@@ -1,0 +1,3 @@
+[submodule "Extern/Core"]
+	path = Extern/Core
+	url = https://github.com/twdes/Core.git
