@@ -4,7 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
-using TecWare.DES.Stuff;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {

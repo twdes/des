@@ -11,7 +11,7 @@ using System.ServiceProcess;
 using System.Text;
 using CommandLine;
 using CommandLine.Text;
-using TecWare.DES.Stuff;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {

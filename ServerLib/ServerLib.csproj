@@ -58,8 +58,11 @@
     <Compile Include="..\Common\AssemblyInfoServer.cs">
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
+    <Compile Include="ConfigItem.cs" />
+    <Compile Include="ConfigLogItem.cs" />
     <Compile Include="Configuration\Contracts.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Stuff\Uri.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

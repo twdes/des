@@ -68,12 +68,17 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <EmbeddedResource Include="DES.xsd">
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Common\AssemblyInfoServer.cs">
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
+    <Compile Include="Configuration\DEConfigurationElement.cs" />
+    <Compile Include="Configuration\DEConfigurationService.cs" />
     <Compile Include="DEServer.cs" />
     <Compile Include="DEServer.Main.cs" />
     <Compile Include="NativeMethods.cs" />
