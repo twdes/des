@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<des xmlns="http://tecware-gmbh.de/dev/des/2014" version="330">
+	<server logpath="log" />
+	<http threads="1" />
+	<luaengine />
+
+	<configLogItem name="test1" displayname="test hidden">
+		<log min="1024" max="4096" />
+	</configLogItem>
+	<configLogItem name="test2" displayname="test hidden2" script="script1">
+	</configLogItem>
+	<?des-merge 01_Merge.xml?>
+</des>

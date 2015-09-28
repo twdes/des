@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<fragment xmlns="http://tecware-gmbh.de/dev/des/2014">
+	<configLogItem name="test1" displayname="test 1" icon="neu">
+		<log min="4096" max="8128" />
+	</configLogItem>
+	<configLogItem name="test2" displayname="test 2" script="script2 script3">
+		<log min="4096" max="8128" />
+	</configLogItem>
+</fragment>

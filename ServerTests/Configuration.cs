@@ -42,5 +42,36 @@ namespace TecWare.DE.Server
 			Assert.AreEqual(typeof(uint), a1.Type);
 			Assert.AreEqual((uint)3670016, a1.DefaultValue);
     }
+
+		[TestMethod]
+		public void MergeConfigurations()
+		{
+			var cs = new DEConfigurationService(new SimpleServiceProvider(), @"..\..\Files\01_Main.xml");
+			cs.UpdateSchema(Assembly.LoadFile(Path.GetFullPath(@"..\..\..\Server\bin\Debug\DEServer.exe")));
+
+			var x = cs.ParseConfiguration(new DE.Stuff.PropertyDictionary());
+
+			Console.WriteLine(x.ToString());
+
+			// tests
+			var c1 = x.Elements(DEConfigurationConstants.MainNamespace + "configLogItem").First();
+			Assert.IsNotNull(c1);
+			Assert.AreEqual("test 1", c1.Attribute("displayname")?.Value);
+			Assert.AreEqual("neu", c1.Attribute("icon")?.Value);
+
+			var l1 = c1.Element(DEConfigurationConstants.xnLog);
+			Assert.IsNotNull(l1);
+			Assert.AreEqual("4096", l1.Attribute("min")?.Value);
+			Assert.AreEqual("8128", l1.Attribute("max")?.Value);
+
+			var c2 = x.Elements(DEConfigurationConstants.MainNamespace + "configLogItem").Skip(1).First();
+			Assert.IsNotNull(c2);
+			Assert.AreEqual("test 2", c2.Attribute("displayname")?.Value);
+			Assert.AreEqual("script1 script2 script3", c2.Attribute("script")?.Value);
+      var l2 = c2.Element(DEConfigurationConstants.xnLog);
+			Assert.IsNotNull(l2);
+			Assert.AreEqual("4096", l2.Attribute("min")?.Value);
+			Assert.AreEqual("8128", l2.Attribute("max")?.Value);
+		}
 	} // class ConfigurationTest
 }

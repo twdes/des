@@ -124,6 +124,8 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XNamespace MainNamespace = "http://tecware-gmbh.de/dev/des/2014";
 
 		public static readonly XName xnDes = MainNamespace + "des";
+		public static readonly XName xnFragment = MainNamespace + "fragment";
+		public static readonly XName xnInclude = MainNamespace + "include";
 
 		public static readonly XName xnServer = MainNamespace + "server";
 		public static readonly XName xnServerResolve = MainNamespace + "resolve";
@@ -135,6 +137,8 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnHttp = MainNamespace + "http";
 		public static readonly XName xnCron = MainNamespace + "cron";
 		public static readonly XName xnLuaEngine = MainNamespace + "luaengine";
+
+		public static readonly XName xnLog = MainNamespace + "log";
 	} // class DEConfigurationConstants
 
 	#endregion

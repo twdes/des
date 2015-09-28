@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Schema;
@@ -51,6 +50,8 @@ namespace TecWare.DE.Server.Configuration
 
 		private Dictionary<XName, IDEConfigurationElement> elementResolveCache = new Dictionary<XName, IDEConfigurationElement>();
 
+		#region -- Ctor/Dtor --------------------------------------------------------------
+
 		public DEConfigurationService(IServiceProvider sp, string configurationFile)
 		{
 			this.sp = sp;
@@ -64,7 +65,35 @@ namespace TecWare.DE.Server.Configuration
 			schema = new XmlSchemaSet(nameTable);
 		} // ctor
 
+		#endregion
+
 		#region -- Parse Configuration ----------------------------------------------------
+
+		#region -- class DEConfigurationStackException ------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private class DEConfigurationStackException : DEConfigurationException
+		{
+			private string stackFrames;
+
+			public DEConfigurationStackException(ParseFrame currentFrame, XObject x, string message, Exception innerException = null)
+				: base(x, message, innerException)
+			{
+				var sbStack = new StringBuilder();
+				var c = currentFrame;
+				while (c != null)
+				{
+					c.AppendStackFrame(sbStack);
+					c = c.Parent;
+				}
+				stackFrames = sbStack.ToString();
+			} // ctor
+
+			public string StackFrame => stackFrames;
+		} // class DEConfigurationStackException
+
+		#endregion
 
 		#region -- class ParseFrame -------------------------------------------------------
 
@@ -82,6 +111,21 @@ namespace TecWare.DE.Server.Configuration
 				this.parentFrame = parentFrame;
 				this.source = source;
 			} // ctor
+
+			public void AppendStackFrame(StringBuilder sbStack)
+			{
+				sbStack.Append(source.BaseUri);
+				var lineInfo = source as IXmlLineInfo;
+				if (lineInfo != null && lineInfo.HasLineInfo())
+				{
+					sbStack.Append(" (");
+					sbStack.Append(lineInfo.LineNumber.ToString());
+					sbStack.Append(',');
+					sbStack.Append(lineInfo.LinePosition.ToString());
+					sbStack.Append(')');
+				}
+				sbStack.AppendLine();
+			} // proc GetStackFrame
 
 			protected override object OnIndex(object key) => base.OnIndex(key) ?? parentFrame?.GetValue(key);
 
@@ -123,6 +167,7 @@ namespace TecWare.DE.Server.Configuration
 			{
 				if (currentFrame == null || currentFrame != frame)
 					throw new InvalidOperationException("Invalid stack.");
+				currentFrame = frame.Parent;
 			} // proc PopFrame
 
 			#endregion
@@ -163,11 +208,11 @@ namespace TecWare.DE.Server.Configuration
 			#endregion
 
 			public Exception CreateConfigException(XObject x, string message, Exception innerException = null)
-				=> new DEConfigurationException(x, message, innerException);
+				=> new DEConfigurationStackException(currentFrame, x, message, innerException);
 
 			public bool IsDefined(string expr)
 			{
-				return true;
+				return currentFrame.GetMemberValue(expr) != null;
 			} // func IsDefined
 
 			public ParseFrame CurrentFrame => currentFrame;
@@ -183,19 +228,30 @@ namespace TecWare.DE.Server.Configuration
 			var fileName = Path.GetFullPath(configurationFile);
 			var context = new ParseContext(arguments, Path.GetDirectoryName(fileName));
 
+
 			// read main file
 			var doc = context.LoadFile(fileName);
-			if (doc.Root.Name != xnDes)
-				throw new InvalidDataException(String.Format("Configuration root node is invalid (expected: {0}).", xnDes));
-			if (doc.Root.GetAttribute("version", String.Empty) != "330")
-				throw new InvalidDataException("Configuration version is invalid (expected: 330).");
-
-			// parse the tree
 			var frame = context.PushFrame(doc);
-			ParseConfiguration(context, doc);
-			context.PopFrame(frame);
 
-			return doc.Root;
+			try
+			{
+				if (doc.Root.Name != xnDes)
+					throw new InvalidDataException(String.Format("Configuration root node is invalid (expected: {0}).", xnDes));
+				if (doc.Root.GetAttribute("version", String.Empty) != "330")
+					throw new InvalidDataException("Configuration version is invalid (expected: 330).");
+
+				// parse the tree
+				ParseConfiguration(context, doc);
+				context.PopFrame(frame);
+
+				return doc.Root;
+			}
+			catch (Exception e)
+			{
+				if (e is DEConfigurationStackException)
+					throw;
+				throw context.CreateConfigException(doc, "Could not parse configuration file.", e);
+			}
 		} // func ParseConfiguration
 
 		private void ParseConfiguration(ParseContext context, XContainer x)
@@ -208,7 +264,7 @@ namespace TecWare.DE.Server.Configuration
 
 				if (c is XComment)
 					deleteMe = c;
-				else if (c != null)
+				else if (c is XProcessingInstruction)
 				{
 					ParseConfigurationPI(context, (XProcessingInstruction)c);
 					deleteMe = c;
@@ -222,7 +278,7 @@ namespace TecWare.DE.Server.Configuration
 						var xCur = (XElement)c;
 
 						// Replace values in attributes
-						foreach (XAttribute attr in xCur.Attributes())
+						foreach (var attr in xCur.Attributes())
 						{
 							if (ChangeConfigurationValue(context, attr, attr.Value, out value))
 								attr.Value = value;
@@ -236,7 +292,7 @@ namespace TecWare.DE.Server.Configuration
 						// Load assemblies -> they preprocessor needs them
 						if (xCur.Name == xnServer)
 						{
-							foreach (XElement cur in xCur.Elements())
+							foreach (var cur in xCur.Elements())
 							{
 								if (cur.Name == xnServerResolve) // resolve paths
 									resolver?.AddPath(cur.Value);
@@ -295,7 +351,7 @@ namespace TecWare.DE.Server.Configuration
 				throw context.CreateConfigException(xPI, "It is not allowed to include to a root element.");
 
 			var xInc = context.LoadFile(xPI, xPI.Data).Root;
-			if (xInc.Name.LocalName == "include")
+			if (xInc.Name == DEConfigurationConstants.xnInclude)
 			{
 				XNode xLast = xPI;
 
@@ -325,7 +381,10 @@ namespace TecWare.DE.Server.Configuration
 
 			// parse the loaded document
 			var newFrame = context.PushFrame(xPI);
-			ParseConfiguration(context, xDoc);
+			if (xDoc.Root.Name != DEConfigurationConstants.xnFragment)
+				throw context.CreateConfigException(xDoc.Root, "<fragment> expected.");
+
+			ParseConfiguration(context, xDoc.Root);
 			context.PopFrame(newFrame);
 
 			// merge the parsed nodes
@@ -346,10 +405,13 @@ namespace TecWare.DE.Server.Configuration
 				else // attribute exists --> override or combine lists
 				{
 					var attributeDefinition = GetAttribute(attributeMerge);
-					if (attributeDefinition.IsList) // list detected
-						attributeRoot.Value = attributeRoot.Value + " " + attributeMerge.Value;
-					else
-						attributeRoot.Value = attributeMerge.Value;
+					if (attributeDefinition != null)
+					{
+						if (attributeDefinition.IsList) // list detected
+							attributeRoot.Value = attributeRoot.Value + " " + attributeMerge.Value;
+						else
+							attributeRoot.Value = attributeMerge.Value;
+					}
 				}
 
 				attributeMerge = attributeMerge.NextAttribute;
@@ -397,7 +459,7 @@ namespace TecWare.DE.Server.Configuration
 					var attr1 = x.Attribute(primaryKeys[i].Name);
 					var attr2 = xSearch.Attribute(primaryKeys[i].Name);
 
-					if (attr1 != null || attr2 != null)
+					if (attr1 != null ^ attr2 != null)
 					{
 						r = false;
 						break;
