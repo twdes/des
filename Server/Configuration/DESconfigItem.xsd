@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema id="DESconfigItem"
+           targetNamespace="http://tecware-gmbh.de/dev/des/2014"
+           elementFormDefault="qualified"
+           xmlns="http://tecware-gmbh.de/dev/des/2014"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema">
+	
+	<xs:include schemaLocation="DEScore.xsd" />
+
+	<!-- Definition for the log element -->
+	<xs:element name="log" type="LogType" />
+
+	<xs:complexType name="ConfigServiceType">
+		<xs:attribute name="displayname" type="xs:string" use="optional" >
+			<xs:annotation>
+				<xs:documentation>Displayname of the service node.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="security" type="xs:string" use="optional">
+			<xs:annotation>
+				<xs:documentation>Security token, that is asked from the user to enter the service node.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+		<xs:attribute name="script" type="ScriptList" use="optional">
+			<xs:annotation>
+				<xs:documentation>Extentions of the service node.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
+	</xs:complexType>
+
+	<xs:complexType name="ConfigItemType">
+		<xs:complexContent>
+			<xs:extension base="ConfigServiceType">
+				<xs:attribute name="name" type="KeyType" use="required">
+					<xs:annotation>
+						<xs:documentation>Name of the current node, must be unique within the system.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+				<xs:attribute name="icon" type="xs:string" use="optional">
+					<xs:annotation>
+						<xs:documentation>Uri to the icon of the node.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+
+	<xs:complexType name="ConfigLogItemType">
+		<xs:complexContent>
+			<xs:extension base="ConfigItemType">
+				<xs:sequence>
+					<xs:element ref="log" minOccurs="0" maxOccurs="1" />
+				</xs:sequence>
+			</xs:extension>
+		</xs:complexContent>
+	</xs:complexType>
+
+	<!-- Elements -->
+
+	<xs:element name="genericService" abstract="true" type="ConfigServiceType">
+		<xs:annotation>
+			<xs:documentation>Placeholder for a service node.</xs:documentation>
+		</xs:annotation>
+	</xs:element>
+
+	<xs:element name="configItem" type="ConfigItemType">
+		<xs:annotation>
+			<xs:documentation>Definiert ein Konfigurationselement.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.DEConfigItem, DE.Server, Version=3.2.0.0, Culture=neutral, PublicKeyToken=null</class>
+			</xs:appinfo>
+		</xs:annotation>
+	</xs:element>
+
+	<xs:element name="configLogItem" type="ConfigLogItemType" substitutionGroup="configItem">
+		<xs:annotation>
+			<xs:documentation>Definiert ein Konfigurationselement mit einer Logdatei.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.DEConfigLogItem, DE.Server, Version=3.2.0.0, Culture=neutral, PublicKeyToken=null</class>
+			</xs:appinfo>
+		</xs:annotation>
+	</xs:element>
+</xs:schema>

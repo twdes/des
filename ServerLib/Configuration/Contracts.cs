@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Xml.Linq;
 
 namespace TecWare.DE.Server.Configuration
@@ -11,7 +8,7 @@ namespace TecWare.DE.Server.Configuration
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	[AttributeUsage(AttributeTargets.Assembly)]
+	[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
 	public class DEConfigurationSchemaAttribute : Attribute
 	{
 		/// <summary>Marks a manifest-resource as a schema extension.</summary>

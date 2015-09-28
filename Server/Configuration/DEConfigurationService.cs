@@ -243,8 +243,6 @@ namespace TecWare.DE.Server.Configuration
 				// parse the tree
 				ParseConfiguration(context, doc);
 				context.PopFrame(frame);
-
-				return doc.Root;
 			}
 			catch (Exception e)
 			{
@@ -252,7 +250,20 @@ namespace TecWare.DE.Server.Configuration
 					throw;
 				throw context.CreateConfigException(doc, "Could not parse configuration file.", e);
 			}
+
+			// check the schema
+			doc.Validate(schema, ValidationEvent, false);
+
+			return doc.Root;
 		} // func ParseConfiguration
+
+		private void ValidationEvent(object sender, ValidationEventArgs e)
+		{
+			if (e.Severity == XmlSeverityType.Warning)
+				sp.LogProxy().LogMsg(LogMsgType.Warning, "Validation: {0}\n{1} ({2:N0},{3:N0})", e.Message, e.Exception.SourceUri, e.Exception.LineNumber, e.Exception.LinePosition);
+			else
+				throw e.Exception;
+		} // proc ValidationEvent
 
 		private void ParseConfiguration(ParseContext context, XContainer x)
 		{
@@ -523,7 +534,7 @@ namespace TecWare.DE.Server.Configuration
 					{
 						{
 							if (src == null)
-								throw new Exception("Could not localize resource.");
+								throw new Exception("Could not locate resource.");
 
 							// Erzeuge die Schemadefinition
 							var xmlSchema = XmlSchema.Read(src, (sender, e) => { throw e.Exception; });
