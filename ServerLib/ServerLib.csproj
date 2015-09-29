@@ -47,6 +47,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -58,10 +59,19 @@
     <Compile Include="..\Common\AssemblyInfoServer.cs">
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
+    <Compile Include="ConfigItem.Actions.cs" />
+    <Compile Include="ConfigItem.Collection.cs" />
     <Compile Include="ConfigItem.cs" />
+    <Compile Include="ConfigItem.Properties.cs" />
     <Compile Include="ConfigLogItem.cs" />
     <Compile Include="Configuration\Contracts.cs" />
+    <Compile Include="Http\HttpResponse.cs" />
+    <Compile Include="Http\HttpWorker.cs" />
+    <Compile Include="LuaEngine.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ServerContracts.cs" />
+    <Compile Include="Stuff\CronBound.cs" />
+    <Compile Include="Stuff\LogLineParser.cs" />
     <Compile Include="Stuff\Uri.cs" />
   </ItemGroup>
   <ItemGroup>

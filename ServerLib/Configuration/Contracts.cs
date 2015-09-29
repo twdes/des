@@ -136,6 +136,8 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnLuaEngine = MainNamespace + "luaengine";
 
 		public static readonly XName xnLog = MainNamespace + "log";
+		public static readonly XName xnFiles = MainNamespace + "files";
+		public static readonly XName xnResources = MainNamespace + "resources";
 	} // class DEConfigurationConstants
 
 	#endregion

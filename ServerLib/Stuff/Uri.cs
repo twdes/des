@@ -10,17 +10,19 @@ namespace TecWare.DE.Server.Stuff
 {
 	public static class ProcsDE
 	{
-		private static string GetDirectoryName(XObject x)
+		public static string GetLocalPath(string path)
 		{
-			var path = x.BaseUri;
+			if (path == null)
+				return null;
 
 			if (path.StartsWith("file://"))
 				path = new Uri(path).LocalPath;
 			else
 				path = path.Replace('/', '\\');
+			return path;
+		} // func GetLocalPath
 
-			return Path.GetDirectoryName(path);
-		} // func GetDirectoryName
+		public static string GetDirectoryName(XObject x) => Path.GetDirectoryName(GetLocalPath(x?.BaseUri));
 
 		public static string GetFileName(XObject x, string filename)
 		{
