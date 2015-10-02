@@ -14,8 +14,7 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void LoadAssemblies()
 		{
-			var cs = new DEConfigurationService(new SimpleServiceProvider(), @"..\..\Files\LoadAssemblies.xml");
-			cs.UpdateSchema(Assembly.LoadFile(Path.GetFullPath(@"..\..\..\Server\bin\Debug\DEServer.exe")));
+			var cs = new DEConfigurationService(new SimpleServiceProvider(), @"..\..\Files\LoadAssemblies.xml", new DE.Stuff.PropertyDictionary());
 
 			var n = cs[DEConfigurationConstants.MainNamespace + "configLogItem"];
 			Assert.IsNotNull(n);
@@ -46,14 +45,17 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void MergeConfigurations()
 		{
-			var cs = new DEConfigurationService(new SimpleServiceProvider(), @"..\..\Files\01_Main.xml");
-			cs.UpdateSchema(Assembly.LoadFile(Path.GetFullPath(@"..\..\..\Server\bin\Debug\DEServer.exe")));
+			var cs = new DEConfigurationService(new SimpleServiceProvider(), @"..\..\Files\01_Main.xml", new DE.Stuff.PropertyDictionary());
 
-			var x = cs.ParseConfiguration(new DE.Stuff.PropertyDictionary());
+			var x = cs.ParseConfiguration();
 
 			Console.WriteLine(x.ToString());
 
 			// tests
+
+			var p = x.Element(DEConfigurationConstants.xnServer)?.Attribute("logpath")?.Value;
+			Assert.IsTrue(Path.IsPathRooted(p));
+
 			var c1 = x.Elements(DEConfigurationConstants.MainNamespace + "configLogItem").First();
 			Assert.IsNotNull(c1);
 			Assert.AreEqual("test 1", c1.Attribute("displayname")?.Value);

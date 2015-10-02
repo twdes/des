@@ -6,9 +6,9 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace TecWare.DE.Server.Stuff
+namespace TecWare.DE.Stuff
 {
-	public static class ProcsDE
+	public static partial class ProcsDE
 	{
 		public static string GetLocalPath(string path)
 		{

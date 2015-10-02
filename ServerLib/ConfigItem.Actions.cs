@@ -394,8 +394,6 @@ namespace TecWare.DE.Server
 		/// <returns>Rückgabe</returns>
 		public object InvokeAction(string sAction, IDEConfigActionCaller args)
 		{
-			// Todo: Security
-
 			// Suche die Action im Cache
 			DEConfigAction a;
 			lock (actions)

@@ -178,19 +178,16 @@ namespace TecWare.DE.Server.Configuration
 	/// <summary></summary>
 	internal class DEConfigurationAttribute : DEConfigurationBase<XmlSchemaAttribute>, IDEConfigurationAttribute
 	{
-		private Lazy<object> getDefaultValue;
-
 		internal DEConfigurationAttribute(XmlSchemaAttribute attribute)
 			: base(attribute)
 		{
-			this.getDefaultValue = new Lazy<object>(() => Procs.ChangeType(Item.DefaultValue, Type));
     } // ctor
 
 		public XName Name => GetXName(Item.QualifiedName);
 		public string TypeName => Item.SchemaTypeName.Name;
 		public Type Type => GetTypeFromXmlTypeCode(Item.AttributeSchemaType.TypeCode);
 
-		public object DefaultValue => getDefaultValue.Value;
+		public string DefaultValue => Item.DefaultValue;
 
 		public bool IsElement => false;
 		public bool IsList => GetListTypeVariation(Item.AttributeSchemaType);
@@ -205,19 +202,16 @@ namespace TecWare.DE.Server.Configuration
 	/// <summary></summary>
 	internal class DEConfigurationElementAttribute : DEConfigurationBase<XmlSchemaElement>, IDEConfigurationAttribute
 	{
-		private Lazy<object> getDefaultValue;
-
 		internal DEConfigurationElementAttribute(XmlSchemaElement element)
 			: base(element)
 		{
-			this.getDefaultValue = new Lazy<object>(() => Procs.ChangeType(Item.DefaultValue, Type));
 		} // ctor
 
 		public XName Name => GetXName(Item.QualifiedName);
 		public string TypeName => Item.SchemaTypeName.Name;
 		public Type Type => GetTypeFromXmlTypeCode(Item.ElementSchemaType.TypeCode);
 
-		public object DefaultValue => getDefaultValue.Value;
+		public string DefaultValue => Item.DefaultValue;
 
 		public bool IsElement => true;
 		public bool IsList => GetListTypeVariation(Item.ElementSchemaType);

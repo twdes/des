@@ -25,19 +25,19 @@ namespace TecWare.DE.Server.Http
 	public interface IDEHttpServer : IDEConfigItem
 	{
 		/// <summary>Gibt die zur Endung registrierten mime-type zurück.</summary>
-		/// <param name="sExtension">Dateiendung</param>
+		/// <param name="extension">Dateiendung</param>
 		/// <returns>mime-type</returns>
-		string GetContentType(string sExtension);
+		string GetContentType(string extension);
 
 		/// <summary>Fragt den Cache ab</summary>
-		/// <param name="sCacheId">Eindeutige Id des Cache-Eintrages</param>
+		/// <param name="cacheId">Eindeutige Id des Cache-Eintrages</param>
 		/// <returns>Gecachtes Objekt oder <c>null</c></returns>
-		object GetWebCache(string sCacheId);
+		object GetWebCache(string cacheId);
 		/// <summary>Trägt etwas in den Cache neu ein.</summary>
-		/// <param name="sCacheId">Eindeutige Id des Cache-Eintrages</param>
+		/// <param name="cacheId">Eindeutige Id des Cache-Eintrages</param>
 		/// <param name="cache">Objekt</param>
 		/// <returns>Wurde der Eintrag in den Cache aufgenommen</returns>
-		bool UpdateWebCache(string sCacheId, object cache);
+		bool UpdateWebCache(string cacheId, object cache);
 
 		/// <summary>Bestimmt die Kodierung, für die Textausgabe.</summary>
 		Encoding Encoding { get; }
@@ -1123,52 +1123,6 @@ namespace TecWare.DE.Server.Http
 			}
 		} // func GetCultureInfo
 	} // class HttpResponse
-
-	#endregion
-
-	#region -- class DataRecordOnly -----------------------------------------------------
-
-	public class DataRecordOnly : IDataRecord, IDisposable
-	{
-		private IDataReader r;
-
-		public DataRecordOnly(IDataReader r)
-		{
-			this.r = r;
-		} // ctor
-
-		public void Dispose()
-		{
-			r.Dispose();
-		} // proc Dispose
-
-		public int FieldCount { get { return r.FieldCount; } }
-
-		public bool GetBoolean(int i) { return r.GetBoolean(i); }
-		public byte GetByte(int i) { return r.GetByte(i); }
-		public long GetBytes(int i, long fieldoffset, byte[] buffer, int bufferoffset, int length) { return r.GetBytes(i, fieldoffset, buffer, bufferoffset, length); }
-		public char GetChar(int i) { return r.GetChar(i); }
-		public long GetChars(int i, long fieldoffset, char[] buffer, int bufferoffset, int length) { return r.GetChars(i, fieldoffset, buffer, bufferoffset, length); }
-		public IDataReader GetData(int i) { return r.GetData(i); }
-		public string GetDataTypeName(int i) { return r.GetDataTypeName(i); }
-		public DateTime GetDateTime(int i) { return r.GetDateTime(i); }
-		public decimal GetDecimal(int i) { return r.GetDecimal(i); }
-		public double GetDouble(int i) { return r.GetDouble(i); }
-		public Type GetFieldType(int i) { return r.GetFieldType(i); }
-		public float GetFloat(int i) { return r.GetFloat(i); }
-		public Guid GetGuid(int i) { return r.GetGuid(i); }
-		public short GetInt16(int i) { return r.GetInt16(i); }
-		public int GetInt32(int i) { return r.GetInt32(i); }
-		public long GetInt64(int i) { return r.GetInt64(i); }
-		public string GetName(int i) { return r.GetName(i); }
-		public int GetOrdinal(string name) { return r.GetOrdinal(name); }
-		public string GetString(int i) { return r.GetString(i); }
-		public object GetValue(int i) { return r.GetValue(i); }
-		public int GetValues(object[] values) { return r.GetValues(values); }
-		public bool IsDBNull(int i) { return r.IsDBNull(i); }
-		public object this[string name] { get { return r[name]; } }
-		public object this[int i] { get { return r[i]; } }
-	} // class DataRecord
 
 	#endregion
 }

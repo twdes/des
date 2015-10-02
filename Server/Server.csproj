@@ -58,6 +58,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -83,10 +84,18 @@
     <Compile Include="..\Common\AssemblyInfoServer.cs">
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
+    <Compile Include="Applications\CronEngine.cs" />
+    <Compile Include="Applications\Group.cs" />
+    <Compile Include="Applications\HttpServer.cs" />
+    <Compile Include="Applications\LuaEngine.cs" />
+    <Compile Include="Applications\ProcessItem.cs" />
+    <Compile Include="Applications\User.cs" />
     <Compile Include="Configuration\DEConfigurationElement.cs" />
     <Compile Include="Configuration\DEConfigurationService.cs" />
     <Compile Include="DEServer.cs" />
+    <Compile Include="DEServer.Events.cs" />
     <Compile Include="DEServer.Main.cs" />
+    <Compile Include="DEQueueScheduler.cs" />
     <Compile Include="NativeMethods.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

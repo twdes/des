@@ -20,6 +20,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -64,6 +65,7 @@
     <Compile Include="ConfigItem.cs" />
     <Compile Include="ConfigItem.Properties.cs" />
     <Compile Include="ConfigLogItem.cs" />
+    <Compile Include="Configuration\ConfigNode.cs" />
     <Compile Include="Configuration\Contracts.cs" />
     <Compile Include="Http\HttpResponse.cs" />
     <Compile Include="Http\HttpWorker.cs" />
@@ -71,7 +73,10 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ServerContracts.cs" />
     <Compile Include="Stuff\CronBound.cs" />
+    <Compile Include="Stuff\DEThread.cs" />
     <Compile Include="Stuff\LogLineParser.cs" />
+    <Compile Include="Stuff\Passwords.cs" />
+    <Compile Include="Stuff\Stuff.cs" />
     <Compile Include="Stuff\Uri.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -42,6 +42,7 @@ namespace TecWare.DE.Server.Configuration
 
 		private string configurationFile;
 		private DateTime configurationStamp;
+		private PropertyDictionary configurationProperties;
 		private List<string> knownConfigurationFiles = new List<string>();
 
 		private XmlNameTable nameTable; // name table
@@ -52,17 +53,21 @@ namespace TecWare.DE.Server.Configuration
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEConfigurationService(IServiceProvider sp, string configurationFile)
+		public DEConfigurationService(IServiceProvider sp, string configurationFile, PropertyDictionary configurationProperties)
 		{
 			this.sp = sp;
 			this.resolver = sp.GetService<IDEServerResolver>(false);
 
 			this.configurationFile = configurationFile;
-			this.configurationStamp = DateTime.MinValue;
+			this.configurationProperties = configurationProperties;
+      this.configurationStamp = DateTime.MinValue;
 
 			// create a empty schema
 			nameTable = new NameTable();
 			schema = new XmlSchemaSet(nameTable);
+
+			// init schema
+			UpdateSchema(Assembly.GetCallingAssembly());
 		} // ctor
 
 		#endregion
@@ -222,11 +227,11 @@ namespace TecWare.DE.Server.Configuration
 
 		/// <summary>Reads the configuration file and validates it agains the schema</summary>
 		/// <returns></returns>
-		public XElement ParseConfiguration(PropertyDictionary arguments)
+		public XElement ParseConfiguration()
 		{
 			// prepare arguments for the configuration
 			var fileName = Path.GetFullPath(configurationFile);
-			var context = new ParseContext(arguments, Path.GetDirectoryName(fileName));
+			var context = new ParseContext(configurationProperties, Path.GetDirectoryName(fileName));
 
 
 			// read main file
@@ -662,7 +667,7 @@ namespace TecWare.DE.Server.Configuration
 		/// <summary>Main configuration file.</summary>
 		public string ConfigurationFile => configurationFile;
 		/// <summary>TimeStamp for the configuration.</summary>
-		public DateTime ConfigurationStamp => ConfigurationStamp;
+		public DateTime ConfigurationStamp => configurationStamp;
 		/// <summary>List of configuration attached files.</summary>
 		public IEnumerable<string> ConfigurationFiles => knownConfigurationFiles;
 	} // class DEConfigurationService

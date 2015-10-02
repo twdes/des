@@ -13,18 +13,18 @@ namespace TecWare.DE.Server
 	public interface IDELuaEngine : IServiceProvider
 	{
 		/// <summary>Verbindet ein Script mit einer Lua-Instanz</summary>
-		/// <param name="sScriptId">Id des Scripts</param>
+		/// <param name="scriptId">Id des Scripts</param>
 		/// <param name="table">Table, mit dem das Skript verbunden wird.</param>
-		/// <param name="lAutoRun">Automatisch ausführen, wenn es geändert wurde</param>
+		/// <param name="autoRun">Automatisch ausführen, wenn es geändert wurde</param>
 		/// <returns>Verbindung-Script zu Global</returns>
-		ILuaAttachedScript AttachScript(string sScriptId, LuaTable table, bool lAutoRun = false);
+		ILuaAttachedScript AttachScript(string scriptId, LuaTable table, bool autoRun = false);
 		/// <summary>Erzeugt ein privates Script.</summary>
 		/// <param name="code">Scriptcode</param>
-		/// <param name="sName">Name des Scripts</param>
-		/// <param name="lDebug">Sollen Debug-Informationen erzeugt werden.</param>
-		/// <param name="args">Argumente für das Script</param>
+		/// <param name="name">Name des Scripts</param>
+		/// <param name="forceDebugMode">Sollen Debug-Informationen erzeugt werden.</param>
+		/// <param name="parameter">Argumente für das Script</param>
 		/// <returns>Erzeugte Script</returns>
-		ILuaScript CreateScript(Func<TextReader> code, string sName, bool lDebug, params KeyValuePair<string, Type>[] args);
+		ILuaScript CreateScript(Func<TextReader> code, string name, bool forceDebugMode, params KeyValuePair<string, Type>[] parameter);
 
 		/// <summary>Zugriff auf die interne Lua-Script-Engine.</summary>
 		Lua Lua { get; }
@@ -44,8 +44,8 @@ namespace TecWare.DE.Server
 		event EventHandler ScriptCompiled;
 
 		/// <summary>Führt das Script aus.</summary>
-		/// <param name="lThrowExceptions"></param>
-		void Run(bool lThrowExceptions = false);
+		/// <param name="throwExceptions"></param>
+		void Run(bool throwExceptions = false);
 
 		/// <summary>Soll das Script automatisch nach einem Reload ausgeführt werden.</summary>
 		bool AutoRun { get; set; }
@@ -68,9 +68,9 @@ namespace TecWare.DE.Server
 	{
 		/// <summary>Führt das Script aus.</summary>
 		/// <param name="table"></param>
-		/// <param name="args"></param>
+		/// <param name="arguments"></param>
 		/// <returns></returns>
-		LuaResult Run(LuaTable table, params object[] args);
+		LuaResult Run(LuaTable table, params object[] arguments);
 		/// <summary>Bei temporären Scripten, die mit Debug-Informationen erzeugt werden, wird ggf. eine
 		/// neue Engine erzeugt. Damit, sie vollständig freigegeben werden.</summary>
 		Lua Lua { get; }

@@ -239,9 +239,7 @@ namespace TecWare.DE.Server
 
 		private uint MinLogSize = 3 << 20;
 		private uint MaxLogSize = 4 << 20;
-
-		private IDEServerQueue serverQueue = null;
-
+				
 		private object logFileLock = new object();
 		private FileStream logFile = null;
 		private int logLines = 0; // Zählt immer eine Mehr (die Leerzeile am Ende)
@@ -252,8 +250,6 @@ namespace TecWare.DE.Server
 		public DEConfigLogItem(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
-			this.serverQueue = this.GetService<IDEServerQueue>(true);
-
 			RegisterList(LogLineListId, new LogLineController(this), true);
 		} // ctor
 
@@ -305,8 +301,8 @@ namespace TecWare.DE.Server
 						throw new ArgumentNullException("logPath", "LogPath muss gesetzt sein.");
 
 					// Lege die Logdatei an
-					var sFileName = LogFileName;
-					var fi = new FileInfo(sFileName);
+					var logFileName = LogFileName;
+					var fi = new FileInfo(logFileName);
 					if (!fi.Exists)
 					{
 						// Verzeichnis anlegen
@@ -350,8 +346,8 @@ namespace TecWare.DE.Server
 			Debug.Print("[{0}] {1}", Name, text);
 
 			var logLine = new LogLine(DateTime.Now, typ, text);
-			if (serverQueue.IsQueueRunning)
-				serverQueue.EnqueueCommand(() => { AddToLog(logLine); });
+			if (Server.Queue?.IsQueueRunning ?? false)
+				Server.Queue.Factory.StartNew(() => AddToLog(logLine));
 			else // Log ist noch nicht initialisiert
 				AddToLog(logLine);
 		} // proc ILogger.LogMsg

@@ -6,6 +6,7 @@ using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using TecWare.DE.Server.Configuration;
 
 namespace TecWare.DE.Server
 {
@@ -50,6 +51,18 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- interface DEServerEvent --------------------------------------------------
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	public enum DEServerEvent
+	{
+		Shutdown,
+		Reconfiguration
+	} // DEServerEvent
+
+	#endregion
+
 	#region -- interface IDEServerQueue -------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
@@ -57,35 +70,29 @@ namespace TecWare.DE.Server
 	/// nicht Zeitkritischer aufgaben an.</summary>
 	public interface IDEServerQueue
 	{
-		/// <summary>Registriert eine Procedure (ohne Parameter), die nur dann
-		/// ausgeführt wird, wenn der Hintergrund-Thread keine sonstigen Aufgaben
-		/// hat. Die minimale Zeitspanne zwischen zwei aufeinander Folgenden
-		/// aufrufen Beträgt 1s.</summary>
-		/// <param name="action">Procedure z.B. vom Type Action.</param>
-		void RegisterIdle(Action action);
-		/// <summary>Entfernt den Idle-Command.</summary>
+		/// <summary>Registers a method, that will be processed during idle of the queuue thread.</summary>
+		/// <param name="action">Action to run.</param>
+		/// <param name="timebetween">Time between the calls, this time is not guaranteed. If the queue thread is under heavy presure it will take longer.</param>
+		void RegisterIdle(Action action, int timebetween = 1000);
+		/// <summary>Registers a method, that will be executed on an event of the server.</summary>
 		/// <param name="action"></param>
-		void UnregisterIdle(Action action);
-
-		/// <summary>Legt eine Aufgabe zur Verarbeitung in die Warteschlange.
-		/// Die Aufgabe wird so schnell wie möglich ausgeführt.</summary>
+		/// <param name="eventType"></param>
+		void RegisterEvent(Action action, DEServerEvent eventType);
+		/// <summary></summary>
 		/// <param name="action"></param>
-		void EnqueueCommand(Action action);
-		/// <summary>Fügt eine Action in die Schlange ein, die nach einem bestimmten Zeitpunkt ausgeführt werden soll</summary>
-		/// <param name="action">Action die asugeführt werden soll.</param>
-		/// <param name="iWait">Millisekunden, die mindestens gewartet werden sollen.</param>
-		void EnqueueCommand(Action action, int iWait);
-		/// <summary>Bricht eine eingesteuerte Action in der Warteschlange ab.</summary>
-		/// <param name="proc"></param>
-		void CancelCommand(Action proc);
+		/// <param name="timeEllapsed"></param>
+		void RegisterCommand(Action action, int timeEllapsed = 0);
+		/// <summary>Removes a command/idle/shutdown action.</summary>
+		/// <param name="action"></param>
+		void CancelCommand(Action action);
 
-		/// <summary>Gibt zurück, ob der Hintergrund-Thread läuft und Aufgaben
-		/// entgegen nimmt. Sollte im Ablauf <c>true</c> sein. Kritisch ist
-		/// die Shutdown-Phase, in der keine Aufgaben mehr in den Hg-Thread 
-		/// eingegliedert werden dürfen.</summary>
+		/// <summary>Returns the factory for the queue thread. Every task gets executed in a single thread.</summary>
+		TaskFactory Factory { get; }
+
+		/// <summary>Get the state of the queue thread. <c>true</c>, means that task can be scheduled. In the 
+		/// shutdown phase, no tasks can be added.</summary>
 		bool IsQueueRunning { get; }
-		/// <summary>Ist die aktuelle Thread-Id ungleich der Hg-Thread-Id, dann
-		/// gibt diese Eigenschaft <c>true</c> zurück.</summary>
+		/// <summary>Is the current thread Id equal to the queue thread id.</summary>
 		bool IsQueueRequired { get; }
 	} // interface IDEServerQueue
 	#endregion
@@ -139,6 +146,9 @@ namespace TecWare.DE.Server
 		/// <summary>Gibt das Verzeichnis für die Loginformationen zurück.</summary>
 		string LogPath { get; }
 		/// <summary>Basiskonfigurationsdatei, die geladen wurde.</summary>
+		IDEConfigurationService Configuration { get; }
+		/// <summary></summary>
+		IDEServerQueue Queue { get; }
 
 		/// <summary>Version der SecurityTokens</summary>
 		int SecurityGroupsVersion { get; }

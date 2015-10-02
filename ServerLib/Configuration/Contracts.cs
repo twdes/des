@@ -51,7 +51,7 @@ namespace TecWare.DE.Server.Configuration
 		/// <summary>Xml-Type-Name</summary>
 		string TypeName { get; }
 		/// <summary>Returns the default of the attribute.</summary>
-		object DefaultValue { get; }
+		string DefaultValue { get; }
 
 		/// <summary>Is the attribute in element notation.</summary>
 		bool IsElement { get; }
@@ -67,7 +67,7 @@ namespace TecWare.DE.Server.Configuration
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public interface IDEConfigurationElement: IDEConfigurationAnnotated
+	public interface IDEConfigurationElement : IDEConfigurationAnnotated
 	{
 		/// <summary>Name of the element.</summary>
 		XName Name { get; }
@@ -132,8 +132,13 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnServerSecurityGroup = MainNamespace + "securitygroup";
 
 		public static readonly XName xnHttp = MainNamespace + "http";
+		public static readonly XName xnHttpPrefix = MainNamespace + "prefix";
+		public static readonly XName xnHttpAccess = MainNamespace + "access";
+		public static readonly XName xnHttpMime = MainNamespace + "mime";
+
 		public static readonly XName xnCron = MainNamespace + "cron";
 		public static readonly XName xnLuaEngine = MainNamespace + "luaengine";
+		public static readonly XName xnLuaScript = MainNamespace + "script";
 
 		public static readonly XName xnLog = MainNamespace + "log";
 		public static readonly XName xnFiles = MainNamespace + "files";

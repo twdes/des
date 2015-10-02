@@ -143,147 +143,181 @@
 		</xs:attribute>
 	</xs:complexType>
 
-	<xs:complexType name="desHttp">
-		<xs:complexContent>
-			<xs:extension base="ConfigServiceType">
-				<xs:sequence>
-					<xs:element ref="log" minOccurs="0" maxOccurs="1" />
+	<xs:element name="http">
+		<xs:annotation>
+			<xs:documentation>Erweitert das Http-Element.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.HttpServer</class>
+			</xs:appinfo>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="ConfigServiceType">
+					<xs:sequence>
+						<xs:element ref="log" minOccurs="0" maxOccurs="1" />
 
-					<xs:sequence minOccurs="0" maxOccurs="unbounded">
-						<xs:element name="prefix" minOccurs="1" maxOccurs="unbounded">
+						<xs:sequence minOccurs="0" maxOccurs="unbounded">
+							<xs:element name="prefix" minOccurs="1" maxOccurs="unbounded">
+								<xs:annotation>
+									<xs:documentation>Prefix für den HttpListener (extener Pfad), wird nichts angegeben so wird http://localhost:8080/ gesetzt.</xs:documentation>
+								</xs:annotation>
+								<xs:complexType mixed="true">
+									<xs:attribute name="path" type="xs:string" use="optional" default="/">
+										<xs:annotation>
+											<xs:documentation>Interner Pfad in der Konfigurationsstruktur auf dem dieser extene Pfad gemappt werden soll.</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
+								</xs:complexType>
+							</xs:element>
+
+							<xs:element name="access" minOccurs="0" maxOccurs="unbounded">
+								<xs:annotation>
+									<xs:documentation>Gibt das Zugriffsschema für den externen Knoten kann. Wird nichts angegeben, so wird die Defaulteinstellung gesetzt.</xs:documentation>
+								</xs:annotation>
+								<xs:complexType mixed="true">
+									<xs:attribute name="scheme" use="optional" default="none">
+										<xs:annotation>
+											<xs:documentation>Welches Security-Schema soll für diesen Knoten verwendet werden.</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:restriction base="xs:string">
+												<xs:enumeration value="none" />
+												<xs:enumeration value="basic" />
+												<xs:enumeration value="ntlm" />
+											</xs:restriction>
+										</xs:simpleType>
+									</xs:attribute>
+								</xs:complexType>
+							</xs:element>
+						</xs:sequence>
+
+						<xs:element name="basicuser" minOccurs="0" maxOccurs="unbounded">
 							<xs:annotation>
-								<xs:documentation>Prefix für den HttpListener (extener Pfad), wird nichts angegeben so wird http://localhost:8080/ gesetzt.</xs:documentation>
+								<xs:appinfo>
+									<class>TecWare.DE.Server.Applications.DEUser</class>
+								</xs:appinfo>
+								<xs:documentation>Nutzer der sich Authentifizieren kann.</xs:documentation>
 							</xs:annotation>
-							<xs:complexType mixed="true">
-								<xs:attribute name="path" type="xs:string" use="optional" default="/">
+							<xs:complexType>
+								<xs:complexContent>
+									<xs:extension base="UserType">
+										<xs:attribute name="password" type="xs:string" use="optional">
+											<xs:annotation>
+												<xs:documentation>Passwort des Nutzers.</xs:documentation>
+											</xs:annotation>
+										</xs:attribute>
+										<xs:attribute name="passwordHash" type="xs:string" use="optional">
+											<xs:annotation>
+												<xs:documentation>Passwort des Nutzers.</xs:documentation>
+											</xs:annotation>
+										</xs:attribute>
+									</xs:extension>
+								</xs:complexContent>
+							</xs:complexType>
+						</xs:element>
+
+						<xs:element name="ntmluser" minOccurs="0" maxOccurs="unbounded" type="UserType">
+							<xs:annotation>
+								<xs:appinfo>
+									<class>TecWare.DE.Server.Applications.DEUser</class>
+								</xs:appinfo>
+								<xs:documentation>Nutzer der sich Authentifizieren kann.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+
+						<xs:element name="mime" minOccurs="0" maxOccurs="unbounded">
+							<xs:annotation>
+								<xs:documentation>Definiert zu einer Dateiendung den mime-type.</xs:documentation>
+							</xs:annotation>
+							<xs:complexType>
+								<xs:attribute name="ext" type="xs:string" use="required">
 									<xs:annotation>
-										<xs:documentation>Interner Pfad in der Konfigurationsstruktur auf dem dieser extene Pfad gemappt werden soll.</xs:documentation>
+										<xs:documentation>Endung der Datei (z.B. &quot;.png&quot;).</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="mime" type="xs:string" use="required">
+									<xs:annotation>
+										<xs:documentation>Mime-Type zu der Endung (z.B. &quot;image/png&quot;).</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 							</xs:complexType>
 						</xs:element>
 
-						<xs:element name="access" minOccurs="0" maxOccurs="unbounded">
+						<xs:element ref="configItem" minOccurs="0" maxOccurs="unbounded" />
+					</xs:sequence>
+
+					<xs:attribute name="realm" type="xs:string" use="optional" default="Data Exchange Server">
+						<xs:annotation>
+							<xs:documentation>Gibt die Authentifizierungs-/Partitionsierungszeichenfolge für den Server an.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+
+					<xs:attribute name="threads" type="xs:int" use="optional" default="10">
+						<xs:annotation>
+							<xs:documentation>Anzahl der zu erzeugenden HttpWorker-Threads (Default: 10, Min: 1, Max: 1000).</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+
+					<xs:attribute name="encoding" type="EncodingType" use="optional" default="utf-8">
+						<xs:annotation>
+							<xs:documentation>Legt die Default Encodierung für den Server fest.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
+	</xs:element>
+
+	<xs:element name="luaengine">
+		<xs:annotation>
+			<xs:documentation>Erweitert die Lua-Script-Engine.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.LuaEngine</class>
+			</xs:appinfo>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="ConfigServiceType">
+					<xs:sequence>
+						<xs:element ref="log" minOccurs="0" maxOccurs="1" />
+
+						<xs:element name="script" minOccurs="0" maxOccurs="unbounded">
 							<xs:annotation>
-								<xs:documentation>Gibt das Zugriffsschema für den externen Knoten kann. Wird nichts angegeben, so wird die Defaulteinstellung gesetzt.</xs:documentation>
+								<xs:documentation>Definiert ein Lua-Script für die Ausführung. Das Skript wird kompiliert im Speicher gehalten und kann mit anderen Elementen verknüpft werden.</xs:documentation>
 							</xs:annotation>
-							<xs:complexType mixed="true">
-								<xs:attribute name="scheme" use="optional" default="none">
+							<xs:complexType>
+								<xs:attribute name="id" type="xs:string" use="required">
 									<xs:annotation>
-										<xs:documentation>Welches Security-Schema soll für diesen Knoten verwendet werden.</xs:documentation>
+										<xs:documentation>Id des Scripts</xs:documentation>
 									</xs:annotation>
-									<xs:simpleType>
-										<xs:restriction base="xs:string">
-											<xs:enumeration value="none" />
-											<xs:enumeration value="basic" />
-											<xs:enumeration value="ntlm" />
-										</xs:restriction>
-									</xs:simpleType>
+								</xs:attribute>
+								<xs:attribute name="filename" type="PathType" use="required">
+									<xs:annotation>
+										<xs:documentation>Dateiname des Lua-Skripts</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="autoreload" type="xs:boolean" use="optional" default="false">
+									<xs:annotation>
+										<xs:documentation>Soll das Skript bei einer Änderung der Datei neu ausgeführt werden.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="debug" type="xs:boolean" use="optional" default="true">
+									<xs:annotation>
+										<xs:documentation>Soll das Skript mit Debug-Informationen geladen werden.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="encoding" type="EncodingType" use="optional">
+									<xs:annotation>
+										<xs:documentation>Kodierung des Skripts (Bezeichnung oder CodePage)</xs:documentation>
+									</xs:annotation>
 								</xs:attribute>
 							</xs:complexType>
 						</xs:element>
 					</xs:sequence>
-
-					<xs:element name="basicuser" minOccurs="0" maxOccurs="unbounded">
-						<xs:annotation>
-							<xs:appinfo>
-								<class>TecWare.DE.Server.Applications.DEUser</class>
-							</xs:appinfo>
-							<xs:documentation>Nutzer der sich Authentifizieren kann.</xs:documentation>
-						</xs:annotation>
-						<xs:complexType>
-							<xs:complexContent>
-								<xs:extension base="UserType">
-									<xs:attribute name="password" type="xs:string" use="optional">
-										<xs:annotation>
-											<xs:documentation>Passwort des Nutzers.</xs:documentation>
-										</xs:annotation>
-									</xs:attribute>
-									<xs:attribute name="passwordHash" type="xs:string" use="optional">
-										<xs:annotation>
-											<xs:documentation>Passwort des Nutzers.</xs:documentation>
-										</xs:annotation>
-									</xs:attribute>
-								</xs:extension>
-							</xs:complexContent>
-						</xs:complexType>
-					</xs:element>
-
-					<xs:element name="ntmluser" minOccurs="0" maxOccurs="unbounded" type="UserType">
-						<xs:annotation>
-							<xs:appinfo>
-								<class>TecWare.DE.Server.Applications.DEUser</class>
-							</xs:appinfo>
-							<xs:documentation>Nutzer der sich Authentifizieren kann.</xs:documentation>
-						</xs:annotation>
-					</xs:element>
-
-					<xs:element name="mime" minOccurs="0" maxOccurs="unbounded">
-						<xs:annotation>
-							<xs:documentation>Definiert zu einer Dateiendung den mime-type.</xs:documentation>
-						</xs:annotation>
-						<xs:complexType>
-							<xs:attribute name="ext" type="xs:string" use="required">
-								<xs:annotation>
-									<xs:documentation>Endung der Datei (z.B. &quot;.png&quot;).</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-							<xs:attribute name="mime" type="xs:string" use="required">
-								<xs:annotation>
-									<xs:documentation>Mime-Type zu der Endung (z.B. &quot;image/png&quot;).</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-						</xs:complexType>
-					</xs:element>
-
-					<xs:element ref="configItem" minOccurs="0" maxOccurs="unbounded" />
-				</xs:sequence>
-			</xs:extension>
-		</xs:complexContent>
-	</xs:complexType>
-
-	<xs:complexType name="desLuaEngine">
-		<xs:complexContent>
-			<xs:extension base="ConfigServiceType">
-				<xs:sequence>
-					<xs:element ref="log" minOccurs="0" maxOccurs="1" />
-
-					<xs:element name="script" minOccurs="0" maxOccurs="unbounded">
-						<xs:annotation>
-							<xs:documentation>Definiert ein Lua-Script für die Ausführung. Das Skript wird kompiliert im Speicher gehalten und kann mit anderen Elementen verknüpft werden.</xs:documentation>
-						</xs:annotation>
-						<xs:complexType>
-							<xs:attribute name="id" type="xs:string" use="required">
-								<xs:annotation>
-									<xs:documentation>Id des Scripts</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-							<xs:attribute name="filename" type="PathType" use="required">
-								<xs:annotation>
-									<xs:documentation>Dateiname des Lua-Skripts</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-							<xs:attribute name="autoreload" type="xs:boolean" use="optional" default="false">
-								<xs:annotation>
-									<xs:documentation>Soll das Skript bei einer Änderung der Datei neu ausgeführt werden.</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-							<xs:attribute name="debug" type="xs:boolean" use="optional" default="true">
-								<xs:annotation>
-									<xs:documentation>Soll das Skript mit Debug-Informationen geladen werden.</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-							<xs:attribute name="encoding" type="xs:string" use="optional">
-								<xs:annotation>
-									<xs:documentation>Kodierung des Skripts (Bezeichnung oder CodePage)</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-						</xs:complexType>
-					</xs:element>
-				</xs:sequence>
-			</xs:extension>
-		</xs:complexContent>
-	</xs:complexType>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
+	</xs:element>
 
 	<xs:element name="include">
 		<xs:annotation>
@@ -305,18 +339,10 @@
 					</xs:annotation>
 				</xs:element>
 
-				<xs:element name="http" minOccurs="0" maxOccurs="1" type="desHttp">
-					<xs:annotation>
-						<xs:documentation>Erweitert das Http-Element.</xs:documentation>
-					</xs:annotation>
-				</xs:element>
+				<xs:element ref="http" minOccurs="0" maxOccurs="1" />
 
-				<xs:element name="luaengine" minOccurs="0" maxOccurs="1" type="desLuaEngine">
-					<xs:annotation>
-						<xs:documentation>Erweitert die Lua-Script-Engine.</xs:documentation>
-					</xs:annotation>
-				</xs:element>
-				
+				<xs:element name="luaengine" minOccurs="0" maxOccurs="1" />
+
 				<xs:sequence minOccurs="0" maxOccurs="unbounded">
 					<xs:element ref="genericService" minOccurs="0" maxOccurs="unbounded" />
 					<xs:element ref="configItem" minOccurs="0" maxOccurs="unbounded" />
@@ -354,40 +380,8 @@
 							</xs:complexType>
 						</xs:element>
 
-						<xs:element name="http" minOccurs="1" maxOccurs="1">
-							<xs:annotation>
-								<xs:documentation>Eigenschaften des Http-Service für den Dienst. Dieser wird immer ausgeführt.</xs:documentation>
-							</xs:annotation>
-							<xs:complexType>
-								<xs:complexContent>
-									<xs:extension base="desHttp">
-										<xs:attribute name="realm" type="xs:string" use="optional" default="Data Exchange Server">
-											<xs:annotation>
-												<xs:documentation>Gibt die Authentifizierungs-/Partitionsierungszeichenfolge für den Server an.</xs:documentation>
-											</xs:annotation>
-										</xs:attribute>
-
-										<xs:attribute name="threads" type="xs:int" use="optional" default="10">
-											<xs:annotation>
-												<xs:documentation>Anzahl der zu erzeugenden HttpWorker-Threads (Default: 10, Min: 1, Max: 1000).</xs:documentation>
-											</xs:annotation>
-										</xs:attribute>
-
-										<xs:attribute name="encoding" type="EncodingType" use="optional" default="utf8">
-											<xs:annotation>
-												<xs:documentation>Legt die Default Encodierung für den Server fest.</xs:documentation>
-											</xs:annotation>
-										</xs:attribute>
-									</xs:extension>
-								</xs:complexContent>
-							</xs:complexType>
-						</xs:element>
-
-						<xs:element name="luaengine" minOccurs="1" maxOccurs="1" type="desLuaEngine">
-							<xs:annotation>
-								<xs:documentation>Definiert die Lua-Script-Engine.</xs:documentation>
-							</xs:annotation>
-						</xs:element>
+						<xs:element ref="http" minOccurs="1" maxOccurs="1" />
+						<xs:element name="luaengine" minOccurs="1" maxOccurs="1" />
 
 						<xs:sequence minOccurs="0" maxOccurs="unbounded">
 							<xs:element ref="genericService" minOccurs="0" maxOccurs="unbounded" />

@@ -449,7 +449,7 @@ namespace TecWare.DE.Server
 			this.lockConfig = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 			this.subItems = new List<DEConfigItem>();
 
-			this.server = new Lazy<IDEServer>(() => this.sp.GetService<IDEServer>(true), true);
+			this.server = new Lazy<IDEServer>(() => this.GetService<IDEServer>(true), true);
 			this.log = new Lazy<LoggerProxy>(this.LogProxy, true);
 
 			this.sp = sp;
@@ -625,20 +625,25 @@ namespace TecWare.DE.Server
 		{
 			lock (scripts)
 			{
-				var engine = this.GetService<IDELuaEngine>(true);
+				var engine = this.GetService<IDELuaEngine>(false);
 
 				var load = config.Tags.GetProperty("ScriptLoad", Procs.EmptyStringArray);
 				var remove = config.Tags.GetProperty("ScriptRemove", Procs.EmptyStringArray);
 
 				// Erzeuge die Skriptverbindungen
-				foreach (string cur in load)
+				if (engine == null)
+					Log.Warn("Script engine is not running, there will be no dynamic parts available.");
+				else
 				{
-					var attachedScript = engine.AttachScript(cur, this, true);
+					foreach (string cur in load)
+					{
+						var attachedScript = engine.AttachScript(cur, this, true);
 
-					// Registriere Script-Update
-					attachedScript.ScriptCompiled += AttachedScriptCompiled;
+						// Registriere Script-Update
+						attachedScript.ScriptCompiled += AttachedScriptCompiled;
 
-					scripts.Add(attachedScript);
+						scripts.Add(attachedScript);
+					}
 				}
 
 				// Lösche Scriptverbindungen
