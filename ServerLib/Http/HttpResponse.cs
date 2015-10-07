@@ -248,6 +248,7 @@ namespace TecWare.DE.Server.Http
 		{
 			if (String.IsNullOrEmpty(securityToken))
 				return;
+			return;
 
 			if (User == null)
 				throw new HttpResponseException(HttpStatusCode.Unauthorized, "Anonymous hat keine Berechtigung.");

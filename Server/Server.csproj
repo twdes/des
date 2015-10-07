@@ -110,8 +110,30 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\ServerWebUI\des.html">
+      <Link>Resources\Http\des.html</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\DEViewer.css">
+      <Link>Resources\Http\DEViewer.css</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\DEViewer.js">
+      <Link>Resources\Http\DEViewer.js</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\libs\jquery-2.1.4.min.js">
+      <Link>Resources\Http\libs\jquery-2.1.4.min.js</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\images\log.error.png">
+      <Link>Resources\Http\images\log.error.png</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\images\log.information.png">
+      <Link>Resources\Http\images\log.information.png</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\images\log.warning.png">
+      <Link>Resources\Http\images\log.warning.png</Link>
+    </EmbeddedResource>
     <Content Include="Configs\Simple.xml" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

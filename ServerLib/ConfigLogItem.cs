@@ -72,13 +72,6 @@ namespace TecWare.DE.Server
 			public override string ToString()
 				=> GetLineData();
 
-			public XElement ToXml()
-				=> new XElement("line",
-					new XAttribute("stamp", stamp),
-					new XAttribute("typ", typ.ToString().Substring(0, 1)),
-					new XText(text)
-				);
-
 			public string GetLineData()
 			{
 				var sb = new StringBuilder();
@@ -155,7 +148,7 @@ namespace TecWare.DE.Server
 			{
 				var logLine = (LogLine)item;
 				xml.WriteStartProperty("line");
-				xml.WriteAttributeProperty("stamp", LogLineParser.ConvertDateTime(logLine.Stamp));
+				xml.WriteAttributeProperty("stamp", logLine.Stamp.ToString("O"));
 				xml.WriteAttributeProperty("typ", GetLogLineType(logLine.Typ));
 				xml.WriteValue(logLine.Text);
 				xml.WriteEndProperty();

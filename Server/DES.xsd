@@ -341,7 +341,7 @@
 
 				<xs:element ref="http" minOccurs="0" maxOccurs="1" />
 
-				<xs:element name="luaengine" minOccurs="0" maxOccurs="1" />
+				<xs:element ref="luaengine" minOccurs="0" maxOccurs="1" />
 
 				<xs:sequence minOccurs="0" maxOccurs="unbounded">
 					<xs:element ref="genericService" minOccurs="0" maxOccurs="unbounded" />
@@ -381,7 +381,7 @@
 						</xs:element>
 
 						<xs:element ref="http" minOccurs="1" maxOccurs="1" />
-						<xs:element name="luaengine" minOccurs="1" maxOccurs="1" />
+						<xs:element ref="luaengine" minOccurs="1" maxOccurs="1" />
 
 						<xs:sequence minOccurs="0" maxOccurs="unbounded">
 							<xs:element ref="genericService" minOccurs="0" maxOccurs="unbounded" />

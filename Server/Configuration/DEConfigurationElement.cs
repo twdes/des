@@ -192,7 +192,10 @@ namespace TecWare.DE.Server.Configuration
 		public bool IsElement => false;
 		public bool IsList => GetListTypeVariation(Item.AttributeSchemaType);
 		public bool IsPrimaryKey => TypeName == "KeyType";
-  } // class DEConfigurationAttribute
+
+		public int MinOccurs => Item.Use == XmlSchemaUse.Required ? 1 : 0;
+		public int MaxOccurs => 1;
+	} // class DEConfigurationAttribute
 
 	#endregion
 
@@ -216,6 +219,9 @@ namespace TecWare.DE.Server.Configuration
 		public bool IsElement => true;
 		public bool IsList => GetListTypeVariation(Item.ElementSchemaType);
 		public bool IsPrimaryKey => TypeName == "KeyType";
+
+		public int MinOccurs => Item.MinOccurs == Decimal.MaxValue ? Int32.MaxValue : Decimal.ToInt32(Item.MinOccurs);
+		public int MaxOccurs => Item.MaxOccurs == Decimal.MaxValue ? Int32.MaxValue : Decimal.ToInt32(Item.MaxOccurs);
 	} // class DEConfigurationElementAttribute
 
 	#endregion
@@ -233,7 +239,7 @@ namespace TecWare.DE.Server.Configuration
 			: base(element)
 		{
 			this.sp = sp;
-
+			
 			getClassType = new Lazy<Type>(() =>
 				{
 					var classType = (Type)null;
@@ -269,7 +275,12 @@ namespace TecWare.DE.Server.Configuration
 				if (items != null)
 				{
 					foreach (var x in items.OfType<XmlSchemaElement>().Where(c => !(c.ElementSchemaType is XmlSchemaSimpleType)))
-						yield return new DEConfigurationElement(sp, x);
+					{
+						if (x.RefName != null && x.Name == null) // resolve reference
+							yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(x.QualifiedName)];
+						else
+							yield return new DEConfigurationElement(sp, x);
+					}
 				}
 			}
 		} // func GetElements
@@ -285,7 +296,7 @@ namespace TecWare.DE.Server.Configuration
 				var items = GetSubSequences(complexType);
 				if (items != null)
 				{
-					foreach (var x in items.OfType<XmlSchemaElement>().Where(c => c.MaxOccurs == 1 && c.ElementSchemaType is XmlSchemaSimpleType))
+					foreach (var x in items.OfType<XmlSchemaElement>().Where(c => c.ElementSchemaType is XmlSchemaSimpleType))
 						yield return new DEConfigurationElementAttribute(x);
 				}
 			}
@@ -293,6 +304,9 @@ namespace TecWare.DE.Server.Configuration
 
 		public XName Name => GetXName(Item.QualifiedName);
 		public Type ClassType => getClassType.Value;
+
+		public int MinOccurs => Item.MinOccurs == Decimal.MaxValue ? Int32.MaxValue : Decimal.ToInt32(Item.MinOccurs);
+		public int MaxOccurs => Item.MaxOccurs == Decimal.MaxValue ? Int32.MaxValue : Decimal.ToInt32(Item.MaxOccurs);
 	} // class DEConfigurationElement
 
 	#endregion

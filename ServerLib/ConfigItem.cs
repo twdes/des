@@ -770,16 +770,92 @@ namespace TecWare.DE.Server
 		} // func GetService
 
 		#endregion
-		
+
 		#region -- Http -------------------------------------------------------------------
+
+		private static void BuildAnnotatedAttribute(XElement annotatedConfig, IDEConfigurationAttribute attributeDefinition, string value)
+		{
+			var property = new XElement("attribute");
+
+			property.SetAttributeValue("name", attributeDefinition.Name.LocalName);
+			property.SetAttributeValue("typename", attributeDefinition.TypeName);
+			property.SetAttributeValue("documentation", attributeDefinition.Documentation);
+
+			if (value == null) // default property
+			{
+				property.SetAttributeValue("isDefault", true);
+				if (attributeDefinition.DefaultValue != null)
+					property.Add(new XText(attributeDefinition.DefaultValue));
+			}
+			else // value property
+			{
+				property.SetAttributeValue("isDefault", false);
+				property.Add(new XText(Procs.ChangeType<string>(value)));
+			}
+
+			annotatedConfig.Add(property);
+		} // proc BuildAnnotatedAttribute
+
+		private XElement BuildAnnotatedConfigNode(XName name, XElement config)
+		{
+			var annotatedElement = new XElement("element");
+			var elementDefinition = Server.Configuration[name];
+
+			annotatedElement.SetAttributeValue("name", name.LocalName);
+			annotatedElement.SetAttributeValue("documentation", elementDefinition.Documentation);
+			if (elementDefinition.ClassType != null)
+				annotatedElement.SetAttributeValue("classType", elementDefinition.ClassType.FullName);
+
+			// add attributes
+			foreach (var c in elementDefinition.GetAttributes())
+			{
+
+				var attribute = config?.Attribute(c.Name);
+				if (attribute != null || c.MaxOccurs == 1)
+				{
+					BuildAnnotatedAttribute(annotatedElement, c, attribute == null ? config?.Element(c.Name)?.Value : attribute.Value);
+				}
+				else if (config != null)
+				{
+					foreach (var element in config.Elements(c.Name))
+					{
+						if (element.Value != null)
+							BuildAnnotatedAttribute(annotatedElement, c, element.Value);
+					}
+				}
+			}
+
+			// add elements
+			foreach (var c in elementDefinition.GetElements())
+			{
+				if (c.ClassType == null)
+				{
+					if (c.MaxOccurs == 1)
+					{
+						annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, config?.Element(c.Name)));
+					}
+					else if(config != null)
+					{
+						foreach (var x in config.Elements(c.Name))
+							annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, x));
+					}
+				}
+			}
+
+			return annotatedElement;
+    } // proc BuildAnnotatedConfigNode
 
 		[
 		DEConfigHttpAction("config", SecurityToken = SecuritySys),
 		Description("Gibt die Einstellungen der aktuellen Knotens zurück.")
 		]
-		private XElement HttpConfigAction()
+		private XElement HttpConfigAction(bool raw = false)
 		{
-			return Config;
+			var config = Config;
+			if (raw || config == null)
+				return config;
+			else
+				return BuildAnnotatedConfigNode(config.Name, config);
 		} // func HttpConfigAction
 
 		#endregion

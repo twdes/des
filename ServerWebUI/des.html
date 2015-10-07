@@ -1,0 +1,71 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Data Exchange Viewer</title>
+    <link rel="stylesheet" href="DEViewer.css" type="text/css" />
+    <script src="libs/jquery-2.1.4.min.js"></script>
+    <script src="DEViewer.js"></script>
+</head>
+<body>
+    <div id="head">
+        <div id="headFrame">
+            <div id="headTitle">
+                <h1 id="headReload" style="cursor: pointer">Data Exchange Server</h1>
+                <h2>TecWare (c) 2015</h2>
+            </div>
+            <select id="currentNode" style="min-width: 200px">
+            </select>
+            <img id="currentImage" src="" height="16" width="16" />
+            <span id="currentUri"></span>
+        </div>
+        <div id="tabs">
+            <span vid="tabLog" class="tabselected">Log</span>
+            <span vid="tabProperties" class="tabunselected">Props</span>
+            <span vid="tabConfig" class="tabunselected">Config</span>
+            <span vid="tabInfo" class="tabunselected">Info</span>
+        </div>
+    </div>
+    <div id="content">
+        <table id="tabLog"></table>
+        <table id="tabProperties"></table>
+        <div id="tabConfig">cfgs</div>
+        <div id="tabInfo">info</div>
+    </div>
+    <div style="display: none">
+        <div id="serverInfoTemplate">
+            <div class="serverInfoBlock">
+                <img src="images/des24.png" title=".des logo"/>
+                <div class="serverInfoText">
+                    <div class="serverInfoTopLine"><b>Data Exchange Server</b> {{version}}</div>
+                    <div class="serverInfoBottomLine">{{copyright}}</div>
+                </div>
+            </div>
+            <div class="serverInfoBlock">
+                <img src="images/windows24.png" title=".windows logo" />
+                <div class="serverInfoText">
+                    <div class="serverInfoTopLine"><b>Microsoft Windows</b> {{os/version}}</div>
+                    <div class="serverInfoBottomLine">{{os/versionstring}}</div>
+                </div>
+            </div>
+            <div class="serverInfoBlock">
+                <img src="images/net24.png" title=".net logo" />
+                <div class="serverInfoText">
+                    <div class="serverInfoTopLine"><b>{{net/versionstring}}</b> ({{net/versionfile}}, {{net/version}})</div>
+                    <div class="serverInfoBottomLine">{{net/copyright}}</div>
+                </div>
+            </div>
+        </div>
+        <div id="assemblyInfoTemplate">
+            <div class="serverInfoBlock">
+                <img src="{{image}}" title="assembly logo" />
+                <div class="serverInfoText">
+                    <div class="serverInfoTopLine"><b>{{title}}</b> Version {{version}}</div>
+                    <div class="serverInfoBottomLine">{{assembly}}</div>
+                    <div class="serverInfoBottomLine">{{copyright}}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

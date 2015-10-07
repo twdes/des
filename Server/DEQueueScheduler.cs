@@ -213,6 +213,8 @@ namespace TecWare.DE.Server
 					timeout = action == null || action is EventItem ? Int32.MaxValue : unchecked(action.Boundary - Environment.TickCount);
 					if (timeout < 0)
 						timeout = 0;
+					//else
+					//	FilledEvent.Reset();
 					break;
 				}
 				else
@@ -249,6 +251,7 @@ namespace TecWare.DE.Server
 					actionEvent.WaitHandle
 				}, timeout == Int32.MaxValue ? -1 : timeout);
 			}
+			Thread.Sleep(100); // todo: fix
 		} // proc ExecuteLoop
 
 		#endregion

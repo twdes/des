@@ -292,7 +292,7 @@ namespace TecWare.DE.Server
 					 where String.Compare(c.GetAttribute("name", String.Empty), "des", true) == 0
 					 select c).FirstOrDefault() == null)
 			{
-				var debugDirectory = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(HttpServer).Assembly.Location), @"..\..\Resources\Http"));
+				var debugDirectory = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(HttpServer).Assembly.Location), @"..\..\..\ServerWebUI"));
 				if (Directory.Exists(debugDirectory))
 				{
 					config.Add(
@@ -339,6 +339,9 @@ namespace TecWare.DE.Server
 			mimeInfo[".jpg"] = "image/jpeg";
 			mimeInfo[".ico"] = "image/x-icon";
 			mimeInfo[".xaml"] = "application/xaml+xml";
+
+			mimeInfo[".map"] = "text/json";
+			mimeInfo[".ts"] = "text/plain";
 
 			foreach (var x in config.ConfigNew.Elements())
 			{

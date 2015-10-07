@@ -59,6 +59,10 @@ namespace TecWare.DE.Server.Configuration
 		bool IsList { get; }
 		/// <summary>Is this attribute a primary key.</summary>
 		bool IsPrimaryKey { get; }
+		/// <summary>There can be one or more member</summary>
+		int MinOccurs { get; }
+		/// <summary>There can be one or more member</summary>
+		int MaxOccurs { get; }
 	} // interface IDEConfigurationAttribute
 
 	#endregion
@@ -81,6 +85,10 @@ namespace TecWare.DE.Server.Configuration
 
 		/// <summary>Class Type</summary>
 		Type ClassType { get; }
+		/// <summary>There can be one or more member</summary>
+		int MinOccurs { get; }
+		/// <summary>There can be one or more member</summary>
+		int MaxOccurs { get; }
 	} // interface IDEConfigurationElement
 
 	#endregion

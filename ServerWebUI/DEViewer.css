@@ -1,0 +1,273 @@
+﻿body {
+    font-family: 'Segoe UI', sans-serif;
+    padding: 0;
+    margin: 0;
+    cursor: default;
+}
+
+#head {
+    position: fixed;
+    left: 0px;
+    top: 0px;
+    right: 0px;
+    height: 54px;
+    padding: 0px;
+}
+#headFrame {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    right: 0px;
+    bottom: 0px;
+    padding: 3px;
+    background-color: lightblue;
+    border-bottom: 1px solid gray;
+}
+
+#headTitle {
+}
+
+#headTitle h1 {
+    display: inline;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+#headTitle h2 {
+    display: inline;
+    font-size: 10px;
+    font-style: normal;
+    font-weight: normal;
+}
+
+#currentUri {
+    margin: 7px;
+    font-size: 12px;
+}
+
+#tabs {
+    position: absolute;
+    right: 30px;
+    bottom: 3px;
+}
+
+#tabs span {
+    font-style: normal;
+    padding: 2px 4px 2px 4px;
+    margin: 0px;
+}
+
+.tabselected {
+    cursor: default;
+    background-color: white;
+    border-left: 1px solid gray;
+    border-top: 1px solid gray;
+    border-right: 1px solid gray;
+    border-bottom: 1px solid white;
+}
+
+.tabunselected {
+    cursor: pointer;
+}
+
+#content {
+    position: fixed;
+    left: 0px;
+    top: 60px;
+    right: 0px;
+    bottom: 0px;
+    background-color: white;
+    overflow: auto;
+}
+
+
+/******************************************************************************
+ * Log-Informationen
+ */
+#tabLog {
+    overflow-x: hidden;
+    overflow-y: scroll;
+    width: 100%;
+    height: 100%;
+}
+
+.logLineHeader
+{
+    font-size: smaller;
+    border-width: 1px;
+    border-bottom-style: solid;
+    border-color: #b4b4b4;
+}
+
+.logLineTime
+{
+    font-family: 'Courier New';
+    font-weight: normal;
+    text-align: left;
+    vertical-align: top;
+    padding-left: 21px;
+    padding-right: 8px;
+    padding-top: 0.14em;
+    width: 6em;
+    background-repeat: no-repeat;
+    background-position-y: 0.1em;
+    cursor: pointer;
+}
+
+.logLineBkI
+{
+    background-image: url('images/log.information.png');
+}
+
+.logLineBkW
+{
+    background-image: url('images/log.warning.png');
+}
+
+.logLineBkE
+{
+    background-image: url('images/log.error.png');
+}
+
+.logLineCell {
+    font-family: 'Courier New';
+    white-space: pre-wrap;
+}
+
+.logLineTextSingle
+{
+    text-overflow: ellipsis;
+    max-height: 1.1em;
+    overflow: hidden;
+}
+
+.logLineTextFull
+{
+    max-height: 15em;
+    overflow-x : auto;
+    overflow-y: auto;
+}
+
+
+/******************************************************************************
+ * Server-Informationen
+ */
+
+#tabInfo .serverInfoBlock {
+    margin: 6px;
+}
+
+#tabInfo .serverInfoText {
+    display: table-cell;
+}
+#tabInfo .serverInfoTopLine {
+
+}
+
+#tabInfo .serverInfoBottomLine {
+    color: darkslategray;
+}
+
+#tabInfo .serverInfoBlock img {
+    width: 24px;
+    height: 24px;
+    padding: 6px;
+    float: left;
+}
+
+
+/******************************************************************************
+ * Server-Informationen
+ */
+
+#tabConfig {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+#tabConfig .configElementBox {
+    padding-left: 32px;
+    left: 0px;
+    right: 0px;
+}
+
+#tabConfig .configHeader {
+    margin-left: -32px;
+    border-bottom: 1px solid darkgray;
+}
+
+#tabConfig .configHeaderTitle {
+    font-family: "Courier New";
+}
+
+#tabConfig .configHeaderDoc {
+    font-size: smaller;
+    color: darkslategray;
+    vertical-align: text-bottom;
+}
+
+#tabConfig .configAttributeTitle {
+    vertical-align: text-bottom;
+}
+
+#tabConfig .configAttributeValue {
+    font-family: "Courier New";
+    vertical-align: text-bottom;
+}
+
+#tabConfig .configAttributeDefault {
+    font-family: "Courier New";
+    color: darkgray;
+    vertical-align: text-bottom;
+}
+
+#tabConfig .configAttributeDocumentation {
+    font-size: smaller;
+    color: darkslategray;
+    vertical-align: text-bottom;
+}
+
+#tabConfig table {
+    padding-bottom: 12px;
+}
+
+#tabConfig td {
+    min-width: 200px;
+    vertical-align: bottom;
+}
+
+
+/******************************************************************************
+ * Server-Informationen
+ */
+
+#tabProperties {
+    padding-left: 12px;
+}
+
+#tabProperties th {
+    padding-top: 6px;
+    font-weight: bold;
+    text-align: left;
+    border-bottom: 1px solid darkgray;
+}
+
+#tabProperties td {
+    padding-right: 10px;
+}
+
+#tabProperties .propertyDescription {
+    font-size: smaller;
+    color: darkslategray;
+}
+
+#tabProperties .propertyName {
+    font-family: "Courier New";
+}
+
+#tabProperties .propertyValue {
+    font-family: "Courier New";
+    vertical-align: text-bottom;
+}
