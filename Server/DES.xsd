@@ -113,15 +113,30 @@
 	<xs:element name="files" substitutionGroup="configItem" type="HttpFileWorkerType">
 		<xs:annotation>
 			<xs:documentation>Dateien für diesen Knoten zur Verfügung stellen.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.Http.HttpFileWorker, DE.Server</class>
+			</xs:appinfo>
 		</xs:annotation>
 	</xs:element>
 
-	<xs:element name="resource" substitutionGroup="configItem" type="HttpResourceWorkerType">
+	<xs:element name="resources" substitutionGroup="configItem" type="HttpResourceWorkerType">
 		<xs:annotation>
 			<xs:documentation>Resourcen für diesen Knoten zur Verfügung stellen.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.Http.HttpResourceWorker, DE.Server</class>
+			</xs:appinfo>
 		</xs:annotation>
 	</xs:element>
 
+	<xs:element name="group" substitutionGroup="configItem" type="ConfigItemType">
+		<xs:annotation>
+			<xs:documentation>Groups element in a simple configuration node.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.DEGroup</class>
+			</xs:appinfo>
+		</xs:annotation>
+	</xs:element>
+	
 	<xs:complexType name="desServer">
 		<xs:sequence>
 			<xs:element name="resolve" minOccurs="0" maxOccurs="unbounded" type="PathType">

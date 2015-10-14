@@ -217,7 +217,7 @@ namespace TecWare.DE.Server.Http
 				namespaceRoot = namespaceRoot + ".";
 
 			// load alternative
-			nonePresentAlternativeExtensions = config.ConfigNew.GetAttribute("loadAlternativeFileIfNotExists", String.Empty).Split( new char[] { ' ' },StringSplitOptions.RemoveEmptyEntries);
+			nonePresentAlternativeExtensions = config.ConfigNew.GetAttribute("nonePresentAlternativeExtensions", String.Empty).Split( new char[] { ' ' },StringSplitOptions.RemoveEmptyEntries);
 			if (nonePresentAlternativeExtensions != null && nonePresentAlternativeExtensions.Length == 0)
 				nonePresentAlternativeExtensions = null;
 
@@ -240,8 +240,8 @@ namespace TecWare.DE.Server.Http
 				DateTime stamp;
 				// try to open the resource stream
 				var forceAlternativeCheck = nonePresentAlternativeExtensions != null && nonePresentAlternativeExtensions.FirstOrDefault(c => resourceName.EndsWith(c, StringComparison.OrdinalIgnoreCase)) != null;
-        var mri = assembly.GetManifestResourceInfo(resourceName);
-				if (mri == null && !forceAlternativeCheck) // nothing...
+        src = assembly.GetManifestResourceStream(resourceName);
+				if (src == null && !forceAlternativeCheck) // nothing...
 					return false;
 
 				// check if there is a newer file
@@ -250,7 +250,7 @@ namespace TecWare.DE.Server.Http
 					var relativeFileName = ProcsDE.GetLocalPath(r.RelativeSubPath);
 					var alternativeFile = (from c in alternativeRoots
 																 let fi = new FileInfo(Path.Combine(c, relativeFileName))
-																 where fi.Exists && fi.LastWriteTimeUtc > assemblyStamp
+																 where fi.Exists && (forceAlternativeCheck || fi.LastWriteTimeUtc > assemblyStamp)
 																 orderby fi.LastWriteTimeUtc descending
 																 select fi).FirstOrDefault();
 
@@ -278,7 +278,7 @@ namespace TecWare.DE.Server.Http
 				DemandFile(r, resourceName);
 				// send the file
 				r.SetLastModified(stamp)
-					.WriteResource(assembly, resourceName, GetFileContentType(resourceName));
+					.WriteStream(src, GetFileContentType(resourceName) ?? r.Http.GetContentType(Path.GetExtension(resourceName)));
 				return true;
 			}
 			finally

@@ -442,10 +442,10 @@ namespace TecWare.DE.Server
 			else
 			{
 				var c = relativeStack.Peek();
-				var l = subPath.Length;
-				if (subPath.Length > 0 && subPath[subPath.Length - 1] == '/')
-					l++;
-				relativeStack.Push(new RelativeFrame(c.AbsolutePosition + l, sp));
+				var p = c.AbsolutePosition + subPath.Length;
+				if (AbsolutePath[p] == '/')
+					p++;
+				relativeStack.Push(new RelativeFrame(p, sp));
 			}
 
 			// clear cache
@@ -462,6 +462,8 @@ namespace TecWare.DE.Server
 				var f = relativeStack.Peek();
 				if (f.Item != sp)
 					throw new ArgumentException("Invalid Stack.");
+
+				relativeStack.Pop();
 				RelativeCacheClear();
 			}
 			else
@@ -859,11 +861,9 @@ namespace TecWare.DE.Server
 
 			defaultCultureInfo = CultureInfo.CurrentCulture;
 
-#if DEBUG
-			IsDebug = true;
-#endif
-
+			// create protocols
 			this.webSocketProtocols = new DEList<IDEWebSocketProtocol>(this, "tw_websockets", "WebSockets");
+			this.RegisterWebSocketProtocol((IDEWebSocketProtocol)this.Server); // register events
 
 			cacheItemController = new CacheItemListController(this);
 			PublishItem(new DEConfigItemPublicAction("clearCache") { DisplayName = "Clear http-cache" });
@@ -916,7 +916,7 @@ namespace TecWare.DE.Server
 						Path.GetFullPath(Path.Combine(baseLocation, @"..\..\..\ServerWebUI"))
 					};
 
-				var xFiles = new XElement(xnFiles,
+				var xFiles = new XElement(xnResources,
 					new XAttribute("name", "des"),
 					new XAttribute("displayname", "Data Exchange Server - Http"),
 					new XAttribute("base", ""),
@@ -932,6 +932,8 @@ namespace TecWare.DE.Server
 						alternativePaths.Select(c => new XElement(xnAlternativeRoot, c))
 					);
 				}
+
+				config.Add(xFiles);
 			}
 		} // proc ValidateConfig
 
@@ -1031,10 +1033,6 @@ namespace TecWare.DE.Server
 			encoding = configNode.GetAttribute<Encoding>("encoding");
 			// set the default user language
 			defaultCultureInfo = configNode.GetAttribute<CultureInfo>("defaultUserLanguage");
-
-			// load extensions
-			foreach (XElement cur in config.ConfigNew.Elements().ToArray())
-				Server.LoadConfigExtension(config, cur, MainNamespace.NamespaceName);
 		} // proc OnBeginReadConfiguration
 
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
@@ -1240,11 +1238,12 @@ namespace TecWare.DE.Server
 
 			if (ctx.Request.IsWebSocketRequest)
 			{
-				var subProtocol = GetWebSocketProtocol(absolutePath, ctx.Request.Headers["Sec-WebSocket-Protocol"]);
+				var subProtocol = GetWebSocketProtocol(absolutePath, Procs.ParseMultiValueHeader(ctx.Request.Headers["Sec-WebSocket-Protocol"]).ToArray());
 				if (subProtocol != null)
 				{
 					var webSocketContext = ctx.AcceptWebSocketAsync(subProtocol.Protocol).Result;
-					subProtocol.AcceptWebSocket(new DEWebSocketContext(this, ctx, webSocketContext, absolutePath));
+					if (!subProtocol.AcceptWebSocket(new DEWebSocketContext(this, ctx, webSocketContext, absolutePath)))
+						webSocketContext.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint failure", CancellationToken.None).Wait();
 				}
 			}
 			else
@@ -1264,17 +1263,25 @@ namespace TecWare.DE.Server
 						// start to find the endpoint
 						if (r.TryEnterSubPath(Server, String.Empty))
 						{
-							// try to map a node
-							if (!ProcessRequestForConfigItem(r, (DEConfigItem)Server))
+							try
 							{
-								// Search all http worker nodes
-								using (EnterReadLock())
+								// try to map a node
+								if (!ProcessRequestForConfigItem(r, (DEConfigItem)Server))
 								{
-									if (!UnsafeProcessRequest(r))
-										throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
+									// Search all http worker nodes
+									using (EnterReadLock())
+									{
+										if (!UnsafeProcessRequest(r))
+											throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
+									}
 								}
 							}
+							finally
+							{
+								r.ExitSubPath(Server);
+							}
 						}
+
 						// check the return value
 						if (ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
 							throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
@@ -1305,8 +1312,21 @@ namespace TecWare.DE.Server
 			}
 		} // proc ProcessRequest
 
-		private IDEWebSocketProtocol GetWebSocketProtocol(string absolutePath, string subProtocols)
+		private IDEWebSocketProtocol GetWebSocketProtocol(string absolutePath, string[] subProtocols)
 		{
+			lock(webSocketProtocols)
+			{
+				foreach (var p in webSocketProtocols)
+				{
+					// correct protocol
+					if (Array.Exists(subProtocols, c => String.Compare(p.Protocol, c, StringComparison.OrdinalIgnoreCase) == 0))
+					{
+						if (p.BasePath.Length == 0 || absolutePath.StartsWith(p.BasePath, StringComparison.OrdinalIgnoreCase))
+							return p;
+					}
+				}
+			}
+
 			return null;
 		} // func GetWebSocketProtocol
 

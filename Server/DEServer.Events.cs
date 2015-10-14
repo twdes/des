@@ -4,46 +4,49 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using TecWare.DE.Server.Http;
 
 namespace TecWare.DE.Server
 {
-	internal partial class DEServer : IDEListService
+	internal partial class DEServer : IDEListService, IDEWebSocketProtocol
 	{
 		#region -- class FiredEvent -------------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
-		private class FiredEvent
+		private sealed class FiredEvent
 		{
-			private int iLastFired;
-			private int iRevision;
+			private int lastFired;
+			private int revision;
 
-			private string sPath;
-			private string sEvent;
-			private string sIndex;
+			private readonly string path;
+			private readonly string eventId;
+			private readonly string index;
 			private XElement values;
 
 			#region -- Ctor/Dtor ------------------------------------------------------------
 
-			public FiredEvent(int iRevision, string sPath, string sEvent, string sIndex, XElement values)
+			public FiredEvent(int revision, string path, string eventId, string index, XElement values)
 			{
-				if (String.IsNullOrEmpty(sPath))
+				if (String.IsNullOrEmpty(path))
 					throw new ArgumentNullException("path");
-				if (String.IsNullOrEmpty(sEvent))
+				if (String.IsNullOrEmpty(eventId))
 					throw new ArgumentNullException("event");
-				if (String.IsNullOrEmpty(sIndex))
-					sIndex = String.Empty;
+				if (String.IsNullOrEmpty(index))
+					index = String.Empty;
 
-				this.sPath = sPath;
-				this.sEvent = sEvent;
-				this.sIndex = sIndex;
+				this.path = path;
+				this.eventId = eventId;
+				this.index = index;
 
-				Reset(iRevision, values);
+				Reset(revision, values);
 			} // ctor
 
 			public override bool Equals(object obj)
@@ -57,15 +60,15 @@ namespace TecWare.DE.Server
 
 			public override int GetHashCode()
 			{
-				return sPath.GetHashCode() | sEvent.GetHashCode() | sIndex.GetHashCode();
+				return path.GetHashCode() | eventId.GetHashCode() | index.GetHashCode();
 			} // func GetHashCode
 
 			#endregion
 
-			public void Reset(int iRevision, XElement values)
+			public void Reset(int revision, XElement values)
 			{
-				this.iLastFired = Environment.TickCount;
-				this.iRevision = iRevision;
+				this.lastFired = Environment.TickCount;
+				this.revision = revision;
 				this.values = values;
 			} // proc Reset
 
@@ -74,93 +77,144 @@ namespace TecWare.DE.Server
 			public XElement GetEvent()
 			{
 				return new XElement("event",
-					new XAttribute("path", sPath),
-					new XAttribute("event", sEvent),
-					String.IsNullOrEmpty(sIndex) ? null : new XAttribute("index", sIndex),
+					new XAttribute("path", path),
+					new XAttribute("event", eventId),
+					String.IsNullOrEmpty(index) ? null : new XAttribute("index", index),
 					values);
 			} // func GetEvent
 
-			public bool IsEqual(string sTestPath, string sTestEvent, string sTestIndex)
+			public bool IsEqual(string testPath, string testEvent, string testIndex)
 			{
-				return String.Compare(sPath, sTestPath, true) == 0 &&
-						String.Compare(sEvent, sTestEvent, true) == 0 &&
-						String.Compare(sIndex, sTestIndex, true) == 0;
+				return String.Compare(path, testPath, true) == 0 &&
+						String.Compare(eventId, testEvent, true) == 0 &&
+						String.Compare(index, testIndex, true) == 0;
 			} // func IsEqual
 
-			public bool IsActive { get { return Environment.TickCount - iLastFired > 300000; } } // 5min
-			public string Path { get { return sPath; } }
-			public string Event { get { return sEvent; } }
-			public string Index { get { return sIndex; } }
-			public int Revision { get { return iRevision; } }
+			public bool IsActive { get { return Environment.TickCount - lastFired > 300000; } } // 5min
+			public string Path { get { return path; } }
+			public string Event { get { return eventId; } }
+			public string Index { get { return index; } }
+			public int Revision { get { return revision; } }
 		} // struct FiredEvent
 
 		#endregion
 
-		private int iSendedRevision = 0; // Zuletzt übertragene Revision
-		private int iCurrentRevision = 1; // Aktuelle Revision
+		private int sendedRevision = 0; // Zuletzt übertragene Revision
+		private int currentRevision = 1; // Aktuelle Revision
 		private Dictionary<string, FiredEvent> propertyChanged = new Dictionary<string, FiredEvent>(); // Liste mit allen Events, mit ihrer Revision (sortiert nach rev)
+		private List<IDEWebSocketContext> activeContexts = new List<IDEWebSocketContext>();
 
-		private int iLastEventClean = Environment.TickCount;
+		private int lastEventClean = Environment.TickCount;
 
 		#region -- Events -----------------------------------------------------------------
 
-		public void AppendNewEvent(DEConfigItem item, string sEvent, string sIndex, XElement values = null)
+		public void AppendNewEvent(DEConfigItem item, string eventId, string index, XElement values = null)
 		{
 			lock (propertyChanged)
 			{
-				if (iCurrentRevision == iSendedRevision)
-					iCurrentRevision++;
+				if (currentRevision == sendedRevision)
+					currentRevision++;
 
 				CleanOutdatedEvents();
 
-				string sConfigPath = item.ConfigPath;
-				string sKey = GetEventKey(sConfigPath, sEvent, sIndex);
+				var configPath = item.ConfigPath;
+				var key = GetEventKey(configPath, eventId, index);
 				FiredEvent ev;
-				if (propertyChanged.TryGetValue(sKey, out ev))
-					ev.Reset(iCurrentRevision, values);
+				if (propertyChanged.TryGetValue(key, out ev))
+					ev.Reset(currentRevision, values);
 				else
-					propertyChanged[sKey] = new FiredEvent(iCurrentRevision, sConfigPath, sEvent, sIndex, values);
+					propertyChanged[key] = ev = new FiredEvent(currentRevision, configPath, eventId, index, values);
+
+				// web socket event handling
+				FireEventOnSocket(configPath, ev.GetEvent());
 			}
 		} // proc AppendNewEvent
 
-		private string GetEventKey(string sPath, string sEvent, string sIndex)
+		private string GetEventKey(string path, string eventId, string index)
 		{
-			if (String.IsNullOrEmpty(sPath))
+			if (String.IsNullOrEmpty(path))
 				throw new ArgumentNullException("path");
-			if (String.IsNullOrEmpty(sEvent))
+			if (String.IsNullOrEmpty(eventId))
 				throw new ArgumentNullException("event");
-			if (String.IsNullOrEmpty(sIndex))
-				sIndex = String.Empty;
+			if (String.IsNullOrEmpty(index))
+				index = String.Empty;
 
-			return sPath + ":" + sEvent + "[" + sIndex + "]";
+			return path + ":" + eventId + "[" + index + "]";
 		} // func GetEventKey
 
 		private void CleanOutdatedEvents()
 		{
 			lock (propertyChanged)
 			{
-				if (Environment.TickCount - iLastEventClean < 10000)
+				if (Environment.TickCount - lastEventClean < 10000)
 					return;
 
-				string[] cleanKeys = new string[100];
-				int iKeyCount = 0;
+				var cleanKeys = new string[100];
+				var keyCount = 0;
 
 				// Suche die Ausgelaufenen Events
 				foreach (var cur in propertyChanged)
+				{
 					if (!cur.Value.IsActive)
 					{
-						cleanKeys[iKeyCount++] = cur.Key;
-						if (iKeyCount >= cleanKeys.Length)
+						cleanKeys[keyCount++] = cur.Key;
+						if (keyCount >= cleanKeys.Length)
 							break;
 					}
+				}
 
 				// Lösche die Schlüssel
-				for (int i = 0; i < iKeyCount; i++)
+				for (int i = 0; i < keyCount; i++)
 					propertyChanged.Remove(cleanKeys[i]);
 
-				iLastEventClean = Environment.TickCount;
+				lastEventClean = Environment.TickCount;
 			}
 		} // proc CleanOutdatedEvents
+
+		#endregion
+
+		#region -- WebSocket Events -------------------------------------------------------
+
+		public bool AcceptWebSocket(IDEWebSocketContext webSocket)
+		{
+			lock(activeContexts)
+				activeContexts.Add(webSocket);
+			return true;
+		} // func AcceptWebSocket
+
+		private void FireEventOnSocket(string path, XElement xEvent)
+		{
+			// prepare line
+			var eventLine = xEvent.ToString(SaveOptions.DisableFormatting);
+
+			lock (activeContexts)
+			{
+				// remove dead sockets
+				for (int i = activeContexts.Count - 1; i >= 0; i--)
+				{
+					var c = activeContexts[i];
+					if (c.WebSocket.State != WebSocketState.Open) // check if the socket is available
+						activeContexts.RemoveAt(i);
+					else if (c.AbsolutePath.Length == 0 || path.StartsWith(c.AbsolutePath, StringComparison.OrdinalIgnoreCase)) // spawn thread
+						Task.Factory.StartNew(SendEventOnSocketAsync(c, eventLine).Wait);
+				}
+			}
+		} // proc FireEventOnSocket
+
+		private async Task SendEventOnSocketAsync(IDEWebSocketContext context, string eventLine)
+		{
+			var ws = context.WebSocket;
+			
+			if (ws.State == System.Net.WebSockets.WebSocketState.Open)
+			{
+				var segment = new ArraySegment<byte>(context.Http.Encoding.GetBytes(eventLine));
+				await ws.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+			}
+		} // proc SendEventOnSocketAsync
+
+		string IDEWebSocketProtocol.Protocol => "des_event";
+		string IDEWebSocketProtocol.BasePath => String.Empty;
+		string IDEWebSocketProtocol.SecurityToken => SecuritySys;
 
 		#endregion
 
@@ -183,55 +237,55 @@ namespace TecWare.DE.Server
 
 		#region -- WriteListCheckRange-----------------------------------------------------
 
-		private static void WriteListCheckRange(XmlWriter xml, ref int iStart, ref int iCount, int iListCount)
+		private static void WriteListCheckRange(XmlWriter xml, ref int startAt, ref int count, int listCount)
 		{
 			// Prüfe den Start
-			if (iStart < 0) // setze von hinten auf
+			if (startAt < 0) // setze von hinten auf
 			{
-				iStart = iListCount + iStart;
-				if (iStart < 0)
-					iStart = 0;
+				startAt = listCount + startAt;
+				if (startAt < 0)
+					startAt = 0;
 			}
 
-			if (iCount < 0) // Anzahl korrigieren
-				iCount = 0;
-			else if (iStart + iCount > iListCount)
+			if (count < 0) // Anzahl korrigieren
+				count = 0;
+			else if (startAt + count > listCount)
 			{
-				iCount = iListCount - iStart;
-				if (iCount < 0)
-					iCount = 0;
+				count = listCount - startAt;
+				if (count < 0)
+					count = 0;
 			}
 
-			xml.WriteAttributeString("tc", iListCount.ToString());
-			xml.WriteAttributeString("s", iStart.ToString());
-			xml.WriteAttributeString("c", iCount.ToString());
+			xml.WriteAttributeString("tc", listCount.ToString());
+			xml.WriteAttributeString("s", startAt.ToString());
+			xml.WriteAttributeString("c", count.ToString());
 		} // proc WriteListCheckRange
 
 		#endregion
 
 		#region -- WriteListFetchEnum -----------------------------------------------------
 
-		private void WriteListFetchEnum(XmlWriter xml, IDEListDescriptor descriptor, IEnumerator enumerator, int iStart, int iCount)
+		private void WriteListFetchEnum(XmlWriter xml, IDEListDescriptor descriptor, IEnumerator enumerator, int startAt, int count)
 		{
-			if (iStart < 0 || iCount < 0)
+			if (startAt < 0 || count < 0)
 				throw new ArgumentException("start oder count dürfen nicht negativ sein.");
 
 			// Überspringe die ersten
-			while (iStart > 0)
+			while (startAt > 0)
 			{
 				if (!enumerator.MoveNext())
 					break;
-				iStart--;
+				startAt--;
 			}
 
 			// Gib die Element aus
-			while (iCount > 0)
+			while (count > 0)
 			{
 				if (!enumerator.MoveNext())
 					break;
 
 				descriptor.WriteItem(new DEListItemWriter(xml), enumerator.Current);
-				iCount--;
+				count--;
 			}
 
 		} // func WriteListFetchEnum
@@ -244,45 +298,45 @@ namespace TecWare.DE.Server
 
 		private class GenericWriter
 		{
-			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IReadOnlyList<T> list, int iStart, int iCount)
+			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IReadOnlyList<T> list, int startAt, int count)
 			{
-				WriteListCheckRange(xml, ref iStart, ref iCount, list.Count);
+				WriteListCheckRange(xml, ref startAt, ref count, list.Count);
 
-				if (iCount > 0)
+				if (count > 0)
 				{
-					var end = iStart + iCount;
-					for (int i = iStart; i < end; i++)
+					var end = startAt + count;
+					for (int i = startAt; i < end; i++)
 						descriptor.WriteItem(new DEListItemWriter(xml), (T)list[i]);
 				}
 			} // proc WriteList
 
-			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IList<T> list, int iStart, int iCount)
+			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IList<T> list, int startAt, int count)
 			{
-				WriteListCheckRange(xml, ref iStart, ref iCount, list.Count);
+				WriteListCheckRange(xml, ref startAt, ref count, list.Count);
 
-				if (iCount > 0)
+				if (count > 0)
 				{
-					var end = iStart + iCount;
-					for (int i = iStart; i < end; i++)
+					var end = startAt + count;
+					for (int i = startAt; i < end; i++)
 						descriptor.WriteItem(new DEListItemWriter(xml), (T)list[i]);
 				}
 			} // proc WriteList
 
-			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable<T> list, int iStart, int iCount)
+			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable<T> list, int startAt, int count)
 			{
-				WriteListCheckRange(xml, ref iStart, ref iCount, list.Count);
+				WriteListCheckRange(xml, ref startAt, ref count, list.Count);
 
-				if (iCount > 0)
+				if (count > 0)
 				{
-					using (var enumerator = list.GetEnumerator(iStart, iCount))
+					using (var enumerator = list.GetEnumerator(startAt, count))
 					{
-						while (iCount > 0)
+						while (count > 0)
 						{
 							if (!enumerator.MoveNext())
 								break;
 
 							descriptor.WriteItem(new DEListItemWriter(xml), enumerator.Current);
-							iCount--;
+							count--;
 						}
 					}
 				}
@@ -291,7 +345,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private void WriteListFetchTyped(Type type, XmlWriter xml, IDEListDescriptor descriptor, object list, int iStart, int iCount)
+		private void WriteListFetchTyped(Type type, XmlWriter xml, IDEListDescriptor descriptor, object list, int startAt, int count)
 		{
 			Type typeGeneric = type.GetGenericTypeDefinition(); // Hole den generischen Typ ab
 
@@ -301,50 +355,50 @@ namespace TecWare.DE.Server
 				throw new ArgumentNullException("writelist", String.Format("Keinen generische Implementierung gefunden ({0}).", typeGeneric.FullName));
 
 			// Aufruf des Writers
-			Type typeDelegate = typeof(Action<,,,,>).MakeGenericType(typeof(XmlWriter), typeof(IDEListDescriptor), type, typeof(int), typeof(int));
-			MethodInfo miWriteListTyped = miWriteList.MakeGenericMethod(type.GetTypeInfo().GenericTypeArguments[0]);
-			Delegate dlg = Delegate.CreateDelegate(typeDelegate, miWriteListTyped);
-			dlg.DynamicInvoke(xml, descriptor, list, iStart, iCount);
+			var typeDelegate = typeof(Action<,,,,>).MakeGenericType(typeof(XmlWriter), typeof(IDEListDescriptor), type, typeof(int), typeof(int));
+			var miWriteListTyped = miWriteList.MakeGenericMethod(type.GetTypeInfo().GenericTypeArguments[0]);
+			var dlg = Delegate.CreateDelegate(typeDelegate, miWriteListTyped);
+			dlg.DynamicInvoke(xml, descriptor, list, startAt, count);
 		} // proc WriteListFetchListTyped
 
 		#endregion
 
 		#region -- WriteListFetchList -----------------------------------------------------
 
-		private void WriteListFetchList(XmlWriter xml, IDEListDescriptor descriptor, IList list, int iStart, int iCount)
+		private void WriteListFetchList(XmlWriter xml, IDEListDescriptor descriptor, IList list, int startAt, int count)
 		{
-			WriteListCheckRange(xml, ref iStart, ref iCount, list.Count);
+			WriteListCheckRange(xml, ref startAt, ref count, list.Count);
 
-			if (iCount > 0)
+			if (count > 0)
 			{
-				var end = iStart + iCount;
-				for (int i = iStart; i < end; i++)
+				var end = startAt + count;
+				for (int i = startAt; i < end; i++)
 					descriptor.WriteItem(new DEListItemWriter(xml), list[i]);
 			}
 		} // proc WriteListFetchList
 
 		#endregion
 
-		void IDEListService.WriteList(IDEHttpContext r, IDEListController controller, int iStart, int iCount)
+		void IDEListService.WriteList(IDEHttpContext r, IDEListController controller, int startAt, int count)
 		{
-			bool lSendTypeDefinition = String.Compare(r.GetProperty("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
+			var sendTypeDefinition = String.Compare(r.GetProperty("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
 
 			// Suche den passenden Descriptor
-			IDEListDescriptor descriptor = controller.Descriptor;
+			var descriptor = controller.Descriptor;
 			if (descriptor == null)
 				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Liste '{0}' besitzt kein Format.", controller.Id));
 
 			controller.OnBeforeList();
 
 			// Rückgabe
-			using (TextWriter tw = r.GetOutputTextWriter("text/xml"))
-			using (XmlWriter xml = XmlWriter.Create(tw, GetSettings(tw)))
+			using (var tw = r.GetOutputTextWriter("text/xml"))
+			using (var xml = XmlWriter.Create(tw, GetSettings(tw)))
 			{
 				xml.WriteStartDocument();
 				xml.WriteStartElement("list");
 
 				// Sollen die Strukturinformationen übertragen werdem
-				if (lSendTypeDefinition)
+				if (sendTypeDefinition)
 				{
 					xml.WriteStartElement("typedef");
 					descriptor.WriteType(new DEListTypeWriter(xml));
@@ -357,7 +411,7 @@ namespace TecWare.DE.Server
 					var list = controller.List;
 
 					// Prüfe auf Indexierte Listen
-					ListEnumeratorType useInterface = ListEnumeratorType.Enumerable;
+					var useInterface = ListEnumeratorType.Enumerable;
 					Type useInterfaceType = null;
 					foreach (var ii in list.GetType().GetTypeInfo().ImplementedInterfaces)
 					{
@@ -404,7 +458,7 @@ namespace TecWare.DE.Server
 							var enumerator = list.GetEnumerator();
 							try
 							{
-								WriteListFetchEnum(xml, descriptor, enumerator, iStart, iCount);
+								WriteListFetchEnum(xml, descriptor, enumerator, startAt, count);
 							}
 							finally
 							{
@@ -417,12 +471,12 @@ namespace TecWare.DE.Server
 						case ListEnumeratorType.ReadOnlyList:
 						case ListEnumeratorType.ListTyped:
 						case ListEnumeratorType.RangeEnumerator:
-							WriteListFetchTyped(useInterfaceType, xml, descriptor, list, iStart, iCount);
+							WriteListFetchTyped(useInterfaceType, xml, descriptor, list, startAt, count);
 							break;
 
 
 						case ListEnumeratorType.ListUntyped:
-							WriteListFetchList(xml, descriptor, (IList)list, iStart, iCount);
+							WriteListFetchList(xml, descriptor, (IList)list, startAt, count);
 							break;
 
 						default:
@@ -445,9 +499,9 @@ namespace TecWare.DE.Server
 			{
 				CleanOutdatedEvents();
 
-				iSendedRevision = iCurrentRevision;
+				sendedRevision = currentRevision;
 				return new XElement("events",
-					new XAttribute("rev", iCurrentRevision),
+					new XAttribute("rev", currentRevision),
 					(
 					from c in propertyChanged.Values
 					where c.Revision > rev

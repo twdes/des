@@ -149,6 +149,7 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnLuaScript = MainNamespace + "script";
 
 		public static readonly XName xnLog = MainNamespace + "log";
+		public static readonly XName xnGroup = MainNamespace + "group";
 		public static readonly XName xnFiles = MainNamespace + "files";
 		public static readonly XName xnResources = MainNamespace + "resources";
 		public static readonly XName xnAlternativeRoot = MainNamespace + "alternativeRoot";

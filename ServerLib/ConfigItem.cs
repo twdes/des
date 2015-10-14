@@ -613,16 +613,23 @@ namespace TecWare.DE.Server
 
 			// Update des Sicherheitstokens
 			securityToken = config.ConfigNew.GetAttribute("security", null);
-			
-			// Lade Http-Erweiterungen
-			foreach (XElement current in config.ConfigNew.Elements().ToArray())
-			{
-				if (current.Name == DEConfigurationConstants.xnFiles)
-					config.RegisterSubItem<HttpFileWorker>(current);
-				else if (current.Name == DEConfigurationConstants.xnResources)
-					config.RegisterSubItem<HttpResourceWorker>(current);
-			}
+
+			// load extensions
+			foreach (var cur in config.ConfigNew.Elements().Where(c => IsSubConfigurationElement(c.Name)).ToArray())
+				Server.LoadConfigExtension(config, cur, String.Empty);
 		} // proc OnBeginReadConfiguration
+
+		protected virtual bool IsSubConfigurationElement(XName xn)
+		{
+			if (xn.Namespace == DEConfigurationConstants.MainNamespace)
+			{
+				return xn == DEConfigurationConstants.xnFiles ||
+					xn == DEConfigurationConstants.xnResources ||
+					xn == DEConfigurationConstants.xnGroup;
+			}
+			else
+				return true;
+		} // func IsSubConfigurationElement
 
 		/// <summary>Wird aufgerufen, bevor die Konfiguration aktiviert wird. Diese Funktion sollte keine Exceptions mehr auslösen.</summary>
 		/// <param name="config"></param>
@@ -807,46 +814,48 @@ namespace TecWare.DE.Server
 			var elementDefinition = Server.Configuration[name];
 
 			annotatedElement.SetAttributeValue("name", name.LocalName);
-			annotatedElement.SetAttributeValue("documentation", elementDefinition.Documentation);
-			if (elementDefinition.ClassType != null)
-				annotatedElement.SetAttributeValue("classType", elementDefinition.ClassType.FullName);
-
-			// add attributes
-			foreach (var c in elementDefinition.GetAttributes())
+			if (elementDefinition != null)
 			{
+				annotatedElement.SetAttributeValue("documentation", elementDefinition.Documentation);
+				if (elementDefinition.ClassType != null)
+					annotatedElement.SetAttributeValue("classType", elementDefinition.ClassType.FullName);
 
-				var attribute = config?.Attribute(c.Name);
-				if (attribute != null || c.MaxOccurs == 1)
+				// add attributes
+				foreach (var c in elementDefinition.GetAttributes())
 				{
-					BuildAnnotatedAttribute(annotatedElement, c, attribute == null ? config?.Element(c.Name)?.Value : attribute.Value);
-				}
-				else if (config != null)
-				{
-					foreach (var element in config.Elements(c.Name))
+
+					var attribute = config?.Attribute(c.Name);
+					if (attribute != null || c.MaxOccurs == 1)
 					{
-						if (element.Value != null)
-							BuildAnnotatedAttribute(annotatedElement, c, element.Value);
+						BuildAnnotatedAttribute(annotatedElement, c, attribute == null ? config?.Element(c.Name)?.Value : attribute.Value);
+					}
+					else if (config != null)
+					{
+						foreach (var element in config.Elements(c.Name))
+						{
+							if (element.Value != null)
+								BuildAnnotatedAttribute(annotatedElement, c, element.Value);
+						}
+					}
+				}
+
+				// add elements
+				foreach (var c in elementDefinition.GetElements())
+				{
+					if (c.ClassType == null)
+					{
+						if (c.MaxOccurs == 1)
+						{
+							annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, config?.Element(c.Name)));
+						}
+						else if (config != null)
+						{
+							foreach (var x in config.Elements(c.Name))
+								annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, x));
+						}
 					}
 				}
 			}
-
-			// add elements
-			foreach (var c in elementDefinition.GetElements())
-			{
-				if (c.ClassType == null)
-				{
-					if (c.MaxOccurs == 1)
-					{
-						annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, config?.Element(c.Name)));
-					}
-					else if(config != null)
-					{
-						foreach (var x in config.Elements(c.Name))
-							annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, x));
-					}
-				}
-			}
-
 			return annotatedElement;
     } // proc BuildAnnotatedConfigNode
 
@@ -1086,9 +1095,9 @@ namespace TecWare.DE.Server
 
 		static DEConfigItem()
 		{
-			miGetProperty = typeof(IDEHttpContext).GetMethod("GetProperty", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string), typeof(string) }, null);
+			miGetProperty = typeof(IDECommonContext).GetMethod("GetProperty", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string), typeof(string) }, null);
 			if (miGetProperty == null)
-				throw new ArgumentNullException("sctor", "IDEConfigActionCaller");
+				throw new ArgumentNullException("sctor", "IDECommonContext");
 
 			piInvariantCulture = typeof(CultureInfo).GetProperty("InvariantCulture", BindingFlags.Public | BindingFlags.Static | BindingFlags.GetProperty);
 			if (piInvariantCulture == null)

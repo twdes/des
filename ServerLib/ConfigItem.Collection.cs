@@ -23,9 +23,9 @@ namespace TecWare.DE.Server
 		/// <summary>Serialisiert die Liste auf den Http-Stream.</summary>
 		/// <param name="r">Http response</param>
 		/// <param name="controller">Liste</param>
-		/// <param name="iStart">Übergebener Startwert.</param>
-		/// <param name="iCount">Anzahl der Elemente die zurückgeliefert werden sollen</param>
-		void WriteList(IDEHttpContext r, IDEListController controller, int iStart, int iCount);
+		/// <param name="startAt">Übergebener Startwert.</param>
+		/// <param name="count">Anzahl der Elemente die zurückgeliefert werden sollen</param>
+		void WriteList(IDEHttpContext r, IDEListController controller, int startAt, int count);
 	} // interface IDEListService
 
 	#endregion

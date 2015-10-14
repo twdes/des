@@ -9,7 +9,11 @@ function loadTemplate(template: JQuery, node: JQuery): string {
 
     var pos = key.indexOf('/');
     if (pos == -1) {
-      return node.attr(key);
+      if (key === "image") {
+        return 'src="' + node.attr(key) + '"'; // do not load {{image}}
+      }
+      else
+        return node.attr(key);
     } else {
       var c = $(key.substring(0, pos), node);
       return c.attr(key.substring(pos + 1));
@@ -50,6 +54,7 @@ function formatValue(type: string, format: string, rawValue: string): string {
 class DETab {
   private app: DEViewer;
   private viewId: string;
+  private visible: boolean;
 
   private button: JQuery;
   private root: JQuery;
@@ -57,6 +62,7 @@ class DETab {
   constructor(app: DEViewer, viewId: string) {
     this.app = app;
     this.viewId = viewId;
+    this.visible = true;
 
     // init button
     this.button = $(['span[vid="', this.viewId, '"]'].join(""), app.TabBarElement).first();
@@ -83,10 +89,16 @@ class DETab {
   public reload(url: string) {
   } // reload
 
+  public showTab(visible: boolean) {
+    this.visible = visible;
+    this.button.css('display', visible ? 'inline' : 'none');
+  } // showTab
+
   get App() { return this.app; }
   get ViewId() { return this.viewId; }
   get ButtonElement() { return this.button; }
   get RootElement() { return this.root; }
+  get IsVisible() { return this.visible; }
 } // class DETab
 
 
@@ -102,8 +114,13 @@ class DELogTab extends DETab {
 
     this.RootElement.empty();
 
-    this.App.serverGet(url + "?action=listget&id=tw_lines",
+    if (!this.IsVisible)
+      return;
+
+    this.App.serverGet(url + "?action=listget&id=tw_lines&start=-500", // last 500
       (function (data) {
+
+        var innerHtmlElements = new Array();
 
         $('items > line', data).each(
           (function (index, element) {
@@ -114,17 +131,19 @@ class DELogTab extends DETab {
             var lineText = line.text().replace(/\</g, '&lt;').replace(/\>/g, '&gt;');
 
             if (firstDate == null || firstDate != lineStamp.getDate()) { // add seperator
-              this.RootElement.append(['<tr><td colspan="2" class="logLineHeader">Datum: ', lineStamp.toLocaleDateString(), '</td></tr>'].join(""));
+              innerHtmlElements.push(['<tr><td colspan="2" class="logLineHeader">Datum: ', lineStamp.toLocaleDateString(), '</td></tr>']);
               firstDate = lineStamp.getDate();
             }
-            this.RootElement.append([
+            innerHtmlElements.push([
               '<tr>',
               '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumintegerDigits: 3 }), '</td>',
               '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
-              '</tr>'].join("")
+            '</tr>'].join("")
             );
           }).bind(this)
         );
+
+        this.RootElement.html(innerHtmlElements.join(""));
 
         // aktivate toggle
         $('.logLineTime', this.RootElement).click(
@@ -195,7 +214,12 @@ class DEProperties extends DETab {
           });
 
       }).bind(this));
- } // reload
+  } // reload
+
+  public updateProperty(propId: string, value: string) {
+    var td = $('#' + propId, this.RootElement);
+    td.html(formatValue(td.attr('type'), td.attr('format'), value));
+  } // updateProperty
 } // class DEProperties
 
 
@@ -260,6 +284,9 @@ class DEServerInfo extends DETab {
 
     this.RootElement.empty();
 
+    if (!this.IsVisible)
+      return;
+
     this.App.serverGet("?action=serverinfo",
       (function (data) {
         var serverInfo = $(':root', data);
@@ -291,6 +318,7 @@ class DEViewer {
   private currentPath: string;
   private currentHost: string;
   private currentUri: string;
+  private currentWebSocket: WebSocket;
 
   private currentTab: DETab;
   private tabs: DETab[];
@@ -395,20 +423,18 @@ class DEViewer {
       },
       function () {
         obj.onReloading = false;
-        setTimeout(() => obj.refreshActionElement.toggleClass("actionButton", true), 1000);
+        setTimeout(() => obj.refreshActionElement.toggleClass("actionButton", true), 100);
       });
   } // beginReloadIndex
 
   private updateIndexAppend(current: JQuery, url: string, level: string) {
 
-    // check if a log exists
-    if ($('list[id="tw_lines"]', current).first().length == 0)
-      return;
-
     // get the attributes
     var name = current.attr('name');
     var displayname = current.attr('displayname');
     var icon = current.attr('icon');
+    // check if a log exists
+    var hasLog = $('list[id="tw_lines"]', current).first().length > 0;
 
     if (name === 'Main') {
       name = "";
@@ -418,12 +444,12 @@ class DEViewer {
       url = url + name + '/';
     
     // insert the option
-    this.currentNodeElement.append(['<option name="', name, '" uri="', url, '" icon="', icon, '">', level, displayname, '</option>'].join(''));
+    this.currentNodeElement.append(['<option name="', name, '" uri="', url, '" icon="', icon, '" hasLog="', hasLog, '">', level, displayname, '</option>'].join(''));
 
     // insert children
     var obj = this;
     level = level + "&nbsp;&nbsp;&nbsp;";
-    $(':only-child item', current).each(
+    current.children('item').each(
       function (index, element) {
         obj.updateIndexAppend($(element), url, level);
       }
@@ -459,13 +485,26 @@ class DEViewer {
     this.beginRefreshTimer = setTimeout(
       (function () {
 
+        // stop listening for events
+        this.stopEventListener();
+
+        // set the new node
         this.currentUri = option.attr('uri');
         this.currentUriElement.text(this.currentHost + this.currentUri);
         this.currentImageElement.attr("src", option.attr("icon"));
 
+        this.startEventListener();
+
+        var hasLog = option.attr('hasLog') === "true";
+
         // reload tabs
-        for (var i = 0; i < this.tabs.length; i++)
+        this.tabs[0].showTab(hasLog);
+        this.tabs[3].showTab(this.currentUri === "");
+
+        for (var i = 0; i < this.tabs.length; i++) {
           this.tabs[i].reload(this.currentUri);
+        }
+        
 
         // reload actions
         $('#actions > span[loaded="true"]').remove();
@@ -502,8 +541,40 @@ class DEViewer {
               });
           });
 
-      }).bind(this), 500);
-	} // beginRefreshUri
+      }).bind(this), 200);
+  } // beginRefreshUri
+
+  private startEventListener() {
+    var wsHost = "ws" + this.currentHost.substring(4);
+    
+    this.currentWebSocket = new WebSocket(wsHost + this.currentUri, "des_event");
+    this.currentWebSocket.onmessage = this.eventListenerMessage.bind(this);
+  } // startEventListener
+
+  private eventListenerMessage(ev: MessageEvent) {
+    if (ev.type === "message") {
+      var d = $(':root', $.parseXML(ev.data));
+
+      //console.log("raw event: " + ev.data);
+
+      // check the path
+      if (this.currentUri === d.attr('path').substring(1)) {
+        var eventId = d.attr('event');
+        if (eventId === 'tw_properties')
+          (<DEProperties>this.tabs[1]).updateProperty(d.attr('index'), d.text());
+        else if (eventId === 'tw_lines') {
+          // todo
+        }
+      }
+
+    }
+  } // eventListenerMessage
+  
+  private stopEventListener() {
+    if (this.currentWebSocket != null)
+      this.currentWebSocket.close();
+    this.currentWebSocket = null;
+  } // startEventListener
 
   get TabBarElement() { return this.tabsElement; }
 } // class DEViewer

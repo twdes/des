@@ -11,13 +11,6 @@ namespace TecWare.DE.Server
 		{
 		} // ctor
 
-		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
-		{
-			base.OnBeginReadConfiguration(config);
-
-			((DEServer)Server).LoadExtensions(config, config.ConfigNew);
-		} // proc OnBeginReadConfiguration
-
 		public override string Icon { get { return "/images/folder.png"; } }
 	} // class DEGroup
 }

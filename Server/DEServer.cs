@@ -652,10 +652,17 @@ namespace TecWare.DE.Server
 
 			// Initialisiere die Basis
 			base.OnBeginReadConfiguration(config);
-
-			// Lade die Anwendungen
-			LoadExtensions(config, config.ConfigNew);
 		} // proc OnBeginReadConfiguration
+
+		protected override bool IsSubConfigurationElement(XName xn)
+		{
+			if (xn == xnLuaEngine ||
+				xn == xnHttp ||
+				xn == xnCron)
+				return true;
+			else
+				return base.IsSubConfigurationElement(xn);
+		} // func IsSubConfigurationElement
 
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
 		{
@@ -664,12 +671,6 @@ namespace TecWare.DE.Server
 			// refresh cron service
 			queue.ExecuteEvent(DEServerEvent.Reconfiguration);
 		} // proc OnEndReadConfiguration
-
-		internal void LoadExtensions(IDEConfigLoading config, XElement element)
-		{
-			foreach (var current in element.Elements().ToArray())
-				LoadConfigExtension(config, current, MainNamespace.NamespaceName);
-		} // proc LoadExtensions
 
 		[ThreadStatic]
 		private static MethodInfo miRegisterSubItem = null;

@@ -10,7 +10,11 @@ function loadTemplate(template, node) {
         var key = key.substring(2, key.length - 2);
         var pos = key.indexOf('/');
         if (pos == -1) {
-            return node.attr(key);
+            if (key === "image") {
+                return 'src="' + node.attr(key) + '"'; // do not load {{image}}
+            }
+            else
+                return node.attr(key);
         }
         else {
             var c = $(key.substring(0, pos), node);
@@ -46,6 +50,7 @@ var DETab = (function () {
         var _this = this;
         this.app = app;
         this.viewId = viewId;
+        this.visible = true;
         // init button
         this.button = $(['span[vid="', this.viewId, '"]'].join(""), app.TabBarElement).first();
         this.button.click(function (e) { return _this.app.selectTab(_this); });
@@ -64,6 +69,10 @@ var DETab = (function () {
     }; // unselect
     DETab.prototype.reload = function (url) {
     }; // reload
+    DETab.prototype.showTab = function (visible) {
+        this.visible = visible;
+        this.button.css('display', visible ? 'inline' : 'none');
+    }; // showTab
     Object.defineProperty(DETab.prototype, "App", {
         get: function () { return this.app; },
         enumerable: true,
@@ -84,6 +93,11 @@ var DETab = (function () {
         enumerable: true,
         configurable: true
     });
+    Object.defineProperty(DETab.prototype, "IsVisible", {
+        get: function () { return this.visible; },
+        enumerable: true,
+        configurable: true
+    });
     return DETab;
 })(); // class DETab
 var DELogTab = (function (_super) {
@@ -95,22 +109,27 @@ var DELogTab = (function (_super) {
         _super.prototype.reload.call(this, url);
         var firstDate = null;
         this.RootElement.empty();
-        this.App.serverGet(url + "?action=listget&id=tw_lines", (function (data) {
+        if (!this.IsVisible)
+            return;
+        this.App.serverGet(url + "?action=listget&id=tw_lines&start=-500", // last 500
+        (function (data) {
+            var innerHtmlElements = new Array();
             $('items > line', data).each((function (index, element) {
                 var line = $(element);
                 var lineType = line.attr('typ');
                 var lineStamp = new Date(Date.parse(line.attr('stamp')));
                 var lineText = line.text().replace(/\</g, '&lt;').replace(/\>/g, '&gt;');
                 if (firstDate == null || firstDate != lineStamp.getDate()) {
-                    this.RootElement.append(['<tr><td colspan="2" class="logLineHeader">Datum: ', lineStamp.toLocaleDateString(), '</td></tr>'].join(""));
+                    innerHtmlElements.push(['<tr><td colspan="2" class="logLineHeader">Datum: ', lineStamp.toLocaleDateString(), '</td></tr>']);
                     firstDate = lineStamp.getDate();
                 }
-                this.RootElement.append([
+                innerHtmlElements.push([
                     '<tr>',
                     '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumintegerDigits: 3 }), '</td>',
                     '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
                     '</tr>'].join(""));
             }).bind(this));
+            this.RootElement.html(innerHtmlElements.join(""));
             // aktivate toggle
             $('.logLineTime', this.RootElement).click(function () {
                 var text = $('.logLineText', $(this).parent());
@@ -160,6 +179,10 @@ var DEProperties = (function (_super) {
             });
         }).bind(this));
     }; // reload
+    DEProperties.prototype.updateProperty = function (propId, value) {
+        var td = $('#' + propId, this.RootElement);
+        td.html(formatValue(td.attr('type'), td.attr('format'), value));
+    }; // updateProperty
     return DEProperties;
 })(DETab); // class DEProperties
 var DEConfig = (function (_super) {
@@ -204,6 +227,8 @@ var DEServerInfo = (function (_super) {
     DEServerInfo.prototype.reload = function (url) {
         _super.prototype.reload.call(this, url);
         this.RootElement.empty();
+        if (!this.IsVisible)
+            return;
         this.App.serverGet("?action=serverinfo", (function (data) {
             var serverInfo = $(':root', data);
             this.RootElement.append(loadTemplate($('#serverInfoTemplate'), serverInfo));
@@ -297,17 +322,16 @@ var DEViewer = (function () {
             obj.updateIndex(data);
         }, function () {
             obj.onReloading = false;
-            setTimeout(function () { return obj.refreshActionElement.toggleClass("actionButton", true); }, 1000);
+            setTimeout(function () { return obj.refreshActionElement.toggleClass("actionButton", true); }, 100);
         });
     }; // beginReloadIndex
     DEViewer.prototype.updateIndexAppend = function (current, url, level) {
-        // check if a log exists
-        if ($('list[id="tw_lines"]', current).first().length == 0)
-            return;
         // get the attributes
         var name = current.attr('name');
         var displayname = current.attr('displayname');
         var icon = current.attr('icon');
+        // check if a log exists
+        var hasLog = $('list[id="tw_lines"]', current).first().length > 0;
         if (name === 'Main') {
             name = "";
             displayname = "Data Exchange Server";
@@ -315,11 +339,11 @@ var DEViewer = (function () {
         else
             url = url + name + '/';
         // insert the option
-        this.currentNodeElement.append(['<option name="', name, '" uri="', url, '" icon="', icon, '">', level, displayname, '</option>'].join(''));
+        this.currentNodeElement.append(['<option name="', name, '" uri="', url, '" icon="', icon, '" hasLog="', hasLog, '">', level, displayname, '</option>'].join(''));
         // insert children
         var obj = this;
         level = level + "&nbsp;&nbsp;&nbsp;";
-        $(':only-child item', current).each(function (index, element) {
+        current.children('item').each(function (index, element) {
             obj.updateIndexAppend($(element), url, level);
         });
     }; // updateIndexAppend
@@ -343,12 +367,20 @@ var DEViewer = (function () {
         var refreshAction = this.refreshActionElement;
         var app = this;
         this.beginRefreshTimer = setTimeout((function () {
+            // stop listening for events
+            this.stopEventListener();
+            // set the new node
             this.currentUri = option.attr('uri');
             this.currentUriElement.text(this.currentHost + this.currentUri);
             this.currentImageElement.attr("src", option.attr("icon"));
+            this.startEventListener();
+            var hasLog = option.attr('hasLog') === "true";
             // reload tabs
-            for (var i = 0; i < this.tabs.length; i++)
+            this.tabs[0].showTab(hasLog);
+            this.tabs[3].showTab(this.currentUri === "");
+            for (var i = 0; i < this.tabs.length; i++) {
                 this.tabs[i].reload(this.currentUri);
+            }
             // reload actions
             $('#actions > span[loaded="true"]').remove();
             this.serverGet(this.currentUri + '?action=list&recursive=false', function (data) {
@@ -374,8 +406,32 @@ var DEViewer = (function () {
                     });
                 });
             });
-        }).bind(this), 500);
+        }).bind(this), 200);
     }; // beginRefreshUri
+    DEViewer.prototype.startEventListener = function () {
+        var wsHost = "ws" + this.currentHost.substring(4);
+        this.currentWebSocket = new WebSocket(wsHost + this.currentUri, "des_event");
+        this.currentWebSocket.onmessage = this.eventListenerMessage.bind(this);
+    }; // startEventListener
+    DEViewer.prototype.eventListenerMessage = function (ev) {
+        if (ev.type === "message") {
+            var d = $(':root', $.parseXML(ev.data));
+            //console.log("raw event: " + ev.data);
+            // check the path
+            if (this.currentUri === d.attr('path').substring(1)) {
+                var eventId = d.attr('event');
+                if (eventId === 'tw_properties')
+                    this.tabs[1].updateProperty(d.attr('index'), d.text());
+                else if (eventId === 'tw_lines') {
+                }
+            }
+        }
+    }; // eventListenerMessage
+    DEViewer.prototype.stopEventListener = function () {
+        if (this.currentWebSocket != null)
+            this.currentWebSocket.close();
+        this.currentWebSocket = null;
+    }; // startEventListener
     Object.defineProperty(DEViewer.prototype, "TabBarElement", {
         get: function () { return this.tabsElement; },
         enumerable: true,

@@ -489,7 +489,7 @@ namespace TecWare.DE.Server.Http
 			if (lastModified.Kind != DateTimeKind.Utc)
 				lastModified = lastModified.ToUniversalTime();
 
-			http.OutputHeaders[HttpRequestHeader.LastModified] = lastModified.ToString("R", CultureInfo.InvariantCulture);
+			http.OutputHeaders[HttpResponseHeader.LastModified] = lastModified.ToString("R", CultureInfo.InvariantCulture);
       return http;
 		} // proc SetLastModified
 
@@ -605,7 +605,7 @@ namespace TecWare.DE.Server.Http
 		{
 			// Ermittle den ContentType
 			if (contentType == null)
-				contentType = http.Http.GetContentType(Path.GetExtension(contentType));
+				contentType = http.Http.GetContentType(Path.GetExtension(resourceName));
 			
 			WriteContent(http,
 				() =>
@@ -748,19 +748,19 @@ namespace TecWare.DE.Server.Http
 			if (value == null)
 				throw new ArgumentNullException("value");
 			else if (value is XElement)
-				WriteXml(http, (XElement)value, contentType);
+				WriteXml(http, (XElement)value, contentType ?? MimeTypes.Text.Xml);
 			else if (value is XDocument)
-				WriteXml(http, (XDocument)value, contentType);
+				WriteXml(http, (XDocument)value, contentType ?? MimeTypes.Text.Xml);
 			else if (value is IDataReader)
 				WriteDataReader(http, (IDataReader)value);
 			else if (value is IDataRecord)
 				WriteDataRecord(http, (IDataRecord)value);
 			else if (value is string)
-				WriteText(http, (string)value, contentType);
+				WriteText(http, (string)value, contentType ?? MimeTypes.Text.Plain);
 			else if (value is Stream)
-				WriteStream(http, (Stream)value, contentType);
+				WriteStream(http, (Stream)value, contentType ?? MimeTypes.Application.OctetStream);
 			else if (value is byte[])
-				WriteBytes(http, (byte[])value, contentType);
+				WriteBytes(http, (byte[])value, contentType ?? MimeTypes.Application.OctetStream);
 			else
 				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Can not send return value of type '{0}'.", value.GetType().FullName));
 		} // proc WriteObject
