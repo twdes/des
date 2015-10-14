@@ -325,9 +325,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		void IDEListService.WriteList(HttpResponse r, IDEListController controller, int iStart, int iCount)
+		void IDEListService.WriteList(IDEHttpContext r, IDEListController controller, int iStart, int iCount)
 		{
-			bool lSendTypeDefinition = String.Compare(r.GetParameter("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
+			bool lSendTypeDefinition = String.Compare(r.GetProperty("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
 
 			// Suche den passenden Descriptor
 			IDEListDescriptor descriptor = controller.Descriptor;

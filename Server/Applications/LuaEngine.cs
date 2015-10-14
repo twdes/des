@@ -75,7 +75,7 @@ namespace TecWare.DE.Server
 				{
 					Procs.FreeAndNil(ref compiled);
 
-					using (TextReader tr = open())
+					using (var tr = open())
 						compiled = Lua.CompileChunk(tr, sName, debug, args);
 				}
 			} // proc Compile
@@ -518,7 +518,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		public override string Icon { get { return "/images/lua.png"; } }
+		public override string Icon { get { return "/images/lua16.png"; } }
 	} // class LuaEngine
 
 	#endregion

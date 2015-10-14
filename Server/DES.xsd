@@ -26,7 +26,33 @@
 	<xs:complexType name="HttpWorkerType">
 		<xs:complexContent>
 			<xs:extension base="ConfigLogItemType">
-				<xs:attribute name="base" type="xs:string" use="optional">
+				<xs:sequence minOccurs="0" maxOccurs="unbounded">
+					<xs:element name="mimeDef" minOccurs="0" maxOccurs="unbounded">
+						<xs:annotation>
+							<xs:documentation>Definiert einen Mime-Type für die entsprechende Datei.</xs:documentation>
+						</xs:annotation>
+						<xs:complexType mixed="true">
+							<xs:attribute name="filter" type="xs:string" use="required">
+								<xs:annotation>
+									<xs:documentation>Filter for the files.</xs:documentation>
+								</xs:annotation>
+							</xs:attribute>
+						</xs:complexType>
+					</xs:element>
+					<xs:element name="securityDef" minOccurs="0" maxOccurs="unbounded">
+						<xs:annotation>
+							<xs:documentation>Defines the security tokens for the file.</xs:documentation>
+						</xs:annotation>
+						<xs:complexType mixed="true">
+							<xs:attribute name="filter" type="xs:string" use="required">
+								<xs:annotation>
+									<xs:documentation>Filter for the files.</xs:documentation>
+								</xs:annotation>
+							</xs:attribute>
+						</xs:complexType>
+					</xs:element>
+				</xs:sequence>
+				<xs:attribute name="base" type="VirtualSubPathType" use="optional">
 					<xs:annotation>
 						<xs:documentation>Virtuelle Url unter der die Dateien eingeordnet werden sollen.</xs:documentation>
 					</xs:annotation>
@@ -43,20 +69,6 @@
 	<xs:complexType name="HttpFileWorkerType">
 		<xs:complexContent>
 			<xs:extension base="HttpWorkerType">
-				<xs:sequence>
-					<xs:element name="mimeDef" minOccurs="0" maxOccurs="unbounded">
-						<xs:annotation>
-							<xs:documentation>Definiert einen Mime-Type für die entsprechende Datei.</xs:documentation>
-						</xs:annotation>
-						<xs:complexType mixed="true">
-							<xs:attribute name="filter" type="xs:string" use="required">
-								<xs:annotation>
-									<xs:documentation>Zeichenfolge die den Filter für diese Definition beschreibt.</xs:documentation>
-								</xs:annotation>
-							</xs:attribute>
-						</xs:complexType>
-					</xs:element>
-				</xs:sequence>
 				<xs:attribute name="directory" type="PathType" use="required">
 					<xs:annotation>
 						<xs:documentation>Verzeichnis, welches unter der Uri verfügbar sein soll.</xs:documentation>
@@ -69,6 +81,13 @@
 	<xs:complexType name="HttpResourceWorkerType">
 		<xs:complexContent>
 			<xs:extension base="HttpWorkerType">
+				<xs:sequence>
+					<xs:element name="alternativeRoot" type="PathType" minOccurs="0" maxOccurs="unbounded">
+						<xs:annotation>
+							<xs:documentation>Searchpath for files in the file system. The file is only taken, if the timestamp is newer as the timestamp of the assembly (the file must exist in the assembly). Use this option only during development, it is not secure in an productiv environment.</xs:documentation>
+						</xs:annotation>
+					</xs:element>
+				</xs:sequence>
 				<xs:attribute name="assembly" type="xs:string" use="required">
 					<xs:annotation>
 						<xs:documentation>Assembly, in welchen sich die Resourcen befinden.</xs:documentation>
@@ -78,6 +97,14 @@
 					<xs:annotation>
 						<xs:documentation>Namespace innerhalb des Assemblies, welches als Wurzel verwendet wird.</xs:documentation>
 					</xs:annotation>
+				</xs:attribute>
+				<xs:attribute name="nonePresentAlternativeExtensions" use="optional">
+					<xs:annotation>
+						<xs:documentation>List of endings, they will never be in the assembly. This is used for debug-proposes.</xs:documentation>
+					</xs:annotation>
+					<xs:simpleType>
+						<xs:list itemType="xs:string" />
+					</xs:simpleType>
 				</xs:attribute>
 			</xs:extension>
 		</xs:complexContent>
@@ -141,13 +168,18 @@
 				<xs:documentation>Legt den Pfad fest in dem die Logdateien abgelegt werden sollen.</xs:documentation>
 			</xs:annotation>
 		</xs:attribute>
+		<xs:attribute name="procdump" type="PathType" use="optional" default="%executedirectory%\procdump.exe">
+			<xs:annotation>
+				<xs:documentation>Path to the sysinterals procdump.exe.</xs:documentation>
+			</xs:annotation>
+		</xs:attribute>
 	</xs:complexType>
 
 	<xs:element name="http">
 		<xs:annotation>
 			<xs:documentation>Erweitert das Http-Element.</xs:documentation>
 			<xs:appinfo>
-				<class>TecWare.DE.Server.HttpServer</class>
+				<class>TecWare.DE.Server.DEHttpServer</class>
 			</xs:appinfo>
 		</xs:annotation>
 		<xs:complexType>
@@ -261,6 +293,12 @@
 					<xs:attribute name="encoding" type="EncodingType" use="optional" default="utf-8">
 						<xs:annotation>
 							<xs:documentation>Legt die Default Encodierung für den Server fest.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+
+					<xs:attribute name="defaultUserLanguage" type="xs:language" use="optional" default="de-DE">
+						<xs:annotation>
+							<xs:documentation>The default user language for http requests.</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
 				</xs:extension>

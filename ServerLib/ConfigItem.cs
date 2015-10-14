@@ -150,6 +150,7 @@ namespace TecWare.DE.Server
 		bool FirstChildren<T>(Predicate<T> predicate, Action<T> action = null, bool recursive = false, bool @unsafe = false) where T : class;
 
 		string Name { get; }
+		string SecurityToken { get; }
 
 		IDEServer Server { get; }
 	} // interface IDEConfigItem
@@ -209,9 +210,9 @@ namespace TecWare.DE.Server
 	//   config
 	public partial class DEConfigItem : LuaTable, IDEConfigItem, IComparable<DEConfigItem>, IDisposable
 	{
-		private const string csLuaActions = "Actions";              // table für alle Aktionen, die in dem Script enthalten sind.
-		private const string csLuaDispose = "Dispose";              // table mit Methoden, die aufgerufen werden, der Knoten zerstört wird.
-		private const string csLuaConfiguration = "Configuration";  // table mit Methoden, die aufgerufen werden, wenn sich die Konfiguration geändert hat.
+		private const string LuaActions = "Actions";              // table für alle Aktionen, die in dem Script enthalten sind.
+		private const string LuaDispose = "Dispose";              // table mit Methoden, die aufgerufen werden, der Knoten zerstört wird.
+		private const string LuaConfiguration = "Configuration";  // table mit Methoden, die aufgerufen werden, wenn sich die Konfiguration geändert hat.
 
 		#region -- class DEConfigLoading --------------------------------------------------
 
@@ -220,6 +221,7 @@ namespace TecWare.DE.Server
 		internal class DEConfigLoading : IDEConfigLoading, IDisposable
 		{
 			private DEConfigItem item;
+			private LogMessageScopeProxy log;
 			private List<DEConfigLoading> subLoads = new List<DEConfigLoading>();
 
 			private XElement configNew;
@@ -233,9 +235,10 @@ namespace TecWare.DE.Server
 
 			#region -- Ctor/Dtor ------------------------------------------------------------
 
-			internal DEConfigLoading(DEConfigItem item, XElement configNew, DateTime lastWrite)
+			internal DEConfigLoading(DEConfigItem item, LogMessageScopeProxy log, XElement configNew, DateTime lastWrite)
 			{
 				this.item = item;
+				this.log = log;
 				this.configNew = configNew;
 				this.configOld = item.Config;
 				this.lastWrite = lastWrite;
@@ -252,7 +255,7 @@ namespace TecWare.DE.Server
 						var curItem = item.subItems.Find(c => String.Compare(c.Name, item.GetConfigItemName(xmlCur), true) == 0);
 						if (curItem != null)
 						{
-							subLoads.Add(new DEConfigLoading(curItem, xmlCur, lastWrite));
+							subLoads.Add(new DEConfigLoading(curItem, log, xmlCur, lastWrite));
 							xmlCur.Remove();
 						}
 					}
@@ -303,9 +306,10 @@ namespace TecWare.DE.Server
 						item.state = DEConfigItemState.Loading;
 
 						item.Log.LogMsg(LogMsgType.Information, "{0}: Konfiguration wird geladen...", item.Name);
-						Debug.Print("BEGIN Lade [{0}]", item.Name);
-						item.OnBeginReadConfiguration(this);
-						Debug.Print("END Lade [{0}]", item.Name);
+						log.WriteLine($"BEGIN Lade [{ item.Name}]");
+						using (log.Indent())
+							item.OnBeginReadConfiguration(this);
+						log.WriteLine($"END Lade [{item.Name}]");
 					}
 
 					// Lösche nicht bearbeitete Knoten
@@ -335,9 +339,10 @@ namespace TecWare.DE.Server
 				try
 				{
 					item.currentConfig = configNew;
-					Debug.Print("BEGIN Aktiviere [{0}]", item.Name);
-					item.OnEndReadConfiguration(this);
-					Debug.Print("END Aktiviere [{0}]", item.Name);
+					log.WriteLine($"BEGIN Aktiviere [{item.Name}]");
+					using (log.Indent())
+						item.OnEndReadConfiguration(this);
+					log.WriteLine($"END Aktiviere [{item.Name}]");
 					item.Log.LogMsg(LogMsgType.Information, "{0}: Konfiguration wurde erfolgreich geladen.", item.Name);
 					item.state = DEConfigItemState.Initialized;
 					return null;
@@ -377,7 +382,7 @@ namespace TecWare.DE.Server
 				if (subLoads.Exists(c => String.Compare(c.item.Name, name, true) == 0))
 					throw new ArgumentException(String.Format("[{0}] existiert schon.", name));
 
-				subLoads.Add(new DEConfigLoading(newItem, config, lastWrite));
+				subLoads.Add(new DEConfigLoading(newItem, log, config, lastWrite));
 				item.subItems.Add(newItem);
 				item.subItems.Sort();
 				// Kopiere die Annotationen, sonst gehen sie beim Remove verloren
@@ -397,6 +402,8 @@ namespace TecWare.DE.Server
 			public Exception LoadException { get { return loadException; } set { loadException = value; } }
 			public bool IsLoadedSuccessful { get { return loadException == null; } }
 			public DateTime LastWrite { get { return lastWrite; } }
+
+			public LogMessageScopeProxy Log => log;
 
 			public PropertyDictionary Tags
 			{
@@ -456,9 +463,9 @@ namespace TecWare.DE.Server
 			this.name = name;
 			this.state = DEConfigItemState.Initializing;
 
-			this.scripts = new DEList<ILuaAttachedScript>(this, AttachedScriptsListId, "Zugeordnete Skripte");
+			this.scripts = new DEList<ILuaAttachedScript>(this, AttachedScriptsListId, "Attached Scripts");
 			this.actions = new ConfigActionDictionary(this);
-			PublishItem(this.properties = new DEList<IDEConfigItemProperty>(this, PropertiesListId, "Eigenschaften"));
+			PublishItem(this.properties = new DEList<IDEConfigItemProperty>(this, PropertiesListId, "Properties"));
 
 			InitTypeProperties();
 
@@ -476,7 +483,7 @@ namespace TecWare.DE.Server
 			Dispose(true);
 		} // proc Dispose
 
-		protected virtual void Dispose(bool lDisposing)
+		protected virtual void Dispose(bool disposing)
 		{
 			if (state == DEConfigItemState.Disposed) // wurde schon gelöscht
 				return;
@@ -488,7 +495,7 @@ namespace TecWare.DE.Server
 					state = DEConfigItemState.Disposed;
 
 				// Gibt es Objekte die freigeben werden sollen
-				var disposeList = GetMemberValue(csLuaDispose, false, true) as LuaTable;
+				var disposeList = GetMemberValue(LuaDispose, false, true) as LuaTable;
 				if (disposeList != null)
 				{
 					foreach (var c in disposeList.Values)
@@ -535,9 +542,7 @@ namespace TecWare.DE.Server
 		} // proc Disposing
 
 		public int CompareTo(DEConfigItem other)
-		{
-			return String.Compare(name, other.name, true);
-		} // func CompareTo
+			=> String.Compare(name, other.name, true);
 
 		#endregion
 
@@ -664,7 +669,7 @@ namespace TecWare.DE.Server
 			}
 
 			// Führe die Skript-Funktion aus
-			CallTableMethods(csLuaConfiguration, config);
+			CallTableMethods(LuaConfiguration, config);
 		} // proc OnEndReadConfiguration
 
 		/// <summary>Wird aufgerufen, wenn ein neues Element angemeldet wurde.</summary>
@@ -862,23 +867,23 @@ namespace TecWare.DE.Server
 
 		#region -- Process Request/Action -------------------------------------------------
 
-		internal void UnsafeInvokeHttpAction(string sAction, HttpResponse r)
+		internal void UnsafeInvokeHttpAction(string sAction, IDEHttpContext r)
 		{
 			var returnValue = InvokeAction(sAction, r);
 
 			// Erzeuge die Rückgabe
 			if (returnValue == DBNull.Value) // NativeCall
 				return;
-			else if (r.IsResponseSended)
+			else if (r.IsOutputStarted)
 				if (returnValue == null)
 					return;
 				else
-					throw new ArgumentException("Rückgabewert nicht verarbeitet.");
+					throw new ArgumentException("Return value expected.");
 			else if (returnValue == null)
 				returnValue = CreateDefaultXmlReturn(true, null);
 			else if (returnValue is XElement)
 			{
-				XElement x = (XElement)returnValue;
+				var x = (XElement)returnValue;
 				if (x.Attribute("status") == null)
 					x.SetAttributeValue("status", "ok");
 			}
@@ -911,26 +916,28 @@ namespace TecWare.DE.Server
 		/// <param name="r"></param>
 		/// <param name="sLocalPath"></param>
 		/// <returns></returns>
-		internal bool UnsafeProcessRequest(HttpResponse r)
+		internal bool UnsafeProcessRequest(IDEHttpContext r)
 		{
 			foreach (var w in from c in this.UnsafeChildren
 												let cHttp = c as HttpWorker
-												where cHttp != null && r.ExistsPath(cHttp.VirtualRoot)
+												where cHttp != null && r.RelativeSubPath.StartsWith(cHttp.VirtualRoot, StringComparison.OrdinalIgnoreCase)
 												orderby cHttp.Priority descending
 												select cHttp)
 			{
 				// Führe den Request aus
-				using (w.EnterReadLock())
+				if (r.TryEnterSubPath(w, w.VirtualRoot))
 				{
-					r.PushPath(w, w.VirtualRoot);
-					try
+					using (w.EnterReadLock())
 					{
-						if (w.Request(r))
-							return true; // Alles I/O
-					}
-					finally
-					{
-						r.PopPath();
+						try
+						{
+							if (w.Request(r))
+								return true; // Alles I/O
+						}
+						finally
+						{
+							r.ExitSubPath(w);
+						}
 					}
 				}
 			}
@@ -940,7 +947,7 @@ namespace TecWare.DE.Server
 		/// <summary>Wird aufgerufen, wenn eine Http-Anfrage am Knoten verarbeitet werden soll.</summary>
 		/// <param name="r">Http-Response</param>
 		/// <returns><c>true</c>, wenn die Anfrage beantwortet wurde.</returns>
-		protected virtual bool OnProcessRequest(HttpResponse r)
+		protected virtual bool OnProcessRequest(IDEHttpContext r)
 		{
 			return false;
 		} // func OnProcessRequest
@@ -1012,9 +1019,9 @@ namespace TecWare.DE.Server
 			object r = base.OnIndex(key);
 			if (r == null)
 			{
-				if (!CheckKnownTable(key, csLuaActions, ref r) &&
-					!CheckKnownTable(key, csLuaDispose, ref r) &&
-					!CheckKnownTable(key, csLuaConfiguration, ref r))
+				if (!CheckKnownTable(key, LuaActions, ref r) &&
+					!CheckKnownTable(key, LuaDispose, ref r) &&
+					!CheckKnownTable(key, LuaConfiguration, ref r))
 				{
 					LuaTable t = sp as LuaTable;
 					if (t != null)
@@ -1071,7 +1078,7 @@ namespace TecWare.DE.Server
 
 		// -- Static ----------------------------------------------------------------
 
-		private static MethodInfo miGetParameter;
+		private static MethodInfo miGetProperty;
 
 		private static PropertyInfo piInvariantCulture;
 		private static MethodInfo miConvertToStringFallBack;
@@ -1079,9 +1086,8 @@ namespace TecWare.DE.Server
 
 		static DEConfigItem()
 		{
-			miGetParameter = typeof(IDEConfigActionCaller).GetMethod("GetParameter", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string), typeof(string) }, null);
-
-			if (miGetParameter == null)
+			miGetProperty = typeof(IDEHttpContext).GetMethod("GetProperty", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string), typeof(string) }, null);
+			if (miGetProperty == null)
 				throw new ArgumentNullException("sctor", "IDEConfigActionCaller");
 
 			piInvariantCulture = typeof(CultureInfo).GetProperty("InvariantCulture", BindingFlags.Public | BindingFlags.Static | BindingFlags.GetProperty);

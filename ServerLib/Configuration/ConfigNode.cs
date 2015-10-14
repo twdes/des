@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -52,6 +53,12 @@ namespace TecWare.DE.Server.Configuration
 					return Encoding.GetEncoding(codePage);
 				else
 					return Encoding.GetEncoding(attributeValue);
+			}
+			else if (attribute.TypeName == "language")
+			{
+				return String.IsNullOrEmpty(attributeValue) ?
+					CultureInfo.GetCultureInfo(attribute.DefaultValue) :
+					CultureInfo.GetCultureInfo(attributeValue);
 			}
 			else
 			{

@@ -791,4 +791,10 @@
 	<xs:simpleType name="EncodingType">
 		<xs:union memberTypes="EncodingStrictType xs:int xs:string" />
 	</xs:simpleType>
+
+	<xs:simpleType name="VirtualSubPathType">
+		<xs:restriction base="xs:string">
+			<xs:pattern value="([A-Za-z0-9_]+\/)+" />
+		</xs:restriction>
+	</xs:simpleType>
 </xs:schema>

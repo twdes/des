@@ -25,7 +25,7 @@ namespace TecWare.DE.Server
 		/// <param name="controller">Liste</param>
 		/// <param name="iStart">Übergebener Startwert.</param>
 		/// <param name="iCount">Anzahl der Elemente die zurückgeliefert werden sollen</param>
-		void WriteList(HttpResponse r, IDEListController controller, int iStart, int iCount);
+		void WriteList(IDEHttpContext r, IDEListController controller, int iStart, int iCount);
 	} // interface IDEListService
 
 	#endregion
@@ -252,10 +252,10 @@ namespace TecWare.DE.Server
 	public abstract class DEListControllerBase : IDEListController
 	{
 		private ReaderWriterLockSlim listLock;
-		private DEConfigItem configItem;
-		private string id;
-		private string displayName;
-		private IDEListDescriptor descriptor;
+		private readonly DEConfigItem configItem;
+		private readonly string id;
+		private readonly string displayName;
+		private readonly IDEListDescriptor descriptor;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
@@ -869,7 +869,7 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("listget", SecurityToken = SecuritySys),
 		Description("Gibt den Inhalt der angegebenen Liste zurück. (optional: desc, template)")
 		]
-		private void HttpListGetAction(HttpResponse r, string id, int start = 0, int count = Int32.MaxValue)
+		private void HttpListGetAction(IDEHttpContext r, string id, int start = 0, int count = Int32.MaxValue)
 		{
 			// Suche den passenden Controller
 			var controller = FindController(id);

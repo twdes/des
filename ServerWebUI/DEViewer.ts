@@ -284,6 +284,7 @@ class DEViewer {
 	private currentNodeElement: JQuery;
   private currentUriElement: JQuery;
   private currentImageElement: JQuery;
+  private refreshActionElement: JQuery;
 	private tabsElement: JQuery;
 
   private onReloading: boolean = false;
@@ -315,6 +316,7 @@ class DEViewer {
 		this.currentNodeElement = $('#currentNode');
     this.currentUriElement = $('#currentUri');
     this.currentImageElement = $('#currentImage');
+    this.refreshActionElement = $('#refreshAction');
     this.tabsElement = $('#tabs');
 
     this.tabs = [
@@ -324,7 +326,7 @@ class DEViewer {
       new DEServerInfo(this)
      ];
 		
-    $('#headReload').click(e => this.beginReloadIndex());
+    this.refreshActionElement.click(e => this.beginReloadIndex());
 		this.currentNodeElement.change(e => this.beginRefreshUri($(':selected', e.target)));
 		
     this.selectTab(this.tabs[0]);
@@ -382,7 +384,8 @@ class DEViewer {
 		if (this.onReloading)
 			return;
 
-		this.onReloading = true;
+    this.onReloading = true;
+    this.refreshActionElement.toggleClass("actionButton", false);
 		this.currentUriElement.text("Loading...");
 
     var obj = this;
@@ -392,6 +395,7 @@ class DEViewer {
       },
       function () {
         obj.onReloading = false;
+        setTimeout(() => obj.refreshActionElement.toggleClass("actionButton", true), 1000);
       });
   } // beginReloadIndex
 
@@ -449,6 +453,9 @@ class DEViewer {
     if (this.beginRefreshTimer != -1)
       clearTimeout(this.beginRefreshTimer);
 
+    var refreshAction = this.refreshActionElement;
+    var app = this;
+
     this.beginRefreshTimer = setTimeout(
       (function () {
 
@@ -456,8 +463,45 @@ class DEViewer {
         this.currentUriElement.text(this.currentHost + this.currentUri);
         this.currentImageElement.attr("src", option.attr("icon"));
 
+        // reload tabs
         for (var i = 0; i < this.tabs.length; i++)
           this.tabs[i].reload(this.currentUri);
+
+        // reload actions
+        $('#actions > span[loaded="true"]').remove();
+
+        this.serverGet(this.currentUri + '?action=list&recursive=false',
+          function (data) {
+
+            $('action', data).each(
+              function (index, element) {
+                var c = $(element);
+                refreshAction.before(['<span class="actionButton" loaded="true" actionId="', c.attr('id'), '">', c.attr('displayname'), '</span>'].join(""));
+              });
+            
+            $('#actions > span[loaded="true"]').click(
+              function (e) {
+
+                var cmd = $(this);
+                cmd.toggleClass('actionButton', false);
+                app.serverGet([app.currentUri, '?action=', cmd.attr('actionId')].join(""),
+                  function (returnData) {
+                    var r = $(":first-child", returnData);
+                    if (r.attr("status") == "ok") {
+                      var text = r.attr("text");
+                      if (text != null)
+                        alert(text);
+                    }
+                    else {
+                      alert("Aufruf fehlgeschlagen:\n" + r.attr("text"));
+                    }
+                  },
+                  function () {
+                    cmd.toggleClass('actionButton', true);
+                  });
+              });
+          });
+
       }).bind(this), 500);
 	} // beginRefreshUri
 

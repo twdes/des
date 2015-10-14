@@ -3,16 +3,17 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Security.Principal;
 using System.ServiceProcess;
+using System.Text;
 using System.Threading;
 using System.Xml.Linq;
+using TecWare.DE.Networking;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
@@ -40,6 +41,24 @@ namespace TecWare.DE.Server
 		public const string ServerCategory = "Dienst";
 		public const string NetworkCategory = "Netzwerk";
 
+		#region -- class DumpFileInfo -----------------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private class DumpFileInfo
+		{
+			public DumpFileInfo(int id, string fileName)
+			{
+				this.Id = id;
+				this.FileName = fileName;
+			} // ctor
+
+			public int Id { get; }
+			public string FileName { get; }
+		} // class DumpFileInfo
+
+		#endregion
+
 		private string logPath = null;                 // Pfad für sämtliche Log-Dateien
 		private SimpleConfigItemProperty<int> propertyLogCount = null; // Zeigt an wie viel Log-Dateien verwaltet werden
 
@@ -50,6 +69,8 @@ namespace TecWare.DE.Server
 		private ResolveEventHandler resolveEventHandler;
 		private DEConfigurationService configuration;
 		private DEQueueScheduler queue = null;
+
+		private DEList<DumpFileInfo> dumpFiles;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
@@ -68,6 +89,7 @@ namespace TecWare.DE.Server
 
 			// create configurations service
 			this.configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
+			this.dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -189,49 +211,6 @@ namespace TecWare.DE.Server
 				propertyMemory.Value = lastMemory = newMemory;
 		} // proc IdleMemoryViewerRefreshValue
 
-		#region -- Image Interface --------------------------------------------------------
-
-		[
-		DEConfigHttpAction("resource", IsNativeCall = true),
-		Description("Lädt die Manifest-Resource als png-Datei. Es kann die Breite bzw. Höhe angepasst werden.")
-		]
-		private void HttpLoadResourceImageAction(HttpResponse r, string image, int w = 32, int h = 32)
-		{
-			var pos = image.IndexOf(',');
-			if (pos == -1)
-				throw new HttpResponseException(HttpStatusCode.BadRequest, "Ungültiges Bild.");
-
-			string resourceId = image.Substring(0, pos);
-			string assemblyName = image.Substring(pos + 1);
-
-			var asm = Assembly.Load(assemblyName);
-			using (var src = asm.GetManifestResourceStream(resourceId))
-			using (var imgSource = Image.FromStream(src))
-			using (var imgDestination = new Bitmap(w, h))
-			{
-				using (var g = Graphics.FromImage(imgDestination))
-				{
-					var rc = new Rectangle(0, 0, w, h);
-					g.FillRectangle(Brushes.Transparent, rc);
-
-					g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
-					g.DrawImage(imgSource, rc);
-				}
-
-				// Wandle das Bild in ein Png
-				r.ResponseHeaders[HttpResponseHeader.LastModified] = File.GetLastWriteTimeUtc(asm.Location).ToString();
-				using (var stmTmp = new MemoryStream())
-				{
-					imgDestination.Save(stmTmp, ImageFormat.Png);
-					stmTmp.Position = 0;
-
-					r.WriteStream(stmTmp, null, "image/png", String.Format("/des/resource/{0}/{1}/{2}", image, w, h));
-				}
-			}
-		} // func HttpLoadResourceImageAction
-
-		#endregion
-
 		#region -- GetServerInfoData ------------------------------------------------------
 
 		private XElement GetServerInfoAssembly(string name, string assemblyName, string title, string version, string copyright, string imagePath)
@@ -312,7 +291,7 @@ namespace TecWare.DE.Server
 					String.Format("NeoLua {0}.{1}", versionLua.Major, versionLua.Minor),
 					luaFileVersion.Version,
 					luaCopyright.Copyright + " " + luaCompany.Company,
-					"/images/lua.png"
+					"/images/lua16.png"
 				)
 			);
 
@@ -384,15 +363,96 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- HttpDumpAction -----------------------------------------------------------
+
+		private int lastDumpFileInfoId = 0;
+
+		[
+		DEConfigHttpAction("dump", IsSafeCall = true, SecurityToken = SecuritySys),
+		Description("Dumps the current state of the process in a local file.")
+		]
+		private XElement HttpDumpAction(bool mini = false)
+		{
+			// check for the procdump.exe
+			var procDump = Config.Element(xnServer)?.GetAttribute("procdump", String.Empty);
+			if (String.IsNullOrEmpty(procDump) || !File.Exists(procDump))
+				throw new ArgumentException("procdump.exe is not available.");
+
+			// prepare arguments
+			var sbArgs = new StringBuilder();
+			if (!mini)
+				sbArgs.Append("-ma "); // dump all
+			sbArgs.Append("-o "); // overwrite existing dump
+			sbArgs.Append("-accepteula "); // accept eula
+      sbArgs.Append(Process.GetCurrentProcess().Id).Append(' '); // process id
+
+			// create the dump in the temp directory
+			DumpFileInfo fi;
+			using (dumpFiles.EnterWriteLock())
+			{
+				var newId = ++lastDumpFileInfoId;
+				dumpFiles.Add(fi = new DumpFileInfo(newId, Path.Combine(Path.GetTempPath(), $"DEServer_{newId:000}.dmp")));
+			}
+
+			sbArgs.Append(fi.FileName);
+
+			// prepare calling procdump
+			ProcessStartInfo psi = new ProcessStartInfo(procDump, sbArgs.ToString());
+			psi.UseShellExecute = false;
+			psi.RedirectStandardOutput = true;
+      using (var p = Process.Start(psi))
+			{
+				if (!p.WaitForExit(5 * 60 + 1000))
+					p.Kill();
+
+				var outputText = p.StandardOutput.ReadToEnd();
+
+				return new XElement("return",
+					new XAttribute("status", p.ExitCode < 0 ? "ok" : "error"),
+					new XAttribute("id", fi.Id),
+          new XAttribute("exitcode", p.ExitCode),
+					new XAttribute("text", outputText)
+				);
+			}
+		} // proc HttpDumpAction
+
+		[
+		DEConfigHttpAction("dumpload", IsNativeCall = true, SecurityToken = SecuritySys),
+		Description("Sends the dump to the client.")
+		]
+		private void HttpDumpLoadAction(IDEHttpContext r, int id = -1)
+		{
+			// get the dump file
+			DumpFileInfo di = null;
+			using (dumpFiles.EnterReadLock())
+			{
+				var index = dumpFiles.FindIndex(c => c.Id == id);
+				if (index >= 0)
+					di = dumpFiles[index];
+			}
+
+			// send the file
+			if (di == null)
+				throw new ArgumentException("dump id is wrong.");
+			var fi = new FileInfo(di.FileName);
+			if (!fi.Exists)
+				throw new ArgumentException("dump id is invalid.");
+			
+			r.SetAttachment(fi.Name)
+				.WriteFile(fi.FullName, MimeTypes.Application.OctetStream + ";gzip");
+		} // HttpDumpLoadAction
+
+		#endregion
+
 		#endregion
 
 		#region -- OnProcessRequest -------------------------------------------------------
 
-		protected override bool OnProcessRequest(HttpResponse r)
+		protected override bool OnProcessRequest(IDEHttpContext r)
 		{
-			if (String.Compare(r.RelativePath, "favicon.ico", true) == 0)
+			if (String.Compare(r.RelativeSubPath, "favicon.ico", true) == 0)
 			{
-				r.WriteResource(typeof(DEServer), "bdesm.ico");
+				r.WriteResource(typeof(DEServer), "des.ico");
 				return true;
 			}
 			else
@@ -430,7 +490,7 @@ namespace TecWare.DE.Server
 			Queue.RegisterCommand(refreshConifg, 500);
 		} // proc ReadConfiguration
 
-		private void BeginReadConfiguration(LogMessageScopeProxy log, DEConfigLoading config)
+		private void BeginReadConfiguration(DEConfigLoading config)
 		{
 			// Lade die aktuelle Konfiguration
 			config.BeginReadConfiguration();
@@ -440,7 +500,7 @@ namespace TecWare.DE.Server
 			{
 				// Lade die SubItems
 				foreach (DEConfigLoading cur in config.SubLoadings)
-					BeginReadConfiguration(log, cur);
+					BeginReadConfiguration(cur);
 
 				// Aktiviere die Konfiguration
 				if (config.IsConfigurationChanged)
@@ -448,9 +508,11 @@ namespace TecWare.DE.Server
 					Exception e = config.EndReadConfiguration();
 					if (e != null)
 					{
-						log.WriteLine();
-						log.WriteException(e);
-						log.WriteLine();
+						config.Log
+							.NewLine()
+							.WriteLine()
+							.WriteException(e)
+							.WriteLine();
 
 						config.DestroySubConfiguration(); // Zerstöre die SubItems
 					}
@@ -466,16 +528,19 @@ namespace TecWare.DE.Server
 			if (!HasLog)
 				LogMsg(EventLogEntryType.Information, "Lese Konfiguration neu.");
 
-				using (LogMessageScopeProxy log = this.LogProxy().GetScope(LogMsgType.Information, true))
+			using (var log = this.LogProxy().GetScope(LogMsgType.Information, true))
 				try
 				{
 					var xConfig = configuration.ParseConfiguration();
 
 					// Zerlege die Konfiguration zur Validierung
-					Debug.Print("BEGIN Lade Konfiguration");
-					using (DEConfigLoading config = new DEConfigLoading(this, xConfig, configuration.ConfigurationStamp))
-						BeginReadConfiguration(log, config);
-					Debug.Print("END Lade Konfiguration");
+					log.WriteLine("BEGIN Lade Konfiguration");
+					using (log.Indent())
+					{
+						using (DEConfigLoading config = new DEConfigLoading(this, log, xConfig, configuration.ConfigurationStamp))
+							BeginReadConfiguration(config);
+					}
+					log.WriteLine("END Lade Konfiguration");
 				}
 				catch (Exception e)
 				{
@@ -903,7 +968,7 @@ namespace TecWare.DE.Server
 
 		public IDEServerQueue Queue => queue;
 
-		public override string Icon { get { return "/images/des.png"; } }
+		public override string Icon { get { return "/images/des16.png"; } }
 
 		// -- Static --------------------------------------------------------------
 

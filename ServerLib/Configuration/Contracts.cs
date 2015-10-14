@@ -151,6 +151,9 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnLog = MainNamespace + "log";
 		public static readonly XName xnFiles = MainNamespace + "files";
 		public static readonly XName xnResources = MainNamespace + "resources";
+		public static readonly XName xnAlternativeRoot = MainNamespace + "alternativeRoot";
+		public static readonly XName xnMimeDef = MainNamespace + "mimeDef";
+		public static readonly XName xnSecurityDef = MainNamespace + "securityDef";
 	} // class DEConfigurationConstants
 
 	#endregion

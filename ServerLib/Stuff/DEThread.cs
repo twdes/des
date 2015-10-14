@@ -389,7 +389,12 @@ namespace TecWare.DE.Server
 			protected override bool TryDequeue(Task task)
 			{
 				lock (tasks)
-					return tasks.Remove(task);
+				{
+					var r = tasks.Remove(task);
+					if (r && tasks.Count == 0)
+						taskFilled.Reset();
+					return r;
+				}
 			} // func TryDequeue
 
 			protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
@@ -423,6 +428,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
+			/// <summary>Is <c>true</c>, as long there are items in the queue.</summary>
 			public ManualResetEventSlim FilledEvent => taskFilled;
 		} // class ThreadTaskScheduler
 
@@ -437,7 +443,7 @@ namespace TecWare.DE.Server
 		{
 			this.cancellationSource = new CancellationTokenSource();
 			this.scheduler = new ThreadTaskScheduler(this);
-      this.factory = new TaskFactory(cancellationSource.Token, TaskCreationOptions.None, TaskContinuationOptions.None, scheduler);
+      this.factory = new TaskFactory(cancellationSource.Token, TaskCreationOptions.AttachedToParent, TaskContinuationOptions.AttachedToParent, scheduler);
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -459,14 +465,15 @@ namespace TecWare.DE.Server
 				new WaitHandle[]
 				{
 					StoppingEvent.WaitHandle,
-					FilledEvent.WaitHandle
+					FilledEventHandle
 				}
 			);
 		} // proc ExecuteLoop
 
 		public TaskFactory Factory => factory;
-		
-		protected ManualResetEventSlim FilledEvent => scheduler.FilledEvent;
+
+		/// <summary>Waits for items in the queue.</summary>
+		protected WaitHandle FilledEventHandle => scheduler.FilledEvent.WaitHandle;
 	} // class DEThreadLoop
 
 	#endregion

@@ -32,7 +32,6 @@
     font-size: 16px;
     font-style: normal;
     font-weight: bold;
-    cursor: pointer;
 }
 
 #headTitle h2 {
@@ -44,7 +43,12 @@
 
 #currentUri {
     margin: 7px;
-    font-size: 12px;
+    font-size: 11px;
+    vertical-align: text-bottom;
+}
+
+#currentImage {
+    vertical-align: text-bottom;
 }
 
 #tabs {
@@ -70,6 +74,28 @@
 
 .tabunselected {
     cursor: pointer;
+}
+
+#actions {
+    position: absolute;
+    top: 6px;
+    right: 30px;
+    text-align: right;
+    font-size: 12px;
+}
+
+#actions span {
+    padding-left: 12px;
+}
+
+.actionButton {
+    cursor: pointer;
+    color: darkblue;
+    text-decoration: underline;
+}
+
+span.actionButton:hover {
+    color: white;
 }
 
 #content {

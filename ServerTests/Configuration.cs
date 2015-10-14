@@ -5,12 +5,21 @@ using System.Linq;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TecWare.DE.Server.Configuration;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
 	[TestClass]
 	public class ConfigurationTests
 	{
+		[TestMethod]
+		public void ReplaceEnv()
+		{
+			var expected = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), @"..\test.txt");
+      var actual = ProcsDE.GetEnvironmentPath(@"%executedirectory%\..\test.txt");
+			Assert.AreEqual(expected, actual);
+    }
+
 		[TestMethod]
 		public void LoadAssemblies()
 		{

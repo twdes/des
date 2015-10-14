@@ -1,15 +1,23 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Net.WebSockets;
 using System.Reflection;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Xml.Linq;
+using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
@@ -17,9 +25,513 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server
 {
+	#region -- class DECommonContext ----------------------------------------------------
+
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal class HttpServer : DEConfigLogItem, IDEHttpServer
+	internal abstract class DECommonContext : IDECommonContext, IDisposable
+	{
+		private readonly DEHttpServer http;
+		private readonly Lazy<NameValueCollection> queryString;
+		private readonly HttpListenerRequest request;
+		private readonly string absolutePath;
+
+		private IDEAuthentificatedUser user = null;
+		private readonly Lazy<CultureInfo> clientCultureInfo;
+
+		#region -- Ctor/Dtor --------------------------------------------------------------
+
+		protected DECommonContext(DEHttpServer http, IPrincipal user, HttpListenerRequest request, string absolutePath)
+		{
+			this.http = http;
+			this.queryString = new Lazy<NameValueCollection>(() => request.QueryString);
+			this.request = request;
+			this.absolutePath = absolutePath;
+
+      this.clientCultureInfo = new Lazy<CultureInfo>(() =>
+			{
+				try
+				{
+					var userLanguages = request.UserLanguages;
+					if (userLanguages == null || userLanguages.Length == 0)
+						return http.DefaultCultureInfo;
+					else
+						return CultureInfo.GetCultureInfo(userLanguages[0]);
+				}
+				catch
+				{
+					return http.DefaultCultureInfo;
+				}
+			}
+			);
+
+			AuthentificateUser(user);
+		} // ctor
+
+		public void Dispose()
+		{
+			Dispose(true);
+		} // proc Dispose
+
+		protected virtual void Dispose(bool disposing)
+		{
+			if (disposing)
+				Procs.FreeAndNil(ref user);
+		} // proc Dispose
+
+		#endregion
+
+		#region -- User -------------------------------------------------------------------
+
+		/// <summary>Change the current user on the context, to a server user. Is the given user null, the result is also null.</summary>
+		private void AuthentificateUser(IPrincipal user)
+		{
+			if (user != null)
+			{
+				user = http.Server.AuthentificateUser(user.Identity);
+				if (user == null)
+					throw new HttpResponseException(HttpStatusCode.Unauthorized, String.Format("Authentification against the DES-Users failed: {0}.", user.Identity.Name));
+			}
+		} // proc AuthentificateUser
+
+		public T GetUser<T>()
+			where T : class
+		{
+			if (user == null)
+				throw new HttpResponseException(HttpStatusCode.Unauthorized, "Authorization expected.");
+
+			T r = user as T;
+			if (r == null)
+				throw new NotImplementedException(String.Format("User class does not implement '{0}.", typeof(T).FullName));
+
+			return r;
+		} // func GetUser
+
+		#endregion
+
+		#region -- Parameter --------------------------------------------------------------
+
+		private static string GetNameValueKeyIgnoreCase(NameValueCollection list, string name)
+		{
+			var value = list[name];
+			if (value == null)
+			{
+				name = list.AllKeys.FirstOrDefault(c => String.Compare(name, c, StringComparison.OrdinalIgnoreCase) == 0);
+				if (name != null)
+					value = list[name];
+			}
+			return value;
+		} // func GetNameValueKeyIgnoreCase
+
+		public string GetProperty(string parameterName, string @default)
+		{
+			// check for query parameter
+			var value = GetNameValueKeyIgnoreCase(queryString.Value, parameterName);
+
+			// check for header field
+			if (value == null)
+				value = GetNameValueKeyIgnoreCase(request.Headers, parameterName);
+
+			return value ?? @default;
+		} // func GetProperty
+
+		public T GetProperty<T>(string parameterName, T @default)
+		{
+			try
+			{
+				var value = GetProperty(parameterName, null);
+				if (value == null)
+					return @default;
+				else
+					return Procs.ChangeType<T>(value);
+			}
+			catch
+			{
+				return @default;
+			}
+		} // func GetProperty
+
+		public string[] ParameterNames => queryString.Value.AllKeys;
+		public string[] HeaderNames => request.Headers.AllKeys;
+
+		#endregion
+
+		/// <summary>Client culture</summary>
+		public CultureInfo CultureInfo => clientCultureInfo.Value;
+
+		public string AbsolutePath => absolutePath;
+		public DEHttpServer Http => http;
+		IDEHttpServer IDECommonContext.Http => http;
+    public IDEAuthentificatedUser User => user;
+  } // class DECommonContext
+
+	#endregion
+
+	#region -- class DEWebSocketContext -------------------------------------------------
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	internal sealed class DEWebSocketContext : DECommonContext, IDEWebSocketContext
+	{
+		private readonly HttpListenerWebSocketContext webSocketContext;
+
+		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, HttpListenerWebSocketContext webSocketContext, string absolutePath)
+			: base(http, context.User, context.Request, absolutePath)
+		{
+			this.webSocketContext = webSocketContext;
+		} // ctor
+		
+		public WebSocket WebSocket => webSocketContext.WebSocket;
+	} // class DEWebSocketContext
+
+	#endregion
+
+	#region -- class DEHttpContext ------------------------------------------------------
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	internal sealed class DEHttpContext : DECommonContext, IDEHttpContext
+	{
+		#region -- struct RelativeFrame ---------------------------------------------------
+
+		private sealed class RelativeFrame
+		{
+			public RelativeFrame(int absolutePosition, IServiceProvider item)
+			{
+				this.AbsolutePosition = absolutePosition;
+				this.Item = item;
+			} // ctor
+
+			public int AbsolutePosition { get; }
+			public IServiceProvider Item { get; }
+		} // struct RelativeFrame
+
+		#endregion
+
+		private readonly HttpListenerContext context;
+		private LogMessageScopeProxy log = null;
+		private bool httpAuthentification;
+
+		private Stack<RelativeFrame> relativeStack = new Stack<RelativeFrame>();
+		private string currentRelativeSubPath = null;
+		private IServiceProvider currentRelativeSubNode = null;
+
+		private bool isOutputSended = false;
+
+		#region -- Ctor/Dtor --------------------------------------------------------------
+
+		public DEHttpContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
+			: base(http, context.User, context.Request, absolutePath)
+		{
+			this.context = context;
+			this.httpAuthentification = httpAuthentification;
+
+			// prepare response header
+			context.Response.Headers["Server"] = "DES";
+
+			// prepare log
+			if (http.IsDebug)
+				LogStart();
+		} // ctor
+
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+			{
+				// close objects
+				Procs.FreeAndNil(ref log);
+
+				// close the context
+				try { context.Response.Close(); }
+				catch { }
+			}
+		} // proc Dispose
+
+		#endregion
+
+		#region -- Log --------------------------------------------------------------------
+
+		public void LogStart()
+		{
+			if (log != null)
+				return; // Log schon gestartet
+
+			log = Http.LogProxy().GetScope(LogMsgType.Information, true, true);
+			log.WriteLine("{0}: {1}", InputMethod, context.Request.Url);
+			log.WriteLine();
+			log.WriteLine("UrlReferrer: {0}", context.Request.UrlReferrer);
+			log.WriteLine("UserAgent: {0}", context.Request.UserAgent);
+			log.WriteLine("UserHostAddress: {0}", context.Request.UserHostAddress);
+			log.WriteLine("Content-Type: {0}", InputContentType);
+			log.WriteLine();
+			log.WriteLine("Header:");
+			var headers = context.Request.Headers;
+			foreach (var k in headers.AllKeys)
+				log.WriteLine("  {0}: {1}", k, headers[k]);
+			log.WriteLine();
+		} // proc LogStart
+
+		public void LogStop()
+		{
+			Procs.FreeAndNil(ref log);
+		} // proc LogStop
+
+		public void Log(Action<LogMessageScopeProxy> action)
+		{
+			if (log != null)
+				action(log);
+		} // proc Log
+
+		#endregion
+
+		#region -- Security ---------------------------------------------------------------
+
+		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
+		/// <param name="securityToken">Zu prüfender Token.</param>
+		public void DemandToken(string securityToken)
+		{
+			if (!httpAuthentification || String.IsNullOrEmpty(securityToken))
+				return;
+
+			if (!TryDemandToken(securityToken))
+				throw CreateAuthorizationException(securityToken);
+		} // proc DemandToken
+
+		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
+		/// <param name="securityToken">Zu prüfender Token.</param>
+		/// <returns><c>true</c>, wenn der Token erlaubt ist.</returns>
+		public bool TryDemandToken(string securityToken)
+		{
+			if (!httpAuthentification)
+				return true;
+			if (String.IsNullOrEmpty(securityToken))
+				return true;
+
+			return User != null && User.IsInRole(securityToken);
+		} // proc TryDemandToken
+
+		public HttpResponseException CreateAuthorizationException(string securityText)
+			=> new HttpResponseException(HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
+
+		#endregion
+
+		#region -- Input ------------------------------------------------------------------
+
+		public Stream GetInputStream()
+		{
+			var encoding = context.Request.Headers["Content-Encoding"];
+			if (encoding != null && encoding.IndexOf("gzip") >= 0)
+				return new GZipStream(context.Request.InputStream, CompressionMode.Decompress);
+			else
+				return context.Request.InputStream;
+		} // func GetInputStream
+
+		public TextReader GetInputTextReader()
+			=> new StreamReader(GetInputStream(), InputEncoding);
+
+		public string[] AcceptedTypes => context.Request.AcceptTypes;
+
+		public string InputMethod => context.Request.HttpMethod;
+		public string InputContentType => context.Request.ContentType;
+		public Encoding InputEncoding => context.Request.ContentEncoding;
+		public long InputLength => context.Request.ContentLength64;
+		public CookieCollection InputCookies => context.Request.Cookies;
+
+		public bool HasInputData => context.Request.HasEntityBody;
+
+		#endregion
+
+		#region -- Output -----------------------------------------------------------------
+
+		private void CheckOutputSended()
+		{
+			if (isOutputSended)
+				throw new InvalidOperationException("Output stream is already started.");
+		} // proc CheckOutputSended
+
+		public Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null)
+		{
+			CheckOutputSended();
+
+			if (String.IsNullOrEmpty(contentType))
+				throw new ArgumentNullException("contentType");
+
+			// is the content tpe marked
+			var p = contentType.IndexOf(";gzip", StringComparison.OrdinalIgnoreCase);
+			if (p >= 0)
+			{
+				contentType = contentType.Remove(p, 5);
+				compress = true;
+			}
+
+			// set default value
+			if (!compress.HasValue)
+				compress = contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
+
+			// set the content type 
+			context.Response.ContentType = contentType;
+
+			// compressed streams allowed
+			if (compress ?? false)
+			{
+				var acceptEncoding = context.Request.Headers["Accept-Encoding"];
+				compress = acceptEncoding != null && acceptEncoding.IndexOf("gzip") >= 0;
+			}
+			else
+				compress = false;
+
+			// create the output stream
+			isOutputSended = true;
+			if (compress.Value)
+			{
+				context.Response.Headers["Content-Encoding"] = "gzip";
+				return new GZipStream(context.Response.OutputStream, CompressionMode.Compress);
+			}
+			else
+			{
+				if (contentLength >= 0)
+					context.Response.ContentLength64 = contentLength;
+				return context.Response.OutputStream;
+			}
+		} // func GetOutputStream
+
+		public TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength = -1)
+		{
+			// add encoding to the content type
+			contentType = contentType + "; charset=" + (encoding ?? Http.Encoding).WebName;
+			return new StreamWriter(GetOutputStream(contentType, contentLength, contentLength == -1));
+		} // func GetOutputTextWriter
+
+		public void Redirect(string url)
+		{
+			CheckOutputSended();
+			isOutputSended = true;
+			context.Response.Redirect(url);
+		} // proc Redirect
+
+		public CookieCollection OutputCookies => context.Response.Cookies;
+		public WebHeaderCollection OutputHeaders => context.Response.Headers;
+
+		public bool IsOutputStarted => isOutputSended;
+
+		#endregion
+
+		#region -- Relative Path ----------------------------------------------------------
+
+		/// <summary>Change into a virtual directory.</summary>
+		/// <param name="subPath">Virtual subPath, should not start with a slash.</param>
+		public bool TryEnterSubPath(IServiceProvider sp, string subPath)
+		{
+			if (sp == null || subPath == null)
+				throw new ArgumentNullException();
+			if (subPath.Length > 0 && subPath[0] == '/')
+				throw new ArgumentException("Invalid subPath.", "subPath");
+
+			// is the current item available for the current user
+			var item = sp as IDEConfigItem;
+			if (item != null)
+				DemandToken(item.SecurityToken);
+
+			// Prüfe die Position
+			if (subPath.Length > 0 && !RelativeSubPath.StartsWith(subPath, StringComparison.OrdinalIgnoreCase))
+				return false;
+
+			// Erzeuge einen neuen Frame
+			if (relativeStack.Count == 0)
+				relativeStack.Push(new RelativeFrame(1, sp));
+			else
+			{
+				var c = relativeStack.Peek();
+				var l = subPath.Length;
+				if (subPath.Length > 0 && subPath[subPath.Length - 1] == '/')
+					l++;
+				relativeStack.Push(new RelativeFrame(c.AbsolutePosition + l, sp));
+			}
+
+			// clear cache
+			RelativeCacheClear();
+
+			return true;
+		} // proc TryEnterSubPath
+
+		/// <summary>Setzt den relativen Bezug zurück.</summary>
+		public void ExitSubPath(IServiceProvider sp)
+		{
+			if (relativeStack.Count > 0)
+			{
+				var f = relativeStack.Peek();
+				if (f.Item != sp)
+					throw new ArgumentException("Invalid Stack.");
+				RelativeCacheClear();
+			}
+			else
+				throw new ArgumentException("Invalid Stack.");
+		} // proc ExitSubPath
+
+		private void RelativeCacheClear()
+		{
+			currentRelativeSubPath = null;
+			currentRelativeSubNode = null;
+		} // proc RelativeCacheClear
+
+		/// <summary>Gibt den zugeordneten Knoten zurück.</summary>
+		public IServiceProvider RelativeSubNode
+		{
+			get
+			{
+				if (currentRelativeSubNode == null)
+				{
+					if (relativeStack.Count == 0)
+						currentRelativeSubNode = Http.Server;
+					else
+						currentRelativeSubNode = relativeStack.Peek().Item;
+				}
+				return currentRelativeSubNode;
+			}
+		} // prop RelativeNode
+
+		/// <summary>Gibt den Relativen Pfad zurück</summary>
+		public string RelativeSubPath
+		{
+			get
+			{
+				if (currentRelativeSubPath == null)
+				{
+					if (relativeStack.Count == 0)
+						currentRelativeSubPath = AbsolutePath;
+					else
+						currentRelativeSubPath = AbsolutePath.Substring(relativeStack.Peek().AbsolutePosition);
+				}
+				return currentRelativeSubPath;
+			}
+		} // prop RelativePath
+
+		public string RelativeSubName
+		{
+			get
+			{
+				if (RelativeSubPath == null)
+					return null;
+
+				var pos = RelativeSubPath.IndexOf('/');
+				if (pos == -1)
+					return RelativeSubPath;
+				else
+					return RelativeSubPath.Substring(0, pos);
+			}
+		} // prop RelativePathName
+
+		/// <summary></summary>
+		public IDEConfigItem CurrentNode => RelativeSubNode as IDEConfigItem;
+
+		#endregion
+	} // class DEHttpContext
+
+	#endregion
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	internal class DEHttpServer : DEConfigLogItem, IDEHttpServer
 	{
 		#region -- struct HttpCacheItem ---------------------------------------------------
 
@@ -62,6 +574,96 @@ namespace TecWare.DE.Server
 			public int HitCount => cacheHit;
 			public object Data => data;
 		} // struct HttpCacheItem
+
+		#endregion
+
+		#region -- class CacheItemListDescriptor ------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private sealed class CacheItemListDescriptor : IDEListDescriptor
+		{
+			public void WriteType(DEListTypeWriter xml)
+			{
+				xml.WriteStartType("item");
+				xml.WriteProperty("@id", typeof(string));
+				xml.WriteProperty("@hit", typeof(int));
+				xml.WriteProperty("@type", typeof(string));
+				xml.WriteProperty("@length", typeof(int));
+				xml.WriteEndType();
+			} // proc WriteType
+
+			public void WriteItem(DEListItemWriter xml, object _item)
+			{
+				var item = (HttpCacheItem)_item;
+				xml.WriteStartProperty("item");
+				xml.WriteAttributeProperty("id", item.CacheId);
+				xml.WriteAttributeProperty("hit", item.HitCount);
+
+				var d = item.Data;
+				if (d is string)
+				{
+					xml.WriteAttributeProperty("type", "text");
+					xml.WriteAttributeProperty("length", ((String)d).Length);
+				}
+				else if (d is byte[])
+				{
+					xml.WriteAttributeProperty("type", "blob");
+					xml.WriteAttributeProperty("length", ((byte[])d).Length);
+				}
+				else if (d is ILuaScript)
+				{
+					var c = ((ILuaScript)d).Chunk;
+					xml.WriteAttributeProperty("type", $"script[{c.ChunkName},{(c.HasDebugInfo ? "D" : "R")}]");
+					xml.WriteAttributeProperty("length", c.Size);
+				}
+				else if (d != null)
+					xml.WriteAttributeProperty("type", d.GetType().Name);
+
+				xml.WriteEndProperty();
+			} // CacheItemListDescriptor
+
+			public static IDEListDescriptor Instance { get; } = new CacheItemListDescriptor();
+		} // class CacheItemListDescriptor
+
+		#endregion
+
+		#region -- class CacheItemListController ------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private sealed class CacheItemListController : IDEListController
+		{
+			private DEHttpServer item;
+
+      public CacheItemListController(DEHttpServer item)
+			{
+				this.item = item;
+				this.item.RegisterList(Id, this, true);
+			} // ctor
+
+			public void Dispose()
+			{
+				this.item.UnregisterList(this);
+			} // proc Dispose
+
+			public IDisposable EnterReadLock()
+			{
+				Monitor.Enter(item.cacheItems);
+        return new DisposableScope(() => Monitor.Exit(item.cacheItems));
+			} // func EnterReadLock
+
+			public IDisposable EnterWriteLock()
+				=> EnterReadLock();
+
+			public void OnBeforeList() { }
+
+			public string Id => "tw_http_cache";
+			public string DisplayName => "Http-Cache";
+			public IDEListDescriptor Descriptor => CacheItemListDescriptor.Instance;
+			
+			public IEnumerable List => item.cacheItems.Where(c => !c.IsEmpty);
+		} // class CacheItemListController
 
 		#endregion
 
@@ -233,13 +835,17 @@ namespace TecWare.DE.Server
 		private List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
 		private List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
 
-		private bool debugMode = false;														// Sollen detailiert die Request-Protokolliert werden
+		private bool debugMode = false;                           // Sollen detailiert die Request-Protokolliert werden
+		private CultureInfo defaultCultureInfo;
 
 		private HttpCacheItem[] cacheItems = new HttpCacheItem[256];
+		private CacheItemListController cacheItemController;
+
+		private DEList<IDEWebSocketProtocol> webSocketProtocols;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public HttpServer(IServiceProvider sp, string sName)
+		public DEHttpServer(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
 			httpThreads = new DEThreadList(this, "Http-Threads", "HTTP", ExecuteHttpRequest);
@@ -247,18 +853,27 @@ namespace TecWare.DE.Server
 			ClearHttpCache();
 			httpListener.AuthenticationSchemeSelectorDelegate = GetAuthenticationScheme;
 
-			// Promote die Dienste
+			// Promote service
 			var sc = sp.GetService<IServiceContainer>(true);
 			sc.AddService(typeof(IDEHttpServer), this);
 
+			defaultCultureInfo = CultureInfo.CurrentCulture;
+
 #if DEBUG
-			Debug = true;
+			IsDebug = true;
 #endif
+
+			this.webSocketProtocols = new DEList<IDEWebSocketProtocol>(this, "tw_websockets", "WebSockets");
+
+			cacheItemController = new CacheItemListController(this);
+			PublishItem(new DEConfigItemPublicAction("clearCache") { DisplayName = "Clear http-cache" });
+			PublishItem(new DEConfigItemPublicAction("debugOn") { DisplayName = "Http-Debug(on)" });
+			PublishItem(new DEConfigItemPublicAction("debugOff") { DisplayName = "Http-Debug(off)" });
 		} // ctor
 
-		protected override void Dispose(bool lDisposing)
+		protected override void Dispose(bool disposing)
 		{
-			if (lDisposing)
+			if (disposing)
 			{
 				// Entferne die Promotion
 				var sc = this.GetService<IServiceContainer>(true);
@@ -273,11 +888,14 @@ namespace TecWare.DE.Server
 					{
 						Server.LogMsg(e);
 					}
+
+				Procs.FreeAndNil(ref webSocketProtocols);
+				Procs.FreeAndNil(ref cacheItemController);
 				Procs.FreeAndNil(ref httpThreads);
 				try { Procs.FreeAndNil(ref httpListener); }
 				catch { }
 			}
-			base.Dispose(lDisposing);
+			base.Dispose(disposing);
 		} // proc Disposing
 
 		#endregion
@@ -288,34 +906,30 @@ namespace TecWare.DE.Server
 		{
 			base.ValidateConfig(config);
 
-			if ((from c in config.Elements(xnFiles)
-					 where String.Compare(c.GetAttribute("name", String.Empty), "des", true) == 0
-					 select c).FirstOrDefault() == null)
+			if (config.Elements(xnFiles).FirstOrDefault(x => String.Compare(x.GetAttribute("name", String.Empty), "des", StringComparison.OrdinalIgnoreCase) == 0) == null)
 			{
-				var debugDirectory = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(HttpServer).Assembly.Location), @"..\..\..\ServerWebUI"));
-				if (Directory.Exists(debugDirectory))
+				var currentAssembly = typeof(DEHttpServer).Assembly;
+				var baseLocation = Path.GetDirectoryName(currentAssembly.Location);
+				var alternativePaths = new string[]
+					{
+						Path.GetFullPath(Path.Combine(baseLocation, @"..\..\Resources\Http")),
+						Path.GetFullPath(Path.Combine(baseLocation, @"..\..\..\ServerWebUI"))
+					};
+
+				var xFiles = new XElement(xnFiles,
+					new XAttribute("name", "des"),
+					new XAttribute("displayname", "Data Exchange Server - Http"),
+					new XAttribute("base", ""),
+					new XAttribute("assembly", currentAssembly.FullName),
+					new XAttribute("namespace", "TecWare.DE.Server.Resources.Http"),
+					new XAttribute("priority", 100)
+				);
+
+				if (Directory.Exists(alternativePaths[0]))
 				{
-					config.Add(
-						new XElement(xnFiles,
-							new XAttribute("name", "des"),
-							new XAttribute("displayname", "Data Exchange Server - Http (Dbg)"),
-							new XAttribute("base", "/"),
-							new XAttribute("directory", debugDirectory),
-							new XAttribute("priority", 101)
-						)
-					);
-				}
-				else
-				{
-					config.Add(
-						new XElement(xnResources,
-							new XAttribute("name", "des"),
-							new XAttribute("displayname", "Data Exchange Server - Http"),
-							new XAttribute("base", "/"),
-							new XAttribute("assembly", typeof(HttpServer).Assembly.GetName().FullName),
-							new XAttribute("namespace", "TecWare.DE.Server.Resources.Http"),
-							new XAttribute("priority", 100)
-						)
+					xFiles.Add(new XAttribute("nonePresentAlternativeExtensions", ".map .ts")); // exception for debug files
+          xFiles.Add(
+						alternativePaths.Select(c => new XElement(xnAlternativeRoot, c))
 					);
 				}
 			}
@@ -325,23 +939,25 @@ namespace TecWare.DE.Server
 		{
 			base.OnBeginReadConfiguration(config);
 
-			// Lade die Prefixe, Authentifizierungsschemas und mime's
+			// clear prefixes, authentification schemes and mine infos
 			prefixPathTranslations.Clear();
 			prefixAuthentificationSchemes.Clear();
 			mimeInfo.Clear();
 
-			// Importiere Standard mime
-			mimeInfo[".js"] = "text/javascript";
-			mimeInfo[".html"] = "text/html";
-			mimeInfo[".css"] = "text/css";
-			mimeInfo[".lua"] = "text/plain"; // wird im Standard nicht ausgeführt
-			mimeInfo[".png"] = "image/png";
-			mimeInfo[".jpg"] = "image/jpeg";
-			mimeInfo[".ico"] = "image/x-icon";
-			mimeInfo[".xaml"] = "application/xaml+xml";
+			// set standard mime informations
+			mimeInfo[".js"] = MimeTypes.Text.JavaScript;
+			mimeInfo[".html"] = MimeTypes.Text.Html;
+			mimeInfo[".css"] = MimeTypes.Text.Css;
+			mimeInfo[".lua"] = MimeTypes.Text.Plain; // do not execute lua files
+			mimeInfo[".png"] = MimeTypes.Image.Png;
+			mimeInfo[".jpg"] = MimeTypes.Image.Jpeg;
+			mimeInfo[".jpeg"] = MimeTypes.Image.Jpeg;
+			mimeInfo[".gif"] = MimeTypes.Image.Gif;
+			mimeInfo[".ico"] = MimeTypes.Image.Icon;
+			mimeInfo[".xaml"] = MimeTypes.Application.Xaml;
 
-			mimeInfo[".map"] = "text/json";
-			mimeInfo[".ts"] = "text/plain";
+			mimeInfo[".map"] = MimeTypes.Text.Json;
+			mimeInfo[".ts"] = MimeTypes.Text.Plain;
 
 			foreach (var x in config.ConfigNew.Elements())
 			{
@@ -359,25 +975,25 @@ namespace TecWare.DE.Server
 						if (!String.IsNullOrEmpty(name) && !String.IsNullOrEmpty(value) && name[0] == '.')
 							mimeInfo[name] = value;
 						else
-							Log.LogMsg(LogMsgType.Warning, "http/mime hat ein ungültiges Format (ext={0};mime={1}).", name, value);
+							Log.LogMsg(LogMsgType.Warning, "http/mime has a invalid format (ext={0};mime={1}).", name, value);
 					}
 				}
 				catch (Exception e)
 				{
-					Log.LogMsg(LogMsgType.Error, "<" + x.Name.LocalName + "> nicht geladen.\n\n" + e.GetMessageString());
+					Log.LogMsg(LogMsgType.Error, "<" + x.Name.LocalName + "> ignored.\n\n" + e.GetMessageString());
 				}
 			}
 
-			// Erzeuge die Prefix-Liste
+			// create the prefix list
 			var prefixes = new List<string>();
 			foreach (var prefix in prefixPathTranslations)
 				prefix.AddHttpPrefix(prefixes);
 
-			// Prüfe, ob der Http-Listener aktualisiert werden muss
+			// do we need a restart of the listener
 			var httpListenerPrefixesChanged = false;
 			if (httpListener.IsListening && httpListener.Prefixes.Count == prefixes.Count)
 			{
-				string[] currentPrefixes = httpListener.Prefixes.ToArray();
+				var currentPrefixes = httpListener.Prefixes.ToArray();
 				for (int i = 0; i < currentPrefixes.Length; i++)
 				{
 					if (currentPrefixes[i] != prefixes[i])
@@ -394,12 +1010,12 @@ namespace TecWare.DE.Server
 			{
 				lock (httpListener)
 				{
-					// Stop den Listener
+					// Stop listener
 					if (httpListener.IsListening)
 						httpListener.Stop();
 					httpListener.Prefixes.Clear();
 
-					// Lade die Prefixe neu
+					// re add prefixes
 					foreach (string c in prefixes)
 						httpListener.Prefixes.Add(c);
 				}
@@ -407,40 +1023,33 @@ namespace TecWare.DE.Server
 
 			var configNode = new XConfigNode(Server.Configuration[xnHttp], config.ConfigNew);
 
-			// Erzeuge die Worker
+			// create the fixed worker
 			httpThreads.Count = configNode.GetAttribute<int>("threads");
-			// Setze den Realm
+			// set a new realm
 			httpListener.Realm = configNode.GetAttribute<string>("realm");
-			// Lese die Default-Encoding aus
+			// read the default encoding
 			encoding = configNode.GetAttribute<Encoding>("encoding");
+			// set the default user language
+			defaultCultureInfo = configNode.GetAttribute<CultureInfo>("defaultUserLanguage");
 
-			// Lade die Erweiterungen (Zerstört werden Sie automatisch)
+			// load extensions
 			foreach (XElement cur in config.ConfigNew.Elements().ToArray())
-			{
-				try
-				{
-					Server.LoadConfigExtension(config, cur, MainNamespace.NamespaceName);
-				}
-				catch (Exception e)
-				{
-					Log.LogMsg(LogMsgType.Error, "Fehler beim Initialisieren der Dienste.\n\n" + e.GetMessageString());
-				}
-			}
+				Server.LoadConfigExtension(config, cur, MainNamespace.NamespaceName);
 		} // proc OnBeginReadConfiguration
 
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnEndReadConfiguration(config);
 
-			// Starte den Listener, falls er durch das Laden der Konfiguration beendet wurde
+			// restart listener, if it was stopped during the configuration process
 			lock (httpListener)
 				try
 				{
-					// Default-Prefix setzen  
+					// no prefixes set, set the default
 					if (httpListener.Prefixes.Count == 0)
 						httpListener.Prefixes.Add("http://localhost:8080/");
 
-					// Starte den Listener
+					// Start the listener
 					if (!httpListener.IsListening)
 						httpListener.Start();
 				}
@@ -452,16 +1061,42 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- Web Sockets ------------------------------------------------------------
+
+		public void RegisterWebSocketProtocol(IDEWebSocketProtocol protocol)
+		{
+			using (webSocketProtocols.EnterWriteLock())
+				webSocketProtocols.Add(protocol);
+		} // proc RegisterWebSocketProtocol
+
+		public void UnregisterWebSocketProtocol(IDEWebSocketProtocol protocol)
+		{
+			using (webSocketProtocols.EnterWriteLock())
+				webSocketProtocols.Remove(protocol);
+		} // proc UnregisterWebSocketProtocol
+
+		#endregion
+
 		#region -- Http Schnittstelle -----------------------------------------------------
 
 		[
-		DEConfigHttpAction("debug", SecurityToken = SecuritySys, IsSafeCall = true),
-		Description("Schaltet den DebugModus ein oder aus.")
+		DEConfigHttpAction("debugOn", SecurityToken = SecuritySys, IsSafeCall = true),
+		Description("Turns the debug mode on.")
 		]
-		private XElement HttpDebugAction(bool debug)
+		private XElement HttpDebugOnAction()
 		{
-			this.Debug = debug;
-			return new XElement("debug", Debug);
+			this.IsDebug = true;
+			return new XElement("debug", IsDebug);
+		} // proc HttpDebugAction
+
+		[
+		DEConfigHttpAction("debugOff", SecurityToken = SecuritySys, IsSafeCall = true),
+		Description("Turns the debug mode off.")
+		]
+		private XElement HttpDebugOffAction()
+		{
+			this.IsDebug = false;
+			return new XElement("debug", IsDebug);
 		} // proc HttpDebugAction
 
 		[
@@ -469,105 +1104,22 @@ namespace TecWare.DE.Server
 		Description("Löscht den aktuellen Cache")
 		]
 		private void HttpClearCacheAction()
-		{
-			ClearHttpCache();
-		} // proc HttpClearCacheAction
-
-		//[
-		//DEConfigHttpAction("getCache"),
-		//Description("Gibt den Cacheinhalt als Tabelle zurück.")
-		//]
-		//private void HttpGetCacheAction(HttpResponse r)
-		//{
-		//	using (var html = HtmlHelper.Create(r.GetOutputTextWriter("text/html")))
-		//		lock (cacheItems)
-		//		{
-		//			html.WriteStartHtml("table", "#cache");
-
-		//			int iCacheSize = 0;
-		//			html.WriteStartHtml("tbody");
-		//			for (int i = 0; i < cacheItems.Length; i++)
-		//				if (!cacheItems[i].IsEmpty)
-		//				{
-		//					html.WriteStartHtml("tr");
-		//					html.WriteHtml("td", null, cacheItems[i].CacheId);
-		//					html.WriteHtml("td", null, cacheItems[i].HitCount.ToString("N0"), "x");
-		//					object obj = cacheItems[i].Data;
-		//					int iLen;
-		//					string sType;
-		//					if (obj is string)
-		//					{
-		//						iLen = ((string)obj).Length;
-		//						sType = "text";
-		//					}
-		//					else if (obj is byte[])
-		//					{
-		//						iLen = ((byte[])obj).Length;
-		//						sType = "bytes";
-		//					}
-		//					else if (obj is ILuaScript)
-		//					{
-		//						LuaChunk c = ((ILuaScript)obj).Chunk;
-		//						iLen = c != null && c.Method.GetType().Name == "RuntimeMethodInfo" ? c.Size : -1;
-		//						sType = "script";
-		//					}
-		//					else
-		//					{
-		//						iLen = -1;
-		//						sType = "unknown";
-		//					}
-		//					html.WriteHtml("td", null, new XAttribute("style", "text-align: center"), sType);
-		//					html.WriteHtml("td", null, new XAttribute("style", "text-align: right"), iLen == -1 ? "N.A." : Procs.FormatFileSize(iLen));
-		//					if (iLen > 0)
-		//						iCacheSize += iLen;
-
-		//					html.WriteEndHtml();
-		//				}
-		//			html.WriteEndHtml();
-
-		//			html.WriteStartHtml("tfoot");
-		//			html.WriteStartHtml("tr");
-		//			html.WriteHtml("th", null);
-		//			html.WriteHtml("th", null);
-		//			html.WriteHtml("th", null);
-		//			html.WriteHtml("th", null, new XAttribute("style", "text-align: right"), Procs.FormatFileSize(iCacheSize));
-		//			html.WriteEndHtml();
-		//			html.WriteEndHtml();
-
-		//			html.WriteEndHtml();
-		//		}
-		//} // proc HttpGetCacheAction
-
-		//protected override void HttpInfoCollectSections(List<HttpInfoSection> sections)
-		//{
-		//	base.HttpInfoCollectSections(sections);
-
-		//	sections.Add(new HttpInfoSection
-		//	{
-		//		Title = "Http-Server",
-		//		Content = html => html.WriteHtml("table", "#cache"),
-		//		Buttons = tw =>
-		//		{
-		//			tw.WriteActionButton("Debug an", "debug&debug=true", ButtonActionTask.Call);
-		//			tw.WriteActionButton("Debug aus", "debug&debug=false", ButtonActionTask.Call);
-		//			tw.WriteActionButton("Cache löschen", "clearCache", ButtonActionTask.Call);
-		//			tw.WriteActionButton("getCache");
-		//		}
-		//	});
-		//} // proc HttpInfoCollectSections
+		=> ClearHttpCache();
 
 		#endregion
 
 		#region -- MimeInfo ---------------------------------------------------------------
 
-		public string GetContentType(string sExtension)
+		public string GetContentType(string extension)
 		{
-			string sContentType;
+			string contentType;
 			lock (mimeInfo)
-				if (mimeInfo.TryGetValue(sExtension, out sContentType))
-					return sContentType;
+			{
+				if (mimeInfo.TryGetValue(extension, out contentType))
+					return contentType;
 				else
-					throw new ArgumentException(String.Format("Kein mime-type definiert für '{0}'.", sExtension), "extension");
+					throw new ArgumentException(String.Format("No contentType defined for '{0}'.", extension), "extension");
+			}
 		} // func GetContentType
 
 		#endregion
@@ -664,7 +1216,9 @@ namespace TecWare.DE.Server
 						throw;
 				}
 				if (ctx != null)
+				{
 					ProcessRequest(ctx);
+				}
 			}
 			else
 				DEThread.CurrentThread.WaitFinish(500);
@@ -672,10 +1226,9 @@ namespace TecWare.DE.Server
 
 		private void ProcessRequest(HttpListenerContext ctx)
 		{
-			// Erzeuge das Antwort-Objekt
 			var url = ctx.Request.Url;
 
-			// Suche das zugehörige Prefix und übersetze den Pfad
+			// Find the prefix for a alternating path
 			var pathTranslation = FindPrefix(prefixPathTranslations, url);
 			string absolutePath;
 			if (pathTranslation == null || pathTranslation.Prefix == null)
@@ -683,98 +1236,110 @@ namespace TecWare.DE.Server
 			else
 				absolutePath = pathTranslation.Path + url.AbsolutePath.Substring(pathTranslation.PrefixPath.Length);
 
-			// Führe die Anfrage aus
-			using (HttpResponse r = new HttpResponse(this, ctx, absolutePath))
-				try
+			var authentificationScheme = GetAuthenticationScheme(ctx.Request);
+
+			if (ctx.Request.IsWebSocketRequest)
+			{
+				var subProtocol = GetWebSocketProtocol(absolutePath, ctx.Request.Headers["Sec-WebSocket-Protocol"]);
+				if (subProtocol != null)
 				{
-					// Sollen der Request ins Log geschrieben werden
-					if (debugMode)
-						r.LogStart();
-
-					// Setze die Kultur des Clients für den aktuellen Thread
-					Thread.CurrentThread.CurrentCulture = r.CultureInfo;
-					Thread.CurrentThread.CurrentUICulture = r.CultureInfo;
-
-					// Starte das ablaufen des Pfades
-					r.PushPath(Server, "/");
-
-					// Versuche den Pfad auf einen Configurationsknoten zu mappen
-					if (!ProcessRequestForConfigItem(r, this.GetService<DEServer>(true)))
+					var webSocketContext = ctx.AcceptWebSocketAsync(subProtocol.Protocol).Result;
+					subProtocol.AcceptWebSocket(new DEWebSocketContext(this, ctx, webSocketContext, absolutePath));
+				}
+			}
+			else
+			{
+				using (var r = new DEHttpContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
+				{
+					try
 					{
-						// Suche innerhalb der Http-Worker
-						using (EnterReadLock())
+						// Start logging
+						if (debugMode)
+							r.LogStart();
+
+						// change the current cultur to the client culture
+						Thread.CurrentThread.CurrentCulture = r.CultureInfo;
+						Thread.CurrentThread.CurrentUICulture = r.CultureInfo;
+
+						// start to find the endpoint
+						if (r.TryEnterSubPath(Server, String.Empty))
 						{
-							if (!UnsafeProcessRequest(r))
-								throw new HttpResponseException(HttpStatusCode.BadRequest, "Nicht verarbeitet.");
+							// try to map a node
+							if (!ProcessRequestForConfigItem(r, (DEConfigItem)Server))
+							{
+								// Search all http worker nodes
+								using (EnterReadLock())
+								{
+									if (!UnsafeProcessRequest(r))
+										throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
+								}
+							}
 						}
+						// check the return value
+						if (ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
+							throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
 					}
-
-					// Wurde eine Rückgabe geschrieben
-					if (ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
-						throw new HttpResponseException(HttpStatusCode.NoContent, "Keine Rückgabe definiert.");
-				}
-				catch (Exception e)
-				{
-					// Entpacke die Target exceptions
-					var ex = e;
-					while (ex is TargetInvocationException)
-						ex = ex.InnerException;
-
-					// Lese die Meldung fürs Response aus
-					var httpEx = ex as HttpResponseException;
-
-					// Startet ggf. die Log-Aufzeichnung
-					if (httpEx != null && httpEx.Code == HttpStatusCode.Unauthorized)
-						r.LogStop();
-					else
+					catch (Exception e)
 					{
-						// Schreibe die Fehlermeldung
-						r.LogStart();
-						r.Log(l => l.WriteException(ex));
-					}
+						// extract target exception
+						var ex = e;
+						while (ex is TargetInvocationException)
+							ex = ex.InnerException;
 
-					if (httpEx != null)
-						ctx.Response.StatusCode = (int)httpEx.Code;
-					else
-						ctx.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-					ctx.Response.StatusDescription = FilterChar(ex.Message);
+						// check for a http exception
+						var httpEx = ex as HttpResponseException;
+
+						// Start logging, or stop
+						if (httpEx != null && httpEx.Code == HttpStatusCode.Unauthorized)
+							r.LogStop();
+						else
+						{
+							r.LogStart();
+							r.Log(l => l.WriteException(ex));
+						}
+
+						ctx.Response.StatusCode = httpEx != null ? (int)httpEx.Code : (int)HttpStatusCode.InternalServerError;
+						ctx.Response.StatusDescription = FilterChar(ex.Message);
+					}
 				}
+			}
 		} // proc ProcessRequest
 
-		private bool ProcessRequestForConfigItem(HttpResponse r, DEConfigItem current)
+		private IDEWebSocketProtocol GetWebSocketProtocol(string absolutePath, string subProtocols)
+		{
+			return null;
+		} // func GetWebSocketProtocol
+
+		private bool ProcessRequestForConfigItem(IDEHttpContext r, DEConfigItem current)
 		{
 			using (current.EnterReadLock())
 			{
-				// Suche den zugehörigen Knoten
-				var currentName = r.RelativePathName;
-				var find = currentName != null ? current.UnsafeFind(r.RelativePathName) : null;
-				if (find != null)
+				// Search zum Nodes
+				foreach (var cur in current.UnsafeChildren.Where(c => r.TryEnterSubPath(c, c.Name)))
 					try
 					{
-						r.PushPath(find, currentName);
-						if (ProcessRequestForConfigItem(r, find))
+						if (ProcessRequestForConfigItem(r, cur))
 							return true;
 					}
 					finally
 					{
-						r.PopPath();
+						r.ExitSubPath(cur);
 					}
 
-				// 1. Prüfe die Actions an diesem Knoten
+				// 1. Check for a defined action of this node
 				string actionName;
-				if (r.RelativePath.Length == 0 && !String.IsNullOrEmpty(actionName = r.GetParameter("action", String.Empty)))
+				if (r.RelativeSubPath.Length == 0 && !String.IsNullOrEmpty(actionName = r.GetProperty("action", String.Empty)))
 				{
 					if (actionName == "lines" || actionName == "states" || actionName == "events")
 						r.LogStop();
 
-					// Führe die Action aus
 					current.UnsafeInvokeHttpAction(actionName, r);
 					return true;
 				}
-				// 2. Kann der Knoten den Eintrag verarbeiten
+				// 2. process the current node
 				else if (current.UnsafeProcessRequest(r))
 					return true;
-				else // 3. Gibt es einen überliegenden HttpWorker der dazu passt
+				else // 3. check for http worker
 					return false;
 			}
 		} // func ProcessRequestForConfigItem
@@ -804,7 +1369,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		public override string Icon { get { return "/images/http.png"; } }
+		public override string Icon { get { return "/images/http16.png"; } }
 
 		/// <summary>Encodierung für Textdateien</summary>
 		public Encoding Encoding { get { return encoding; } }
@@ -815,6 +1380,9 @@ namespace TecWare.DE.Server
 		Category("Http"),
 		Description("Ist die Protokollierung der Http-Request aktiv."),
 		]
-		public bool Debug { get { return debugMode; } private set { SetProperty(ref debugMode, value); } }
-	} // class HttpServer
+		public bool IsDebug { get { return debugMode; } private set { SetProperty(ref debugMode, value); } }
+	
+		/// <summary></summary>
+		public CultureInfo DefaultCultureInfo => defaultCultureInfo;
+  } // class DEHttpServer
 }

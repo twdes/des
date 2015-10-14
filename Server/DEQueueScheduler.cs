@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
@@ -39,7 +37,7 @@ namespace TecWare.DE.Server
 				action();
 			} // proc Execute
 
-			public virtual bool IsDue() => unchecked(Boundary - Environment.TickCount) < 0;
+			public virtual bool IsDue() => unchecked(Boundary - Environment.TickCount) <= 0;
 
 			public int Id { get; }
 			public Action Action => action;
@@ -101,6 +99,7 @@ namespace TecWare.DE.Server
 				: base(id, action)
 			{
 				this.timeBetween = Math.Max(100, timeBetween);
+				this.nextBoundary = unchecked(Environment.TickCount + timeBetween);
 			} // ctor
 
 			public override void Execute()
@@ -129,7 +128,7 @@ namespace TecWare.DE.Server
 		private DEServer server;
 		private int lastItemId = 0;
 		private readonly LinkedList<ActionItem> actions = new LinkedList<ActionItem>();
-		private ManualResetEventSlim actionEvent = new ManualResetEventSlim(false);
+		private AutoResetEvent actionEvent = new AutoResetEvent(false);
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
@@ -171,27 +170,19 @@ namespace TecWare.DE.Server
 			}
 		} // proc Shutdown
 
-		private bool IsActionAlive(Action action, out IDisposable executeLock)
+		private bool IsActionAlive(Action action)
 		{
 			var configItem = action.Target as DEConfigItem;
-			if (configItem == null || configItem == server)
-			{
-				executeLock = null;
+			if (configItem == null)
 				return true;
-			}
 			else
 			{
 				switch (configItem.State)
 				{
-					case DEConfigItemState.Initialized:
-						executeLock = configItem.EnterReadLock();
-						return true;
 					case DEConfigItemState.Invalid:
 					case DEConfigItemState.Disposed:
-						executeLock = null;
 						return false;
 					default:
-						executeLock = null;
 						return true;
 				}
 			}
@@ -211,17 +202,12 @@ namespace TecWare.DE.Server
 				{
 					action = GetNextAction(false);
 					timeout = action == null || action is EventItem ? Int32.MaxValue : unchecked(action.Boundary - Environment.TickCount);
-					if (timeout < 0)
-						timeout = 0;
-					//else
-					//	FilledEvent.Reset();
 					break;
 				}
 				else
 				{
 					// schedule the action, that sets the schedule in the same thread
-					IDisposable actionLock;
-					if (IsActionAlive(action.Action, out actionLock))
+					if (IsActionAlive(action.Action))
 					{
 						Factory.StartNew(action.Execute).ContinueWith(
 							t =>
@@ -232,12 +218,13 @@ namespace TecWare.DE.Server
 								}
 								finally
 								{
-									actionLock?.Dispose();
 									// re-execute action
 									if (action is IdleItem)
 										InsertAction(action);
 								}
-							});
+							}, this.Factory.CancellationToken, TaskContinuationOptions.ExecuteSynchronously, Factory.Scheduler);
+
+						timeout = 0; // no timeout, run tasks
 					}
 					RemoveAction(action);
 				}
@@ -245,13 +232,12 @@ namespace TecWare.DE.Server
 
 			if (timeout > 0)
 			{
-				WaitHandle.WaitAny(new WaitHandle[] {
+        WaitHandle.WaitAny(new WaitHandle[] {
 					StoppingEvent.WaitHandle,
-					FilledEvent.WaitHandle,
-					actionEvent.WaitHandle
+					FilledEventHandle,
+					actionEvent
 				}, timeout == Int32.MaxValue ? -1 : timeout);
 			}
-			Thread.Sleep(100); // todo: fix
 		} // proc ExecuteLoop
 
 		#endregion
@@ -299,9 +285,9 @@ namespace TecWare.DE.Server
 				if (pos != null)
 					actions.AddBefore(pos, action);
 				else
-					actions.AddFirst(action);
+					actions.AddLast(action);
 
-				FilledEvent.Set();
+				actionEvent.Set(); // mark list is changed
 			}
 		} // proc InsertAction
 

@@ -13,68 +13,13 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDEConfigActionCaller ------------------------------------------
-
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
-	public interface IDEConfigActionCaller
-	{
-		/// <summary>Berechtigung des Nutzers prüfen.</summary>
-		/// <param name="securityToken"></param>
-		void DemandToken(string securityToken);
-		/// <summary>Gibt einen Parameter zurück.</summary>
-		/// <param name="parameterName">Name des Parameters</param>
-		/// <param name="default">Defaultwert</param>
-		/// <returns></returns>
-		string GetParameter(string parameterName, string @default);
-		/// <summary>Liste der Parameter</summary>
-		string[] ParameterNames { get; }
-
-		/// <summary>Wurde eine Antwort gesendet</summary>
-		bool IsResponseSended { get; }
-
-		/// <summary>Gibt Zugriff auf den Nutzer</summary>
-		IDEAuthentificatedUser User { get; }
-	} // interface IDEConfigActionCaller
-
-	#endregion
-
-	#region -- class DEConfigActionCallerTable ------------------------------------------
-
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
-	public class DEConfigActionCallerTable : LuaTable
-	{
-		private IDEConfigActionCaller caller;
-
-		public DEConfigActionCallerTable(IDEConfigActionCaller caller)
-		{
-			this.caller = caller;
-		} // ctor
-
-		protected override object OnIndex(object key)
-		{
-			// hole den Parameter Wert als Default ab
-			object v = null;
-			if (caller != null && key is string)
-				v = caller.GetParameter((string)key, null);
-
-			return v ?? base.OnIndex(key);
-		} // proc OnIndex
-
-		[LuaMember("Caller")]
-		public IDEConfigActionCaller Caller { get { return caller; } set { } }
-	} // class DEConfigActionCallerTable
-
-	#endregion
-
 	#region -- delegate DEConfigActionDelegate ------------------------------------------
 
 	/// <summary></summary>
 	/// <param name="item"></param>
 	/// <param name="args"></param>
 	/// <returns></returns>
-	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEConfigActionCaller args);
+	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEHttpContext context);
 
 	#endregion
 
@@ -101,16 +46,16 @@ namespace TecWare.DE.Server
 			this.methodDescription = methodDescription;
 		} // ctor
 
-		public object Invoke(DEConfigItem item, IDEConfigActionCaller caller)
+		public object Invoke(DEConfigItem item, IDEHttpContext context)
 		{
 			if (action != null)
 				if (nativeCall)
 				{
-					action(item, caller);
+					action(item, context);
 					return DBNull.Value;
 				}
 				else
-					return action(item, caller);
+					return action(item, context);
 			else
 				return null;
 		} // proc Invoke
@@ -389,22 +334,22 @@ namespace TecWare.DE.Server
 		} // proc CollectActions
 
 		/// <summary>Führt eine Aktion aus.</summary>
-		/// <param name="sAction">Name der Aktion</param>
-		/// <param name="args">Parameter, die übergeben werden sollen.</param>
+		/// <param name="actionName">Name der Aktion</param>
+		/// <param name="context">Parameter, die übergeben werden sollen.</param>
 		/// <returns>Rückgabe</returns>
-		public object InvokeAction(string sAction, IDEConfigActionCaller args)
+		public object InvokeAction(string actionName, IDEHttpContext context)
 		{
 			// Suche die Action im Cache
 			DEConfigAction a;
 			lock (actions)
 			{
-				a = actions[sAction];
+				a = actions[actionName];
 				if (a == null) // Beziehungsweise erzeuge sie
 				{
-					a = CompileAction(sAction);
+					a = CompileAction(actionName);
 					if (a == null)
 						a = DEConfigAction.Empty;
-					actions[sAction] = a;
+					actions[actionName] = a;
 				}
 			}
 
@@ -412,14 +357,14 @@ namespace TecWare.DE.Server
 			try
 			{
 				if (a == DEConfigAction.Empty)
-					throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", sAction));
+					throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
 
-				args.DemandToken(a.SecurityToken);
-				return a.Invoke(this, args);
+				context.DemandToken(a.SecurityToken);
+				return a.Invoke(this, context);
 			}
 			catch (Exception e)
 			{
-				if (!a.IsSafeCall || args.IsResponseSended || (e is HttpResponseException)) // Antwort kann nicht mehr gesendet werden
+				if (!a.IsSafeCall || context.IsOutputStarted || (e is HttpResponseException)) // Antwort kann nicht mehr gesendet werden
 					throw;
 
 				// Meldung protokollieren
@@ -460,7 +405,7 @@ namespace TecWare.DE.Server
 		private DEConfigAction CompileTypeAction(ref ConfigAction ca)
 		{
 			// Native Calls, es wird einfach ein Aufruf mit den HttpResponse gemacht, dies muss der erste Parameter sein
-			if (ca.Attribute.IsNativeCall && (ca.Method.GetParameters().Length == 0 || ca.Method.GetParameters()[0].ParameterType != typeof(HttpResponse)))
+			if (ca.Attribute.IsNativeCall && (ca.Method.GetParameters().Length == 0 || ca.Method.GetParameters()[0].ParameterType != typeof(IDEHttpContext)))
 				throw new ArgumentException("NativeCall-Actions müssen folgende Signatur haben: void Action(HttpResonse, ...)");
 
 			var exprLambda = CompileMethodAction(ca.Method);
@@ -499,12 +444,12 @@ namespace TecWare.DE.Server
 			);
 		} // func CompileLuaAction
 
-		protected virtual DEConfigAction CompileAction(string sAction)
+		protected virtual DEConfigAction CompileAction(string actionName)
 		{
 			DEConfigAction action;
-			if ((action = CompileTypeAction(sAction)) != null && !action.IsEmpty)
+			if ((action = CompileTypeAction(actionName)) != null && !action.IsEmpty)
 				return action;
-			else if ((action = CompileLuaAction(sAction)) != null && !action.IsEmpty)
+			else if ((action = CompileLuaAction(actionName)) != null && !action.IsEmpty)
 				return action;
 			else
 				return DEConfigAction.Empty;
@@ -513,7 +458,7 @@ namespace TecWare.DE.Server
 		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate dlg = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
-			var argCaller = Expression.Parameter(typeof(IDEConfigActionCaller), "#arg");
+			var argCaller = Expression.Parameter(typeof(IDEHttpContext), "#arg");
 
 			int parameterOffset;
 			ParameterInfo[] parameterInfo;
@@ -553,7 +498,7 @@ namespace TecWare.DE.Server
 
 			// Werte den Rückgabewert aus
 			Expression<DEConfigActionDelegate> exprLambda;
-			ParameterExpression returnValue = method.ReturnType == typeof(void) ? null : Expression.Variable(method.ReturnType, "#return");
+			var returnValue = method.ReturnType == typeof(void) ? null : Expression.Variable(method.ReturnType, "#return");
 			if (returnValue == null)
 			{
 				exprLambda = Expression.Lambda<DEConfigActionDelegate>(
@@ -572,54 +517,52 @@ namespace TecWare.DE.Server
 
 		private Expression[] CreateArgumentExpressions(ParameterExpression arg, ParameterExpression argThis, int parameterInfoOffset, ParameterInfo[] parameterInfo, ParameterExpression extraData)
 		{
-			Expression[] r = new Expression[parameterInfo.Length - parameterInfoOffset];
+			var r = new Expression[parameterInfo.Length - parameterInfoOffset];
 
-			// Erzeuge die Parameter
+			// Create the parameter
 			for (int i = parameterInfoOffset; i < parameterInfo.Length; i++)
 			{
-				ParameterInfo p = parameterInfo[i];
-				Type typeTo = p.ParameterType;
-				TypeCode typeCode = Type.GetTypeCode(typeTo);
+				var p = parameterInfo[i];
+				var typeTo = p.ParameterType;
+				var typeCode = Type.GetTypeCode(typeTo);
 				Expression exprGetParameter;
 
 				if (typeTo == typeof(object)) // Keine Konvertierung
 				{
-					exprGetParameter = Expression.Convert(Expression.Call(arg, miGetParameter, Expression.Constant(p.Name), Expression.Default(typeof(string))), typeof(object));
+					exprGetParameter = Expression.Convert(Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Default(typeof(string))), typeof(object));
 				}
 				else if (typeCode == TypeCode.Object) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
-					if (typeTo == typeof(IDEConfigActionCaller))
-						exprGetParameter = arg;
-					else if (typeTo.IsAssignableFrom(GetType()))
-						exprGetParameter = argThis;
-					else if (typeTo == typeof(HttpResponse))
+					if (typeTo == typeof(IDEHttpContext))
 					{
 						exprGetParameter = Expression.Condition(
-							Expression.TypeIs(arg, typeof(HttpResponse)),
-							Expression.Convert(arg, typeof(HttpResponse)),
-							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall erwartet HttpResponse")), typeof(HttpResponse))
+							Expression.TypeIs(arg, typeof(IDEHttpContext)),
+							Expression.Convert(arg, typeof(IDEHttpContext)),
+							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEHttpContext))
 						);
 					}
+					else if (typeTo.IsAssignableFrom(GetType()))
+						exprGetParameter = argThis;
 					else if (typeTo == typeof(TextReader)) // Input-Datenstrom (Text)
 					{
 						if (extraData.Type != typeof(TextReader))
-							throw new ArgumentException("ExtraData konnte nicht gebunden werden.");
+							throw new ArgumentException("Can not bind extra data to call.");
 						exprGetParameter = extraData;
 					}
 					else if (typeTo == typeof(Stream)) // Input-Datenstrom (Binär)
 					{
 						if (extraData.Type != typeof(Stream))
-							throw new ArgumentException("ExtraData konnte nicht gebunden werden.");
+							throw new ArgumentException("Can not bind extra data to call.");
 						exprGetParameter = extraData;
 					}
 					else
 					{
-						TypeConverter conv = TypeDescriptor.GetConverter(typeTo);
+						var conv = TypeDescriptor.GetConverter(typeTo);
 
 						exprGetParameter =
 							Expression.Convert(
 								Expression.Call(Expression.Constant(conv), miConvertFromInvariantString,
-								Expression.Call(arg, miGetParameter, Expression.Constant(p.Name), Expression.Default(typeof(string)))
+								Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Default(typeof(string)))
 							),
 							typeTo
 						);
@@ -627,13 +570,13 @@ namespace TecWare.DE.Server
 				}
 				else if (typeCode == TypeCode.String) // String gibt es nix zu tun
 				{
-					exprGetParameter = Expression.Call(arg, miGetParameter, Expression.Constant(p.Name), Expression.Constant(p.DefaultValue == DBNull.Value ? null : p.DefaultValue, typeof(string)));
+					exprGetParameter = Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Constant(p.DefaultValue == DBNull.Value ? null : p.DefaultValue, typeof(string)));
 				}
 				else // Standardtype
 				{
 					// ToType - Konverter
 					exprGetParameter = Expression.Call(FindConvertMethod(typeTo),
-						Expression.Call(arg, miGetParameter, Expression.Constant(p.Name), Expression.Constant(Convert.ToString(p.DefaultValue, CultureInfo.InvariantCulture))),
+						Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Constant(Convert.ToString(p.DefaultValue, CultureInfo.InvariantCulture))),
 						Expression.Property(null, piInvariantCulture)
 				 );
 				}
@@ -660,7 +603,7 @@ namespace TecWare.DE.Server
 
 		private LuaTable GetActionTable()
 		{
-			return this.GetMemberValue(csLuaActions, lRawGet: true) as LuaTable;
+			return this.GetMemberValue(LuaActions, lRawGet: true) as LuaTable;
 		} // func GetActionTable
 
 		#endregion

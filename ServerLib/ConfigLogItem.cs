@@ -16,7 +16,7 @@ namespace TecWare.DE.Server
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public class DEConfigLogItem : DEConfigItem, ILogger
+	public class DEConfigLogItem : DEConfigItem, ILogger, ILogger2
 	{
 		public const string LogCategory = "Log";
 
@@ -230,6 +230,45 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class LogMessageScopeHolder --------------------------------------------
+
+		private sealed class LogMessageScopeHolder : ILogMessageScope
+		{
+			private DEConfigLogItem owner;
+
+			public LogMessageScopeHolder(DEConfigLogItem owner)
+			{
+				this.owner = owner;
+				lock (owner.logMessageScopeLock)
+					this.owner.logMessageScopeCounter++;
+			} // ctor
+
+			public void Dispose()
+			{
+				lock (owner.logMessageScopeLock)
+				{
+					if (this.owner.logMessageScopeCounter == 0)
+						return;
+
+					if (--this.owner.logMessageScopeCounter == 0)
+					{
+						owner.currentMessageScope.Dispose();
+						owner.currentMessageScope = null;
+					}
+				}
+			} // proc Dispose
+
+			private LogMessageScope Scope => owner.currentMessageScope;
+			public LogMsgType Typ { get { return Scope.Typ; } set { Scope.Typ = value; } }
+
+			public ILogMessageScope AutoFlush() => Scope.AutoFlush();
+			public IDisposable Indent(string indentation = "  ") => Scope.Indent(indentation);
+			public ILogMessageScope Write(string text) => Scope.Write(text);
+			public ILogMessageScope WriteLine(bool force = true) => Scope.WriteLine(force);
+		} // class LogMessageScopeHolder
+
+		#endregion
+
 		private uint MinLogSize = 3 << 20;
 		private uint MaxLogSize = 4 << 20;
 				
@@ -237,6 +276,10 @@ namespace TecWare.DE.Server
 		private FileStream logFile = null;
 		private int logLines = 0; // Zählt immer eine Mehr (die Leerzeile am Ende)
 		private List<long> linesOffsetCache = new List<long>(); // Gibt den Offset jeder 32igsten Zeile zurück
+
+		private object logMessageScopeLock = new object();
+		private LogMessageScope currentMessageScope = null;
+		private int logMessageScopeCounter = 0;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
@@ -345,6 +388,22 @@ namespace TecWare.DE.Server
 				AddToLog(logLine);
 		} // proc ILogger.LogMsg
 
+		public ILogMessageScope GetScope(LogMsgType typ = LogMsgType.Information, bool autoFlush = true)
+		{
+			lock (logMessageScopeLock)
+			{
+				if (currentMessageScope == null)
+					currentMessageScope = new LogMessageScope(this, typ, autoFlush);
+				else
+				{
+					currentMessageScope.Typ = typ;
+					if (autoFlush)
+						currentMessageScope.AutoFlush();
+				}
+			}
+			return new LogMessageScopeHolder(this);
+		} // func GetScope
+		
 		public int ConfigLogItemCount
 		{
 			get

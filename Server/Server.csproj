@@ -43,6 +43,9 @@
     <AssemblyOriginatorKeyFile>
     </AssemblyOriginatorKeyFile>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>des.ico</ApplicationIcon>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="CommandLine, Version=2.0.261.0, Culture=neutral, PublicKeyToken=de6f01bd326f8c32, processorArchitecture=MSIL">
       <HintPath>..\packages\CommandLineParser.2.0.261-beta\lib\net45\CommandLine.dll</HintPath>
@@ -58,7 +61,6 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Drawing" />
     <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -110,6 +112,15 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="des.ico" />
+    <EmbeddedResource Include="Resources\Http\images\lua16.png" />
+    <EmbeddedResource Include="Resources\Http\images\windows24.png" />
+    <EmbeddedResource Include="Resources\Http\images\des16.png" />
+    <EmbeddedResource Include="Resources\Http\images\des24.png" />
+    <EmbeddedResource Include="Resources\Http\images\dotnet24.png" />
+    <EmbeddedResource Include="Resources\Http\images\http.file16.png" />
+    <EmbeddedResource Include="Resources\Http\images\http.res16.png" />
+    <EmbeddedResource Include="Resources\Http\images\http16.png" />
     <EmbeddedResource Include="..\ServerWebUI\des.html">
       <Link>Resources\Http\des.html</Link>
     </EmbeddedResource>

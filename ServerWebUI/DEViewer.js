@@ -236,6 +236,7 @@ var DEViewer = (function () {
         this.currentNodeElement = $('#currentNode');
         this.currentUriElement = $('#currentUri');
         this.currentImageElement = $('#currentImage');
+        this.refreshActionElement = $('#refreshAction');
         this.tabsElement = $('#tabs');
         this.tabs = [
             new DELogTab(this),
@@ -243,7 +244,7 @@ var DEViewer = (function () {
             new DEConfig(this),
             new DEServerInfo(this)
         ];
-        $('#headReload').click(function (e) { return _this.beginReloadIndex(); });
+        this.refreshActionElement.click(function (e) { return _this.beginReloadIndex(); });
         this.currentNodeElement.change(function (e) { return _this.beginRefreshUri($(':selected', e.target)); });
         this.selectTab(this.tabs[0]);
         // initialize view empty
@@ -289,12 +290,14 @@ var DEViewer = (function () {
         if (this.onReloading)
             return;
         this.onReloading = true;
+        this.refreshActionElement.toggleClass("actionButton", false);
         this.currentUriElement.text("Loading...");
         var obj = this;
         this.serverGet('?action=list', function (data) {
             obj.updateIndex(data);
         }, function () {
             obj.onReloading = false;
+            setTimeout(function () { return obj.refreshActionElement.toggleClass("actionButton", true); }, 1000);
         });
     }; // beginReloadIndex
     DEViewer.prototype.updateIndexAppend = function (current, url, level) {
@@ -337,12 +340,40 @@ var DEViewer = (function () {
     DEViewer.prototype.beginRefreshUri = function (option) {
         if (this.beginRefreshTimer != -1)
             clearTimeout(this.beginRefreshTimer);
+        var refreshAction = this.refreshActionElement;
+        var app = this;
         this.beginRefreshTimer = setTimeout((function () {
             this.currentUri = option.attr('uri');
             this.currentUriElement.text(this.currentHost + this.currentUri);
             this.currentImageElement.attr("src", option.attr("icon"));
+            // reload tabs
             for (var i = 0; i < this.tabs.length; i++)
                 this.tabs[i].reload(this.currentUri);
+            // reload actions
+            $('#actions > span[loaded="true"]').remove();
+            this.serverGet(this.currentUri + '?action=list&recursive=false', function (data) {
+                $('action', data).each(function (index, element) {
+                    var c = $(element);
+                    refreshAction.before(['<span class="actionButton" loaded="true" actionId="', c.attr('id'), '">', c.attr('displayname'), '</span>'].join(""));
+                });
+                $('#actions > span[loaded="true"]').click(function (e) {
+                    var cmd = $(this);
+                    cmd.toggleClass('actionButton', false);
+                    app.serverGet([app.currentUri, '?action=', cmd.attr('actionId')].join(""), function (returnData) {
+                        var r = $(":first-child", returnData);
+                        if (r.attr("status") == "ok") {
+                            var text = r.attr("text");
+                            if (text != null)
+                                alert(text);
+                        }
+                        else {
+                            alert("Aufruf fehlgeschlagen:\n" + r.attr("text"));
+                        }
+                    }, function () {
+                        cmd.toggleClass('actionButton', true);
+                    });
+                });
+            });
         }).bind(this), 500);
     }; // beginRefreshUri
     Object.defineProperty(DEViewer.prototype, "TabBarElement", {
