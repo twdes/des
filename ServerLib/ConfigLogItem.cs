@@ -259,9 +259,10 @@ namespace TecWare.DE.Server
 			} // proc Dispose
 
 			private LogMessageScope Scope => owner.currentMessageScope;
-			public LogMsgType Typ { get { return Scope.Typ; } set { Scope.Typ = value; } }
+			public LogMsgType Typ { get { return Scope.Typ; } }
 
 			public ILogMessageScope AutoFlush() => Scope.AutoFlush();
+			public ILogMessageScope SetType(LogMsgType value, bool force = false) => Scope.SetType(value, force);
 			public IDisposable Indent(string indentation = "  ") => Scope.Indent(indentation);
 			public ILogMessageScope Write(string text) => Scope.Write(text);
 			public ILogMessageScope WriteLine(bool force = true) => Scope.WriteLine(force);
@@ -396,7 +397,7 @@ namespace TecWare.DE.Server
 					currentMessageScope = new LogMessageScope(this, typ, autoFlush);
 				else
 				{
-					currentMessageScope.Typ = typ;
+					currentMessageScope.SetType(typ);
 					if (autoFlush)
 						currentMessageScope.AutoFlush();
 				}

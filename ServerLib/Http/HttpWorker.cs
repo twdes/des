@@ -39,38 +39,8 @@ namespace TecWare.DE.Server.Http
 			if (value == null || value.Length == 0 || value == "*")
 				return true;
 			else
-			{
-				var p1 = value.IndexOf('*');
-				var p2 = value.LastIndexOf('*');
-				if (p1 == p2) // only one start
-				{
-					if (p1 == 0) // => endswith
-						return subPath.EndsWith(value.Substring(1), StringComparison.OrdinalIgnoreCase);
-					else if (p1 == value.Length - 1)// => startwith
-						return subPath.StartsWith(value.Substring(0, p1), StringComparison.OrdinalIgnoreCase);
-					else
-						return TestFilterEx(value, subPath);
-				}
-				else
-				{
-					var p3 = value.IndexOf('*', p1 + 1);
-					if (p3 == p2) // two stars
-					{
-						if (p1 == 0 && p2 == value.Length - 1) // => contains
-							return subPath.IndexOf(value.Substring(1, p2 - 1), StringComparison.OrdinalIgnoreCase) >= 0;
-						else
-							return TestFilterEx(value, subPath);
-					}
-					else
-						return TestFilterEx(value, subPath);
-				}
-			}
+				return ProcsDE.IsFilterEqual(subPath, value);
 		} // func TestFilter
-
-		private bool TestFilterEx(string value, string subPath)
-		{
-			throw new NotImplementedException();
-		} // func TestFilterEx
 
 		protected string GetFileContentType(string subPath)
 			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value).FirstOrDefault();

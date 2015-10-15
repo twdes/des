@@ -976,15 +976,3 @@ namespace TecWare.DE.Server
 		public static DEServer Current { get; private set; }
 	} // class DEServer
 }
-/*
-Register shutdown
-				// Stop task of the current 
-				var cronEngine = this.GetService<CronEngine>(typeof(IDECronEngine), false);
-				if (cronEngine != null)
-					cronEngine.CancelJobs();
-
-	Register Reconfig
-	var cronEngine = config.Tags.GetProperty<CronEngine>("cronEngine", null);
-			if (cronEngine != null)
-				cronEngine.RefreshCronServices();
-	*/

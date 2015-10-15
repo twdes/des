@@ -145,6 +145,7 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnHttpMime = MainNamespace + "mime";
 
 		public static readonly XName xnCron = MainNamespace + "cron";
+		public static readonly XName xnCronRunAfter = MainNamespace + "runafter";
 		public static readonly XName xnLuaEngine = MainNamespace + "luaengine";
 		public static readonly XName xnLuaScript = MainNamespace + "script";
 

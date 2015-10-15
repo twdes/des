@@ -67,6 +67,7 @@
     <Compile Include="ConfigLogItem.cs" />
     <Compile Include="Configuration\ConfigNode.cs" />
     <Compile Include="Configuration\Contracts.cs" />
+    <Compile Include="CronEngine.cs" />
     <Compile Include="Http\HttpResponse.cs" />
     <Compile Include="Http\HttpWorker.cs" />
     <Compile Include="LuaEngine.cs" />
