@@ -203,9 +203,22 @@ span.actionButton:hover {
     float: left;
 }
 
+#dumpListFrame {
+    border-top: 1px solid darkgray;
+    margin: 16px 6px 6px 6px;
+}
+
+#dumpListFrame h3 {
+    font-size: small;
+}
+
+#dumpList {
+    margin: 0px;
+}
+
 
 /******************************************************************************
- * Server-Informationen
+ * Configuration tab
  */
 
 #tabConfig {

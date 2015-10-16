@@ -45,7 +45,8 @@ namespace TecWare.DE.Server
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
-		private class DumpFileInfo
+		[DEListTypePropertyAttribute("dump")]
+    private sealed class DumpFileInfo
 		{
 			public DumpFileInfo(int id, string fileName)
 			{
@@ -53,7 +54,40 @@ namespace TecWare.DE.Server
 				this.FileName = fileName;
 			} // ctor
 
+			[DEListTypeProperty("@id")]
 			public int Id { get; }
+			[DEListTypeProperty("@size")]
+			public long Size
+			{
+				get
+				{
+					try
+					{
+						return new FileInfo(FileName).Length;
+					}
+					catch
+					{
+						return -1;
+					}
+				}
+			} // prop Size
+
+			[DEListTypeProperty("@created")]
+			public DateTime LastWriteTimeUtc
+			{
+				get
+				{
+					try
+					{
+						return new FileInfo(FileName).LastWriteTimeUtc;
+					}
+					catch
+					{
+						return DateTime.MinValue;
+					}
+				}
+			} // prop Size
+
 			public string FileName { get; }
 		} // class DumpFileInfo
 
@@ -90,7 +124,10 @@ namespace TecWare.DE.Server
 			// create configurations service
 			this.configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
 			this.dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
-		} // ctor
+
+			PublishItem(dumpFiles);
+			PublishItem(new DEConfigItemPublicAction("dump") { DisplayName = "Dump" });
+    } // ctor
 
 		protected override void Dispose(bool disposing)
 		{
@@ -408,9 +445,9 @@ namespace TecWare.DE.Server
 				var outputText = p.StandardOutput.ReadToEnd();
 
 				return new XElement("return",
-					new XAttribute("status", p.ExitCode < 0 ? "ok" : "error"),
+					new XAttribute("status", p.ExitCode > 0 ? "ok" : "error"),
 					new XAttribute("id", fi.Id),
-          new XAttribute("exitcode", p.ExitCode),
+					new XAttribute("exitcode", p.ExitCode),
 					new XAttribute("text", outputText)
 				);
 			}
@@ -420,17 +457,17 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("dumpload", SecurityToken = SecuritySys),
 		Description("Sends the dump to the client.")
 		]
-		private void HttpDumpLoadAction(IDEHttpContext r, int id = -1)
+		private void HttpDumpLoadAction(IDEContext r, int id = -1)
 		{
 			// get the dump file
 			DumpFileInfo di = null;
 			using (dumpFiles.EnterReadLock())
-			{
-				var index = dumpFiles.FindIndex(c => c.Id == id);
-				if (index >= 0)
-					di = dumpFiles[index];
-			}
-
+				{
+					var index = dumpFiles.FindIndex(c => c.Id == id);
+					if (index >= 0)
+						di = dumpFiles[index];
+				}
+			
 			// send the file
 			if (di == null)
 				throw new ArgumentException("dump id is wrong.");
@@ -448,7 +485,7 @@ namespace TecWare.DE.Server
 
 		#region -- OnProcessRequest -------------------------------------------------------
 
-		protected override bool OnProcessRequest(IDEHttpContext r)
+		protected override bool OnProcessRequest(IDEContext r)
 		{
 			if (String.Compare(r.RelativeSubPath, "favicon.ico", true) == 0)
 			{
@@ -469,7 +506,7 @@ namespace TecWare.DE.Server
 		{
 			refreshConifg = InternalRefreshConfiguration;
 
-			PublishItem(new DEConfigItemPublicAction("readconfig") { DisplayName = "Konfiguration aktualisieren" });
+			PublishItem(new DEConfigItemPublicAction("readconfig") { DisplayName = "Refresh(Configuration)" });
 
 			// Lese die Konfigurationsdatei
 			ReadConfiguration();

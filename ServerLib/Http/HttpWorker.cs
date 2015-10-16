@@ -45,7 +45,7 @@ namespace TecWare.DE.Server.Http
 		protected string GetFileContentType(string subPath)
 			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value).FirstOrDefault();
 
-		protected void DemandFile(IDEHttpContext r, string subPath)
+		protected void DemandFile(IDEContext r, string subPath)
 		{
 			var tokens = Config.Elements(xnSecurityDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value?.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)).FirstOrDefault();
 			if (tokens == null || tokens.Length == 0)
@@ -64,9 +64,9 @@ namespace TecWare.DE.Server.Http
 		/// <summary>Does the specific address.</summary>
 		/// <param name="r">Request context.</param>
 		/// <returns><c>true</c>, if the request is processed.</returns>
-		public abstract bool Request(IDEHttpContext r);
+		public abstract bool Request(IDEContext r);
 
-		protected override bool OnProcessRequest(IDEHttpContext r)
+		protected override bool OnProcessRequest(IDEContext r)
 		{
 			if (base.OnProcessRequest(r))
 				return true;
@@ -102,7 +102,7 @@ namespace TecWare.DE.Server.Http
 			directoryBase = Config.GetAttribute("directory", String.Empty);
 		} // proc OnEndReadConfiguration
 
-		public override bool Request(IDEHttpContext r)
+		public override bool Request(IDEContext r)
 		{
 			// create the full file name
 			var fileName = Path.GetFullPath(Path.Combine(directoryBase, ProcsDE.GetLocalPath(r.RelativeSubPath)));
@@ -196,7 +196,7 @@ namespace TecWare.DE.Server.Http
 				alternativeRoots = null;
 		} // proc OnBeginReadConfiguration
 
-		public override bool Request(IDEHttpContext r)
+		public override bool Request(IDEContext r)
 		{
 			if (assembly == null || namespaceRoot == null)
 				return false;
@@ -248,7 +248,7 @@ namespace TecWare.DE.Server.Http
 				DemandFile(r, resourceName);
 				// send the file
 				r.SetLastModified(stamp)
-					.WriteStream(src, GetFileContentType(resourceName) ?? r.Http.GetContentType(Path.GetExtension(resourceName)));
+					.WriteStream(src, GetFileContentType(resourceName) ?? r.Server.GetContentType(Path.GetExtension(resourceName)));
 				return true;
 			}
 			finally

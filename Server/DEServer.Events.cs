@@ -207,7 +207,7 @@ namespace TecWare.DE.Server
 			
 			if (ws.State == System.Net.WebSockets.WebSocketState.Open)
 			{
-				var segment = new ArraySegment<byte>(context.Http.Encoding.GetBytes(eventLine));
+				var segment = new ArraySegment<byte>(context.Server.Encoding.GetBytes(eventLine));
 				await ws.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
 			}
 		} // proc SendEventOnSocketAsync
@@ -379,7 +379,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		void IDEListService.WriteList(IDEHttpContext r, IDEListController controller, int startAt, int count)
+		void IDEListService.WriteList(IDEContext r, IDEListController controller, int startAt, int count)
 		{
 			var sendTypeDefinition = String.Compare(r.GetProperty("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
 

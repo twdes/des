@@ -19,7 +19,7 @@ namespace TecWare.DE.Server
 	/// <param name="item"></param>
 	/// <param name="args"></param>
 	/// <returns></returns>
-	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEHttpContext context);
+	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEContext context);
 
 	#endregion
 
@@ -41,12 +41,12 @@ namespace TecWare.DE.Server
 			this.securityToken = securityToken;
 			this.description = description;
 			this.action = action;
-			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEHttpContext));
+			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEContext));
 			this.isSafeCall = isNativeCall ? false : isSafeCall;
 			this.methodDescription = methodDescription;
 		} // ctor
 
-		public object Invoke(DEConfigItem item, IDEHttpContext context)
+		public object Invoke(DEConfigItem item, IDEContext context)
 		{
 			if (action != null)
 				if (isNativeCall)
@@ -337,7 +337,7 @@ namespace TecWare.DE.Server
 		/// <param name="actionName">Name der Aktion</param>
 		/// <param name="context">Parameter, die übergeben werden sollen.</param>
 		/// <returns>Rückgabe</returns>
-		public object InvokeAction(string actionName, IDEHttpContext context)
+		public object InvokeAction(string actionName, IDEContext context)
 		{
 			// Suche die Action im Cache
 			DEConfigAction a;
@@ -453,7 +453,7 @@ namespace TecWare.DE.Server
 		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate dlg = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
-			var argCaller = Expression.Parameter(typeof(IDEHttpContext), "#arg");
+			var argCaller = Expression.Parameter(typeof(IDEContext), "#arg");
 
 			int parameterOffset;
 			ParameterInfo[] parameterInfo;
@@ -528,12 +528,12 @@ namespace TecWare.DE.Server
 				}
 				else if (typeCode == TypeCode.Object) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
-					if (typeTo == typeof(IDEHttpContext))
+					if (typeTo == typeof(IDEContext))
 					{
 						exprGetParameter = Expression.Condition(
-							Expression.TypeIs(arg, typeof(IDEHttpContext)),
-							Expression.Convert(arg, typeof(IDEHttpContext)),
-							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEHttpContext))
+							Expression.TypeIs(arg, typeof(IDEContext)),
+							Expression.Convert(arg, typeof(IDEContext)),
+							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEContext))
 						);
 					}
 					else if (typeTo.IsAssignableFrom(GetType()))

@@ -114,7 +114,7 @@ var DELogTab = (function (_super) {
         this.App.serverGet(url + "?action=listget&id=tw_lines&start=-500", // last 500
         (function (data) {
             var innerHtmlElements = new Array();
-            $('items > line', data).each((function (index, element) {
+            $('items > line', data).get().reverse().forEach((function (element) {
                 var line = $(element);
                 var lineType = line.attr('typ');
                 var lineStamp = new Date(Date.parse(line.attr('stamp')));
@@ -136,7 +136,7 @@ var DELogTab = (function (_super) {
                 text.toggleClass("logLineTextFull");
                 text.toggleClass("logLineTextSingle");
             });
-            this.RootElement.scrollTop(this.RootElement.height());
+            this.RootElement.scrollTop(0);
         }).bind(this));
     }; // reload
     return DELogTab;
@@ -226,18 +226,36 @@ var DEServerInfo = (function (_super) {
     } // ctor
     DEServerInfo.prototype.reload = function (url) {
         _super.prototype.reload.call(this, url);
-        this.RootElement.empty();
+        var serverInfoElement = $('#serverInfo', this.RootElement);
+        var dumpFilesElement = $('#dumpList', this.RootElement);
+        serverInfoElement.empty();
+        dumpFilesElement.empty();
         if (!this.IsVisible)
             return;
+        // get server info
         this.App.serverGet("?action=serverinfo", (function (data) {
             var serverInfo = $(':root', data);
-            this.RootElement.append(loadTemplate($('#serverInfoTemplate'), serverInfo));
-            var obj = this;
+            serverInfoElement.append(loadTemplate($('#serverInfoTemplate'), serverInfo));
             var tmpl = $('#assemblyInfoTemplate');
             $('assembly', data).each(function (index, element) {
-                obj.RootElement.append(loadTemplate(tmpl, $(element)));
+                serverInfoElement.append(loadTemplate(tmpl, $(element)));
             });
-        }).bind(this));
+        }));
+        this.App.serverGet("?action=listget&id=tw_dumpfiles", function (data) {
+            var dumpAdded = false;
+            $('items > dump', data).each(function (index, element) {
+                var dump = $(element);
+                var id = dump.attr("id");
+                var created = new Date(Date.parse(dump.attr("created")));
+                dumpFilesElement.append([
+                    '<li><a href="/?action=dumpload&id=', id, '">',
+                    created.toLocaleString(),
+                    ' (', formatValue('long', 'FILESIZE', dump.attr('size')), ')</a></li>'
+                ].join(""));
+                dumpAdded = true;
+            });
+            $('#dumpListFrame').css('display', dumpAdded ? 'block' : 'none');
+        });
     }; // reload
     return DEServerInfo;
 })(DETab); // class DEServerInfo
