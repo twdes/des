@@ -713,24 +713,24 @@ namespace TecWare.DE.Server
 				RemoveAssemblyPath(resolve.Value);
 		} // proc RemoveResolve
 
-		private void WaitForService(string sServiceName, int iMaxTime)
+		private void WaitForService(string serviceName, int maxTime)
 		{
-			var cur = Array.Find(ServiceController.GetServices(), sv => String.Compare(sv.ServiceName, sServiceName, true) == 0);
+			var cur = Array.Find(ServiceController.GetServices(), sv => String.Compare(sv.ServiceName, serviceName, true) == 0);
 
 			if (cur == null)
-				LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gefunden...", sServiceName));
+				LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gefunden...", serviceName));
 			else
 			{
-				LogMsg(EventLogEntryType.Information, String.Format("Warte auf Service '{0}' für maximal {1:N0}ms...", sServiceName, iMaxTime));
-				while (cur.Status != ServiceControllerStatus.Running && iMaxTime > 0)
+				LogMsg(EventLogEntryType.Information, String.Format("Warte auf Service '{0}' für maximal {1:N0}ms...", serviceName, maxTime));
+				while (cur.Status != ServiceControllerStatus.Running && maxTime > 0)
 				{
-					serviceLog.RequestAdditionalTime(700);
+					// serviceLog.RequestAdditionalTime(700); service is already started
 					Thread.Sleep(500);
 					cur.Refresh();
-					iMaxTime -= 500;
+					maxTime -= 500;
 				}
 				if (cur.Status != ServiceControllerStatus.Running)
-					LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gestartet...", sServiceName));
+					LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gestartet...", serviceName));
 			}
 		} // proc WaitForService
 

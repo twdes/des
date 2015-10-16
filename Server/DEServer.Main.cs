@@ -110,7 +110,7 @@ namespace TecWare.DE.Server
 				{
 					case EventLogEntryType.Error:
 					case EventLogEntryType.FailureAudit:
-						Console.ForegroundColor = ConsoleColor.DarkRed;
+						Console.ForegroundColor = ConsoleColor.Red;
 						Console.Error.WriteLine(message);
 						break;
 					case EventLogEntryType.SuccessAudit:
