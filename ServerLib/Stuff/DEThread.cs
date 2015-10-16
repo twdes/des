@@ -27,7 +27,7 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEThreadBase(IServiceProvider sp, string name, string categoryName = ThreadCategory, ThreadPriority priority = ThreadPriority.Normal, bool isBackground = false, ApartmentState apartmentState = ApartmentState.MTA)
+		public DEThreadBase(IServiceProvider sp, string name, string categoryName = ThreadCategory)
 		{
 			this.sp = sp;
 
@@ -55,7 +55,10 @@ namespace TecWare.DE.Server
 				null,
 				"Läuft"
 			);
+		} // ctor
 
+		protected void StartThread(string name, ThreadPriority priority = ThreadPriority.Normal, bool isBackground = false, ApartmentState apartmentState = ApartmentState.MTA)
+		{
 			// create the thread
 			thread = new Thread(Execute);
 			thread.SetApartmentState(apartmentState);
@@ -71,7 +74,7 @@ namespace TecWare.DE.Server
 				throw new Exception(String.Format("Could not start thread '{0}'.", name));
 
 			Procs.FreeAndNil(ref startedEvent);
-		} // ctor
+		} // proc StartThread
 
 		~DEThreadBase()
 		{
@@ -439,12 +442,14 @@ namespace TecWare.DE.Server
 		private readonly CancellationTokenSource cancellationSource;
 
 		public DEThreadLoop(IServiceProvider sp, string name, string categoryName = ThreadCategory, ThreadPriority priority = ThreadPriority.Normal)
-			: base(sp, name, categoryName, priority, true, ApartmentState.STA)
+			: base(sp, name, categoryName)
 		{
 			this.cancellationSource = new CancellationTokenSource();
 			this.scheduler = new ThreadTaskScheduler(this);
       this.factory = new TaskFactory(cancellationSource.Token, TaskCreationOptions.AttachedToParent, TaskContinuationOptions.AttachedToParent, scheduler);
-		} // ctor
+
+			StartThread(name, priority, true, ApartmentState.STA);
+    } // ctor
 
 		protected override void Dispose(bool disposing)
 		{
@@ -494,10 +499,12 @@ namespace TecWare.DE.Server
 		private readonly ThreadDelegate action;
 
 		public DEThread(IServiceProvider sp, string name, ThreadDelegate action, string categoryName = ThreadCategory, ThreadPriority priority = ThreadPriority.Normal, bool isBackground = false, ApartmentState apartmentState = ApartmentState.MTA)
-			:base(sp, name, categoryName, priority, isBackground, apartmentState)
+			:base(sp, name, categoryName)
 		{
 			this.action = action;
-		} // ctor
+
+			StartThread(name, priority, isBackground, apartmentState);
+    } // ctor
 
 		protected override void ExecuteLoop() => action();
 
