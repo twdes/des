@@ -131,8 +131,6 @@ namespace TecWare.DE.Server
 		public string ActionName { get; }
 		/// <summary>Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um die Aktion auszuführen.</summary>
 		public string SecurityToken { get; set; }
-		/// <summary>Die Aktion erhält einen Parameter für Respone-Objekt und muss sich um alles alleine kümmern.</summary>
-		public bool IsNativeCall { get; set; }
 		/// <summary>Sollen Exceptions in eine gültige Rückgabe umgewandelt werden (default: false).</summary>
 		public bool IsSafeCall { get; set; }
 	} // class DEConfigHttpActionAttribute

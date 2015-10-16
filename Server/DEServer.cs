@@ -417,7 +417,7 @@ namespace TecWare.DE.Server
 		} // proc HttpDumpAction
 
 		[
-		DEConfigHttpAction("dumpload", IsNativeCall = true, SecurityToken = SecuritySys),
+		DEConfigHttpAction("dumpload", SecurityToken = SecuritySys),
 		Description("Sends the dump to the client.")
 		]
 		private void HttpDumpLoadAction(IDEHttpContext r, int id = -1)
