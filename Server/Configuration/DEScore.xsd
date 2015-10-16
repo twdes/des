@@ -46,6 +46,14 @@
 		</xs:attribute>
 	</xs:complexType>
 
+	<xs:simpleType name="CronBound">
+		<xs:union memberTypes="xs:string" />
+	</xs:simpleType>
+
+	<xs:simpleType name="TimeSpan">
+		<xs:union memberTypes="xs:string" />
+	</xs:simpleType>
+
 	<xs:simpleType name="LuaAliasesType">
 		<xs:annotation>
 			<xs:documentation>Definition of type lua aliases.</xs:documentation>

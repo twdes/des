@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema id="DESconfigItem"
+           targetNamespace="http://tecware-gmbh.de/dev/des/2014"
+           elementFormDefault="qualified"
+           xmlns="http://tecware-gmbh.de/dev/des/2014"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+	<xs:include schemaLocation="DEScore.xsd" />
+	<xs:include schemaLocation="DESconfigItem.xsd" />
+
+	<xs:element name="process" substitutionGroup="configItem">
+		<xs:annotation>
+			<xs:documentation>Manage a external process.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.DEProcessItem</class>
+			</xs:appinfo>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="ConfigLogItemType">
+					<xs:sequence>
+						<xs:element name="arguments" minOccurs="0" maxOccurs="1" type="xs:string">
+							<xs:annotation>
+								<xs:documentation>Beschreibt die Argumente der Anwendung</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+						<xs:element name="env" minOccurs="0" maxOccurs="unbounded">
+							<xs:complexType mixed="true">
+								<xs:annotation>
+									<xs:documentation>Legt eine Environmentvariable fest.</xs:documentation>
+								</xs:annotation>
+								<xs:attribute name="key" type="xs:string" use="required">
+									<xs:annotation>
+										<xs:documentation>Name der Environmentvariable</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:complexType>
+						</xs:element>
+						<xs:element name="kill" minOccurs="0" maxOccurs="1" type="xs:string">
+							<xs:annotation>
+								<xs:documentation>Befehl der gesendet wird beim Beenden.</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:sequence>
+					<xs:attribute name="filename" type="PathType" use="optional">
+						<xs:annotation>
+							<xs:documentation>Dateiname</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="arguments" type="xs:string" use="optional">
+						<xs:annotation>
+							<xs:documentation>Beschreibt die Argumente der Anwendung</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="domain" type="xs:string" use="optional">
+						<xs:annotation>
+							<xs:documentation>Domain des Nutzers mit dem der Prozess gestartet werden soll.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="username" type="xs:string" use="optional">
+						<xs:annotation>
+							<xs:documentation>Nutzer mit dem der Prozess gestartet werden soll.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="password" type="xs:string" use="optional">
+						<xs:annotation>
+							<xs:documentation>Password des Nutzers</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="loadUserProfile" type="xs:boolean" use="optional">
+						<xs:annotation>
+							<xs:documentation>Profil des Nutzers laden</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="outputEncoding" type="EncodingType" use="optional">
+						<xs:annotation>
+							<xs:documentation>Kodierung für die StdOut,StdErr Umleitung (Id oder Name).</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="inputEncoding" type="EncodingType" use="optional">
+						<xs:annotation>
+							<xs:documentation>Kodierung für die StdIn Umleitung (Id oder Name).</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="workingDirectory" type="PathType" use="optional">
+						<xs:annotation>
+							<xs:documentation>Aktuelles Verzeichnis in der die Anwendung gestartet werden soll.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+
+					<xs:attribute name="autostart" type="xs:boolean" use="optional" default="false">
+						<xs:annotation>
+							<xs:documentation>Soll die Anwendung automatisch gestartet werden</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="configrestart" type="xs:boolean" use="optional" default="false">
+						<xs:annotation>
+							<xs:documentation>Soll bei der Änderung der Konfiguration, die Anwendung automatisch gestartet werden.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>

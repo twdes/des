@@ -55,8 +55,6 @@
 		</xs:complexContent>
 	</xs:complexType>
 
-	<!-- Elements -->
-
 	<xs:element name="genericService" abstract="true" type="ConfigServiceType">
 		<xs:annotation>
 			<xs:documentation>Placeholder for a service node.</xs:documentation>

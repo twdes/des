@@ -131,7 +131,8 @@ namespace TecWare.DE.Server
 
 			// read the border
 			cronBound = new CronBound(config.ConfigNew.GetAttribute("bound", String.Empty));
-			//runTimeSlice = 
+			var attr= config.ConfigNew.Attribute("runTimeSlice");
+			runTimeSlice = attr == null ? null : new TimeSpan?(TimeSpan.Parse(attr.Value));
 
 			// initialize run after
 			runAfterJob = config.ConfigNew.Elements(DEConfigurationConstants.xnCronRunAfter)

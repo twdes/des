@@ -321,6 +321,24 @@
 		</xs:complexType>
 	</xs:element>
 
+	<xs:element name="cron">
+		<xs:annotation>
+			<xs:documentation>Service for timed job handling.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.DECronEngine</class>
+			</xs:appinfo>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="ConfigServiceType">
+					<xs:sequence>
+						<xs:element ref="log" minOccurs="0" maxOccurs="1" />
+					</xs:sequence>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
+	</xs:element>
+
 	<xs:element name="luaengine">
 		<xs:annotation>
 			<xs:documentation>Erweitert die Lua-Script-Engine.</xs:documentation>
@@ -393,7 +411,7 @@
 				</xs:element>
 
 				<xs:element ref="http" minOccurs="0" maxOccurs="1" />
-
+				<xs:element ref="cron" minOccurs="0" maxOccurs="1" />
 				<xs:element ref="luaengine" minOccurs="0" maxOccurs="1" />
 
 				<xs:sequence minOccurs="0" maxOccurs="unbounded">
@@ -434,6 +452,7 @@
 						</xs:element>
 
 						<xs:element ref="http" minOccurs="1" maxOccurs="1" />
+						<xs:element ref="cron" minOccurs="0" maxOccurs="1" />
 						<xs:element ref="luaengine" minOccurs="1" maxOccurs="1" />
 
 						<xs:sequence minOccurs="0" maxOccurs="unbounded">
