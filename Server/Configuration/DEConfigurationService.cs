@@ -232,8 +232,7 @@ namespace TecWare.DE.Server.Configuration
 			// prepare arguments for the configuration
 			var fileName = Path.GetFullPath(configurationFile);
 			var context = new ParseContext(configurationProperties, Path.GetDirectoryName(fileName));
-
-
+			
 			// read main file
 			var doc = context.LoadFile(fileName);
 			var frame = context.PushFrame(doc);

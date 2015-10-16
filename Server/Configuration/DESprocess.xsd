@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<xs:schema id="DESconfigItem"
+<xs:schema id="DESprocess"
            targetNamespace="http://tecware-gmbh.de/dev/des/2014"
            elementFormDefault="qualified"
            xmlns="http://tecware-gmbh.de/dev/des/2014"
