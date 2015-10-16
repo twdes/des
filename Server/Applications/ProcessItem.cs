@@ -16,7 +16,7 @@ namespace TecWare.DE.Server
 {
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal class DEProcessItem : DEConfigLogItem
+	internal class DEProcessItem : DEConfigLogItem, IDEProcessItem
 	{
 		public const string ProcessCategory = "Process";
 
@@ -223,9 +223,7 @@ namespace TecWare.DE.Server
 		Description("Sendet eine Zeichenfolge an die Anwendung")
 		]
 		private void HttpSendAction(string cmd)
-		{
-			inputStream.WriteLine(cmd);
-		} // proc HttpSendAction
+			=> SendCommand(cmd);
 
 		[
 		DEConfigHttpAction("processRefresh", IsSafeCall = true),
@@ -343,7 +341,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc CreateProcessPipe
 
-		private bool StartProcess()
+		public bool StartProcess()
 		{
 			try
 			{
@@ -494,19 +492,19 @@ namespace TecWare.DE.Server
 			}
 		} // func SendKillCommand
 
-		private void StopProcess()
+		public void StopProcess()
 		{
 			const string csSendKillCommand = "SendKillCommand";
 			try
 			{
-				bool lCommandSended = SendKillCommand();
+				var isCommandSended = SendKillCommand();
 
 				// Prüfe ob das Script ne Idee hat
-				if (!lCommandSended)
+				if (!isCommandSended)
 				{
-					object sendKillCommand = this[csSendKillCommand];
+					var sendKillCommand = this[csSendKillCommand];
 					if (sendKillCommand != null)
-						lCommandSended = (bool)Lua.RtConvertValue(CallMemberDirect(csSendKillCommand, LuaResult.Empty.Values, lThrowExceptions: false), typeof(bool));
+						isCommandSended = (bool)Lua.RtConvertValue(CallMemberDirect(csSendKillCommand, LuaResult.Empty.Values, lThrowExceptions: false), typeof(bool));
 				}
 
 				//// Ctrl+C - muss via CreateRemoteThread ausgeführt werden!
@@ -517,7 +515,7 @@ namespace TecWare.DE.Server
 				//}
 
 				// Warte auf das Ende
-				if (!process.WaitForExit(lCommandSended ? Config.GetAttribute("exitTimeout", 3000) : 100))
+				if (!process.WaitForExit(isCommandSended ? Config.GetAttribute("exitTimeout", 3000) : 100))
 				{
 					Log.LogMsg(LogMsgType.Warning, "Prozess wird abgeschossen.");
 					process.Kill();
@@ -528,6 +526,9 @@ namespace TecWare.DE.Server
 				Log.Except(e);
 			}
 		} // proc StopProcess
+
+		public void SendCommand(string cmd)
+			=> inputStream?.WriteLine(cmd);
 
 		#endregion
 
