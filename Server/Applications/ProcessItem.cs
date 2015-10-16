@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -37,6 +38,63 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class ProcessProperty --------------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private sealed class ProcessProperty : IDEConfigItemProperty
+		{
+			public event EventHandler ValueChanged;
+
+			private readonly DEProcessItem item;
+			private readonly PropertyInfo property;
+			private readonly string name;
+			private readonly string description;
+			private readonly string displayName;
+			private readonly string format;
+
+			private object lastValue;
+
+			public ProcessProperty(DEProcessItem item, string propertyName, string displayName, string description, string format)
+			{
+				this.item = item;
+				
+				// find property
+				this.property = typeof(Process).GetRuntimeProperty(propertyName);
+				if (this.property == null)
+					throw new ArgumentException($"{propertyName} is not declared on Process.");
+
+				this.name = "tw_process_" + property.Name.ToLower();
+				this.description = description;
+				this.displayName = displayName;
+				this.format = format;
+
+				this.lastValue = Value;
+			} // ctor
+
+			public void Refresh()
+			{
+				var t = Value;
+				if (!Object.Equals(lastValue, t))
+				{
+					lastValue = t;
+					ValueChanged?.Invoke(this, EventArgs.Empty);
+				}
+			} // proc Refresh
+
+			public string Category => ProcessCategory;
+
+			public string Name => name;
+			public string DisplayName => displayName;
+			public string Description => description;
+			public string Format => format;
+			public Type Type => property.PropertyType;
+
+			public object Value => property?.GetValue(item.process);
+		} // class ProcessProperty
+
+		#endregion
+
 		private Encoding outputEncoding = null; // Encoding für die Ausgaben der Anwendung
 		private Encoding inputEncoding = null;  // Encoding für Input-Texte
 
@@ -52,6 +110,9 @@ namespace TecWare.DE.Server
 		private IAsyncResult arErrorStream = null;
 		private Action<LogMsgType, StreamReader> procProcessLogLine;
 
+		private ProcessProperty[] publishedProperties;
+		private Action procRefreshProperties;
+
 		#region -- Ctor/Dtor/Config -------------------------------------------------------
 
 		public DEProcessItem(IServiceProvider sp, string name)
@@ -59,77 +120,54 @@ namespace TecWare.DE.Server
 		{
 			procProcessLogLine = ProcessReceiveLine;
 
-			PublishItem(new DEConfigItemPublicAction("processStart") { DisplayName = "Start" });
-			PublishItem(new DEConfigItemPublicAction("processStop") { DisplayName = "Stop" });
+			PublishItem(new DEConfigItemPublicAction("processStart") { DisplayName = "Start(process)" });
+			PublishItem(new DEConfigItemPublicAction("processStop") { DisplayName = "Stop(process)" });
+			PublishItem(new DEConfigItemPublicAction("processRefresh") { DisplayName = "Refresh(process)" });
 
-			//processId = new SimpleConfigItemProperty<int?>(this, "tw_process_id", "Id", ProcessCategory, "Gets the unique identifier for the associated process.", "N0", null);
+			publishedProperties = new ProcessProperty[]
+				{
+					new ProcessProperty(this, "Id","(Id)", "Gets the unique identifier for the associated process.", "N0"),
+					new ProcessProperty(this, "HandleCount","Handles", "Gets the number of handles opened by the process.", "N0"),
+
+					new ProcessProperty(this, "PagedSystemMemorySize64","Memory (paged, system)", "Gets the amount of pageable system memory, in bytes, allocated for the associated process.", "FILESIZE"),
+					new ProcessProperty(this, "NonpagedSystemMemorySize64","Memory (none paged,system)", "Gets the amount of nonpaged system memory, in bytes, allocated for the associated process.", "FILESIZE"),
+					new ProcessProperty(this, "PagedMemorySize64","Memory (paged)", "Gets the amount of paged memory, in bytes, allocated for the associated process.", "FILESIZE"),
+					new ProcessProperty(this, "PeakPagedMemorySize64","Memory (paged,peak)", "Gets the maximum amount of memory in the virtual memory paging file, in bytes, used by the associated process.", "FILESIZE"),
+					new ProcessProperty(this, "VirtualMemorySize64","Memory (virtual)", "Gets the amount of the virtual memory, in bytes, allocated for the associated process.", "FILESIZE"),
+					new ProcessProperty(this, "PeakVirtualMemorySize64","Memory (virtual,peak)", "Gets the maximum amount of virtual memory, in bytes, used by the associated process.", "FILESIZE"),
+					new ProcessProperty(this, "PeakWorkingSet64","Memory (workingset,peak)", "Gets the maximum amount of physical memory, in bytes, used by the associated process.", "FILESIZE"),
+					new ProcessProperty(this, "WorkingSet64","Memory (workingset)", "Gets the amount of physical memory, in bytes, allocated for the associated process.", "FILESIZE"),
+
+					new ProcessProperty(this, "ProcessName","Name", "Gets the name of the process.", null),
+					new ProcessProperty(this, "StartTime","StartTime", "Gets the time that the associated process was started.", "G"),
+					new ProcessProperty(this, "TotalProcessorTime","Time (total)", "Gets the total processor time for this process.", null),
+					new ProcessProperty(this, "UserProcessorTime","Time (user)", "Gets the user processor time for this process.", null),
+					new ProcessProperty(this, "PrivilegedProcessorTime","Time (system)", "Gets the privileged processor time for this process.", null)
+				};
+
+			foreach (var c in publishedProperties)
+				RegisterProperty(c);
+
+			procRefreshProperties = HttpRefreshProperties;
+			Server.Queue.RegisterIdle(procRefreshProperties, 3000);
     } // ctor
-
-		//[
-		//DEConfigHttpAction("process"),
-		//Description("Gibt die Prozesseigenschaften zurück.")
-		//]
-		//private XElement HttpRefreshAction(int typ = 0)
-		//{
-		//	if (typ == 1)
-		//		HttpStartAction();
-		//	else if (typ == 2)
-		//		HttpStopAction();
-
-		//	XElement r = new XElement("process");
-		//	if (IsProcessRunning)
-		//	{
-		//		Process p = process;
-		//		r.Add(
-		//			new XElement("id", p.Id.ToString("N0")),
-		//			new XElement("mem_paged", Procs.FormatFileSize(p.PagedMemorySize64)),
-		//			new XElement("mem_sys_paged", Procs.FormatFileSize(p.PagedSystemMemorySize64)),
-		//			new XElement("mem_sys_nonpaged", Procs.FormatFileSize(p.NonpagedSystemMemorySize64)),
-		//			new XElement("mem_peak_paged", Procs.FormatFileSize(p.PeakPagedMemorySize64)),
-		//			new XElement("mem_private", Procs.FormatFileSize(p.PrivateMemorySize64)),
-		//			new XElement("mem_virtual", Procs.FormatFileSize(p.VirtualMemorySize64)),
-		//			new XElement("mem_peak_virtual", Procs.FormatFileSize(p.PeakVirtualMemorySize64)),
-		//			new XElement("mem_workingset", Procs.FormatFileSize(p.WorkingSet64)),
-		//			new XElement("mem_peak_workingset", Procs.FormatFileSize(p.PeakWorkingSet64)),
-		//			new XElement("mem_handles", p.HandleCount.ToString("N0")),
-		//			new XElement("start", p.StartTime.ToString("G")),
-		//			new XElement("time_total", p.TotalProcessorTime.ToString()),
-		//			new XElement("time_user", p.UserProcessorTime.ToString()),
-		//			new XElement("time_priv", p.PrivilegedProcessorTime.ToString())
-		//		);
-		//	}
-		//	else
-		//	{
-		//		r.Add(
-		//			new XElement("id", "Läuft nicht"),
-		//			new XElement("session", String.Empty),
-		//			new XElement("mem_paged", String.Empty),
-		//			new XElement("mem_sys_paged", String.Empty),
-		//			new XElement("mem_sys_nonpaged", String.Empty),
-		//			new XElement("mem_peak_paged", String.Empty),
-		//			new XElement("mem_private", String.Empty),
-		//			new XElement("mem_virtual", String.Empty),
-		//			new XElement("mem_peak_virtual", String.Empty),
-		//			new XElement("mem_workingset", String.Empty),
-		//			new XElement("mem_peak_workingset", String.Empty),
-		//			new XElement("mem_handles", String.Empty),
-		//			new XElement("start", String.Empty),
-		//			new XElement("time_total", String.Empty),
-		//			new XElement("time_user", String.Empty),
-		//			new XElement("time_priv", String.Empty)
-		//		);
-		//	}
-		//	return r;
-		//} // proc HttpStartAction
-
+		
 		protected override void Dispose(bool disposing)
 		{
 			try
 			{
+				Server.Queue.CancelCommand(procRefreshProperties);
+
 				if (IsProcessRunning)
 					StopProcess();
 
-				//Procs.FreeAndNil(ref processId);
+				// finish properties
+				if (publishedProperties != null)
+				{
+					foreach (var c in publishedProperties)
+						UnregisterProperty(c.Name);
+					publishedProperties = null;
+				}
 			}
 			finally
 			{
@@ -189,6 +227,22 @@ namespace TecWare.DE.Server
 			inputStream.WriteLine(cmd);
 		} // proc HttpSendAction
 
+		[
+		DEConfigHttpAction("processRefresh", IsSafeCall = true),
+		Description("Refreshs the process properties.")
+		]
+		private void HttpRefreshProperties()
+		{
+			using (EnterReadLock())
+			{
+				if (publishedProperties != null)
+				{
+					foreach (var c in publishedProperties)
+						c.Refresh();
+				}
+			}
+		} // proc HttpRefreshProperties
+		
 		#endregion
 
 		#region -- Start/Stop Process -------------------------------------------------------
@@ -411,6 +465,7 @@ namespace TecWare.DE.Server
 					}
 
 				CallMemberDirect("ProcessStarted", new object[] { process }, lThrowExceptions: false);
+				HttpRefreshProperties();
 
 				return true;
 			}
@@ -521,6 +576,8 @@ namespace TecWare.DE.Server
 
 				if (this["ProcessStopped"] != null)
 					CallMemberDirect("ProcessStopped", new object[] { (Process)state }, lThrowExceptions: false);
+
+				HttpRefreshProperties();
 			}
 			finally
 			{
