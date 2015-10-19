@@ -45,7 +45,8 @@ namespace TecWare.DE.Server
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
-		private class DumpFileInfo
+		[DEListTypePropertyAttribute("dump")]
+    private sealed class DumpFileInfo
 		{
 			public DumpFileInfo(int id, string fileName)
 			{
@@ -53,7 +54,40 @@ namespace TecWare.DE.Server
 				this.FileName = fileName;
 			} // ctor
 
+			[DEListTypeProperty("@id")]
 			public int Id { get; }
+			[DEListTypeProperty("@size")]
+			public long Size
+			{
+				get
+				{
+					try
+					{
+						return new FileInfo(FileName).Length;
+					}
+					catch
+					{
+						return -1;
+					}
+				}
+			} // prop Size
+
+			[DEListTypeProperty("@created")]
+			public DateTime LastWriteTimeUtc
+			{
+				get
+				{
+					try
+					{
+						return new FileInfo(FileName).LastWriteTimeUtc;
+					}
+					catch
+					{
+						return DateTime.MinValue;
+					}
+				}
+			} // prop Size
+
 			public string FileName { get; }
 		} // class DumpFileInfo
 
@@ -90,7 +124,10 @@ namespace TecWare.DE.Server
 			// create configurations service
 			this.configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
 			this.dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
-		} // ctor
+
+			PublishItem(dumpFiles);
+			PublishItem(new DEConfigItemPublicAction("dump") { DisplayName = "Dump" });
+    } // ctor
 
 		protected override void Dispose(bool disposing)
 		{
@@ -408,29 +445,29 @@ namespace TecWare.DE.Server
 				var outputText = p.StandardOutput.ReadToEnd();
 
 				return new XElement("return",
-					new XAttribute("status", p.ExitCode < 0 ? "ok" : "error"),
+					new XAttribute("status", p.ExitCode > 0 ? "ok" : "error"),
 					new XAttribute("id", fi.Id),
-          new XAttribute("exitcode", p.ExitCode),
+					new XAttribute("exitcode", p.ExitCode),
 					new XAttribute("text", outputText)
 				);
 			}
 		} // proc HttpDumpAction
 
 		[
-		DEConfigHttpAction("dumpload", IsNativeCall = true, SecurityToken = SecuritySys),
+		DEConfigHttpAction("dumpload", SecurityToken = SecuritySys),
 		Description("Sends the dump to the client.")
 		]
-		private void HttpDumpLoadAction(IDEHttpContext r, int id = -1)
+		private void HttpDumpLoadAction(IDEContext r, int id = -1)
 		{
 			// get the dump file
 			DumpFileInfo di = null;
 			using (dumpFiles.EnterReadLock())
-			{
-				var index = dumpFiles.FindIndex(c => c.Id == id);
-				if (index >= 0)
-					di = dumpFiles[index];
-			}
-
+				{
+					var index = dumpFiles.FindIndex(c => c.Id == id);
+					if (index >= 0)
+						di = dumpFiles[index];
+				}
+			
 			// send the file
 			if (di == null)
 				throw new ArgumentException("dump id is wrong.");
@@ -448,7 +485,7 @@ namespace TecWare.DE.Server
 
 		#region -- OnProcessRequest -------------------------------------------------------
 
-		protected override bool OnProcessRequest(IDEHttpContext r)
+		protected override bool OnProcessRequest(IDEContext r)
 		{
 			if (String.Compare(r.RelativeSubPath, "favicon.ico", true) == 0)
 			{
@@ -469,7 +506,7 @@ namespace TecWare.DE.Server
 		{
 			refreshConifg = InternalRefreshConfiguration;
 
-			PublishItem(new DEConfigItemPublicAction("readconfig") { DisplayName = "Konfiguration aktualisieren" });
+			PublishItem(new DEConfigItemPublicAction("readconfig") { DisplayName = "Refresh(Configuration)" });
 
 			// Lese die Konfigurationsdatei
 			ReadConfiguration();
@@ -713,24 +750,24 @@ namespace TecWare.DE.Server
 				RemoveAssemblyPath(resolve.Value);
 		} // proc RemoveResolve
 
-		private void WaitForService(string sServiceName, int iMaxTime)
+		private void WaitForService(string serviceName, int maxTime)
 		{
-			var cur = Array.Find(ServiceController.GetServices(), sv => String.Compare(sv.ServiceName, sServiceName, true) == 0);
+			var cur = Array.Find(ServiceController.GetServices(), sv => String.Compare(sv.ServiceName, serviceName, true) == 0);
 
 			if (cur == null)
-				LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gefunden...", sServiceName));
+				LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gefunden...", serviceName));
 			else
 			{
-				LogMsg(EventLogEntryType.Information, String.Format("Warte auf Service '{0}' für maximal {1:N0}ms...", sServiceName, iMaxTime));
-				while (cur.Status != ServiceControllerStatus.Running && iMaxTime > 0)
+				LogMsg(EventLogEntryType.Information, String.Format("Warte auf Service '{0}' für maximal {1:N0}ms...", serviceName, maxTime));
+				while (cur.Status != ServiceControllerStatus.Running && maxTime > 0)
 				{
-					serviceLog.RequestAdditionalTime(700);
+					// serviceLog.RequestAdditionalTime(700); service is already started
 					Thread.Sleep(500);
 					cur.Refresh();
-					iMaxTime -= 500;
+					maxTime -= 500;
 				}
 				if (cur.Status != ServiceControllerStatus.Running)
-					LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gestartet...", sServiceName));
+					LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gestartet...", serviceName));
 			}
 		} // proc WaitForService
 

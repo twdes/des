@@ -26,14 +26,20 @@
             <span vid="tabInfo" class="tabunselected">Info</span>
         </div>
         <div id="actions">
-            <span id="refreshAction" class="actionButton" style="padding-left: 18px">Aktualisieren</span>
+            <span id="refreshAction" class="actionButton" style="padding-left: 18px">Refresh</span>
         </div>
     </div>
     <div id="content">
         <table id="tabLog"></table>
         <table id="tabProperties"></table>
         <div id="tabConfig">cfgs</div>
-        <div id="tabInfo">info</div>
+        <div id="tabInfo">
+            <div id="serverInfo"></div>
+            <div id="dumpListFrame">
+                <h3>Dumps:</h3>
+                <ul id="dumpList"></ul>
+            </div>
+        </div>
     </div>
     <div style="display: none">
         <div id="serverInfoTemplate">

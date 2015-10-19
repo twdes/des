@@ -122,8 +122,8 @@ class DELogTab extends DETab {
 
         var innerHtmlElements = new Array();
 
-        $('items > line', data).each(
-          (function (index, element) {
+        $('items > line', data).get().reverse().forEach(
+          (function (element) {
 
             var line = $(element);
             var lineType = line.attr('typ');
@@ -154,7 +154,7 @@ class DELogTab extends DETab {
           }
         );
 
-        this.RootElement.scrollTop(this.RootElement.height());
+        this.RootElement.scrollTop(0);
 
       }).bind(this));
   } // reload
@@ -282,26 +282,54 @@ class DEServerInfo extends DETab {
   public reload(url: string) {
     super.reload(url);
 
-    this.RootElement.empty();
+    var serverInfoElement = $('#serverInfo', this.RootElement);
+    var dumpFilesElement = $('#dumpList', this.RootElement);
+    serverInfoElement.empty();
+    dumpFilesElement.empty();
 
     if (!this.IsVisible)
       return;
 
+    // get server info
     this.App.serverGet("?action=serverinfo",
       (function (data) {
         var serverInfo = $(':root', data);
 
-        this.RootElement.append(loadTemplate($('#serverInfoTemplate'), serverInfo));
+        serverInfoElement.append(loadTemplate($('#serverInfoTemplate'), serverInfo));
 
-        var obj = this;
         var tmpl = $('#assemblyInfoTemplate');
         $('assembly', data).each(
           function (index, element) {
-            obj.RootElement.append(loadTemplate(tmpl, $(element)));
+            serverInfoElement.append(loadTemplate(tmpl, $(element)));
           }
         );
-      }).bind(this)
+      })
     );
+
+    this.App.serverGet("?action=listget&id=tw_dumpfiles",
+      function (data) {
+        var dumpAdded = false;
+        $('items > dump', data).each(
+          function (index, element) {
+
+            var dump = $(element);
+
+            var id = dump.attr("id");
+            var created = new Date(Date.parse(dump.attr("created")));
+            dumpFilesElement.append([
+              '<li><a href="/?action=dumpload&id=', id, '">',
+              created.toLocaleString(),
+              ' (', formatValue('long', 'FILESIZE', dump.attr('size')), ')</a></li>'
+            ].join(""));
+
+            dumpAdded = true;
+          }
+        );
+
+        $('#dumpListFrame').css('display', dumpAdded ? 'block' : 'none');
+      }
+    );
+
   } // reload
 } // class DEServerInfo
 

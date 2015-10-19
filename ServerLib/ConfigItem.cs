@@ -131,8 +131,6 @@ namespace TecWare.DE.Server
 		public string ActionName { get; }
 		/// <summary>Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um die Aktion auszuführen.</summary>
 		public string SecurityToken { get; set; }
-		/// <summary>Die Aktion erhält einen Parameter für Respone-Objekt und muss sich um alles alleine kümmern.</summary>
-		public bool IsNativeCall { get; set; }
 		/// <summary>Sollen Exceptions in eine gültige Rückgabe umgewandelt werden (default: false).</summary>
 		public bool IsSafeCall { get; set; }
 	} // class DEConfigHttpActionAttribute
@@ -876,7 +874,7 @@ namespace TecWare.DE.Server
 
 		#region -- Process Request/Action -------------------------------------------------
 
-		internal void UnsafeInvokeHttpAction(string sAction, IDEHttpContext r)
+		internal void UnsafeInvokeHttpAction(string sAction, IDEContext r)
 		{
 			var returnValue = InvokeAction(sAction, r);
 
@@ -925,7 +923,7 @@ namespace TecWare.DE.Server
 		/// <param name="r"></param>
 		/// <param name="sLocalPath"></param>
 		/// <returns></returns>
-		internal bool UnsafeProcessRequest(IDEHttpContext r)
+		internal bool UnsafeProcessRequest(IDEContext r)
 		{
 			foreach (var w in from c in this.UnsafeChildren
 												let cHttp = c as HttpWorker
@@ -956,7 +954,7 @@ namespace TecWare.DE.Server
 		/// <summary>Wird aufgerufen, wenn eine Http-Anfrage am Knoten verarbeitet werden soll.</summary>
 		/// <param name="r">Http-Response</param>
 		/// <returns><c>true</c>, wenn die Anfrage beantwortet wurde.</returns>
-		protected virtual bool OnProcessRequest(IDEHttpContext r)
+		protected virtual bool OnProcessRequest(IDEContext r)
 		{
 			return false;
 		} // func OnProcessRequest

@@ -204,14 +204,14 @@
 						<xs:element ref="log" minOccurs="0" maxOccurs="1" />
 
 						<xs:sequence minOccurs="0" maxOccurs="unbounded">
-							<xs:element name="prefix" minOccurs="1" maxOccurs="unbounded">
+							<xs:element name="prefix" minOccurs="0" maxOccurs="unbounded">
 								<xs:annotation>
-									<xs:documentation>Prefix für den HttpListener (extener Pfad), wird nichts angegeben so wird http://localhost:8080/ gesetzt.</xs:documentation>
+									<xs:documentation>Translate a http-Listener prefix to a specific configuration path.</xs:documentation>
 								</xs:annotation>
 								<xs:complexType mixed="true">
 									<xs:attribute name="path" type="xs:string" use="optional" default="/">
 										<xs:annotation>
-											<xs:documentation>Interner Pfad in der Konfigurationsstruktur auf dem dieser extene Pfad gemappt werden soll.</xs:documentation>
+											<xs:documentation>Configuration path, with is the mapping desitination.</xs:documentation>
 										</xs:annotation>
 									</xs:attribute>
 								</xs:complexType>
@@ -219,7 +219,7 @@
 
 							<xs:element name="access" minOccurs="0" maxOccurs="unbounded">
 								<xs:annotation>
-									<xs:documentation>Gibt das Zugriffsschema für den externen Knoten kann. Wird nichts angegeben, so wird die Defaulteinstellung gesetzt.</xs:documentation>
+									<xs:documentation>Defines the access schema for http-Listener.</xs:documentation>
 								</xs:annotation>
 								<xs:complexType mixed="true">
 									<xs:attribute name="scheme" use="optional" default="none">

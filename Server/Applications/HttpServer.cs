@@ -161,7 +161,7 @@ namespace TecWare.DE.Server
 
 		public string AbsolutePath => absolutePath;
 		public DEHttpServer Http => http;
-		IDEHttpServer IDECommonContext.Http => http;
+		IDEContextServer IDECommonContext.Server => http;
     public IDEAuthentificatedUser User => user;
   } // class DECommonContext
 
@@ -190,7 +190,7 @@ namespace TecWare.DE.Server
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal sealed class DEHttpContext : DECommonContext, IDEHttpContext
+	internal sealed class DEHttpContext : DECommonContext, IDEContext
 	{
 		#region -- struct RelativeFrame ---------------------------------------------------
 
@@ -1330,7 +1330,7 @@ namespace TecWare.DE.Server
 			return null;
 		} // func GetWebSocketProtocol
 
-		private bool ProcessRequestForConfigItem(IDEHttpContext r, DEConfigItem current)
+		private bool ProcessRequestForConfigItem(IDEContext r, DEConfigItem current)
 		{
 			using (current.EnterReadLock())
 			{

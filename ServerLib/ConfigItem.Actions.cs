@@ -19,7 +19,7 @@ namespace TecWare.DE.Server
 	/// <param name="item"></param>
 	/// <param name="args"></param>
 	/// <returns></returns>
-	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEHttpContext context);
+	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEContext context);
 
 	#endregion
 
@@ -33,23 +33,23 @@ namespace TecWare.DE.Server
 		private string description;
 		private MethodInfo methodDescription;
 		private DEConfigActionDelegate action;
-		private bool nativeCall;
-		private bool safeCall;
+		private bool isNativeCall;
+		private bool isSafeCall;
 
-		public DEConfigAction(string securityToken, string description, DEConfigActionDelegate action, bool nativeCall, bool safeCall, MethodInfo methodDescription)
+		public DEConfigAction(string securityToken, string description, DEConfigActionDelegate action, bool isSafeCall, MethodInfo methodDescription)
 		{
 			this.securityToken = securityToken;
 			this.description = description;
 			this.action = action;
-			this.nativeCall = nativeCall;
-			this.safeCall = nativeCall ? false : safeCall;
+			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEContext));
+			this.isSafeCall = isNativeCall ? false : isSafeCall;
 			this.methodDescription = methodDescription;
 		} // ctor
 
-		public object Invoke(DEConfigItem item, IDEHttpContext context)
+		public object Invoke(DEConfigItem item, IDEContext context)
 		{
 			if (action != null)
-				if (nativeCall)
+				if (isNativeCall)
 				{
 					action(item, context);
 					return DBNull.Value;
@@ -63,13 +63,13 @@ namespace TecWare.DE.Server
 		public string Description { get { return description; } }
 		public MethodInfo MethodDescription { get { return methodDescription; } }
 		public string SecurityToken { get { return securityToken; } }
-		public bool IsSafeCall { get { return safeCall; } }
+		public bool IsSafeCall { get { return isSafeCall; } }
 
 		public bool IsEmpty { get { return action == null; } }
 
 		// -- Static --------------------------------------------------------------
 
-		private static readonly DEConfigAction empty = new DEConfigAction(null, null, null, false, false, null);
+		private static readonly DEConfigAction empty = new DEConfigAction(null, null, null, false, null);
 
 		public static DEConfigAction Empty { get { return empty; } }
 	} // class DEConfigAction
@@ -337,7 +337,7 @@ namespace TecWare.DE.Server
 		/// <param name="actionName">Name der Aktion</param>
 		/// <param name="context">Parameter, die übergeben werden sollen.</param>
 		/// <returns>Rückgabe</returns>
-		public object InvokeAction(string actionName, IDEHttpContext context)
+		public object InvokeAction(string actionName, IDEContext context)
 		{
 			// Suche die Action im Cache
 			DEConfigAction a;
@@ -404,14 +404,10 @@ namespace TecWare.DE.Server
 
 		private DEConfigAction CompileTypeAction(ref ConfigAction ca)
 		{
-			// Native Calls, es wird einfach ein Aufruf mit den HttpResponse gemacht, dies muss der erste Parameter sein
-			if (ca.Attribute.IsNativeCall && (ca.Method.GetParameters().Length == 0 || ca.Method.GetParameters()[0].ParameterType != typeof(IDEHttpContext)))
-				throw new ArgumentException("NativeCall-Actions müssen folgende Signatur haben: void Action(HttpResonse, ...)");
-
 			var exprLambda = CompileMethodAction(ca.Method);
 
 			// Erzeuge die Action
-			return new DEConfigAction(ca.Attribute.SecurityToken, ca.Description, exprLambda.Compile(), ca.Attribute.IsNativeCall, ca.Attribute.IsSafeCall, ca.Method);
+			return new DEConfigAction(ca.Attribute.SecurityToken, ca.Description, exprLambda.Compile(), ca.Attribute.IsSafeCall, ca.Method);
 		} // func CompileTypeAction
 
 		private DEConfigAction CompileLuaAction(string sAction)
@@ -438,7 +434,6 @@ namespace TecWare.DE.Server
 				ca.GetOptionalValue<string>("Security", null),
 				ca.GetOptionalValue<string>("Description", null),
 				CompileMethodAction(dlg.Method, dlg).Compile(),
-				ca.GetOptionalValue("NativeCall", false),
 				ca.GetOptionalValue("SafeCall", true),
 				dlg.Method
 			);
@@ -458,7 +453,7 @@ namespace TecWare.DE.Server
 		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate dlg = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
-			var argCaller = Expression.Parameter(typeof(IDEHttpContext), "#arg");
+			var argCaller = Expression.Parameter(typeof(IDEContext), "#arg");
 
 			int parameterOffset;
 			ParameterInfo[] parameterInfo;
@@ -533,12 +528,12 @@ namespace TecWare.DE.Server
 				}
 				else if (typeCode == TypeCode.Object) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
-					if (typeTo == typeof(IDEHttpContext))
+					if (typeTo == typeof(IDEContext))
 					{
 						exprGetParameter = Expression.Condition(
-							Expression.TypeIs(arg, typeof(IDEHttpContext)),
-							Expression.Convert(arg, typeof(IDEHttpContext)),
-							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEHttpContext))
+							Expression.TypeIs(arg, typeof(IDEContext)),
+							Expression.Convert(arg, typeof(IDEContext)),
+							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEContext))
 						);
 					}
 					else if (typeTo.IsAssignableFrom(GetType()))
