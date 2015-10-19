@@ -446,7 +446,7 @@ namespace TecWare.DE.Server
 					// calculate next runtime
 					if (jobBound != null && !jobBound.Bound.IsEmpty && cronItemCache != null)
 					{
-						var index = Array.IndexOf(cronItemCache, jobBound);
+						var index = Array.FindIndex(cronItemCache, c => c.Job == jobBound);
 						if (index >= 0)
 						{
 							DateTime dtNext = jobBound.Bound.GetNext(DateTime.Now);
@@ -529,6 +529,8 @@ namespace TecWare.DE.Server
 		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || this.GetMemberValue("Cancel", lRawGet: true) != null;
 
 		#endregion
+
+		public override string Icon => "/images/clock_run.png";
 	} // class LuaCronJobItem
 
 	#endregion
@@ -561,6 +563,8 @@ namespace TecWare.DE.Server
 					Log.Info("{0}: finished.", c.DisplayName);
 				}, true);
 		} // proc RunJob
+
+		public override string Icon => "/images/clock_data.png";
 	} // class CronJobGroupBatch
 
 	#endregion
@@ -596,6 +600,8 @@ namespace TecWare.DE.Server
 				Log.Info("{0}: All tasks finished.");
 			}
 		} // proc RunJob
+
+		public override string Icon => "/images/clock_gearwheel.png";
 	} // class CronJobGroupStart
 
 	#endregion

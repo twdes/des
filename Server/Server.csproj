@@ -86,6 +86,7 @@
     <EmbeddedResource Include="Configuration\DEScron.xsd">
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <None Include="Configs\Hello.lua" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
@@ -118,6 +119,11 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Resources\Http\images\config.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock_data.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock_gearwheel.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock_run.png" />
     <EmbeddedResource Include="des.ico" />
     <EmbeddedResource Include="Resources\Http\images\lua16.png" />
     <EmbeddedResource Include="Resources\Http\images\windows24.png" />

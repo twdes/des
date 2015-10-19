@@ -623,7 +623,11 @@ namespace TecWare.DE.Server
 			{
 				return xn == DEConfigurationConstants.xnFiles ||
 					xn == DEConfigurationConstants.xnResources ||
-					xn == DEConfigurationConstants.xnGroup;
+					xn == DEConfigurationConstants.xnGroup ||
+					xn == DEConfigurationConstants.xnLuaCronBatch ||
+					xn == DEConfigurationConstants.xnLuaCronGroup ||
+					xn == DEConfigurationConstants.xnLuaCronJob ||
+					xn == DEConfigurationConstants.xnLuaProcess;
 			}
 			else
 				return true;
