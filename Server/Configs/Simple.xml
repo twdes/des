@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <des xmlns="http://tecware-gmbh.de/dev/des/2014" version="330">
 	<server logpath="Log" procdump="..\..\..\..\..\bin\procdump.exe">
-		<resolve>d:\temp</resolve>
 		<resolve>c:\temp</resolve>
 	</server>
 	

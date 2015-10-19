@@ -151,13 +151,13 @@
 			</xs:element>
 			<xs:element name="dependonservice" minOccurs="0" maxOccurs="unbounded">
 				<xs:annotation>
-					<xs:documentation>Gibt eine Service an auf den gewartet werden soll. Der Dienst wird nicht gestartet.</xs:documentation>
+					<xs:documentation>Service to wait for. While waiting, the configuration is not loaded.</xs:documentation>
 				</xs:annotation>
 
-				<xs:complexType>
-					<xs:attribute name="maxtime" type="xs:int">
+				<xs:complexType mixed="true">
+					<xs:attribute name="maxtime" type="xs:int" default="30000">
 						<xs:annotation>
-							<xs:documentation>Maximale Zeit die gewartet werden soll.</xs:documentation>
+							<xs:documentation>Maximum time to wait. (in ms)</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
 				</xs:complexType>
@@ -299,15 +299,15 @@
 						</xs:annotation>
 					</xs:attribute>
 
-					<xs:attribute name="threads" type="xs:int" use="optional" default="10">
+					<xs:attribute name="threads" type="xs:int" use="optional" default="10" >
 						<xs:annotation>
-							<xs:documentation>Anzahl der zu erzeugenden HttpWorker-Threads (Default: 10, Min: 1, Max: 1000).</xs:documentation>
+							<xs:documentation>Number of HttpWorker-Threads to be generate (Default: 10, Min: 1, Max: 1000).</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
 
 					<xs:attribute name="encoding" type="EncodingType" use="optional" default="utf-8">
 						<xs:annotation>
-							<xs:documentation>Legt die Default Encodierung für den Server fest.</xs:documentation>
+							<xs:documentation>Specifies the default encoding for the server.</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
 
@@ -431,19 +431,19 @@
 
 						<xs:element name="server" minOccurs="1" maxOccurs="1">
 							<xs:annotation>
-								<xs:documentation>Einstellungen die am Server vorgenommen werden.</xs:documentation>
+								<xs:documentation>Settings that are made to the server.</xs:documentation>
 							</xs:annotation>
 							<xs:complexType>
 								<xs:complexContent>
 									<xs:extension base="desServer">
 										<xs:attribute name="logpath" type="PathType" use="required">
 											<xs:annotation>
-												<xs:documentation>Legt den Pfad fest in dem die Logdateien abgelegt werden sollen.</xs:documentation>
+												<xs:documentation>Specifies the path where the log files should be stored.</xs:documentation>
 											</xs:annotation>
 										</xs:attribute>
 										<xs:attribute name="globalwait" type="xs:int" use="optional">
 											<xs:annotation>
-												<xs:documentation>Zeit die gewartet werden soll, bis die Konfiguration weiter gelesen werden soll (in ms).</xs:documentation>
+												<xs:documentation>Time to wait until the configuration should be read (in ms).</xs:documentation>
 											</xs:annotation>
 										</xs:attribute>
 									</xs:extension>
