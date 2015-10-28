@@ -125,9 +125,10 @@ var DELogTab = (function (_super) {
                 }
                 innerHtmlElements.push([
                     '<tr>',
-                    '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumintegerDigits: 3 }), '</td>',
+                    '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', (_a = {}, _a["minimumIntegerDigits"] = 3, _a)), '</td>',
                     '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
                     '</tr>'].join(""));
+                var _a;
             }).bind(this));
             this.RootElement.html(innerHtmlElements.join(""));
             // aktivate toggle
