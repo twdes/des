@@ -69,8 +69,9 @@ namespace TecWare.DE.Server
 		} // ctor
 
 		public DEConfigurationException(XmlSchemaObject x, string message, Exception innerException = null)
+			: base(message, innerException)
 		{
-			this.sourceUri = x.SourceUri;
+			this.sourceUri = DEConfigItem.GetSourceUri(x);
 			this.lineNumber = x.LineNumber;
 			this.linePosition = x.LinePosition;
 		} // ctor
@@ -1112,7 +1113,18 @@ namespace TecWare.DE.Server
 			miConvertFromInvariantString = typeof(TypeConverter).GetMethod("ConvertFromInvariantString", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string) }, null);
 			if (miConvertFromInvariantString == null)
 				throw new ArgumentNullException("sctor", "TypeConverter");
-		} // sctor
+		} // sctor	
+
+		internal static string GetSourceUri(XmlSchemaObject x)
+		{
+			if (x.Parent == null)
+				return x.SourceUri;
+			else
+			{
+				var t = x.SourceUri;
+				return String.IsNullOrEmpty(t) ? GetSourceUri(x.Parent) : t;
+			}
+		} // func GetSourceUri
 	} // class DEConfigItem
 
 	#endregion

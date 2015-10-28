@@ -4,8 +4,8 @@
            elementFormDefault="qualified"
            xmlns="http://tecware-gmbh.de/dev/des/2014"
            xmlns:xs="http://www.w3.org/2001/XMLSchema">
-	
-	<xs:include schemaLocation="DEScore.xsd" />
+
+	<xs:include id="DEScore" schemaLocation="DEScore.xsd" />
 
 	<!-- Definition for the log element -->
 	<xs:element name="log" type="LogType" />
@@ -31,6 +31,9 @@
 	<xs:complexType name="ConfigItemType">
 		<xs:complexContent>
 			<xs:extension base="ConfigServiceType">
+				<xs:sequence minOccurs="0" maxOccurs="unbounded">
+					<xs:element ref="configItem" minOccurs="0" maxOccurs="unbounded" />
+				</xs:sequence>
 				<xs:attribute name="name" type="KeyType" use="required">
 					<xs:annotation>
 						<xs:documentation>Name of the current node, must be unique within the system.</xs:documentation>

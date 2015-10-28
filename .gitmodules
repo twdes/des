@@ -1,3 +1,6 @@
 [submodule "Extern/Core"]
 	path = Extern/Core
 	url = https://github.com/twdes/Core.git
+[submodule "Extern/odette"]
+	path = Extern/odette
+	url = https://github.com/twdes/odette.git

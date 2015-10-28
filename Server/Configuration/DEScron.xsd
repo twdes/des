@@ -5,8 +5,8 @@
            xmlns="http://tecware-gmbh.de/dev/des/2014"
            xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
-	<xs:include schemaLocation="DEScore.xsd" />
-	<xs:include schemaLocation="DESconfigItem.xsd" />
+	<xs:include id="DEScore" schemaLocation="DEScore.xsd" />
+	<xs:include id="DESconfigItem" schemaLocation="DESconfigItem.xsd" />
 
 	<xs:complexType name="CronJobItemType">
 		<xs:complexContent>

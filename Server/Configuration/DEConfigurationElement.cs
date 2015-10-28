@@ -252,7 +252,14 @@ namespace TecWare.DE.Server.Configuration
 							var typeString = classTypeElement.InnerText;
 							try
 							{
-
+								if (typeString.IndexOf(',') == -1) // this is relative type
+								{
+									var sourceUri = DEConfigItem.GetSourceUri(appInfo);
+									var posType = sourceUri.LastIndexOf(',');
+									if (posType != -1)
+										typeString = typeString + ", " + sourceUri.Substring(0, posType);
+								}
+							
 								classType = Type.GetType(typeString, true, false);
 							}
 							catch (Exception e)

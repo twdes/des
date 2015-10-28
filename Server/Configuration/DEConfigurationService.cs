@@ -26,8 +26,14 @@ namespace TecWare.DE.Server.Configuration
 		/// <summary></summary>
 		private struct SchemaAssemblyDefinition
 		{
-			public Assembly Assembly;
-			public XmlSchema Schema;
+			public SchemaAssemblyDefinition(XmlSchema schema, Assembly assembly)
+			{
+				this.Schema = schema;
+				this.Assembly = assembly;
+			} // ctor
+
+			public Assembly Assembly { get; }
+			public XmlSchema Schema { get; }
 
 			public string TargetNamespace => Schema.TargetNamespace;
 			public string Name => Schema.Id + ".xsd";
@@ -310,12 +316,20 @@ namespace TecWare.DE.Server.Configuration
 							foreach (var cur in xCur.Elements())
 							{
 								if (cur.Name == xnServerResolve) // resolve paths
+								{
+									if (ChangeConfigurationValue(context, cur, cur.Value, out value))
+										cur.Value = value;
 									resolver?.AddPath(cur.Value);
+								}
 								else if (cur.Name == xnServerLoad)
 								{
+									if (ChangeConfigurationValue(context, cur, cur.Value, out value))
+										cur.Value = value;
 									var assembly = resolver?.Load(cur.Value);
 									if (assembly != null)
 										UpdateSchema(assembly);
+									else
+										throw context.CreateConfigException(cur, String.Format("Failed to load assembly ({0}).", cur.Value));
 								}
 							}
 						}
@@ -533,7 +547,7 @@ namespace TecWare.DE.Server.Configuration
 			{
 				using (var src = assembly.GetManifestResourceStream(schemaAttribute.BaseType, schemaAttribute.ResourceId))
 				{
-					var schemaUri = assembly.FullName + ", " + (schemaAttribute.BaseType == null ? "" : schemaAttribute.BaseType.Name + ".") + schemaAttribute.ResourceId;
+					var schemaUri = assembly.FullName + ", " + (schemaAttribute.BaseType == null ? "" : schemaAttribute.BaseType.FullName + ".") + schemaAttribute.ResourceId;
           try
 					{
 						{
@@ -555,8 +569,17 @@ namespace TecWare.DE.Server.Configuration
 									throw new ArgumentException(String.Format("Schema already loaded (existing: {0}).", assemblySchemas[exists].DisplayName));
 								}
 
+								// clear includes
+								for (var i = xmlSchema.Includes.Count - 1; i >= 0; i--)
+								{
+									var cur = xmlSchema.Includes[i] as XmlSchemaInclude;
+									if (cur != null && assemblySchemas.Exists(c => String.Compare(c.Schema.Id, cur.Id, StringComparison.OrdinalIgnoreCase) == 0))
+										xmlSchema.Includes.RemoveAt(i);
+								}
+								
+
 								// Add the schema
-								assemblySchemas.Add(new SchemaAssemblyDefinition { Schema = xmlSchema, Assembly = assembly });
+								assemblySchemas.Add(new SchemaAssemblyDefinition(xmlSchema, assembly));
 								schema.Add(xmlSchema);
 
 								log.Info("Schema added ({0})", assemblySchemas[assemblySchemas.Count - 1].DisplayName);

@@ -10,8 +10,13 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerLib", "ServerLib\ServerLib.csproj", "{6A13EE24-AE1A-4242-8F61-0E32F1E9E37D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "Server\Server.csproj", "{4D97B8D8-3ED2-404C-8BE4-417B5BB588D2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{72EED527-236E-4124-B360-54B25F0F9105} = {72EED527-236E-4124-B360-54B25F0F9105}
+	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerTests", "ServerTests\ServerTests.csproj", "{B1B84A00-DDC4-485A-A799-9FEC23BE43B9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEModette", "Extern\odette\DEModette\DEModette.csproj", "{72EED527-236E-4124-B360-54B25F0F9105}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -35,11 +40,16 @@ Global
 		{B1B84A00-DDC4-485A-A799-9FEC23BE43B9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B1B84A00-DDC4-485A-A799-9FEC23BE43B9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B1B84A00-DDC4-485A-A799-9FEC23BE43B9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72EED527-236E-4124-B360-54B25F0F9105}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72EED527-236E-4124-B360-54B25F0F9105}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72EED527-236E-4124-B360-54B25F0F9105}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72EED527-236E-4124-B360-54B25F0F9105}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{67528843-E631-4C05-B6E8-514CC8BEC7B6} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
+		{72EED527-236E-4124-B360-54B25F0F9105} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 	EndGlobalSection
 EndGlobal
