@@ -19,6 +19,10 @@ namespace TecWare.DE.Stuff
 
 	public static partial class ProcsDE
 	{
+		/// <summary>Simple "Star"-Filter rule, for single-strings</summary>
+		/// <param name="value"></param>
+		/// <param name="filterExpression"></param>
+		/// <returns></returns>
 		public static bool IsFilterEqual(string value, string filterExpression)
 		{
 			var p1 = filterExpression.IndexOf('*');
@@ -26,7 +30,10 @@ namespace TecWare.DE.Stuff
 			if (p1 == p2) // only one start
 			{
 				if (p1 == 0) // => endswith
-					return value.EndsWith(filterExpression.Substring(1), StringComparison.OrdinalIgnoreCase);
+					if (value.Length == 1)
+						return true;
+					else
+						return value.EndsWith(filterExpression.Substring(1), StringComparison.OrdinalIgnoreCase);
 				else if (p1 == filterExpression.Length - 1)// => startwith
 					return value.StartsWith(filterExpression.Substring(0, p1), StringComparison.OrdinalIgnoreCase);
 				else

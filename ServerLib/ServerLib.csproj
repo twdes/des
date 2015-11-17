@@ -80,6 +80,7 @@
     <Compile Include="Stuff\Passwords.cs" />
     <Compile Include="Stuff\Stuff.cs" />
     <Compile Include="Stuff\Uri.cs" />
+    <Compile Include="TcpServer.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Extern\Core\DESCore\DESCore.csproj">

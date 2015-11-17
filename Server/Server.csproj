@@ -98,6 +98,7 @@
     <Compile Include="Applications\HttpServer.cs" />
     <Compile Include="Applications\LuaEngine.cs" />
     <Compile Include="Applications\ProcessItem.cs" />
+    <Compile Include="Applications\TcpServer.cs" />
     <Compile Include="Applications\User.cs" />
     <Compile Include="Configuration\DEConfigurationElement.cs" />
     <Compile Include="Configuration\DEConfigurationService.cs" />

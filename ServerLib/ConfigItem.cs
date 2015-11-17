@@ -714,25 +714,25 @@ namespace TecWare.DE.Server
 			}
 		} // proc UnregisterSubItem
 
-		public void WalkChildren<T>(Action<T> action, bool lRecursive = false, bool lUnsafe = false)
+		public void WalkChildren<T>(Action<T> action, bool recursive = false, bool walkUnsafe = false)
 			where T : class
 		{
-			using (lUnsafe ? null : EnterReadLock())
+			using (walkUnsafe ? null : EnterReadLock())
 				foreach (DEConfigItem cur in subItems)
 				{
 					T r = cur as T;
 					if (r != null)
 						action(r);
 
-					if (lRecursive)
-						cur.WalkChildren<T>(action, true, lUnsafe);
+					if (recursive)
+						cur.WalkChildren<T>(action, true, walkUnsafe);
 				}
 		} // func WalkChildren
 
-		public bool FirstChildren<T>(Predicate<T> predicate, Action<T> action = null, bool lRecursive = false, bool lUnsafe = false)
+		public bool FirstChildren<T>(Predicate<T> predicate, Action<T> action = null, bool recursive = false, bool walkUnsafe = false)
 			where T : class
 		{
-			using (lUnsafe ? null : EnterReadLock())
+			using (walkUnsafe ? null : EnterReadLock())
 				foreach (DEConfigItem cur in subItems)
 				{
 					T r = cur as T;
@@ -743,7 +743,7 @@ namespace TecWare.DE.Server
 						return true;
 					}
 
-					if (lRecursive && cur.FirstChildren<T>(predicate, action, true))
+					if (recursive && cur.FirstChildren<T>(predicate, action, true))
 						return true;
 				}
 			return false;
@@ -769,6 +769,38 @@ namespace TecWare.DE.Server
 
 		/// <summary>Zugriff auf die aktuelle Konfiguration</summary>
 		public XElement Config { get { return currentConfig; } }
+
+		#endregion
+
+		#region -- Validation Helper ------------------------------------------------------
+
+		protected static void ValidateDirectory(XElement x, XName name, bool optional = false)
+		{
+			ValidateDirectory(x, "@" + name.LocalName, x?.Attribute(name)?.Value, optional);
+		} // proc ValidateDirectory
+
+		protected static void ValidateDirectory(XObject x, string name, string directoryPath, bool optional = false)
+		{
+			try
+			{
+				// check for null
+				if (String.IsNullOrEmpty(directoryPath))
+				{
+					if (optional)
+						return;
+					throw new ArgumentNullException(name);
+				}
+
+				// directory must exists
+				var di = new DirectoryInfo(directoryPath);
+				if (!di.Exists)
+					throw new IOException("Directory not exiting.");
+			}
+			catch (Exception e)
+			{
+				throw new DEConfigurationException(x, String.Format("Can not validate {0}.", name), e);
+			}
+		} // proc ValidateDirectory
 
 		#endregion
 
