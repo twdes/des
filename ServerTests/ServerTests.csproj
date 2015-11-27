@@ -61,6 +61,7 @@
   <ItemGroup>
     <Compile Include="Configuration.cs" />
     <Compile Include="Helper.cs" />
+    <Compile Include="Oftp.cs" />
     <Compile Include="Stuff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -68,6 +69,10 @@
     <ProjectReference Include="..\Extern\Core\DESCore\DESCore.csproj">
       <Project>{67528843-e631-4c05-b6e8-514cc8bec7b6}</Project>
       <Name>DESCore</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Extern\odette\DEModette\DEModette.csproj">
+      <Project>{72eed527-236e-4124-b360-54b25f0f9105}</Project>
+      <Name>DEModette</Name>
     </ProjectReference>
     <ProjectReference Include="..\ServerLib\ServerLib.csproj">
       <Project>{6a13ee24-ae1a-4242-8f61-0e32f1e9e37d}</Project>

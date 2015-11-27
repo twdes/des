@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -14,7 +15,7 @@ namespace TecWare.DE.Server
 	{
 		IPEndPoint LocalEndPoint { get; }
 	} // interface IListenerTcp
-
+	
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Interface for the tcp-Server interface.</summary>
 	public interface IServerTcp
@@ -24,5 +25,16 @@ namespace TecWare.DE.Server
 		/// <param name="createHandler">Handle that creates the protocol for the in bound data,</param>
 		/// <returns>Registered tcp-Listener</returns>
 		IListenerTcp RegisterListener(IPEndPoint endPoint, Action<Stream> createHandler);
+
+		/// <summary></summary>
+		/// <param name="endPoint"></param>
+		/// <returns></returns>
+		Stream Connect(IPEndPoint endPoint); // todo: create handler
+
+		/// <summary>Returns a informational string about the given stream. The stream should be
+		/// created from the server.</summary>
+		/// <param name="stream"></param>
+		/// <returns></returns>
+		string GetStreamInfo(Stream stream);
   } // interface IServerTcp
 }

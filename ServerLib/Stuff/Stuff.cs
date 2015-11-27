@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography.X509Certificates;
 
 namespace TecWare.DE.Stuff
 {
@@ -19,6 +22,70 @@ namespace TecWare.DE.Stuff
 
 	public static partial class ProcsDE
 	{
+		public static IEnumerable<X509Certificate2> FindCertificate(string search)
+		{
+			if (search.StartsWith("store://")) // search in the store
+			{
+				// store://location/name/subject
+				// default for location is "currentuser"
+				// allowed is "cu", "lm" as shortcut
+				// name default is "My"
+
+				search = search.Substring(8);
+				var parts = search.Split('/');
+
+				StoreLocation storeLocation = StoreLocation.CurrentUser;
+				StoreName storeName = StoreName.My;
+				var subject = String.Empty;
+
+				var ofs = 0;
+				if (parts.Length >= 3)
+				{
+					// first should be user
+					if (String.Compare(parts[0], "m", StringComparison.OrdinalIgnoreCase) == 0 ||
+						String.Compare(parts[0], "LocalMachine", StringComparison.OrdinalIgnoreCase) == 0)
+						storeLocation = StoreLocation.LocalMachine;
+					ofs++;
+				}
+				if (parts.Length >= 2)
+				{
+					if (!Enum.TryParse<StoreName>(parts[ofs], out storeName))
+						storeName = StoreName.My;
+					ofs++;
+				}
+				if (parts.Length >= 1)
+				{
+					subject = parts[ofs];
+				}
+
+				using (var store = new X509Store(storeName, storeLocation))
+				{
+					store.Open(OpenFlags.ReadOnly);
+					try
+					{
+						foreach (var c in store.Certificates)
+						{
+							if (String.IsNullOrEmpty(subject) || CertifacteMatchSubject(c.Subject, subject))
+								yield return c;
+						}
+					}
+					finally
+					{
+						store.Close();
+					}
+				}
+			}
+			else if (Path.IsPathRooted(search))
+				yield return new X509Certificate2(search);
+		} // func FindCertificate
+
+		private static bool CertifacteMatchSubject(string subject, string expr)
+		{
+			return subject == expr; // todo: a select algorithm
+		} // func CertifacteMatchSubject
+
+		#region -- Filter -----------------------------------------------------------------
+
 		/// <summary>Simple "Star"-Filter rule, for single-strings</summary>
 		/// <param name="value"></param>
 		/// <param name="filterExpression"></param>
@@ -61,6 +128,8 @@ namespace TecWare.DE.Stuff
 
 		public static bool PasswordCompare(string testPassword, string passwordHash)
 			=> Passwords.PasswordCompare(testPassword, passwordHash);
+
+		#endregion
 	} // class ProcsDE
 
 	#endregion

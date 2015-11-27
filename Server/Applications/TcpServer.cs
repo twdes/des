@@ -254,6 +254,20 @@ namespace TecWare.DE.Server
 
 			public override long Position { get { return totalReadedBytes; } set { throw new NotSupportedException(); } }
 			public override long Length { get { return totalReadedBytes; } }
+
+			public string StreamInfo
+			{
+				get
+				{
+					var ip = s.RemoteEndPoint as IPEndPoint;
+					if (ip == null)
+						return s.RemoteEndPoint?.ToString();
+					else if (ip.AddressFamily == AddressFamily.InterNetwork)
+						return $"{ip.Address}:{ip.Port}";
+					else
+						return $"{ip.Address},{ip.Port}";
+				}
+			} // prop StreamInfo
 		} // class ConnectionTcp
 
 		#endregion
@@ -286,10 +300,25 @@ namespace TecWare.DE.Server
 			return new ListenerTcp(this, endPoint, createHandler);
 		} // proc RegisterListener
 
-		public IDisposable RegisterConnection(IPAddress address, ushort port, Action<Stream> createHandler)
+		public string GetStreamInfo(Stream stream)
+		{
+			if (stream is ConnectionTcp)
+				return ((ConnectionTcp)stream).StreamInfo;
+			else
+				return null;
+		} // func GetStreamInfo
+
+		public IDisposable RegisterConnection(IPAddress address, ushort port, Action<NetworkStream> createHandler)
 		{
 			return null; // ConnectionTcp
 		} // proc RegisterConnection
+
+		public Stream Connect(IPEndPoint endPoint)
+		{
+			var s = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+			s.Connect(endPoint);
+			return new ConnectionTcp(s);
+		}
 
 		private static string FormatEndPoint(EndPoint remoteEndPoint)
 		{
