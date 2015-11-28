@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TecWare.DE.Odette;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
@@ -215,6 +216,13 @@ namespace TecWare.DE.Server
 				{
 					Encoding.ASCII.GetBytes("===== Hallo ===== WELT ===================================================================")
 				}, true, 16);
+		}
+
+		[TestMethod]
+		public void CertificateSelect01()
+		{
+			foreach (var c in ProcsDE.FindCertificate("store://currentuser/my/CN=OFTP2Test"))
+				Console.WriteLine(c.Subject);
 		}
 	}
 }

@@ -531,6 +531,14 @@ namespace TecWare.DE.Server.Configuration
 
 					valueModified |= true;
 				}
+				else if (attributeDefinition.TypeName == "CertificateType")
+				{
+					if (String.IsNullOrEmpty(newValue) || !newValue.StartsWith("store://"))
+					{
+						newValue = ProcsDE.GetFileName(x, newValue);
+						valueModified |= true;
+					}
+				}
 			}
 
 			return valueModified;

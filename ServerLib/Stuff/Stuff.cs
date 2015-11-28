@@ -36,26 +36,28 @@ namespace TecWare.DE.Stuff
 
 				StoreLocation storeLocation = StoreLocation.CurrentUser;
 				StoreName storeName = StoreName.My;
-				var subject = String.Empty;
+				var filter = new string[0];
 
 				var ofs = 0;
 				if (parts.Length >= 3)
 				{
 					// first should be user
-					if (String.Compare(parts[0], "m", StringComparison.OrdinalIgnoreCase) == 0 ||
+					if (String.Compare(parts[0], "lm", StringComparison.OrdinalIgnoreCase) == 0 ||
 						String.Compare(parts[0], "LocalMachine", StringComparison.OrdinalIgnoreCase) == 0)
 						storeLocation = StoreLocation.LocalMachine;
 					ofs++;
 				}
 				if (parts.Length >= 2)
 				{
-					if (!Enum.TryParse<StoreName>(parts[ofs], out storeName))
+					if (!Enum.TryParse<StoreName>(parts[ofs], true, out storeName))
 						storeName = StoreName.My;
 					ofs++;
 				}
 				if (parts.Length >= 1)
 				{
-					subject = parts[ofs];
+					filter = parts[ofs].Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+					for (var i = 0; i < filter.Length; i++)
+						filter[i] = filter[i].Trim();
 				}
 
 				using (var store = new X509Store(storeName, storeLocation))
@@ -65,7 +67,7 @@ namespace TecWare.DE.Stuff
 					{
 						foreach (var c in store.Certificates)
 						{
-							if (String.IsNullOrEmpty(subject) || CertifacteMatchSubject(c.Subject, subject))
+							if (filter.Length == 0 || CertifacteMatchSubject(c, filter))
 								yield return c;
 						}
 					}
@@ -79,9 +81,32 @@ namespace TecWare.DE.Stuff
 				yield return new X509Certificate2(search);
 		} // func FindCertificate
 
-		private static bool CertifacteMatchSubject(string subject, string expr)
+		private static bool CertifacteMatchSubject(X509Certificate2 cert, string[] filter)
 		{
-			return subject == expr; // todo: a select algorithm
+			var splittedSubject = cert.Subject.Split(',');
+			for (var i = 0; i < splittedSubject.Length; i++)
+				splittedSubject[i] = splittedSubject[i].Trim();
+
+			foreach (var f in filter)
+			{
+				var p = f.IndexOf('=');
+				if (p != -1)
+				{
+					var hit = false;
+					foreach (var s in splittedSubject)
+					{
+						if (String.Compare(f, 0, s, 0, p, StringComparison.OrdinalIgnoreCase) == 0)
+						{
+							hit = true;
+							if (String.Compare(f, s, StringComparison.OrdinalIgnoreCase) != 0)
+								return false;
+						}
+					}
+					if (!hit)
+						return false;
+				}
+			}
+			return true;
 		} // func CertifacteMatchSubject
 
 		#region -- Filter -----------------------------------------------------------------
