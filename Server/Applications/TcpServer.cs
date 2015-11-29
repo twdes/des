@@ -19,7 +19,7 @@ namespace TecWare.DE.Server
 		#region -- class ListenerTcp ------------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
+		/// <summary>Implementation of a lisener.</summary>
 		private sealed class ListenerTcp : IListenerTcp, IDisposable
 		{
 			private readonly TcpServer server;
@@ -35,6 +35,7 @@ namespace TecWare.DE.Server
 				this.server = server;
 				this.createHandler = createHandler;
 
+				// create the socket
 				s = new Socket(endPoint.Address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
 				// bind socket
@@ -47,6 +48,11 @@ namespace TecWare.DE.Server
 
 			public void Dispose()
 			{
+				try
+				{
+					s.Close();
+				}
+				catch { }
 			} // proc Dispose
 
 			private void BeginAccept(SocketAsyncEventArgs e)
@@ -67,7 +73,7 @@ namespace TecWare.DE.Server
 				}
 				else // error during accept
 				{
-					// todo: error
+					server.Log.Warn(String.Format("Listen for {0} failed: {1}", FormatEndPoint(s.LocalEndPoint), e.SocketError));
 					return;
 				}
 
@@ -99,14 +105,22 @@ namespace TecWare.DE.Server
 		/// <summary></summary>
 		private sealed class ConnectionTcp : Stream
 		{
+			private readonly TcpServer server;
 			private readonly Socket s;
-
+			
 			private long totalReadedBytes = 0;
 			private long totalWrittenBytes = 0;
 
-			public ConnectionTcp(Socket s)
+			#region -- Ctor/Dtor ------------------------------------------------------------
+
+			public ConnectionTcp(TcpServer server, Socket s)
 			{
+				this.server = server;
 				this.s = s;
+
+				// set timeouts
+				s.ReceiveTimeout = 10000;
+				s.SendTimeout = 10000;
 			} // ctor
 
 			protected override void Dispose(bool disposing)
@@ -114,10 +128,14 @@ namespace TecWare.DE.Server
 				if (disposing)
 					s.Close();
 
+				server.RemoveConnection(this);
+
 				base.Dispose(disposing);
 			} // proc Dispose
 
 			public override void Flush() { }
+
+			#endregion
 
 			#region -- Read -----------------------------------------------------------------
 
@@ -136,7 +154,7 @@ namespace TecWare.DE.Server
 				var completion = new TaskCompletionSource<int>();
 
 				// register cancel
-				//cancellationToken.Register(
+				cancellationToken.Register(() => completion.SetCanceled());
 
 				// create async task
 				var recvArgs = new SocketAsyncEventArgs();
@@ -144,13 +162,13 @@ namespace TecWare.DE.Server
 				recvArgs.SetBuffer(buffer, offset, count);
 				recvArgs.Completed += (sender, e) => EndReadAsync(e);
 
-        if (!s.ReceiveAsync(recvArgs))
+				if (!s.ReceiveAsync(recvArgs))
 					EndReadAsync(recvArgs);
 
 				return completion.Task;
 			} // func ReadAsync
 
-			private void EndReadAsync( SocketAsyncEventArgs e)
+			private void EndReadAsync(SocketAsyncEventArgs e)
 			{
 				var completion = e.UserToken as TaskCompletionSource<int>;
 				try
@@ -161,7 +179,7 @@ namespace TecWare.DE.Server
 				{
 					completion.SetException(ex);
 				}
-      } // proc EndReadAsync
+			} // proc EndReadAsync
 
 			public override int Read(byte[] buffer, int offset, int count)
 			{
@@ -197,19 +215,20 @@ namespace TecWare.DE.Server
 
 			public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
 			{
-				var completation = new TaskCompletionSource<object>();
+				var completion = new TaskCompletionSource<object>();
 
 				// register cancel
+				cancellationToken.Register(() => completion.SetCanceled());
 
 				// create async send
 				var sendArgs = new SocketAsyncEventArgs();
 				sendArgs.SetBuffer(buffer, offset, count);
-				sendArgs.UserToken = completation;
+				sendArgs.UserToken = completion;
 				sendArgs.Completed += (sender, e) => EndWriteAsync(e);
 				if (!s.SendAsync(sendArgs))
 					EndWriteAsync(sendArgs);
 
-				return completation.Task;
+				return completion.Task;
 			} // func WriteAsync
 
 			private void EndWriteAsync(SocketAsyncEventArgs e)
@@ -218,7 +237,7 @@ namespace TecWare.DE.Server
 				try
 				{
 					EndWrite(e.BytesTransferred, e.SocketError);
-          completion.SetResult(null);
+					completion.SetResult(null);
 				}
 				catch (Exception ex)
 				{
@@ -238,7 +257,7 @@ namespace TecWare.DE.Server
 				if (error == SocketError.Success)
 					Interlocked.Add(ref totalWrittenBytes, r);
 				else
-					throw new Exception("todo");
+					throw new SocketException((int)error);
 			} // proc EndWrite
 
 			#endregion
@@ -271,10 +290,16 @@ namespace TecWare.DE.Server
 		} // class ConnectionTcp
 
 		#endregion
-		
+
+		private DEList<ConnectionTcp> connections;
+
+		#region -- Ctor/Dtor --------------------------------------------------------------
+
 		public TcpServer(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
+			this.connections = new DEList<ConnectionTcp>(this, "tw_connections", "Connections");
+
 			var sc = this.GetService<IServiceContainer>(true);
 			sc.AddService(typeof(IServerTcp), this);
 		} // ctor
@@ -290,15 +315,61 @@ namespace TecWare.DE.Server
 			base.Dispose(disposing);
 		} // proc Dispose
 
+		#endregion
+
+		#region -- Create Connection ------------------------------------------------------
+
 		private Stream CreateConnection(Socket sNew)
 		{
-			return new ConnectionTcp(sNew);
-		}
+			var c = new ConnectionTcp(this, sNew);
+			connections.Add(c);
+			return c;
+		} // func CreateConnection
+
+		private void RemoveConnection(ConnectionTcp connection)
+		{
+			connections.Remove(connection);
+		} // proc RemoveConnection
 
 		public IListenerTcp RegisterListener(IPEndPoint endPoint, Action<Stream> createHandler)
 		{
 			return new ListenerTcp(this, endPoint, createHandler);
 		} // proc RegisterListener
+
+		public Task<Stream> CreateConnectionAsync(IPEndPoint endPoint, CancellationToken cancellationToken)
+		{
+			var taskCompletion = new TaskCompletionSource<Stream>();
+
+			// register cancel
+			cancellationToken.Register(() => taskCompletion.SetCanceled());
+
+			// create the connect
+			var e = new SocketAsyncEventArgs();
+			e.UserToken = taskCompletion;
+			e.Completed += (sender, _e) => EndConnection(_e);
+			if (!Socket.ConnectAsync(SocketType.Stream, ProtocolType.Tcp, e))
+				EndConnection(e);
+
+			return taskCompletion.Task;
+		} // func CreateConnection
+
+		private void EndConnection(SocketAsyncEventArgs e)
+		{
+			var taskCompletion = (TaskCompletionSource<Stream>)e.UserToken;
+			try
+			{
+				if (taskCompletion.Task.IsCanceled)
+					throw new TaskCanceledException();
+        else if (e.SocketError != SocketError.SocketError)
+					taskCompletion.SetResult(CreateConnection(e.ConnectSocket));
+				else
+					throw new SocketException((int)e.SocketError);
+			}
+			catch (Exception ex)
+			{
+				taskCompletion.SetException(ex);
+			}
+		} // proc ConnectSocket
 
 		public string GetStreamInfo(Stream stream)
 		{
@@ -308,17 +379,21 @@ namespace TecWare.DE.Server
 				return null;
 		} // func GetStreamInfo
 
-		public IDisposable RegisterConnection(IPAddress address, ushort port, Action<NetworkStream> createHandler)
+		public Task<IPEndPoint> ResolveEndpointAsync(string dnsOrAddress, int port, CancellationToken cancellationToken)
 		{
-			return null; // ConnectionTcp
-		} // proc RegisterConnection
+			IPAddress addr;
+			if (IPAddress.TryParse(dnsOrAddress, out addr))
+				return Task.FromResult(new IPEndPoint(addr, port));
 
-		public Stream Connect(IPEndPoint endPoint)
+			return Task.Factory.FromAsync<IPEndPoint>(Dns.BeginGetHostAddresses(dnsOrAddress, null, port), EndResolveEndPoint);
+		} // func ResolveEndpointAsync
+
+		private IPEndPoint EndResolveEndPoint(IAsyncResult ar)
 		{
-			var s = new Socket(endPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-			s.Connect(endPoint);
-			return new ConnectionTcp(s);
-		}
+			var port = (int)ar.AsyncState;
+			var addresses = Dns.EndGetHostAddresses(ar);
+			return new IPEndPoint(addresses[0], port);
+		} // func EndResolveEndPoint
 
 		private static string FormatEndPoint(EndPoint remoteEndPoint)
 		{
@@ -332,5 +407,6 @@ namespace TecWare.DE.Server
 				return remoteEndPoint?.ToString();
 		} // func FormatEndPoint
 
+		#endregion
 	} // class TcpServer
 }

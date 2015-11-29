@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace TecWare.DE.Server
@@ -27,9 +28,17 @@ namespace TecWare.DE.Server
 		IListenerTcp RegisterListener(IPEndPoint endPoint, Action<Stream> createHandler);
 
 		/// <summary></summary>
-		/// <param name="endPoint"></param>
+		/// <param name="endPoint">End point for the connection</param>
+		/// <param name="timeout"></param>
 		/// <returns></returns>
-		Stream Connect(IPEndPoint endPoint); // todo: create handler
+		Task<Stream> CreateConnectionAsync(IPEndPoint endPoint, CancellationToken cancellationToken);
+
+		/// <summary>Resolve the address to the endpoint.</summary>
+		/// <param name="dnsOrAddress"></param>
+		/// <param name="port"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		Task<IPEndPoint> ResolveEndpointAsync(string dnsOrAddress, int port, CancellationToken cancellationToken);
 
 		/// <summary>Returns a informational string about the given stream. The stream should be
 		/// created from the server.</summary>

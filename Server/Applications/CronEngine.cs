@@ -417,6 +417,13 @@ namespace TecWare.DE.Server
 				if (currentJobs.FindIndex(c => job == c.Job) >= 0)
 					throw new InvalidOperationException("Job is already running.");
 
+				using (currentJobs.EnterReadLock())
+				{
+					foreach (var j in currentJobs)
+						if (!job.CanRunParallelTo(j.Job))
+							throw new InvalidOperationException(String.Format("Job is blocked (job: {0})", j.Job.DisplayName));
+				}
+
 				Log.Info("jobstart: {0}", job.DisplayName);
 				var currentJob = new CurrentRunningJob(this, job, cancellation);
 				currentJobs.Add(currentJob);
