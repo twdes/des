@@ -120,6 +120,11 @@ namespace TecWare.DE.Server
 
 			public ConnectionTcp(TcpServer server, Socket s)
 			{
+				if (server == null)
+					throw new ArgumentNullException("server");
+				if (s == null)
+					throw new ArgumentNullException("socket");
+
 				this.server = server;
 				this.s = s;
 
@@ -374,7 +379,7 @@ namespace TecWare.DE.Server
 			{
 				if (taskCompletion.Task.IsCanceled)
 					throw new TaskCanceledException();
-        else if (e.SocketError != SocketError.SocketError)
+        else if (e.SocketError == SocketError.Success)
 					taskCompletion.SetResult(CreateConnection(e.ConnectSocket));
 				else
 					throw new SocketException((int)e.SocketError);
