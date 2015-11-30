@@ -649,7 +649,7 @@ namespace TecWare.DE.Server.Configuration
 				else
 					t = c as XmlSchemaComplexType;
 
-				// Prüfe die Complex-Typen
+				// check complex types
 				if (t != null)
 				{
 					// Durchsuche die Sequencen, Alternativen
@@ -660,6 +660,15 @@ namespace TecWare.DE.Server.Configuration
 						if (e != null)
 							return e;
 					}
+				}
+
+				// search with in the sequences
+				var seq = c as XmlSchemaSequence;
+				if (seq != null)
+				{
+					e = FindConfigElement(stack, seq.Items, name);
+					if (e != null)
+						return e;
 				}
 			}
 			return null;

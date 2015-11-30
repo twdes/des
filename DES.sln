@@ -18,6 +18,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerTests", "ServerTests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEModette", "Extern\odette\DEModette\DEModette.csproj", "{72EED527-236E-4124-B360-54B25F0F9105}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEMpowershell", "Extern\powershell\DEMpowershell\DEMpowershell.csproj", "{0496732B-0812-4E06-B7FE-212F2761EBAF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -44,6 +46,10 @@ Global
 		{72EED527-236E-4124-B360-54B25F0F9105}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{72EED527-236E-4124-B360-54B25F0F9105}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{72EED527-236E-4124-B360-54B25F0F9105}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0496732B-0812-4E06-B7FE-212F2761EBAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0496732B-0812-4E06-B7FE-212F2761EBAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0496732B-0812-4E06-B7FE-212F2761EBAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0496732B-0812-4E06-B7FE-212F2761EBAF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -51,5 +57,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{67528843-E631-4C05-B6E8-514CC8BEC7B6} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 		{72EED527-236E-4124-B360-54B25F0F9105} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
+		{0496732B-0812-4E06-B7FE-212F2761EBAF} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 	EndGlobalSection
 EndGlobal

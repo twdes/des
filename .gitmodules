@@ -4,3 +4,6 @@
 [submodule "Extern/odette"]
 	path = Extern/odette
 	url = https://github.com/twdes/odette.git
+[submodule "Extern/powershell"]
+	path = Extern/powershell
+	url = https://github.com/twdes/powershell.git

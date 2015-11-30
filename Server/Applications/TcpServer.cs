@@ -73,7 +73,8 @@ namespace TecWare.DE.Server
 				}
 				else // error during accept
 				{
-					server.Log.Warn(String.Format("Listen for {0} failed: {1}", FormatEndPoint(s.LocalEndPoint), e.SocketError));
+					if (e.SocketError != SocketError.OperationAborted)
+						server.Log.Warn(String.Format("Listen for {0} failed: {1}", FormatEndPoint(s.LocalEndPoint), e.SocketError));
 					return;
 				}
 
@@ -107,9 +108,13 @@ namespace TecWare.DE.Server
 		{
 			private readonly TcpServer server;
 			private readonly Socket s;
+
+			private readonly Lazy<string> streamInfo;
 			
 			private long totalReadedBytes = 0;
 			private long totalWrittenBytes = 0;
+
+			private bool isDisposed = false;
 
 			#region -- Ctor/Dtor ------------------------------------------------------------
 
@@ -118,6 +123,20 @@ namespace TecWare.DE.Server
 				this.server = server;
 				this.s = s;
 
+				this.streamInfo = new Lazy<string>(
+					() =>
+					{
+						var ip = s.RemoteEndPoint as IPEndPoint;
+						if (ip == null)
+							return s.RemoteEndPoint?.ToString();
+						else if (ip.AddressFamily == AddressFamily.InterNetwork)
+							return $"{ip.Address}:{ip.Port}";
+						else
+							return $"{ip.Address},{ip.Port}";
+					});
+
+				server.Log.Info("[{0}] Connection created.", StreamInfo);
+
 				// set timeouts
 				s.ReceiveTimeout = 10000;
 				s.SendTimeout = 10000;
@@ -125,11 +144,17 @@ namespace TecWare.DE.Server
 
 			protected override void Dispose(bool disposing)
 			{
+				if (isDisposed)
+					return;
+
+				isDisposed = true;
 				if (disposing)
+				{
+					server.Log.Info("[{0}] Connection closed ({1} bytes received, {2} bytes sent).", StreamInfo, totalReadedBytes, totalWrittenBytes);
+
 					s.Close();
-
-				server.RemoveConnection(this);
-
+					server.RemoveConnection(this);
+				}
 				base.Dispose(disposing);
 			} // proc Dispose
 
@@ -274,19 +299,7 @@ namespace TecWare.DE.Server
 			public override long Position { get { return totalReadedBytes; } set { throw new NotSupportedException(); } }
 			public override long Length { get { return totalReadedBytes; } }
 
-			public string StreamInfo
-			{
-				get
-				{
-					var ip = s.RemoteEndPoint as IPEndPoint;
-					if (ip == null)
-						return s.RemoteEndPoint?.ToString();
-					else if (ip.AddressFamily == AddressFamily.InterNetwork)
-						return $"{ip.Address}:{ip.Port}";
-					else
-						return $"{ip.Address},{ip.Port}";
-				}
-			} // prop StreamInfo
+			public string StreamInfo => streamInfo.Value;
 		} // class ConnectionTcp
 
 		#endregion
@@ -341,10 +354,11 @@ namespace TecWare.DE.Server
 			var taskCompletion = new TaskCompletionSource<Stream>();
 
 			// register cancel
-			cancellationToken.Register(() => taskCompletion.SetCanceled());
+			cancellationToken.Register(() => taskCompletion.TrySetCanceled());
 
 			// create the connect
 			var e = new SocketAsyncEventArgs();
+			e.RemoteEndPoint = endPoint;
 			e.UserToken = taskCompletion;
 			e.Completed += (sender, _e) => EndConnection(_e);
 			if (!Socket.ConnectAsync(SocketType.Stream, ProtocolType.Tcp, e))
