@@ -154,9 +154,10 @@ namespace TecWare.DE.Server
 
 		public void ExecuteEvent(DEServerEvent eventType)
 		{
-			lock(actions)
+			lock (actions)
 			{
-				foreach (var action in actions.OfType<EventItem>().Where(c => c.EventType == eventType))
+				var eventActions = actions.OfType<EventItem>().Where(c => c.EventType == eventType).ToArray();
+        foreach (var action in eventActions)
 				{
 					try
 					{

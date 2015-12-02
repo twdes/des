@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Security.Cryptography.X509Certificates;
 
 namespace TecWare.DE.Stuff
 {
@@ -19,6 +22,99 @@ namespace TecWare.DE.Stuff
 
 	public static partial class ProcsDE
 	{
+		public static IEnumerable<X509Certificate2> FindCertificate(string search)
+		{
+			if (search.StartsWith("store://")) // search in the store
+			{
+				// store://location/name/subject
+				// default for location is "currentuser"
+				// allowed is "cu", "lm" as shortcut
+				// name default is "My"
+
+				search = search.Substring(8);
+				var parts = search.Split('/');
+
+				StoreLocation storeLocation = StoreLocation.CurrentUser;
+				StoreName storeName = StoreName.My;
+				var filter = new string[0];
+
+				var ofs = 0;
+				if (parts.Length >= 3)
+				{
+					// first should be user
+					if (String.Compare(parts[0], "lm", StringComparison.OrdinalIgnoreCase) == 0 ||
+						String.Compare(parts[0], "LocalMachine", StringComparison.OrdinalIgnoreCase) == 0)
+						storeLocation = StoreLocation.LocalMachine;
+					ofs++;
+				}
+				if (parts.Length >= 2)
+				{
+					if (!Enum.TryParse<StoreName>(parts[ofs], true, out storeName))
+						storeName = StoreName.My;
+					ofs++;
+				}
+				if (parts.Length >= 1)
+				{
+					filter = parts[ofs].Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+					for (var i = 0; i < filter.Length; i++)
+						filter[i] = filter[i].Trim();
+				}
+
+				using (var store = new X509Store(storeName, storeLocation))
+				{
+					store.Open(OpenFlags.ReadOnly);
+					try
+					{
+						foreach (var c in store.Certificates)
+						{
+							if (filter.Length == 0 || CertifacteMatchSubject(c, filter))
+								yield return c;
+						}
+					}
+					finally
+					{
+						store.Close();
+					}
+				}
+			}
+			else if (Path.IsPathRooted(search))
+				yield return new X509Certificate2(search);
+		} // func FindCertificate
+
+		private static bool CertifacteMatchSubject(X509Certificate2 cert, string[] filter)
+		{
+			var splittedSubject = cert.Subject.Split(',');
+			for (var i = 0; i < splittedSubject.Length; i++)
+				splittedSubject[i] = splittedSubject[i].Trim();
+
+			foreach (var f in filter)
+			{
+				var p = f.IndexOf('=');
+				if (p != -1)
+				{
+					var hit = false;
+					foreach (var s in splittedSubject)
+					{
+						if (String.Compare(f, 0, s, 0, p, StringComparison.OrdinalIgnoreCase) == 0)
+						{
+							hit = true;
+							if (String.Compare(f, s, StringComparison.OrdinalIgnoreCase) != 0)
+								return false;
+						}
+					}
+					if (!hit)
+						return false;
+				}
+			}
+			return true;
+		} // func CertifacteMatchSubject
+
+		#region -- Filter -----------------------------------------------------------------
+
+		/// <summary>Simple "Star"-Filter rule, for single-strings</summary>
+		/// <param name="value"></param>
+		/// <param name="filterExpression"></param>
+		/// <returns></returns>
 		public static bool IsFilterEqual(string value, string filterExpression)
 		{
 			var p1 = filterExpression.IndexOf('*');
@@ -26,7 +122,10 @@ namespace TecWare.DE.Stuff
 			if (p1 == p2) // only one start
 			{
 				if (p1 == 0) // => endswith
-					return value.EndsWith(filterExpression.Substring(1), StringComparison.OrdinalIgnoreCase);
+					if (value.Length == 1)
+						return true;
+					else
+						return value.EndsWith(filterExpression.Substring(1), StringComparison.OrdinalIgnoreCase);
 				else if (p1 == filterExpression.Length - 1)// => startwith
 					return value.StartsWith(filterExpression.Substring(0, p1), StringComparison.OrdinalIgnoreCase);
 				else
@@ -54,6 +153,8 @@ namespace TecWare.DE.Stuff
 
 		public static bool PasswordCompare(string testPassword, string passwordHash)
 			=> Passwords.PasswordCompare(testPassword, passwordHash);
+
+		#endregion
 	} // class ProcsDE
 
 	#endregion

@@ -136,7 +136,7 @@ class DELogTab extends DETab {
             }
             innerHtmlElements.push([
               '<tr>',
-              '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumintegerDigits: 3 }), '</td>',
+              '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumIntegerDigits: 3 }), '</td>',
               '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
             '</tr>'].join("")
             );

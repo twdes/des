@@ -390,6 +390,24 @@
 		</xs:complexType>
 	</xs:element>
 
+	<xs:element name ="serverTcp">
+		<xs:annotation>
+			<xs:documentation>Initializes a generell propose tcp server</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.TcpServer</class>
+			</xs:appinfo>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="ConfigServiceType">
+					<xs:sequence>
+						<xs:element ref="log" minOccurs="0" maxOccurs="1" />
+					</xs:sequence>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
+	</xs:element>
+
 	<xs:element name="include">
 		<xs:annotation>
 			<xs:documentation>Elemente werden an der Include via des-include.</xs:documentation>
@@ -413,6 +431,7 @@
 				<xs:element ref="http" minOccurs="0" maxOccurs="1" />
 				<xs:element ref="cron" minOccurs="0" maxOccurs="1" />
 				<xs:element ref="luaengine" minOccurs="0" maxOccurs="1" />
+				<xs:element ref="serverTcp" minOccurs="0" maxOccurs="1" />
 
 				<xs:sequence minOccurs="0" maxOccurs="unbounded">
 					<xs:element ref="genericService" minOccurs="0" maxOccurs="unbounded" />
@@ -454,6 +473,7 @@
 						<xs:element ref="http" minOccurs="1" maxOccurs="1" />
 						<xs:element ref="cron" minOccurs="0" maxOccurs="1" />
 						<xs:element ref="luaengine" minOccurs="1" maxOccurs="1" />
+						<xs:element ref="serverTcp" minOccurs="0" maxOccurs="1" />
 
 						<xs:sequence minOccurs="0" maxOccurs="unbounded">
 							<xs:element ref="genericService" minOccurs="0" maxOccurs="unbounded" />

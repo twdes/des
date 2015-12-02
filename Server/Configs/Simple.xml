@@ -6,6 +6,10 @@
 	
 	<http threads="1">
 	</http>
-	
-	<luaengine />
+	<cron />
+	<luaengine>
+		<script id="hello" filename="Hello.lua" />
+	</luaengine>
+
+	<luaCronJob name="hello" bound="0,1,*" script="hello" />
 </des>

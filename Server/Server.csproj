@@ -52,11 +52,11 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="Neo.Lua, Version=5.3.0.0, Culture=neutral, PublicKeyToken=fdb0cd4fe8a6e3b2, processorArchitecture=MSIL">
-      <HintPath>..\packages\NeoLua.1.0.3\lib\net45\Neo.Lua.dll</HintPath>
+      <HintPath>..\packages\NeoLua.1.1.0-beta\lib\net45\Neo.Lua.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Neo.Lua.Desktop, Version=5.3.0.0, Culture=neutral, PublicKeyToken=fdb0cd4fe8a6e3b2, processorArchitecture=MSIL">
-      <HintPath>..\packages\NeoLua.1.0.3\lib\net45\Neo.Lua.Desktop.dll</HintPath>
+      <HintPath>..\packages\NeoLua.1.1.0-beta\lib\net45\Neo.Lua.Desktop.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -86,6 +86,7 @@
     <EmbeddedResource Include="Configuration\DEScron.xsd">
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <None Include="Configs\Hello.lua" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
@@ -97,6 +98,7 @@
     <Compile Include="Applications\HttpServer.cs" />
     <Compile Include="Applications\LuaEngine.cs" />
     <Compile Include="Applications\ProcessItem.cs" />
+    <Compile Include="Applications\TcpServer.cs" />
     <Compile Include="Applications\User.cs" />
     <Compile Include="Configuration\DEConfigurationElement.cs" />
     <Compile Include="Configuration\DEConfigurationService.cs" />
@@ -118,6 +120,11 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Resources\Http\images\config.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock_data.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock_gearwheel.png" />
+    <EmbeddedResource Include="Resources\Http\images\clock_run.png" />
     <EmbeddedResource Include="des.ico" />
     <EmbeddedResource Include="Resources\Http\images\lua16.png" />
     <EmbeddedResource Include="Resources\Http\images\windows24.png" />

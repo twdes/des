@@ -148,6 +148,7 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnCronRunAfter = MainNamespace + "runafter";
 		public static readonly XName xnLuaEngine = MainNamespace + "luaengine";
 		public static readonly XName xnLuaScript = MainNamespace + "script";
+		public static readonly XName xnServerTcp = MainNamespace + "serverTcp";
 
 		public static readonly XName xnLog = MainNamespace + "log";
 		public static readonly XName xnGroup = MainNamespace + "group";
@@ -156,6 +157,11 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnAlternativeRoot = MainNamespace + "alternativeRoot";
 		public static readonly XName xnMimeDef = MainNamespace + "mimeDef";
 		public static readonly XName xnSecurityDef = MainNamespace + "securityDef";
+
+		public static readonly XName xnLuaCronGroup = MainNamespace + "cronGroup";
+		public static readonly XName xnLuaCronBatch = MainNamespace + "cronBatch";
+		public static readonly XName xnLuaCronJob = MainNamespace + "luaCronJob";
+		public static readonly XName xnLuaProcess = MainNamespace + "process";
 	} // class DEConfigurationConstants
 
 	#endregion

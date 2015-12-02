@@ -602,6 +602,8 @@ namespace TecWare.DE.Server
 				return "Http";
 			else if (element.Name == xnCron)
 				return "Cron";
+			else if (element.Name == xnServerTcp)
+				return "ServerTcp";
 			else
 				return base.GetConfigItemName(element);
 		} // func GetConfigItemName
@@ -695,6 +697,7 @@ namespace TecWare.DE.Server
 		{
 			if (xn == xnLuaEngine ||
 				xn == xnHttp ||
+				xn == xnServerTcp ||
 				xn == xnCron)
 				return true;
 			else

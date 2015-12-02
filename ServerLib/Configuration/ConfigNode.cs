@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -24,7 +25,7 @@ namespace TecWare.DE.Server.Configuration
 		} // ctor
 
 		public T GetAttribute<T>(string name)
-		=> Procs.ChangeType<T>(GetAttribute(name));
+			=> Procs.ChangeType<T>(GetAttribute(name));
 
 		public object GetAttribute(string name)
 		{
@@ -59,6 +60,12 @@ namespace TecWare.DE.Server.Configuration
 				return String.IsNullOrEmpty(attributeValue) ?
 					CultureInfo.GetCultureInfo(attribute.DefaultValue) :
 					CultureInfo.GetCultureInfo(attributeValue);
+			}
+			else if (attribute.TypeName == "PathType")
+			{
+				if (String.IsNullOrEmpty(attributeValue))
+					return null;
+				return new DirectoryInfo(attributeValue);
 			}
 			else
 			{

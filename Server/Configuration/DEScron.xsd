@@ -5,10 +5,10 @@
            xmlns="http://tecware-gmbh.de/dev/des/2014"
            xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
-	<xs:include schemaLocation="DEScore.xsd" />
-	<xs:include schemaLocation="DESconfigItem.xsd" />
+	<xs:include id="DEScore" schemaLocation="DEScore.xsd" />
+	<xs:include id="DESconfigItem" schemaLocation="DESconfigItem.xsd" />
 
-	<xs:complexType name="CronJobItemType" >
+	<xs:complexType name="CronJobItemType">
 		<xs:complexContent>
 			<xs:extension base="ConfigLogItemType">
 				<xs:sequence>
@@ -23,7 +23,7 @@
 						<xs:documentation>Defines the schedule of the job.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
-				<xs:attribute name="runTimeSplice" type="TimeSpan" use="optional">
+				<xs:attribute name="runTimeSlice" type="TimeSpan" use="optional">
 					<xs:annotation>
 						<xs:documentation>The maximum runtime for the job per invocation.</xs:documentation>
 					</xs:annotation>
@@ -32,13 +32,24 @@
 		</xs:complexContent>
 	</xs:complexType>
 
-	<xs:element name="luaCronJob" substitutionGroup="configItem" type="CronJobItemType">
+	<xs:element name="luaCronJob" substitutionGroup="configItem">
 		<xs:annotation>
 			<xs:documentation>Defines job that is based on a lua file.</xs:documentation>
 			<xs:appinfo>
 				<class>TecWare.DE.Server.LuaCronJobItem</class>
 			</xs:appinfo>
 		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="CronJobItemType">
+					<xs:attribute name="supportsCancelation" type="xs:boolean" use="optional" default="false">
+						<xs:annotation>
+							<xs:documentation>Does this job supports cancellation.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
 	</xs:element>
 
 	<xs:element name="cronBatch" substitutionGroup="configItem" type="CronJobItemType">

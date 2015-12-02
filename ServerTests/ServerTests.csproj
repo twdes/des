@@ -36,11 +36,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Neo.Lua, Version=5.3.0.0, Culture=neutral, PublicKeyToken=fdb0cd4fe8a6e3b2, processorArchitecture=MSIL">
-      <HintPath>..\packages\NeoLua.1.0.3\lib\net45\Neo.Lua.dll</HintPath>
+      <HintPath>..\packages\NeoLua.1.1.0-beta\lib\net45\Neo.Lua.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Neo.Lua.Desktop, Version=5.3.0.0, Culture=neutral, PublicKeyToken=fdb0cd4fe8a6e3b2, processorArchitecture=MSIL">
-      <HintPath>..\packages\NeoLua.1.0.3\lib\net45\Neo.Lua.Desktop.dll</HintPath>
+      <HintPath>..\packages\NeoLua.1.1.0-beta\lib\net45\Neo.Lua.Desktop.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -61,16 +61,18 @@
   <ItemGroup>
     <Compile Include="Configuration.cs" />
     <Compile Include="Helper.cs" />
+    <Compile Include="Oftp.cs" />
     <Compile Include="Stuff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Extern\Core\DESCore\DESCore.csproj">
       <Project>{67528843-e631-4c05-b6e8-514cc8bec7b6}</Project>
       <Name>DESCore</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Extern\odette\DEModette\DEModette.csproj">
+      <Project>{72eed527-236e-4124-b360-54b25f0f9105}</Project>
+      <Name>DEModette</Name>
     </ProjectReference>
     <ProjectReference Include="..\ServerLib\ServerLib.csproj">
       <Project>{6a13ee24-ae1a-4242-8f61-0e32f1e9e37d}</Project>
@@ -81,7 +83,9 @@
       <Name>Server</Name>
     </ProjectReference>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
   <ItemGroup>
     <Content Include="Files\01_Main.xml" />
     <Content Include="Files\01_Merge.xml" />
