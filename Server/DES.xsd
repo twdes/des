@@ -463,7 +463,7 @@
 
 					<xs:attribute name="version" use="required">
 						<xs:annotation>
-							<xs:documentation>Version der Konfiguration. Sollte immer 330 sein.</xs:documentation>
+							<xs:documentation>Version of the configuration. Should always be 330.</xs:documentation>
 						</xs:annotation>
 						<xs:simpleType>
 							<xs:restriction base="xs:string">

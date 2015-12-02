@@ -8,7 +8,7 @@
 	<xs:include schemaLocation="DEScore.xsd" />
 	<xs:include schemaLocation="DESconfigItem.xsd" />
 
-	<xs:complexType name="CronJobItemType" abstract="true">
+	<xs:complexType name="CronJobItemType" >
 		<xs:complexContent>
 			<xs:extension base="ConfigLogItemType">
 				<xs:sequence>
