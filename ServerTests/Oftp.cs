@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TecWare.DE.Odette;
+using TecWare.DE.Odette.Services;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -117,7 +119,7 @@ namespace TecWare.DE.Server
 			while (true)
 			{
 				var eos = OdetteFtp.FillFromStreamInternal(reader, allowCompressing, buffer, out filledBuffer);
-        OdetteFtp.WriteToStreamInternal(writer, buffer, filledBuffer);
+				OdetteFtp.WriteToStreamInternal(writer, buffer, filledBuffer);
 				if (eos)
 					break;
 			}
@@ -128,7 +130,7 @@ namespace TecWare.DE.Server
 		private static byte Header(int len, bool repeat, bool eof)
 		{
 			if (eof)
-				len|= 0x80;
+				len |= 0x80;
 			if (repeat)
 				len |= 0x40;
 
@@ -223,6 +225,27 @@ namespace TecWare.DE.Server
 		{
 			foreach (var c in ProcsDE.FindCertificate("store://currentuser/my/CN=OFTP2Test"))
 				Console.WriteLine(c.Subject);
+		}
+
+		[TestMethod]
+		public void RegEx01()
+		{
+			 var names = new Tuple<bool, string>[]
+				{
+					new Tuple<bool, string>(false, ""),
+					new Tuple<bool, string>(true, "ABZ#WICHTIG.TXT#201501011405580045.state")
+				};
+
+			foreach (var t in names)
+			{
+				var m = Regex.Match(t.Item2, DirectoryFileServiceItem.FileSelectorRegEx);
+				Assert.AreEqual(t.Item1, m.Success);
+				if (m.Success)
+				{
+					Assert.AreEqual(4, m.Groups.Count);
+					Console.WriteLine("{0} -> Orignator: {1}, File: {2}, Date: {3}", t.Item2, m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
+				}
+			}
 		}
 	}
 }
