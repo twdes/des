@@ -341,7 +341,7 @@
 
 	<xs:element name="luaengine">
 		<xs:annotation>
-			<xs:documentation>Erweitert die Lua-Script-Engine.</xs:documentation>
+			<xs:documentation>Extends the Lua scripting engine.</xs:documentation>
 			<xs:appinfo>
 				<class>TecWare.DE.Server.LuaEngine</class>
 			</xs:appinfo>
@@ -359,27 +359,27 @@
 							<xs:complexType>
 								<xs:attribute name="id" type="xs:string" use="required">
 									<xs:annotation>
-										<xs:documentation>Id des Scripts</xs:documentation>
+										<xs:documentation>Id of the script</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 								<xs:attribute name="filename" type="PathType" use="required">
 									<xs:annotation>
-										<xs:documentation>Dateiname des Lua-Skripts</xs:documentation>
+										<xs:documentation>Filename of Lua script</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 								<xs:attribute name="autoreload" type="xs:boolean" use="optional" default="false">
 									<xs:annotation>
-										<xs:documentation>Soll das Skript bei einer Änderung der Datei neu ausgeführt werden.</xs:documentation>
+										<xs:documentation>Re-execute the script when file is changing. (Default=false)</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 								<xs:attribute name="debug" type="xs:boolean" use="optional" default="true">
 									<xs:annotation>
-										<xs:documentation>Soll das Skript mit Debug-Informationen geladen werden.</xs:documentation>
+										<xs:documentation>Load script with debug information. (Default=true)</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 								<xs:attribute name="encoding" type="EncodingType" use="optional">
 									<xs:annotation>
-										<xs:documentation>Kodierung des Skripts (Bezeichnung oder CodePage)</xs:documentation>
+										<xs:documentation>Specifies the default encoding for the script. (name or code page)</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 							</xs:complexType>

@@ -26,7 +26,7 @@ Er ist nicht als Server für millionen von Anfragen ausgelegt, sondern seine Stär
 '''
 2. Nun kann der Dienst über die Kommandozeile gestartet werden:
 '''PS
-DEServer.exe -v -c C:\Config.xml
+DEServer.exe run -v -c C:\Config.xml
 '''
 3. Weiterführende Hilfe zu den Parametern des Dienstes bekommt man mit folgendem Befehl:
 '''PS

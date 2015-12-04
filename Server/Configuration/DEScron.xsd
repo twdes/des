@@ -20,7 +20,7 @@
 				</xs:sequence>
 				<xs:attribute name="bound" type="CronBound" use="optional">
 					<xs:annotation>
-						<xs:documentation>Defines the schedule of the job.</xs:documentation>
+						<xs:documentation>Defines the schedule of the job. (Example: "0,1,*" - every Minute, "22:26" - once per day)</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
 				<xs:attribute name="runTimeSlice" type="TimeSpan" use="optional">
