@@ -60,6 +60,7 @@
   </Choose>
   <ItemGroup>
     <Compile Include="Configuration.cs" />
+    <Compile Include="CsvTest.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="Oftp.cs" />
     <Compile Include="Stuff.cs" />
