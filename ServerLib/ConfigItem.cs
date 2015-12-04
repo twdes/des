@@ -1103,7 +1103,7 @@ namespace TecWare.DE.Server
 		public virtual string SecurityToken { get { return securityToken; } }
 
 		/// <summary>Gibt ein Symbol für den Knoten zurück.</summary>
-		public virtual string Icon { get { return Config.GetAttribute("icon", "/images/config.png"); } }
+		public virtual string Icon { get { return null; } }
 
 		/// <summary>Zugriff auf die Konfigurationsdatei.</summary>
 		[LuaMember("Log")]

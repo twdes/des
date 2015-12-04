@@ -845,7 +845,7 @@ namespace TecWare.DE.Server
 			XElement x = new XElement("item",
 				new XAttribute("name", Name),
 				new XAttribute("displayname", DisplayName),
-				new XAttribute("icon", Icon)
+				new XAttribute("icon", Icon ?? Config.GetAttribute("icon", "/images/config.png"))
 			);
 
 			// Füge die entsprechenden Collections
