@@ -86,7 +86,6 @@
     <EmbeddedResource Include="Configuration\DEScron.xsd">
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <None Include="Configs\Hello.lua" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
@@ -155,9 +154,10 @@
     <EmbeddedResource Include="..\ServerWebUI\images\log.warning.png">
       <Link>Resources\Http\images\log.warning.png</Link>
     </EmbeddedResource>
-    <Content Include="Configs\Simple.xml" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Configs\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

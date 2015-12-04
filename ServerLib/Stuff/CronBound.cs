@@ -18,6 +18,7 @@ namespace TecWare.DE.Server.Stuff
 	/// Mo,Mi,1,17 2:20 zu jedem Montag bzw. Mittwoch oder zu jedem 1. und 17. um 2:20
 	/// 5,10,15 2,14:30 am 5,10,15 jedes Monats einmal um 2:30 uhr und einaml 14:30
 	/// 0,10,20,30,40,50 aller 10min
+	/// 10,* aller 10min
 	/// </example>
 	[Serializable]
 	public struct CronBound : IFormattable, IEquatable<CronBound>

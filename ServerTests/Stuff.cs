@@ -47,5 +47,11 @@ namespace TecWare.DE.Server
 	[TestClass]
 	public class CronBoundTests
 	{
+		[TestMethod]
+		public void TimeTest01()
+		{
+			var cron = new CronBound("12:25");
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 25, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 0, 6)));
+		}
 	}
 }
