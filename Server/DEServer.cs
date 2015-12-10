@@ -1040,8 +1040,20 @@ namespace TecWare.DE.Server
 		private string LuaFormat(string text, params object[] args)
 			=> String.Format(text, args);
 
+		[LuaMember("error")]
+		private void LuaError(object error)
+		{
+			if (error is Exception)
+				throw (Exception)error;
+			else
+				throw new Exception(error?.ToString());
+		} // func LuaError
+
 		[LuaMember("String")]
 		private static LuaType LuaString => LuaType.GetType(typeof(String));
+
+		[LuaMember("LogMsgType")]
+		private static LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
 
 		#endregion
 

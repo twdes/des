@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -199,6 +200,10 @@ namespace TecWare.DE.Server
 			this.procCronIdle = CronIdle;
 			PublishItem(this.currentJobs);
 
+			// Register Engine
+			var sc = sp.GetService<IServiceContainer>(true);
+			sc.AddService(typeof(IDECronEngine), this, false);
+
 			// Register Server events
 			Server.Queue.RegisterEvent(procCancelJobs = CancelJobs, DEServerEvent.Shutdown);
 			Server.Queue.RegisterEvent(procRefreshCronServices = RefreshCronServices, DEServerEvent.Reconfiguration);
@@ -215,6 +220,8 @@ namespace TecWare.DE.Server
 					Server.Queue.CancelCommand(procCronIdle);
 					Server.Queue.CancelCommand(procCancelJobs);
 					Server.Queue.CancelCommand(procRefreshCronServices);
+
+					this.GetService<IServiceContainer>(false)?.RemoveService(typeof(IDECronEngine));
 
 					Procs.FreeAndNil(ref currentJobs);
 					Procs.FreeAndNil(ref cronItemCacheController);

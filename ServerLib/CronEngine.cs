@@ -220,8 +220,7 @@ namespace TecWare.DE.Server
 		/// <param name="job"></param>
 		protected async Task ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation)
 		{
-			if (CronEngine == null)
-				throw new ArgumentException("No cron engine to run a job.");
+			CheckCronEngine();
 
 			await CronEngine.ExecuteJobAsync(job, cancellation);
 		} // proc ExecuteJobAsync
