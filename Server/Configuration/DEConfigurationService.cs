@@ -325,11 +325,14 @@ namespace TecWare.DE.Server.Configuration
 								{
 									if (ChangeConfigurationValue(context, cur, cur.Value, out value))
 										cur.Value = value;
-									var assembly = resolver?.Load(cur.Value);
-									if (assembly != null)
-										UpdateSchema(assembly);
-									else
-										throw context.CreateConfigException(cur, String.Format("Failed to load assembly ({0}).", cur.Value));
+									try
+									{
+										UpdateSchema(Assembly.Load(cur.Value));
+									}
+									catch (Exception e)
+									{
+										throw context.CreateConfigException(cur, String.Format("Failed to load assembly ({0}).", cur.Value), e);
+									}
 								}
 							}
 						}
@@ -550,6 +553,9 @@ namespace TecWare.DE.Server.Configuration
 
 		public void UpdateSchema(Assembly assembly)
 		{
+			if (assembly == null)
+				throw new ArgumentNullException("assembly");
+
 			var log = sp.LogProxy();
 			foreach (var schemaAttribute in assembly.GetCustomAttributes<DEConfigurationSchemaAttribute>())
 			{

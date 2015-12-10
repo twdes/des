@@ -13,6 +13,7 @@ using System.ServiceProcess;
 using System.Text;
 using System.Threading;
 using System.Xml.Linq;
+using Neo.IronLua;
 using TecWare.DE.Networking;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
@@ -1001,6 +1002,46 @@ namespace TecWare.DE.Server
 			get { return propertyLogCount.Value; }
 			set { propertyLogCount.Value = value; }
 		} // prop TotalLogCount
+
+		#endregion
+
+		#region -- Base Lua Environment ---------------------------------------------------
+		
+		[LuaMember("rawget")]
+		private object LuaRawGet(LuaTable t, object key)
+			=> t.GetValue(key, true);
+
+		[LuaMember("rawset")]
+		private object LuaRawSet(LuaTable t, object key, object value)
+			=> t.SetValue(key, value, true);
+
+		[LuaMember("safecall")]
+		private LuaResult LuaSafeCall(object target, params object[] args)
+		{
+			try
+			{
+				return new LuaResult(true, Lua.RtInvoke(target, args));
+			}
+			catch (Exception e)
+			{
+				return new LuaResult(false, e.Message, e);
+			}
+		} // func LuaSafeCall
+
+		[LuaMember("rawmembers")]
+		private IEnumerable<KeyValuePair<string, object>> LuaRawMembers(LuaTable t)
+			=> t.Members;
+
+		[LuaMember("rawarray")]
+		private IList<object> LuaRawArray(LuaTable t)
+			=> t.ArrayList;
+
+		[LuaMember("format")]
+		private string LuaFormat(string text, params object[] args)
+			=> String.Format(text, args);
+
+		[LuaMember("String")]
+		private static LuaType LuaString => LuaType.GetType(typeof(String));
 
 		#endregion
 
