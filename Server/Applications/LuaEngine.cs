@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Xml.Linq;
 using Neo.IronLua;
@@ -16,7 +17,7 @@ namespace TecWare.DE.Server
 	#region -- class LuaEngine ----------------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
-	/// <summary>Bündelt die Verwaltung und Ausführung von Scripts</summary>
+	/// <summary>Service for Debugging and running lua scripts.</summary>
 	internal sealed class LuaEngine : DEConfigLogItem, IDELuaEngine
 	{
 		#region -- class LuaScript --------------------------------------------------------
@@ -25,19 +26,29 @@ namespace TecWare.DE.Server
 		/// <summary>Loaded script.</summary>
 		internal abstract class LuaScript : IDisposable
 		{
-			private LuaEngine engine;
-			private string scriptId;
-			private LuaChunk compiled;
-			private LuaCompileOptions debug;
+			private readonly LuaEngine engine;
+			private readonly LoggerProxy log;
+			private readonly string scriptId;
+		
+			private bool compiledWithDebugger;
+			private readonly object chunkLock = new object();
+			private LuaChunk chunk;
 
 			#region -- Ctor/Dtor ------------------------------------------------------------
 
-			protected LuaScript(LuaEngine engine, string sScriptId, bool forceDebugMode)
+			protected LuaScript(LuaEngine engine, string scriptId, bool compileWithDebugger)
 			{
 				this.engine = engine;
-				this.scriptId = sScriptId;
-				this.compiled = null;
-				this.Debug = forceDebugMode;
+				this.log = LoggerProxy.Create(engine.Log, scriptId);
+				this.scriptId = scriptId;
+
+				this.chunk = null;
+				this.compiledWithDebugger = compileWithDebugger;
+
+				// attach the script to the engine
+				engine.AddScript(this);
+
+				log.Info("Hinzugefügt.");
 			} // ctor
 
 			~LuaScript()
@@ -58,10 +69,11 @@ namespace TecWare.DE.Server
 					foreach (var g in engine.GetAttachedGlobals(scriptId))
 						g.ResetScript();
 
-					// Entferne das Script
+					// Remove the script from the engine
 					engine.RemoveScript(this);
+					log.Info("Entfernt.");
 
-					Procs.FreeAndNil(ref compiled);
+					Procs.FreeAndNil(ref chunk);
 				}
 			} // proc Dispose
 
@@ -69,32 +81,68 @@ namespace TecWare.DE.Server
 
 			#region -- Compile --------------------------------------------------------------
 
-			protected virtual void Compile(Func<TextReader> open, string sName, KeyValuePair<string, Type>[] args)
+			protected virtual void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
 			{
-				lock (this)
+				lock (chunkLock)
 				{
-					Procs.FreeAndNil(ref compiled);
+					// clear the current chunk
+					Procs.FreeAndNil(ref chunk);
 
+					// recompile the script
 					using (var tr = open())
-						compiled = Lua.CompileChunk(tr, sName, debug, args);
+						chunk = Lua.CompileChunk(tr, scriptId, compiledWithDebugger ? engine.debugOptions : null, args);
 				}
 			} // proc Compile
 
+			public void LogLuaException(Exception e)
+			{
+				// unwind target exceptions
+				if (e is TargetInvocationException)
+				{
+					if (e.InnerException != null)
+					{
+						LogLuaException(e.InnerException);
+						return;
+					}
+				}
+
+				// log exception
+				var ep = e as LuaParseException;
+				if (ep != null)
+				{
+					Log.Except("{0} ({3} at {1}, {2})", ep.Message, ep.Line, ep.Column, ep.FileName);
+				}
+				else
+				{
+					var er = e as LuaRuntimeException;
+					if (er != null)
+					{
+						Log.Except(er);
+					}
+					else
+						Log.Except("Compile failed.", e);
+				}
+			} // proc LogLuaException
+
 			#endregion
 
-			public void LogMsg(LogMsgType type, string sMessage)
-			{
-				engine.Log.LogMsg(type, "[{0}] {1}", ScriptId, sMessage);
-			} // proc LogMsg
-
+					/// <summary>Engine</summary>
 			public LuaEngine Engine => engine;
+			/// <summary>Log for script related messages.</summary>
+			public LoggerProxy Log => log;
+			/// <summary>Access to the assigned Lua-Engine.</summary>
+			public virtual Lua Lua => engine.Lua;
 
+			/// <summary>Unique id of the script.</summary>
 			public string ScriptId => scriptId;
+			/// <summary>Filename of the scipt.</summary>
 			public abstract string ScriptBase { get; }
 
-			public bool Debug { get { return debug != null; } set { debug = value ? LuaDeskop.StackTraceCompileOptions : null; } }
-			public LuaChunk Chunk { get { lock (this) return compiled; } }
-			public virtual Lua Lua => engine.Lua;
+			/// <summary>Is the script debugable.</summary>
+			public bool Debug => compiledWithDebugger;
+
+			/// <summary>Access to the chunk.</summary>
+			public LuaChunk Chunk { get { lock (this) return chunk; } }
 		} // class LuaScript
 
 		#endregion
@@ -102,46 +150,57 @@ namespace TecWare.DE.Server
 		#region -- class LuaFileScript ----------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
-		/// <summary>Script auf der Basis einer Datei.</summary>
+		/// <summary>Script that is based on file.</summary>
 		private sealed class LuaFileScript : LuaScript
 		{
-			private FileInfo fileSource;    // Quelle des Scripts
-			private Encoding encoding;      // Welche Encodierung hat das Script
-			private DateTime compiledStamp; // Zeitstempel, wenn das Script zuletzt kompiliert wurde
+			private FileInfo fileSource;    // File source of the script
+			private Encoding encoding;      // Encoding style of the file
+			private DateTime compiledStamp; // Last time compiled
 
-			public LuaFileScript(LuaEngine engine, string scriptId, FileInfo fileSource, Encoding encoding, bool forceDebugMode)
-				: base(engine, scriptId, forceDebugMode)
+			public LuaFileScript(LuaEngine engine, string scriptId, FileInfo fileSource, Encoding encoding, bool compileWithDebugger)
+				: base(engine, scriptId, compileWithDebugger)
 			{
 				this.fileSource = fileSource;
 				this.encoding = encoding ?? Encoding.Default;
 				this.compiledStamp = DateTime.MinValue;
 
+				// compile an add
 				Compile();
 			} // ctor
 
-			protected override void Compile(Func<TextReader> open, string name, KeyValuePair<string, Type>[] args)
+			protected override void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
 			{
-				// Erzeuge das Script neu
+				// Re-create the script
 				try
 				{
-					base.Compile(open, name, args);
+					base.Compile(open, args);
 				}
 				catch (Exception e)
 				{
-					LogMsg(LogMsgType.Error, e.GetMessageString());
+					LogLuaException(e);
 				}
 
-				// Führe das Script erneut auf den Globals aus
+				// Notify that the script is changed
 				foreach (var c in Engine.GetAttachedGlobals(ScriptId))
-					c.OnScriptChanged();
+				{
+					try { c.OnScriptChanged(); }
+					catch (Exception e) { Log.Except("Attach to failed.", e); }
+				}
 			} // proc Compile
 
 			public void Compile()
 			{
-				Compile(() => new StreamReader(fileSource.FullName, encoding), fileSource.FullName, null);
+				Compile(() => new StreamReader(fileSource.FullName, encoding), null);
 			} // proc Compile
 
+			public void SetDebugMode(bool compileWithDebug)
+			{
+				// todo:
+			} // proc SetDebugMode
+
+			/// <summary>Name of the file</summary>
 			public override string ScriptBase => fileSource.FullName;
+			/// <summary>Encoding of the file.</summary>
 			public Encoding Encoding { get { return encoding; } set { encoding = value; } }
 		} // class LuaFileScript
 
@@ -150,56 +209,46 @@ namespace TecWare.DE.Server
 		#region -- class LuaMemoryScript --------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
-		/// <summary>Script, welches nicht auf einer Basis auf der Datei erzeugt wurde.</summary>
+		/// <summary>In memory script, that is not based on a file.</summary>
 		private sealed class LuaMemoryScript : LuaScript, ILuaScript
 		{
-			private Lua lua = null;
-			private string name;
+			private readonly string name;
 
 			#region -- Ctor/Dtor ------------------------------------------------------------
 
-			public LuaMemoryScript(LuaEngine engine, Func<TextReader> code, string name, bool forceDebugMode, KeyValuePair<string, Type>[] args)
-				: base(engine, Guid.NewGuid().ToString("D"), forceDebugMode)
+			public LuaMemoryScript(LuaEngine engine, Func<TextReader> code, string name, KeyValuePair<string, Type>[] args)
+				: base(engine, Guid.NewGuid().ToString("D"), false)
 			{
 				this.name = name;
 
-				if (forceDebugMode)
-					lua = new Lua();
 				try
 				{
-					Compile(code, name, args);
+					Compile(code, args);
 				}
-				catch
+				catch (Exception e)
 				{
-					if (lua != null)
-						lua.Dispose();
-					throw;
+					LogLuaException(e);
 				}
 			} // ctor
 
-			protected override void Dispose(bool disposing)
+			#endregion
+			
+			public LuaResult Run(LuaTable table, bool throwExceptions, params object[] args)
 			{
 				try
 				{
-
-					base.Dispose(disposing);
+					return Chunk.Run(table, args);
 				}
-				finally
+				catch (Exception e)
 				{
-					if (disposing)
-						Procs.FreeAndNil(ref lua);
+					LogLuaException(e);
+					if (throwExceptions)
+						throw;
+					return LuaResult.Empty;
 				}
-			} // proc Dispose
-
-			#endregion
-
-			public LuaResult Run(LuaTable table, params object[] args)
-			{
-				return Chunk.Run(table, args);
 			} // func Run
 
 			public override string ScriptBase => name;
-			public override Lua Lua => lua ?? base.Lua;
 		} // class LuaMemoryScript
 
 		#endregion
@@ -213,8 +262,9 @@ namespace TecWare.DE.Server
 			public event CancelEventHandler ScriptChanged;
 			public event EventHandler ScriptCompiled;
 
-			private LuaEngine engine;
-			private string scriptId;
+			private readonly LuaEngine engine;
+			private readonly LoggerProxy log;
+			private readonly string scriptId;
 			private LuaTable table;
 			private bool autoRun;
 			private bool needToRun;
@@ -227,12 +277,13 @@ namespace TecWare.DE.Server
 			public LuaAttachedGlobal(LuaEngine engine, string scriptId, LuaTable table, bool autoRun)
 			{
 				this.engine = engine;
+				this.log = LoggerProxy.Create(GetHostLog(table) ?? engine.Log, scriptId);
 				this.scriptId = scriptId;
 				this.table = table;
 				this.autoRun = autoRun;
 				this.needToRun = autoRun;
 
-				// Ausführen des Skripts
+				// Run the script
 				if (needToRun && IsCompiled)
 					Run(false);
 			} // ctor
@@ -243,7 +294,19 @@ namespace TecWare.DE.Server
 				currentScript = null;
 			} // proc Dispose
 
+			private static ILogger GetHostLog(LuaTable table)
+			{
+				// Check for a logger
+				var sp = table.GetMemberValue("host") as IServiceProvider;
+				if (sp != null)
+					return  sp.GetService<ILogger>(false);
+
+				return null;
+			} // func LogMsg
+
 			#endregion
+
+			#region -- Run, ResetScript -----------------------------------------------------
 
 			public void ResetScript()
 			{
@@ -254,25 +317,29 @@ namespace TecWare.DE.Server
 			public void Run(bool throwExceptions)
 			{
 				lock (scriptLock)
-					try
-					{
-						if (GetScript(throwExceptions) == null)
+				using (var m = log.CreateScope(LogMsgType.Information, true, true))
+						try
 						{
-							LogMsg(LogMsgType.Information, "Skript nicht gefunden.");
-							return;
-						}
+							if (GetScript(throwExceptions) == null)
+							{
+								m.SetType(LogMsgType.Warning)
+									.WriteLine("Script not found.");
+								return;
+							}
 
-						LogMsg(LogMsgType.Information, "Ausgeführt.");
-						currentScript.Chunk.Run(table);
-						needToRun = false;
-						OnScriptCompiled();
-					}
-					catch (Exception e)
-					{
-						if (throwExceptions)
-							throw;
-						LogMsg(LogMsgType.Error, e.GetMessageString());
-					}
+							currentScript.Chunk.Run(table);
+							m.WriteLine("Executed.");
+
+							needToRun = false;
+							OnScriptCompiled();
+						}
+						catch (Exception e)
+						{
+							if (throwExceptions)
+								throw;
+
+							m.WriteException(e);
+						}
 			} // proc Run
 
 			private LuaScript GetScript(bool throwExceptions)
@@ -281,11 +348,11 @@ namespace TecWare.DE.Server
 				{
 					currentScript = engine.FindScript(scriptId);
 					if (currentScript == null && throwExceptions)
-						throw new ArgumentException(String.Format("[{0}]: Skript nicht gefunden.", scriptId));
+						throw new ArgumentException(String.Format("Skript '{0}' nicht gefunden.", scriptId));
 				}
 				return currentScript;
 			} // func GetScript
-
+			
 			public void OnScriptChanged()
 			{
 				var e = new CancelEventArgs(!autoRun);
@@ -295,7 +362,7 @@ namespace TecWare.DE.Server
 				if (e.Cancel || !IsCompiled)
 				{
 					needToRun = true;
-					LogMsg(LogMsgType.Information, "Wartet auf ausführung.");
+					log.Info("Waiting for execution.");
 				}
 				else
 					Run(false);
@@ -307,17 +374,7 @@ namespace TecWare.DE.Server
 					ScriptCompiled(this, EventArgs.Empty);
 			} // proc OnScriptCompiled
 
-			private void LogMsg(LogMsgType type, string sMessage)
-			{
-				// Log auf Global anzeigen
-				dynamic host = table.GetMemberValue("host");
-				if (host != null)
-					host.Log.LogMsg(type, "[Script: {0}] {1}", scriptId, sMessage);
-
-				// Log auf Script anzeigen
-				if (currentScript != null)
-					currentScript.LogMsg(type, sMessage);
-			} // func LogMsg
+			#endregion
 
 			public string ScriptId => scriptId;
 			public LuaTable LuaTable => table;
@@ -337,21 +394,65 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class LuaEngineTraceLineDebugger ---------------------------------------
+
+		private sealed class LuaEngineTraceLineDebugger : LuaTraceLineDebugger
+		{
+			private readonly LuaEngine engine;
+
+			public LuaEngineTraceLineDebugger(LuaEngine engine)
+			{
+				this.engine = engine;
+			} // ctor
+
+			protected override void OnExceptionUnwind(LuaTraceLineExceptionEventArgs e)
+			{
+			} // proc OnExceptionUnwind
+
+			protected override void OnFrameEnter(LuaTraceLineEventArgs e)
+			{
+			} // proc OnFrameEnter
+
+			protected override void OnTracePoint(LuaTraceLineEventArgs e)
+			{
+			} // proc OnTracePoint
+
+			protected override void OnFrameExit()
+			{
+			} // proc OnFrameExit
+		} // class LuaEngineTraceLineDebugger
+
+		#endregion
+
 		private SimpleConfigItemProperty<int> propertyScriptCount = null;
-		private readonly Lua lua = new Lua();                                              // Globale Scripting Engine
-		private readonly List<LuaScript> scripts = new List<LuaScript>();                  // Liste aller geladene Scripts
-		private readonly List<LuaAttachedGlobal> globals = new List<LuaAttachedGlobal>();  // Alle Verbindungen
+
+		private readonly Lua lua = new Lua();								// Global scripting engine
+		private readonly DEList<LuaScript> scripts;					// Liste aller geladene Scripts
+		private readonly DEList<LuaAttachedGlobal> globals; // List of all attachments
+
+		private readonly LuaEngineTraceLineDebugger debugHook;	// Trace Line Debugger interface
+		private readonly LuaCompileOptions debugOptions;				// options for the debugging of scripts
 
 		#region -- Ctor/Dtor/Configuration ------------------------------------------------
 
 		public LuaEngine(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
-			// Füge die States hinzu
-			propertyScriptCount = new SimpleConfigItemProperty<int>(this, "tw_luaengine_scripts", "Skripte", "Lua-Engine", "Anzahl der aktiven Scripte.", "{0:N0}", 0);
+			// create the state
+			this.propertyScriptCount = new SimpleConfigItemProperty<int>(this, "tw_luaengine_scripts", "Skripte", "Lua-Engine", "Anzahl der aktiven Scripte.", "{0:N0}", 0);
 
+			// create the lists
+			this.scripts = new DEList<LuaScript>(this, "tw_scripts", "Scriptlist");
+			this.globals = new DEList<LuaAttachedGlobal>(this, "tw_globals", "Attached scripts");
+
+			// Register the service
 			var sc = sp.GetService<IServiceContainer>(true);
 			sc.AddService(typeof(IDELuaEngine), this);
+
+			// create the debug options
+			debugHook = new LuaEngineTraceLineDebugger(this);
+			debugOptions = new LuaCompileOptions();
+			debugOptions.DebugEngine = debugHook;
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -362,8 +463,7 @@ namespace TecWare.DE.Server
 				{
 					Procs.FreeAndNil(ref propertyScriptCount);
 
-					var sc = this.GetService<IServiceContainer>(true);
-					sc.RemoveService(typeof(IDELuaEngine));
+					this.GetService<IServiceContainer>(false)?.RemoveService(typeof(IDELuaEngine));
 				}
 			}
 			finally
@@ -410,7 +510,7 @@ namespace TecWare.DE.Server
 			// Id des Scripts
 			var scriptId = cur.GetAttribute<string>("id");
 			if (String.IsNullOrEmpty(scriptId))
-				throw new ArgumentNullException("@id", "Id nicht gefunden.");
+				throw new ArgumentNullException("@id", "ScriptId is expected.");
 
 			// Lese den Dateinamen
 			string sFileName = cur.GetAttribute<string>("filename");
@@ -437,9 +537,11 @@ namespace TecWare.DE.Server
 			else
 			{
 				fileScript.Encoding = encoding;
-				fileScript.Debug = forceDebugMode;
+				fileScript.SetDebugMode(forceDebugMode);
+
 				scriptRemove[Array.IndexOf(scriptRemove, fileScript)] = null;
-				fileScript.LogMsg(LogMsgType.Information, "Aktualisiert.");
+				
+				fileScript.Log.Info("Refreshed.");
 			}
 		} // LoadScript
 
@@ -450,23 +552,27 @@ namespace TecWare.DE.Server
 		private void AddScript(LuaScript script)
 		{
 			lock (scripts)
+			{
+				if (FindScript(script.ScriptId) != null)
+					throw new IndexOutOfRangeException(String.Format("ScriptId '{0}' is not unique.", script.ScriptId));
+
 				scripts.Add(script);
-			script.LogMsg(LogMsgType.Information, "Hinzugefügt.");
+			}
 		} // proc AddScript
 
 		private void RemoveScript(LuaScript script)
 		{
 			lock (scripts)
-			{
-				script.LogMsg(LogMsgType.Information, "Entfernt.");
 				scripts.Remove(script);
-			}
 		} // proc RemoveScript
 
 		private LuaScript FindScript(string scriptId)
 		{
 			lock (scripts)
-				return scripts.Find(c => String.Compare(c.ScriptId, scriptId, true) == 0);
+			{
+				var index = scripts.FindIndex(s => String.Compare(s.ScriptId, scriptId, StringComparison.OrdinalIgnoreCase) == 0);
+				return index >= 0 ? scripts[index] : null;
+			}
 		} // func FindScript
 
 		private IEnumerable<LuaAttachedGlobal> GetAttachedGlobals(string scriptId)
@@ -507,9 +613,9 @@ namespace TecWare.DE.Server
 			}
 		} // func AttachScript
 
-		public ILuaScript CreateScript(Func<TextReader> code, string name, bool forceDebugMode, params KeyValuePair<string, Type>[] parameters)
+		public ILuaScript CreateScript(Func<TextReader> code, string name, params KeyValuePair<string, Type>[] parameters)
 		{
-			var s = new LuaMemoryScript(this, code, name, forceDebugMode, parameters);
+			var s = new LuaMemoryScript(this, code, name, parameters);
 			AddScript(s);
 			return s;
 		} // func CreateScript

@@ -21,10 +21,9 @@ namespace TecWare.DE.Server
 		/// <summary>Erzeugt ein privates Script.</summary>
 		/// <param name="code">Scriptcode</param>
 		/// <param name="name">Name des Scripts</param>
-		/// <param name="forceDebugMode">Sollen Debug-Informationen erzeugt werden.</param>
 		/// <param name="parameter">Argumente für das Script</param>
 		/// <returns>Erzeugte Script</returns>
-		ILuaScript CreateScript(Func<TextReader> code, string name, bool forceDebugMode, params KeyValuePair<string, Type>[] parameter);
+		ILuaScript CreateScript(Func<TextReader> code, string name, params KeyValuePair<string, Type>[] parameter);
 
 		/// <summary>Zugriff auf die interne Lua-Script-Engine.</summary>
 		Lua Lua { get; }
@@ -68,12 +67,10 @@ namespace TecWare.DE.Server
 	{
 		/// <summary>Führt das Script aus.</summary>
 		/// <param name="table"></param>
+		/// <param name="throwExceptions"></param>
 		/// <param name="arguments"></param>
 		/// <returns></returns>
-		LuaResult Run(LuaTable table, params object[] arguments);
-		/// <summary>Bei temporären Scripten, die mit Debug-Informationen erzeugt werden, wird ggf. eine
-		/// neue Engine erzeugt. Damit, sie vollständig freigegeben werden.</summary>
-		Lua Lua { get; }
+		LuaResult Run(LuaTable table, bool throwExceptions, params object[] arguments);
 		/// <summary>Gibt Zugriff auf den Chunk.</summary>
 		LuaChunk Chunk { get; }
 	} // interface ILuaScript

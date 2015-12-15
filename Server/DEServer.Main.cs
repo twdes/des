@@ -374,6 +374,13 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		public static void AddToProcessEnvironment(string path)
+		{
+			var pathList = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Process).Split(';');
+			if (Array.FindIndex(pathList, p => String.Compare(p, path, StringComparison.OrdinalIgnoreCase) == 0) == -1)
+				Environment.SetEnvironmentVariable("PATH", String.Join(";", pathList) + ";" + path);
+		} // proc AddToProcessEnvironment
+
 		/// <summary>Eintrittspunkt in die Anwendung.</summary>
 		/// <param name="args">Parameter die übergeben werden. Ungenutzt.</param>
 		public static void Main(string[] args)

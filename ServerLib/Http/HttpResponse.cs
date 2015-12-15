@@ -633,8 +633,7 @@ namespace TecWare.DE.Server.Http
 			var luaEngine = context.Server.GetService<IDELuaEngine>(true);
 			return luaEngine.CreateScript(
 				createSource,
-				p >= 0 ? cacheId.Substring(p + 1) : "content.lua",
-				context.Server.IsDebug
+				p >= 0 ? cacheId.Substring(p + 1) : "content.lua"
 			);
 		} // func CreateScript
 
@@ -691,7 +690,7 @@ namespace TecWare.DE.Server.Http
 			else if (o is ILuaScript)
 			{
 				var c = (ILuaScript)o;
-				var r = c.Run(new LuaHttpTable(context, contentType));
+				var r = c.Run(new LuaHttpTable(context, contentType), true);
 
 				if (!context.IsOutputStarted && r.Count >0)
 					WriteObject(context, r[0], r.GetValueOrDefault(1, MimeTypes.Text.Html));

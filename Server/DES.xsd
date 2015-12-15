@@ -139,10 +139,40 @@
 	
 	<xs:complexType name="desServer">
 		<xs:sequence>
-			<xs:element name="resolve" minOccurs="0" maxOccurs="unbounded" type="PathType">
+			<xs:element name="resolve" minOccurs="0" maxOccurs="unbounded">
 				<xs:annotation>
 					<xs:documentation>Definiert ein Verzeichnis indem Assemblies gesucht werden.</xs:documentation>
 				</xs:annotation>
+				<xs:complexType>
+					<xs:simpleContent>
+						<xs:extension base="PathType">
+							<xs:attribute name="type" use="optional" default="net">
+								<xs:annotation>
+									<xs:documentation>How is the path used.</xs:documentation>
+								</xs:annotation>
+								<xs:simpleType>
+									<xs:restriction base="xs:string">
+										<xs:enumeration value="net">
+											<xs:annotation>
+												<xs:documentation>This path is only used in the .net assembly resolver.</xs:documentation>
+											</xs:annotation>
+										</xs:enumeration>
+										<xs:enumeration value="platform">
+											<xs:annotation>
+												<xs:documentation>This path is used for the .net assembly resolver, and also a sub path is added to the environment PATH (on 64bit systems the x64 is added, on 32bit systems the x86 is added).</xs:documentation>
+											</xs:annotation>
+										</xs:enumeration>
+										<xs:enumeration value="envonly">
+											<xs:annotation>
+												<xs:documentation>Adds this path to the environment.</xs:documentation>
+											</xs:annotation>
+										</xs:enumeration>
+									</xs:restriction>
+								</xs:simpleType>
+							</xs:attribute>
+						</xs:extension>
+					</xs:simpleContent>
+				</xs:complexType>
 			</xs:element>
 			<xs:element name="load" minOccurs="0" maxOccurs="unbounded" type="xs:string">
 				<xs:annotation>

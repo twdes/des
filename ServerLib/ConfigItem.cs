@@ -628,7 +628,9 @@ namespace TecWare.DE.Server
 					xn == DEConfigurationConstants.xnLuaCronBatch ||
 					xn == DEConfigurationConstants.xnLuaCronGroup ||
 					xn == DEConfigurationConstants.xnLuaCronJob ||
-					xn == DEConfigurationConstants.xnLuaProcess;
+					xn == DEConfigurationConstants.xnLuaProcess  ||
+					xn == DEConfigurationConstants.xnLuaConfigItem ||
+					xn == DEConfigurationConstants.xnLuaConfigLogItem;
 			}
 			else
 				return true;

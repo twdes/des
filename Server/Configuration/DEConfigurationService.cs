@@ -319,7 +319,25 @@ namespace TecWare.DE.Server.Configuration
 								{
 									if (ChangeConfigurationValue(context, cur, cur.Value, out value))
 										cur.Value = value;
-									resolver?.AddPath(cur.Value);
+
+									switch (cur.GetAttribute("type", "net"))
+									{
+										case "net":
+											resolver?.AddPath(cur.Value);
+											break;
+										case "platform":
+											resolver?.AddPath(cur.Value);
+											if (IntPtr.Size == 4) // 32bit
+												DEServer.AddToProcessEnvironment(Path.Combine(cur.Value, "x86"));
+											else
+												DEServer.AddToProcessEnvironment(Path.Combine(cur.Value, "x64"));
+											break;
+										case "envonly":
+											DEServer.AddToProcessEnvironment(cur.Value);
+											break;
+										default:
+											throw context.CreateConfigException(cur, "resolve @type has an invalid attribute value.");
+									}
 								}
 								else if (cur.Name == xnServerLoad)
 								{

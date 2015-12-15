@@ -205,13 +205,32 @@ namespace TecWare.DE.Server.Configuration
 	/// <summary></summary>
 	internal class DEConfigurationElementAttribute : DEConfigurationBase<XmlSchemaElement>, IDEConfigurationAttribute
 	{
+		private Lazy<string> typeName;
+
 		internal DEConfigurationElementAttribute(XmlSchemaElement element)
 			: base(element)
 		{
+			this.typeName = new Lazy<string>(() =>
+				{
+					var r = Item.SchemaTypeName.Name;
+					if (!String.IsNullOrEmpty(r)) // direkt name
+						return r;
+
+					var ct = Item.SchemaType as XmlSchemaComplexType;
+					while (ct != null)
+					{
+						r = ct.BaseXmlSchemaType.Name;
+						if (!String.IsNullOrEmpty(r))
+							return r;
+						ct = ct.BaseXmlSchemaType as XmlSchemaComplexType;
+					}
+
+					return String.Empty;
+				});
 		} // ctor
 
 		public XName Name => GetXName(Item.QualifiedName);
-		public string TypeName => Item.SchemaTypeName.Name;
+		public string TypeName => typeName.Value;
 		public Type Type => GetTypeFromXmlTypeCode(Item.ElementSchemaType.TypeCode);
 
 		public string DefaultValue => Item.DefaultValue;
@@ -292,6 +311,17 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func GetElements
 
+		private bool IsSimpleTextContent(XmlSchemaType type)
+		{
+			if (type is XmlSchemaSimpleType)
+				return true;
+			else
+			{
+				var ct = type as XmlSchemaComplexType;
+				return ct.ContentType == XmlSchemaContentType.TextOnly;
+			}
+		} // func IsSimpleTextContent
+
 		public IEnumerable<IDEConfigurationAttribute> GetAttributes()
 		{
 			var complexType = Item.ElementSchemaType as XmlSchemaComplexType;
@@ -303,7 +333,7 @@ namespace TecWare.DE.Server.Configuration
 				var items = GetSubSequences(complexType);
 				if (items != null)
 				{
-					foreach (var x in items.OfType<XmlSchemaElement>().Where(c => c.ElementSchemaType is XmlSchemaSimpleType))
+					foreach (var x in items.OfType<XmlSchemaElement>().Where(c => IsSimpleTextContent(c.ElementSchemaType)))
 						yield return new DEConfigurationElementAttribute(x);
 				}
 			}
