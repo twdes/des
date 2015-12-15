@@ -532,7 +532,7 @@ namespace TecWare.DE.Server
 				if (!fi.Exists)
 					throw new ArgumentException(String.Format("Datei '{0}' nicht gefunden.", fi.FullName));
 
-				AddScript(new LuaFileScript(this, scriptId, fi, encoding, forceDebugMode));
+				new LuaFileScript(this, scriptId, fi, encoding, forceDebugMode);
 			}
 			else
 			{
