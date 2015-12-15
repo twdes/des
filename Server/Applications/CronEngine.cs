@@ -332,6 +332,12 @@ namespace TecWare.DE.Server
 						}
 					}
 				}
+				catch (FileNotFoundException ex)
+				{
+					log.WriteLine(ex.Message);
+					log.WriteLine("The schedule will reset to start.");
+					log.SetType(LogMsgType.Warning, true);
+				}
 				catch (Exception ex)
 				{
 					log.WriteException(ex);
