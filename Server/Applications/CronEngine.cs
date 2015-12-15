@@ -459,7 +459,12 @@ namespace TecWare.DE.Server
 					// generate log entry
 					var name = jobBound == null ? "<unnamed>" : jobBound.DisplayName;
 					if (jobException != null)
+					{
 						Log.Except(String.Format("jobfinish: {0}", name), jobException);
+						var node = jobRunning.Job as DEConfigLogItem;
+						if (node != null)
+							node.Log.Except("Execution failed.", jobException);
+					}
 					else
 						Log.Info("jobfinish: {0}", name);
 
