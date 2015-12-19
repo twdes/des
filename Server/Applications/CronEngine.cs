@@ -463,7 +463,18 @@ namespace TecWare.DE.Server
 						Log.Except(String.Format("jobfinish: {0}", name), jobException);
 						var node = jobRunning.Job as DEConfigLogItem;
 						if (node != null)
-							node.Log.Except("Execution failed.", jobException);
+						{
+							var aggException = jobException as AggregateException;
+							if (aggException != null)
+							{
+								if (aggException.InnerException != null)
+									node.Log.Except("Execution failed.", aggException.InnerException);
+								foreach (var ex in aggException.InnerExceptions)
+									node.Log.Except("Execution failed.", ex);
+							}
+							else
+								node.Log.Except("Execution failed.", jobException);
+						}
 					}
 					else
 						Log.Info("jobfinish: {0}", name);
