@@ -293,7 +293,7 @@ namespace TecWare.DE.Server
 			{
 				try
 				{
-					log.WriteLine("Lese Jobstarts ein.");
+					log.WriteLine("Reread job table.");
 
 					using (var sr = new StreamReader(NextRuntimeFile))
 					{

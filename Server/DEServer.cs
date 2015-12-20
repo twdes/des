@@ -564,7 +564,7 @@ namespace TecWare.DE.Server
 		{
 			// Ohne Log, werden die Informationen in das Windows-Erreignisprotokoll geschrieben.
 			if (!HasLog)
-				LogMsg(EventLogEntryType.Information, "Lese Konfiguration neu.");
+				LogMsg(EventLogEntryType.Information, "Reread configuration.");
 
 			using (var log = this.LogProxy().GetScope(LogMsgType.Information, true))
 				try
@@ -572,13 +572,13 @@ namespace TecWare.DE.Server
 					var xConfig = configuration.ParseConfiguration();
 
 					// Zerlege die Konfiguration zur Validierung
-					log.WriteLine("BEGIN Lade Konfiguration");
+					log.WriteLine("BEGIN Load configuration");
 					using (log.Indent())
 					{
 						using (DEConfigLoading config = new DEConfigLoading(this, log, xConfig, configuration.ConfigurationStamp))
 							BeginReadConfiguration(config);
 					}
-					log.WriteLine("END Lade Konfiguration");
+					log.WriteLine("END Load configuration");
 				}
 				catch (Exception e)
 				{
@@ -665,9 +665,10 @@ namespace TecWare.DE.Server
 				var waitTimeout = server.GetAttribute("globalwait", 0);
 				if (waitTimeout > 0)
 				{
-					LogMsg(EventLogEntryType.Information, String.Format("Warte {0}ms...", waitTimeout));
+					LogMsg(EventLogEntryType.Information, String.Format("Wait {0}ms...", waitTimeout));
 					//serviceLog.RequestAdditionalTime(iWait);
 					Thread.Sleep(waitTimeout);
+					LogMsg(EventLogEntryType.Information, "Continue load configure...");
 				}
 			}
 

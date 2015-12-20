@@ -90,7 +90,7 @@ namespace TecWare.DE.Server
 			public string Format => format;
 			public Type Type => property.PropertyType;
 
-			public object Value => property?.GetValue(item.process);
+			public object Value => item.process == null ? null : property?.GetValue(item.process);
 		} // class ProcessProperty
 
 		#endregion
