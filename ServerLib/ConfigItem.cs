@@ -1080,15 +1080,15 @@ namespace TecWare.DE.Server
 		#endregion
 
 		/// <summary>Setzt ein neues Ereignis.</summary>
-		/// <param name="sEvent">Bezeichnung des Ereignisses.</param>
-		/// <param name="sIndex">Optionaler Index für das Ereignis. Falls mehrere Elemente zu diesem Ereignis zugeordnet werden können.</param>
+		/// <param name="eventId">Bezeichnung des Ereignisses.</param>
+		/// <param name="index">Optionaler Index für das Ereignis. Falls mehrere Elemente zu diesem Ereignis zugeordnet werden können.</param>
 		/// <param name="values">Werte die zu dieser Kombination gesetzt werden.</param>
 		/// <remarks>Ereignisse werden nicht zwingend sofort gemeldet, sondern können auch gepollt werden.
 		/// Deswegen sollte bei den <c>values</c> darauf geachtet werden, dass sie überschreibbar gestaltet 
 		/// werden.</remarks>
-		protected void FireEvent(string sEvent, string sIndex = null, XElement values = null)
+		protected void FireEvent(string eventId, string index = null, XElement values = null)
 		{
-			Server.AppendNewEvent(this, sEvent, sIndex, values);
+			Server.AppendNewEvent(this, eventId, index, values);
 		} // proc FireEvent
 
 		/// <summary>Gibt den internen Namen zurück (muss nicht veröffentlicht werden).</summary>
