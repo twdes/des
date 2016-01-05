@@ -580,7 +580,7 @@ namespace TecWare.DE.Server
 		Category(LogCategory),
 		Format("FILESIZE")
 		]
-		public long LogFileSize { get { return logFile.Length; } }
+		public long LogFileSize { get { return logFile?.Length ?? 0; } }
 		[
 		PropertyName("tw_log_filename"),
 		DisplayName("Datei"),
