@@ -337,14 +337,25 @@ namespace TecWare.DE.Server
 	public interface IDERangeEnumerable<T> : IEnumerable
 	{
 		/// <summary>Erweiterter Enumerator.</summary>
-		/// <param name="iStart">Erstes Element welches abgefragt werden soll.</param>
-		/// <param name="iCount">Anzahl der Elemente</param>
+		/// <param name="start">Erstes Element welches abgefragt werden soll.</param>
+		/// <param name="count">Anzahl der Elemente</param>
 		/// <returns>Enumerator</returns>
-		IEnumerator<T> GetEnumerator(int iStart, int iCount);
+		IEnumerator<T> GetEnumerator(int start, int count);
 
 		/// <summary>Gesamtanzahl der Elemente</summary>
 		int Count { get; }
 	} // interface IDERangeEnumerator<T>
+
+	#endregion
+
+	#region -- interface IDERangeEnumerable2 --------------------------------------------
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	public interface IDERangeEnumerable2<T> : IDERangeEnumerable<T>
+	{
+		IEnumerator<T> GetEnumerator(int start, int count, string selector);
+	} // interface IDERangeEnumerable2
 
 	#endregion
 
