@@ -796,7 +796,7 @@ namespace TecWare.DE.Server
 				// directory must exists
 				var di = new DirectoryInfo(directoryPath);
 				if (!di.Exists)
-					throw new IOException("Directory not exiting.");
+					throw new IOException("Directory not existing.");
 			}
 			catch (Exception e)
 			{
