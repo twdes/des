@@ -23,7 +23,11 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void LoadAssemblies()
 		{
-			var cs = new DEConfigurationService(new SimpleServiceProvider(), @"..\..\Files\LoadAssemblies.xml", new DE.Stuff.PropertyDictionary());
+			var service = new SimpleServiceProvider();
+			var cs = new DEConfigurationService(service, @"..\..\Files\01_Main.xml", new DE.Stuff.PropertyDictionary());
+			service.Add(typeof(IDEConfigurationService), cs);
+
+			cs.UpdateSchema(Assembly.LoadFile(Path.GetFullPath(@"..\..\..\Server\bin\Debug\DEServer.exe")));
 
 			var n = cs[DEConfigurationConstants.MainNamespace + "configLogItem"];
 			Assert.IsNotNull(n);
@@ -48,13 +52,16 @@ namespace TecWare.DE.Server
 			var a1 = n2.GetAttributes().FirstOrDefault(c => c.Name == "min");
 			Assert.IsNotNull(a1);
 			Assert.AreEqual(typeof(uint), a1.Type);
-			Assert.AreEqual((uint)3670016, a1.DefaultValue);
+			Assert.AreEqual("3670016", a1.DefaultValue);
     }
 
 		[TestMethod]
 		public void MergeConfigurations()
 		{
-			var cs = new DEConfigurationService(new SimpleServiceProvider(), @"..\..\Files\01_Main.xml", new DE.Stuff.PropertyDictionary());
+			var service = new SimpleServiceProvider();
+			var cs = new DEConfigurationService(service, @"..\..\Files\01_Main.xml", new DE.Stuff.PropertyDictionary());
+			service.Add(typeof(IDEConfigurationService), cs);
+			cs.UpdateSchema(Assembly.LoadFile(Path.GetFullPath(@"..\..\..\Server\bin\Debug\DEServer.exe")));
 
 			var x = cs.ParseConfiguration();
 
