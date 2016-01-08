@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -132,7 +133,8 @@ namespace TecWare.DE.Server
 			logData = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
 			using (ManualResetEventSlim started = new ManualResetEventSlim(false))
 			{
-				Task.Factory.StartNew(() => CreateLogLineCache(started));
+				// Use different schedule, to fork from the thread queue
+				Task.Factory.StartNew(() => CreateLogLineCache(started), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 				started.Wait();
 			}
 		} // ctor
@@ -462,49 +464,68 @@ namespace TecWare.DE.Server
 
 		private sealed class LogMessageScopeHolder : ILogMessageScope
 		{
-			private DEConfigLogItem owner;
+			private readonly DEConfigLogItem owner;
+			private readonly LogMessageScopeFrame frame;
 
-			public LogMessageScopeHolder(DEConfigLogItem owner)
+			public LogMessageScopeHolder(DEConfigLogItem owner, LogMessageScopeFrame frame)
 			{
 				this.owner = owner;
-				lock (owner.logMessageScopeLock)
-					this.owner.logMessageScopeCounter++;
+				this.frame = frame;
+
+				lock (SyncRoot)
+					frame.LogMessageScopeCounter++;
 			} // ctor
 
 			public void Dispose()
 			{
-				lock (owner.logMessageScopeLock)
+				lock (SyncRoot)
 				{
-					if (this.owner.logMessageScopeCounter == 0)
+					if (frame.LogMessageScopeCounter == 0)
 						return;
 
-					if (--this.owner.logMessageScopeCounter == 0)
+					if (--frame.LogMessageScopeCounter == 0)
 					{
-						owner.currentMessageScope.Dispose();
-						owner.currentMessageScope = null;
+						frame.Scope.Dispose();
+						owner.scopes.Remove(frame);
 					}
 				}
 			} // proc Dispose
 
-			private LogMessageScope Scope => owner.currentMessageScope;
-			public LogMsgType Typ { get { return Scope.Typ; } }
+			private object SyncRoot => owner.scopes;
 
-			public ILogMessageScope AutoFlush() => Scope.AutoFlush();
-			public ILogMessageScope SetType(LogMsgType value, bool force = false) => Scope.SetType(value, force);
-			public IDisposable Indent(string indentation = "  ") => Scope.Indent(indentation);
-			public ILogMessageScope Write(string text) => Scope.Write(text);
-			public ILogMessageScope WriteLine(bool force = true) => Scope.WriteLine(force);
+			public LogMsgType Typ { get { return frame.Scope.Typ; } }
+
+			public ILogMessageScope AutoFlush() => frame.Scope.AutoFlush();
+			public ILogMessageScope SetType(LogMsgType value, bool force = false) => frame.Scope.SetType(value, force);
+			public IDisposable Indent(string indentation = "  ") => frame.Scope.Indent(indentation);
+			public ILogMessageScope Write(string text) => frame.Scope.Write(text);
+			public ILogMessageScope WriteLine(bool force = true) => frame.Scope.WriteLine(force);
 		} // class LogMessageScopeHolder
+
+		#endregion
+
+		#region -- class LogMessageScopeFrame --------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private sealed class LogMessageScopeFrame
+		{
+			public LogMessageScopeFrame(LogMessageScope scope)
+			{
+				this.Scope = scope;
+			} // ctor
+
+			public int LogMessageScopeCounter { get; set; } = 0;
+			public LogMessageScope Scope { get; }
+		} // class LogMessageScopeFrame
 
 		#endregion
 
 		private DELogFile logFile = null;
 		private readonly Lazy<string> logFileName;
 
-		private object logMessageScopeLock = new object();
-		private LogMessageScope currentMessageScope = null;
-		private int logMessageScopeCounter = 0;
-
+		private readonly List<LogMessageScopeFrame> scopes = new List<LogMessageScopeFrame>();
+		
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public DEConfigLogItem(IServiceProvider sp, string sName)
@@ -595,21 +616,32 @@ namespace TecWare.DE.Server
 				logFile?.Add(logLine);
 		} // proc ILogger.LogMsg
 
-		public ILogMessageScope GetScope(LogMsgType typ = LogMsgType.Information, bool autoFlush = true)
+		ILogMessageScope ILogger2.CreateScope(LogMsgType typ, bool autoFlush)
 		{
-			lock (logMessageScopeLock)
+			lock (scopes)
 			{
-				if (currentMessageScope == null)
-					currentMessageScope = new LogMessageScope(this, typ, autoFlush);
+				var frame = new LogMessageScopeFrame(new LogMessageScope(this, typ, autoFlush));
+				scopes.Add(frame);
+				return new LogMessageScopeHolder(this, frame);
+			}
+		} // func ILogger2.CreateScope
+
+		ILogMessageScope ILogger2.GetScope(LogMsgType typ, bool autoFlush)
+		{
+			lock (scopes)
+			{
+				if (scopes.Count == 0)
+					return ((ILogger2)this).CreateScope(typ, autoFlush);
 				else
 				{
-					currentMessageScope.SetType(typ);
+					var frame = scopes.Last();
+					frame.Scope.SetType(typ);
 					if (autoFlush)
-						currentMessageScope.AutoFlush();
+						frame.Scope.AutoFlush();
+					return new LogMessageScopeHolder(this, frame);
 				}
 			}
-			return new LogMessageScopeHolder(this);
-		} // func GetScope
+		} // func ILogger2.GetScope
 
 		public int ConfigLogItemCount
 		{

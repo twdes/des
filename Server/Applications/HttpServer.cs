@@ -15,6 +15,7 @@ using System.Reflection;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;
@@ -1243,7 +1244,12 @@ namespace TecWare.DE.Server
 				{
 					var webSocketContext = ctx.AcceptWebSocketAsync(subProtocol.Protocol).Result;
 					if (!subProtocol.AcceptWebSocket(new DEWebSocketContext(this, ctx, webSocketContext, absolutePath)))
-						webSocketContext.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint failure", CancellationToken.None).Wait();
+						Task.Run(async () => await webSocketContext.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint failure", CancellationToken.None));
+				}
+				else
+				{
+					var webSocket = ctx.AcceptWebSocketAsync(null).Result;
+					Task.Run(async () => await webSocket.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint is not defined.", CancellationToken.None));
 				}
 			}
 			else
