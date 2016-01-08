@@ -4,9 +4,9 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Stuff
 {
-  ///////////////////////////////////////////////////////////////////////////////
-  /// <summary></summary>
-  internal static class LogLineParser
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	internal static class LogLineParser
   {
     public static void Parse(string dataLine, out LogMsgType typ, out DateTime stamp, out string text)
     {
@@ -51,7 +51,10 @@ namespace TecWare.DE.Server.Stuff
                   case '\\':
                     sb.Append('\\');
                     break;
-                  default:
+									case '0':
+										sb.Append('\0');
+										break;
+									default:
                     sb.Append(c);
                     break;
                 }

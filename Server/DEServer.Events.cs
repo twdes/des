@@ -322,7 +322,7 @@ namespace TecWare.DE.Server
 				}
 			} // proc WriteList
 
-			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable<T> list, int startAt, int count)
+			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable2<T> list, int startAt, int count)
 			{
 				WriteListCheckRange(xml, ref startAt, ref count, list.Count);
 
@@ -434,7 +434,7 @@ namespace TecWare.DE.Server
 									useInterfaceType = ii;
 								}
 							}
-							else if (genericType == typeof(IDERangeEnumerable<>))
+							else if (genericType == typeof(IDERangeEnumerable2<>))
 							{
 								if (useInterface < ListEnumeratorType.RangeEnumerator)
 								{

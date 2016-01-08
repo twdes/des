@@ -76,4 +76,24 @@ namespace TecWare.DE.Server
 	} // interface ILuaScript
 
 	#endregion
+
+	#region -- class LuaStackTraceFrame -------------------------------------------------
+
+	public sealed class LuaStackTraceItem
+	{
+		public string ScriptId;
+		public ILuaScript Script;
+		public int Line;
+	} // class TraceStackTraceItem
+
+	#endregion
+
+	#region -- class TraceStackTrace -----------------------------------------------------
+
+	public sealed class TraceStackTrace
+	{
+		
+	} // class TraceStackTrace
+
+	#endregion
 }

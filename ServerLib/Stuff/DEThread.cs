@@ -131,7 +131,8 @@ namespace TecWare.DE.Server
 					catch (ThreadAbortException)
 					{
 						log.Abort(Thread.CurrentThread.Name);
-						propertyRunning.Value = "Abgebrochen";
+						if (propertyRunning != null)
+							propertyRunning.Value = "Abgebrochen";
 						UnregisterThread();
 						return;
 					}

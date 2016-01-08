@@ -354,7 +354,7 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	public interface IDERangeEnumerable2<T> : IDERangeEnumerable<T>
 	{
-		IEnumerator<T> GetEnumerator(int start, int count, string selector);
+		IEnumerator<T> GetEnumerator(int start, int count, IPropertyReadOnlyDictionary selector);
 	} // interface IDERangeEnumerable2
 
 	#endregion

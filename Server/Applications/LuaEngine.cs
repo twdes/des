@@ -2,13 +2,18 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Design;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Server.Configuration;
+using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
 using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
@@ -18,7 +23,7 @@ namespace TecWare.DE.Server
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Service for Debugging and running lua scripts.</summary>
-	internal sealed class LuaEngine : DEConfigLogItem, IDELuaEngine
+	internal sealed class LuaEngine : DEConfigLogItem, IDEWebSocketProtocol, IDELuaEngine
 	{
 		#region -- class LuaScript --------------------------------------------------------
 
@@ -29,7 +34,7 @@ namespace TecWare.DE.Server
 			private readonly LuaEngine engine;
 			private readonly LoggerProxy log;
 			private readonly string scriptId;
-		
+
 			private bool compiledWithDebugger;
 			private readonly object chunkLock = new object();
 			private LuaChunk chunk;
@@ -126,7 +131,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-					/// <summary>Engine</summary>
+			/// <summary>Engine</summary>
 			public LuaEngine Engine => engine;
 			/// <summary>Log for script related messages.</summary>
 			public LoggerProxy Log => log;
@@ -232,7 +237,7 @@ namespace TecWare.DE.Server
 			} // ctor
 
 			#endregion
-			
+
 			public LuaResult Run(LuaTable table, bool throwExceptions, params object[] args)
 			{
 				try
@@ -299,7 +304,7 @@ namespace TecWare.DE.Server
 				// Check for a logger
 				var sp = table.GetMemberValue("host") as IServiceProvider;
 				if (sp != null)
-					return  sp.GetService<ILogger>(false);
+					return sp.GetService<ILogger>(false);
 
 				return null;
 			} // func LogMsg
@@ -352,7 +357,7 @@ namespace TecWare.DE.Server
 				}
 				return currentScript;
 			} // func GetScript
-			
+
 			public void OnScriptChanged()
 			{
 				var e = new CancelEventArgs(!autoRun);
@@ -398,6 +403,31 @@ namespace TecWare.DE.Server
 
 		private sealed class LuaEngineTraceLineDebugger : LuaTraceLineDebugger
 		{
+			#region -- class LuaTraceLineDebugInfo ------------------------------------------
+
+			///////////////////////////////////////////////////////////////////////////////
+			/// <summary></summary>
+			private sealed class LuaTraceLineDebugInfo : ILuaDebugInfo
+			{
+				private readonly string chunkName;
+				private readonly string sourceFile;
+				private readonly int line;
+
+				public LuaTraceLineDebugInfo(LuaTraceLineExceptionEventArgs e, LuaScript script)
+				{
+					this.chunkName = e.SourceName;
+					this.sourceFile = script?.ScriptBase ?? chunkName;
+					this.line = e.SourceLine;
+				} // ctor
+
+				public string ChunkName => chunkName;
+				public int Column => 0;
+				public string FileName => sourceFile;
+				public int Line => line;
+			} // class LuaTraceLineDebugInfo
+
+			#endregion
+
 			private readonly LuaEngine engine;
 
 			public LuaEngineTraceLineDebugger(LuaEngine engine)
@@ -407,6 +437,29 @@ namespace TecWare.DE.Server
 
 			protected override void OnExceptionUnwind(LuaTraceLineExceptionEventArgs e)
 			{
+				var luaFrames = new List<LuaStackFrame>();
+				var offsetForRecalc = 0;
+				LuaExceptionData currentData = null;
+
+				// get default exception data
+				if (e.Exception.Data[LuaRuntimeException.ExceptionDataKey] is LuaExceptionData)
+				{
+					currentData = LuaExceptionData.GetData(e.Exception);
+					offsetForRecalc = currentData.Count;
+					luaFrames.AddRange(currentData);
+				}
+				else
+					currentData = LuaExceptionData.GetData(e.Exception, resolveStackTrace: false);
+
+				// re-trace the stack frame
+				var trace = new StackTrace(e.Exception, true);
+				for (var i = offsetForRecalc; i < trace.FrameCount - 1; i++)
+					luaFrames.Add(LuaExceptionData.GetStackFrame(trace.GetFrame(i)));
+
+				// add trace point
+				luaFrames.Add(new LuaStackFrame(trace.GetFrame(trace.FrameCount - 1), new LuaTraceLineDebugInfo(e, engine.FindScript(e.SourceName))));
+
+				currentData.UpdateStackTrace(luaFrames.ToArray());
 			} // proc OnExceptionUnwind
 
 			protected override void OnFrameEnter(LuaTraceLineEventArgs e)
@@ -424,15 +477,57 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class LuaDebugSession --------------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private sealed class LuaDebugSession : IDisposable
+		{
+			private readonly LuaEngine engine;
+			private readonly IDEWebSocketContext context;
+
+			private CancellationTokenSource cancel;
+			private Task sessionTask;
+
+			public LuaDebugSession(LuaEngine engine, IDEWebSocketContext context)
+			{
+				this.engine = engine;
+				this.context = context;
+
+				cancel = new CancellationTokenSource();
+				sessionTask = Task.Run(Execute, cancel.Token);
+			} // ctor
+
+			public void Dispose()
+			{
+				// Dispose session
+			}
+
+			private async Task Execute()
+			{
+				byte[] buf = new byte[1024];
+				while (Socket.State == WebSocketState.Open)
+				{
+					var seg = new ArraySegment<byte>(buf, 0, buf.Length);
+					var r = await Socket.ReceiveAsync(seg, cancel.Token);
+				}
+			} // proc Execute
+
+			public WebSocket Socket => context.WebSocket;
+		} // class LuaDebugSession
+
+		#endregion
+
 		private SimpleConfigItemProperty<int> propertyScriptCount = null;
 
-		private readonly Lua lua = new Lua();								// Global scripting engine
-		private readonly DEList<LuaScript> scripts;					// Liste aller geladene Scripts
+		private readonly Lua lua = new Lua();               // Global scripting engine
+		private readonly DEList<LuaScript> scripts;         // Liste aller geladene Scripts
 		private readonly DEList<LuaAttachedGlobal> globals; // List of all attachments
 
-		private readonly LuaEngineTraceLineDebugger debugHook;	// Trace Line Debugger interface
-		private readonly LuaCompileOptions debugOptions;				// options for the debugging of scripts
-
+		private readonly LuaEngineTraceLineDebugger debugHook;  // Trace Line Debugger interface
+		private readonly LuaCompileOptions debugOptions;        // options for the debugging of scripts
+		private bool debugSocketRegistered = false;
+		
 		#region -- Ctor/Dtor/Configuration ------------------------------------------------
 
 		public LuaEngine(IServiceProvider sp, string name)
@@ -480,7 +575,7 @@ namespace TecWare.DE.Server
 			var i = 0;
 			var scriptRemove = (from s in scripts where s is LuaFileScript select (LuaFileScript)s).ToArray();
 			var luaScriptDefinition = Server.Configuration[xnLuaScript];
-      foreach (var cur in config.ConfigNew.Elements(xnLuaScript))
+			foreach (var cur in config.ConfigNew.Elements(xnLuaScript))
 			{
 				try
 				{
@@ -504,6 +599,19 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc OnBeginReadConfiguration
+
+		protected override void OnEndReadConfiguration(IDEConfigLoading config)
+		{
+			base.OnEndReadConfiguration(config);
+
+			// register the debug listener
+			var http = this.GetService<IDEHttpServer>(true);
+			if (!debugSocketRegistered)
+			{
+				http.RegisterWebSocketProtocol(this);
+				debugSocketRegistered = true;
+			}
+		} // proc 
 
 		private void LoadScript(XConfigNode cur, LuaFileScript[] scriptRemove)
 		{
@@ -540,7 +648,7 @@ namespace TecWare.DE.Server
 				fileScript.SetDebugMode(forceDebugMode);
 
 				scriptRemove[Array.IndexOf(scriptRemove, fileScript)] = null;
-				
+
 				fileScript.Log.Info("Refreshed.");
 			}
 		} // LoadScript
@@ -588,6 +696,19 @@ namespace TecWare.DE.Server
 			lock (globals)
 				globals.Remove(item);
 		} // func RemoveAttachedGlobal
+
+		#endregion
+
+		#region -- IDEWebSocketProtocol ---------------------------------------------------
+
+		bool IDEWebSocketProtocol.AcceptWebSocket(IDEWebSocketContext webSocket)
+		{
+			new LuaDebugSession(this, webSocket);
+			return true;
+		}
+
+		string IDEWebSocketProtocol.BasePath => String.Empty;
+		string IDEWebSocketProtocol.Protocol => "dedbg";
 
 		#endregion
 
