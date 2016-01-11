@@ -135,7 +135,8 @@ namespace TecWare.DE.Server
 					{
 						try
 						{
-							ProcessAnswer(XElement.Parse(Encoding.UTF8.GetString(recvBuffer, 0, recvOffset)));
+							var xAnswer = XElement.Parse(Encoding.UTF8.GetString(recvBuffer, 0, recvOffset));
+							ProcessAnswer(xAnswer);
 						}
 						catch (Exception e)
 						{
@@ -158,7 +159,7 @@ namespace TecWare.DE.Server
 				if (w != null)
 				{
 					if (x.Name == "exception")
-						w.Source.SetException(new Exception(x.GetAttribute("message", String.Empty)));
+						Task.Run(() => w.Source.SetException(new Exception(x.GetAttribute("message", String.Empty))), sessionDisposeClose.Token);
 					else
 						Task.Run(() => w.Source.SetResult(x), sessionDisposeClose.Token);
 				}
