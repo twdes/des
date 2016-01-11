@@ -484,34 +484,238 @@ namespace TecWare.DE.Server
 		private sealed class LuaDebugSession : IDisposable
 		{
 			private readonly LuaEngine engine;
+			private readonly LoggerProxy log;
 			private readonly IDEWebSocketContext context;
 
-			private CancellationTokenSource cancel;
+			private CancellationTokenSource cancelSessionTokenSource;
 			private Task sessionTask;
+
+			private DEConfigItem currentItem = null;
 
 			public LuaDebugSession(LuaEngine engine, IDEWebSocketContext context)
 			{
 				this.engine = engine;
+				this.log = LoggerProxy.Create(engine.Log, "Debug Session");
 				this.context = context;
 
-				cancel = new CancellationTokenSource();
-				sessionTask = Task.Run(Execute, cancel.Token);
+				cancelSessionTokenSource = new CancellationTokenSource();
+				sessionTask = Task.Run(Execute, cancelSessionTokenSource.Token);
+
+				UseNode("/");
 			} // ctor
 
 			public void Dispose()
 			{
 				// Dispose session
-			}
+				cancelSessionTokenSource.Cancel();
+			} // proc Dispose
 
 			private async Task Execute()
 			{
-				byte[] buf = new byte[1024];
+				var recvOffset = 0;
+				var recvBuffer = new byte[1 << 20]; // 1MB buffer
 				while (Socket.State == WebSocketState.Open)
 				{
-					var seg = new ArraySegment<byte>(buf, 0, buf.Length);
-					var r = await Socket.ReceiveAsync(seg, cancel.Token);
+					var recvRest = recvBuffer.Length - recvOffset;
+
+					// buffer is too small, close connection
+					if (recvRest == 0)
+					{
+						Dispose();
+						return;
+					}
+
+					// get bytes
+					var r = await Socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), cancelSessionTokenSource.Token);
+					if (r.MessageType == WebSocketMessageType.Text) // get only text messages
+					{
+						recvOffset += r.Count;
+						if (r.EndOfMessage) // eom
+						{
+							// first decode message
+							try
+							{
+								var xMessage = XElement.Parse(Encoding.UTF8.GetString(recvBuffer, 0, recvOffset));
+								try
+								{
+									await ProcessMessage(xMessage);
+								}
+								catch (Exception e)
+								{
+									var token = xMessage.GetAttribute("token", 0);
+									if (token > 0) // answer requested
+										await SendAnswerAsync(xMessage, CreateException(new XElement("exception", new XAttribute("token", token)), e));
+									else
+										throw; // fall to next
+								}
+							}
+							catch (Exception e)
+							{
+								log.Except(e);
+							}
+
+							recvOffset = 0;
+						}
+					}
 				}
 			} // proc Execute
+
+			private XElement CreateException(XElement x, Exception e)
+			{
+				var aggE = e as AggregateException;
+				if (aggE != null)
+				{
+					var @enum = aggE.InnerExceptions.GetEnumerator();
+					if (@enum.MoveNext())
+					{
+						CreateException(x, @enum.Current);
+						while (@enum.MoveNext())
+							x.Add(CreateException(new XElement("innerException"), @enum.Current));
+					}
+					else
+						x.Add(new XAttribute("message", e.Message));
+				}
+				else
+				{
+					x.Add(new XAttribute("message", e.Message));
+					x.Add(new XAttribute("type", LuaType.GetType(e.GetType()).AliasOrFullName));
+					x.Add(new XElement("stackTrace", e.StackTrace));
+
+					if (e.InnerException != null)
+						x.Add(CreateException(new XElement("innerException"), e.InnerException));
+				}
+
+				return x;
+			} // proc CreateException
+
+			private XElement CreateMember(object member, object value, Type type = null)
+			{
+				var x = new XElement("v",
+					member is int ? new XAttribute("i", member) : new XAttribute("n", member.ToString()),
+					new XAttribute("t", LuaType.GetType(type ?? (value != null ? value.GetType() : typeof(object))).AliasOrFullName)
+				);
+
+				if (value != null)
+					x.Add(new XText(Procs.ChangeType<string>(value)));
+
+				return x;
+			} // func CreateMember
+
+			private async Task ProcessMessage(XElement x)
+			{
+				Debug.Print("[Server] Receive Message: {0}", x.GetAttribute("token", 0));
+
+				var command = x.Name;
+
+				if (command == "execute")
+					await SendAnswerAsync(x, Execute(x));
+				else if (command == "use")
+					await SendAnswerAsync(x, UseNode(x));
+				else if (command == "member")
+					await SendAnswerAsync(x, GetMember(x));
+				else // always, answer commands with a token
+					throw new ArgumentException($"Unknown command '{command}'.");
+			} // proc ProcessMessage
+
+			public async Task SendAnswerAsync(XElement xMessage, XElement xAnswer)
+			{
+				// update token
+				if (xMessage != null && xAnswer.Attribute("token") == null)
+				{
+					var token = xMessage.GetAttribute("token", 0);
+					if (token > 0)
+						xAnswer.Add(new XAttribute("token", token));
+				}
+
+				Debug.Print("[Server] Send Message: {0}", xAnswer.GetAttribute("token", 0));
+
+				// encode and send
+				var buf = Encoding.UTF8.GetBytes(xAnswer.ToString(SaveOptions.None));
+				await Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, cancelSessionTokenSource.Token);
+			} // proc SendAnswerAsync
+
+			#region -- Execute --------------------------------------------------------------
+
+			private XElement Execute(XElement xMessage)
+			{
+				// compile the chunk
+				var chunk = engine.Lua.CompileChunk(xMessage.Value, "remote.lua", null);
+
+				// run the chunk on the node
+				var r = chunk.Run(currentItem);
+
+				// return the result
+				var xAnswer = new XElement("return");
+				for (var i = 0; i < r.Count; i++)
+					xAnswer.Add(CreateMember(i, r[i]));
+
+				return xAnswer;
+			} // func Execute
+
+			#endregion
+
+			#region -- GlobalVars -----------------------------------------------------------
+
+			private XElement GetMember(XElement xMessage)
+			{
+				var xAnswer = new XElement("return");
+
+				foreach (var c in currentItem)
+					xAnswer.Add(CreateMember(c.Key, c.Value));
+
+				return xAnswer;
+			} // func GlobalVars
+
+			#endregion
+
+			#region -- UseNode --------------------------------------------------------------
+
+			private XElement UseNode(XElement xMessage)
+			{
+				var p = xMessage.GetAttribute("node", String.Empty);
+				if (!String.IsNullOrEmpty(p))
+					UseNode(p);
+				return new XElement("return", new XAttribute("node", currentItem.ConfigPath));
+			} // proc UseNode 
+
+			private void UseNode(string path)
+			{
+				if (!path.StartsWith("/"))
+					throw new ArgumentException("Invalid path format.");
+
+				UseNode((DEConfigItem)engine.Server, path, 1);
+			} // proc UseItem
+
+			private void UseNode(DEConfigItem current, string path, int offset)
+			{
+				if (offset >= path.Length)
+				{
+					currentItem = current;
+					return;
+				}
+				else
+				{
+					var pos = path.IndexOf(path, offset);
+					if (pos == offset)
+						throw new ArgumentException("Invalid path format.");
+					if (pos == -1)
+						pos = path.Length;
+
+					if (pos - offset == 0) // end
+						this.currentItem = current;
+					else // find node
+					{
+						var currentName = path.Substring(offset, pos - offset);
+						var newCurrent = current.UnsafeFind(currentName);
+						if (newCurrent == null)
+							throw new ArgumentException("Invalid path.");
+
+						UseNode(newCurrent, path, pos + 1);
+					}
+				}
+			} // proc UseNode
+			
+			#endregion
 
 			public WebSocket Socket => context.WebSocket;
 		} // class LuaDebugSession
@@ -527,7 +731,7 @@ namespace TecWare.DE.Server
 		private readonly LuaEngineTraceLineDebugger debugHook;  // Trace Line Debugger interface
 		private readonly LuaCompileOptions debugOptions;        // options for the debugging of scripts
 		private bool debugSocketRegistered = false;
-		
+
 		#region -- Ctor/Dtor/Configuration ------------------------------------------------
 
 		public LuaEngine(IServiceProvider sp, string name)
