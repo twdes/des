@@ -94,19 +94,8 @@ namespace TecWare.DE.Server.Http
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public interface IDECommonContext
+	public interface IDECommonContext : IPropertyReadOnlyDictionary
 	{
-		/// <summary>Get the parameter of the current command (includes http-request-header fields).</summary>
-		/// <param name="parameterName"></param>
-		/// <param name="@default"></param>
-		/// <returns></returns>
-		string GetProperty(string parameterName, string @default);
-		/// <summary></summary>
-		/// <typeparam name="T"></typeparam>
-		/// <param name="parameterName"></param>
-		/// <param name="@default"></param>
-		/// <returns></returns>
-		T GetProperty<T>(string parameterName, T @default);
 		/// <summary>Returns the available parameter</summary>
 		string[] ParameterNames { get; }
 		/// <summary>Returns the available parameter</summary>
