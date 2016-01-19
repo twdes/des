@@ -42,7 +42,7 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		protected DECommonContext(DEHttpServer http, IPrincipal user, HttpListenerRequest request, string absolutePath)
+		protected DECommonContext(DEHttpServer http, HttpListenerRequest request, string absolutePath)
 		{
 			this.http = http;
 			this.queryString = new Lazy<NameValueCollection>(() => request.QueryString);
@@ -65,8 +65,6 @@ namespace TecWare.DE.Server
 				}
 			}
 			);
-
-			AuthentificateUser(user);
 		} // ctor
 
 		public void Dispose()
@@ -85,13 +83,13 @@ namespace TecWare.DE.Server
 		#region -- User -------------------------------------------------------------------
 
 		/// <summary>Change the current user on the context, to a server user. Is the given user null, the result is also null.</summary>
-		private void AuthentificateUser(IPrincipal user)
+		internal void AuthentificateUser(IPrincipal authentificateUser)
 		{
-			if (user != null)
+			if (authentificateUser != null)
 			{
-				user = http.Server.AuthentificateUser(user.Identity);
+				user = http.Server.AuthentificateUser(authentificateUser.Identity);
 				if (user == null)
-					throw new HttpResponseException(HttpStatusCode.Unauthorized, String.Format("Authentification against the DES-Users failed: {0}.", user.Identity.Name));
+					throw new HttpResponseException(HttpStatusCode.Unauthorized, String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Identity.Name));
 			}
 		} // proc AuthentificateUser
 
@@ -124,33 +122,24 @@ namespace TecWare.DE.Server
 			return value;
 		} // func GetNameValueKeyIgnoreCase
 
-		public string GetProperty(string parameterName, string @default)
+		public bool TryGetProperty(string name, out object value)
 		{
 			// check for query parameter
-			var value = GetNameValueKeyIgnoreCase(queryString.Value, parameterName);
+			value = GetNameValueKeyIgnoreCase(queryString.Value, name);
 
 			// check for header field
 			if (value == null)
-				value = GetNameValueKeyIgnoreCase(request.Headers, parameterName);
+				value = GetNameValueKeyIgnoreCase(request.Headers, name);
 
-			return value ?? @default;
-		} // func GetProperty
+			return value != null;
+		} // func TryGetProperty
 
-		public T GetProperty<T>(string parameterName, T @default)
-		{
-			try
-			{
-				var value = GetProperty(parameterName, null);
-				if (value == null)
-					return @default;
-				else
-					return Procs.ChangeType<T>(value);
-			}
-			catch
-			{
-				return @default;
-			}
-		} // func GetProperty
+		/// <summary></summary>
+		/// <param name="name"></param>
+		/// <param name="default"></param>
+		/// <returns></returns>
+		public object GetProperty(string name, object @default)
+			=> PropertyDictionaryExtensions.GetProperty(this, name, @default);
 
 		public string[] ParameterNames => queryString.Value.AllKeys;
 		public string[] HeaderNames => request.Headers.AllKeys;
@@ -177,9 +166,11 @@ namespace TecWare.DE.Server
 		private readonly HttpListenerWebSocketContext webSocketContext;
 
 		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, HttpListenerWebSocketContext webSocketContext, string absolutePath)
-			: base(http, context.User, context.Request, absolutePath)
+			: base(http, context.Request, absolutePath)
 		{
 			this.webSocketContext = webSocketContext;
+
+			AuthentificateUser(context.User);
 		} // ctor
 		
 		public WebSocket WebSocket => webSocketContext.WebSocket;
@@ -222,7 +213,7 @@ namespace TecWare.DE.Server
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public DEHttpContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
-			: base(http, context.User, context.Request, absolutePath)
+			: base(http, context.Request, absolutePath)
 		{
 			this.context = context;
 			this.httpAuthentification = httpAuthentification;
@@ -311,8 +302,8 @@ namespace TecWare.DE.Server
 			return User != null && User.IsInRole(securityToken);
 		} // proc TryDemandToken
 
-		public HttpResponseException CreateAuthorizationException(string securityText)
-			=> new HttpResponseException(HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
+		public HttpResponseException CreateAuthorizationException(string securityText) // force user, if no user is given
+		 => new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
 
 		#endregion
 
@@ -639,7 +630,7 @@ namespace TecWare.DE.Server
 		{
 			private DEHttpServer item;
 
-      public CacheItemListController(DEHttpServer item)
+			public CacheItemListController(DEHttpServer item)
 			{
 				this.item = item;
 				this.item.RegisterList(Id, this, true);
@@ -653,7 +644,7 @@ namespace TecWare.DE.Server
 			public IDisposable EnterReadLock()
 			{
 				Monitor.Enter(item.cacheItems);
-        return new DisposableScope(() => Monitor.Exit(item.cacheItems));
+				return new DisposableScope(() => Monitor.Exit(item.cacheItems));
 			} // func EnterReadLock
 
 			public IDisposable EnterWriteLock()
@@ -664,7 +655,7 @@ namespace TecWare.DE.Server
 			public string Id => "tw_http_cache";
 			public string DisplayName => "Http-Cache";
 			public IDEListDescriptor Descriptor => CacheItemListDescriptor.Instance;
-			
+
 			public IEnumerable List => item.cacheItems.Where(c => !c.IsEmpty);
 		} // class CacheItemListController
 
@@ -830,9 +821,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private Encoding encoding = Encoding.UTF8;								// Encoding für die Textdaten von Datenströmen
-		private HttpListener httpListener = new HttpListener();		// Zugriff auf den HttpListener
-		private DEThreadList httpThreads = null;									// Threads, die die Request behandeln
+		private Encoding encoding = Encoding.UTF8;                // Encoding für die Textdaten von Datenströmen
+		private HttpListener httpListener = new HttpListener();   // Zugriff auf den HttpListener
+		private DEThreadList httpThreads = null;                  // Threads, die die Request behandeln
 
 		private Dictionary<string, string> mimeInfo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // Hält die Mime-Informationen
 		private List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
@@ -929,7 +920,7 @@ namespace TecWare.DE.Server
 				if (Directory.Exists(alternativePaths[0]))
 				{
 					xFiles.Add(new XAttribute("nonePresentAlternativeExtensions", ".map .ts")); // exception for debug files
-          xFiles.Add(
+					xFiles.Add(
 						alternativePaths.Select(c => new XElement(xnAlternativeRoot, c))
 					);
 				}
@@ -1258,6 +1249,9 @@ namespace TecWare.DE.Server
 				{
 					try
 					{
+						// authentificate user
+						r.AuthentificateUser(ctx.User);
+
 						// Start logging
 						if (debugMode)
 							r.LogStart();
@@ -1320,7 +1314,7 @@ namespace TecWare.DE.Server
 
 		private IDEWebSocketProtocol GetWebSocketProtocol(string absolutePath, string[] subProtocols)
 		{
-			lock(webSocketProtocols)
+			lock (webSocketProtocols)
 			{
 				foreach (var p in webSocketProtocols)
 				{

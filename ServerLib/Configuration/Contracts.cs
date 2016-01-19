@@ -143,6 +143,8 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnHttpPrefix = MainNamespace + "prefix";
 		public static readonly XName xnHttpAccess = MainNamespace + "access";
 		public static readonly XName xnHttpMime = MainNamespace + "mime";
+		public static readonly XName xnHttpBasicUser = MainNamespace + "basicuser";
+		public static readonly XName xnHttpNtmlUser = MainNamespace + "ntmluser";
 
 		public static readonly XName xnCron = MainNamespace + "cron";
 		public static readonly XName xnCronRunAfter = MainNamespace + "runafter";

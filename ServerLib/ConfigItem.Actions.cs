@@ -106,7 +106,7 @@ namespace TecWare.DE.Server
 			public ConfigDescriptionCache(ConfigDescriptionCache prev, Type type)
 			{
 				this.prev = prev;
-				
+
 				// Suche alle Actions
 				actions =
 					(
@@ -303,7 +303,7 @@ namespace TecWare.DE.Server
 		} // class ConfigActionDictionary
 
 		#endregion
-		
+
 		#region -- Actions, Attached Script -----------------------------------------------
 
 		private void AttachedScriptCompiled(object sender, EventArgs e)
@@ -426,14 +426,14 @@ namespace TecWare.DE.Server
 			if (sAction == null || ca == null)
 				return DEConfigAction.Empty;
 
-			Delegate dlg = ca["Method"] as Delegate;
+			var dlg = ca["Method"] as Delegate;
 			if (dlg == null)
 				return DEConfigAction.Empty;
 
 			return new DEConfigAction(
 				ca.GetOptionalValue<string>("Security", null),
 				ca.GetOptionalValue<string>("Description", null),
-				CompileMethodAction(dlg.Method, dlg).Compile(),
+				CompileMethodAction(dlg.Method, dlg, i => ca[i + 1]).Compile(),
 				ca.GetOptionalValue("SafeCall", true),
 				dlg.Method
 			);
@@ -450,19 +450,20 @@ namespace TecWare.DE.Server
 				return DEConfigAction.Empty;
 		} // proc CompileAction
 
-		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate dlg = null)
+		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate @delegate = null, Func<int, object> alternateParameterDescription = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
 			var argCaller = Expression.Parameter(typeof(IDEContext), "#arg");
 
-			int parameterOffset;
 			ParameterInfo[] parameterInfo;
-			if (dlg != null)
-			{
-				var miInvoke = dlg.GetType().GetMethod("Invoke");
-				var miMethod = dlg.Method;
+			var parameterOffset = 0;
 
-				parameterInfo = miMethod.GetParameters();
+			// ger the parameter information
+			if (@delegate != null)
+			{
+				var miInvoke = @delegate.GetType().GetMethod("Invoke");
+
+				parameterInfo = method.GetParameters();
 				parameterOffset = parameterInfo.Length - miInvoke.GetParameters().Length;
 			}
 			else
@@ -478,15 +479,15 @@ namespace TecWare.DE.Server
 
 			var inputStreamIndex = Array.FindIndex(parameterInfo, c => c.ParameterType == typeof(StreamWriter) || c.ParameterType == typeof(Stream));
 			if (inputStreamIndex >= 0)
-				throw new NotImplementedException();
+				throw new NotImplementedException("configuration of extraData is currently not implemented.");
 
 			// Generiere das Parameter Mapping
-			var exprParameter = CreateArgumentExpressions(argCaller, argThis, parameterOffset, parameterInfo, inputStream);
+			var exprParameter = CreateArgumentExpressions(argCaller, argThis, parameterOffset, parameterInfo, alternateParameterDescription, inputStream);
 
 			// Erzeuge den Call auf die Action
-			var exprCall = dlg == null ?
+			var exprCall = @delegate == null ?
 				(Expression)Expression.Call(Expression.Convert(argThis, method.DeclaringType), method, exprParameter) :
-				(Expression)Expression.Invoke(Expression.Constant(dlg), exprParameter);
+				(Expression)Expression.Invoke(Expression.Constant(@delegate), exprParameter);
 
 			if (inputStream != null)
 				exprCall = Expression.Block(new ParameterExpression[] { inputStream }, exprGetExtraData, Expression.TryFinally(exprCall, exprFinallyExtraData));
@@ -510,21 +511,29 @@ namespace TecWare.DE.Server
 			return exprLambda;
 		} // func CompileMethodAction
 
-		private Expression[] CreateArgumentExpressions(ParameterExpression arg, ParameterExpression argThis, int parameterInfoOffset, ParameterInfo[] parameterInfo, ParameterExpression extraData)
+		private Expression[] CreateArgumentExpressions(ParameterExpression arg, ParameterExpression argThis, int parameterOffset, ParameterInfo[] parameterInfo, Func<int, object> alternateParameterDescription, ParameterExpression extraData)
 		{
-			var r = new Expression[parameterInfo.Length - parameterInfoOffset];
+			var r = new Expression[parameterInfo.Length - parameterOffset];
 
 			// Create the parameter
-			for (int i = parameterInfoOffset; i < parameterInfo.Length; i++)
+			for (var i = 0; i < r.Length; i++)
 			{
-				var p = parameterInfo[i];
-				var typeTo = p.ParameterType;
+				var currentParameter = parameterInfo[i + parameterOffset];
+				var typeTo = currentParameter.ParameterType;
 				var typeCode = Type.GetTypeCode(typeTo);
+
+				var propertyDictionary = Expression.Convert(arg, typeof(IPropertyReadOnlyDictionary));
+
+				// generate expressions
+				Expression parameterName;
+				Expression parameterDefault;
+				CreateArgumentExpressionsByInfo(alternateParameterDescription != null ? alternateParameterDescription(i) : null, currentParameter, out parameterName, out parameterDefault);
+
 				Expression exprGetParameter;
 
 				if (typeTo == typeof(object)) // Keine Konvertierung
 				{
-					exprGetParameter = Expression.Convert(Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Default(typeof(string))), typeof(object));
+					exprGetParameter = Expression.Call(miGetPropertyObject, propertyDictionary, parameterName, parameterDefault);
 				}
 				else if (typeCode == TypeCode.Object) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
@@ -557,7 +566,7 @@ namespace TecWare.DE.Server
 						exprGetParameter =
 							Expression.Convert(
 								Expression.Call(Expression.Constant(conv), miConvertFromInvariantString,
-								Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Default(typeof(string)))
+								Expression.Call(miGetPropertyString, propertyDictionary, parameterName, parameterDefault)
 							),
 							typeTo
 						);
@@ -565,36 +574,35 @@ namespace TecWare.DE.Server
 				}
 				else if (typeCode == TypeCode.String) // String gibt es nix zu tun
 				{
-					exprGetParameter = Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Constant(p.DefaultValue == DBNull.Value ? null : p.DefaultValue, typeof(string)));
+					exprGetParameter = Expression.Call(miGetPropertyString, propertyDictionary, parameterName, parameterDefault);
 				}
-				else // Standardtype
+				else // Some type
 				{
 					// ToType - Konverter
-					exprGetParameter = Expression.Call(FindConvertMethod(typeTo),
-						Expression.Call(arg, miGetProperty, Expression.Constant(p.Name), Expression.Constant(Convert.ToString(p.DefaultValue, CultureInfo.InvariantCulture))),
-						Expression.Property(null, piInvariantCulture)
-				 );
+					var miTarget = miGetPropertyGeneric.MakeGenericMethod(typeTo);
+					exprGetParameter = Expression.Call(miTarget, propertyDictionary, parameterName, parameterDefault);
 				}
 
-				r[i - parameterInfoOffset] = exprGetParameter;
+				r[i] = exprGetParameter;
 			}
 
 			return r;
 		} // func CreateArgumentExpressions
 
-		private static MethodInfo FindConvertMethod(Type typeTo)
+		private static void CreateArgumentExpressionsByInfo(dynamic alternateParameterInfo, ParameterInfo parameterInfo, out Expression parameterName, out Expression parameterDefault)
 		{
-			foreach (MethodInfo mi in typeof(Convert).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.InvokeMethod))
-			{
-				if (mi.ReturnType == typeTo)
-				{
-					ParameterInfo[] p = mi.GetParameters();
-					if (p.Length == 2 && p[0].ParameterType == typeof(string) && p[1].ParameterType == typeof(IFormatProvider))
-						return mi;
-				}
-			}
-			throw new ArgumentException(String.Format("Kein Konverter für '{0}' gefunden.", typeTo));
-		} // func FindConvertMethod
+			var parameterNameString = (string)(alternateParameterInfo.Name ?? parameterInfo.Name);
+			var parameterDefaultValue = (object)(alternateParameterInfo.Default ?? parameterInfo.DefaultValue);
+
+			if (parameterNameString == null)
+				throw new ArgumentNullException("parameterName");
+
+			parameterName = Expression.Constant(parameterNameString, typeof(string));
+			parameterDefault =
+				parameterDefaultValue == DBNull.Value || parameterDefaultValue == null ?
+					(Expression)Expression.Default(parameterInfo.ParameterType) :
+					Expression.Constant(parameterDefaultValue, parameterInfo.ParameterType);
+		} // func CreateArgumentExpressionsByInfo
 
 		private LuaTable GetActionTable()
 		{

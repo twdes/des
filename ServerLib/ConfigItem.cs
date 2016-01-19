@@ -628,9 +628,11 @@ namespace TecWare.DE.Server
 					xn == DEConfigurationConstants.xnLuaCronBatch ||
 					xn == DEConfigurationConstants.xnLuaCronGroup ||
 					xn == DEConfigurationConstants.xnLuaCronJob ||
-					xn == DEConfigurationConstants.xnLuaProcess  ||
+					xn == DEConfigurationConstants.xnLuaProcess ||
 					xn == DEConfigurationConstants.xnLuaConfigItem ||
-					xn == DEConfigurationConstants.xnLuaConfigLogItem;
+					xn == DEConfigurationConstants.xnLuaConfigLogItem ||
+					xn == DEConfigurationConstants.xnHttpBasicUser ||
+					xn == DEConfigurationConstants.xnHttpNtmlUser;
 			}
 			else
 				return true;
@@ -1124,7 +1126,9 @@ namespace TecWare.DE.Server
 
 		// -- Static ----------------------------------------------------------------
 
-		private static MethodInfo miGetProperty;
+		private static MethodInfo miGetPropertyObject;
+		private static MethodInfo miGetPropertyString;
+		private static MethodInfo miGetPropertyGeneric;
 
 		private static PropertyInfo piInvariantCulture;
 		private static MethodInfo miConvertToStringFallBack;
@@ -1132,9 +1136,22 @@ namespace TecWare.DE.Server
 
 		static DEConfigItem()
 		{
-			miGetProperty = typeof(IDECommonContext).GetMethod("GetProperty", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string), typeof(string) }, null);
-			if (miGetProperty == null)
-				throw new ArgumentNullException("sctor", "IDECommonContext");
+			var typePropertyDictionaryExtensions = typeof(PropertyDictionaryExtensions).GetTypeInfo();
+			foreach (var mi in typePropertyDictionaryExtensions.GetDeclaredMethods("GetProperty"))
+			{
+				var parameterInfo = mi.GetParameters();
+				if (parameterInfo.Length == 3)
+				{
+					if (parameterInfo[2].ParameterType == typeof(object))
+						miGetPropertyObject = mi;
+					else if (parameterInfo[2].ParameterType == typeof(string))
+						miGetPropertyString = mi;
+					else if (mi.IsGenericMethodDefinition)
+						miGetPropertyGeneric = mi;
+				}
+			}
+			if (miGetPropertyObject == null || miGetPropertyString == null || miGetPropertyGeneric == null)
+				throw new ArgumentNullException("sctor", "PropertyDictionaryExtensions");
 
 			piInvariantCulture = typeof(CultureInfo).GetProperty("InvariantCulture", BindingFlags.Public | BindingFlags.Static | BindingFlags.GetProperty);
 			if (piInvariantCulture == null)

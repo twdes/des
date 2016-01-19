@@ -17,6 +17,7 @@ namespace TecWare.DE.Server.Applications
 		/// <summary></summary>
 		private class UserContext : IDEAuthentificatedUser
 		{
+			private readonly object userLock = new object();
 			private DEUser user;
 			private IIdentity identity;
 
@@ -35,10 +36,9 @@ namespace TecWare.DE.Server.Applications
 
 			public object GetService(Type serviceType)
 			{
-				lock (this)
+				lock (userLock)
 				{
-					if (serviceType == typeof(WindowsImpersonationContext) &&
-						identity is WindowsIdentity)
+					if (serviceType == typeof(WindowsImpersonationContext) && identity is WindowsIdentity)
 						return ((WindowsIdentity)identity).Impersonate();
 					else
 						return null;
@@ -50,23 +50,23 @@ namespace TecWare.DE.Server.Applications
 
 		#endregion
 
-		private int iServerSecurityVersion = 0;
+		private readonly object securityTokensLock = new object();
+		private int serverSecurityVersion = 0;
 		private string[] securityTokens = null;
-		private object securityTokensLock = new object();
 
 		#region -- Ctor/Dtor/Configuration ------------------------------------------------
 
-		public DEUser(IServiceProvider sp, string sName)
-			: base(sp, sName)
+		public DEUser(IServiceProvider sp, string name)
+			: base(sp, name)
 		{
 			Server.RegisterUser(this);
 		} // ctor
 
-		protected override void Dispose(bool lDisposing)
+		protected override void Dispose(bool disposing)
 		{
-			if (lDisposing)
+			if (disposing)
 				Server.UnregisterUser(this);
-			base.Dispose(lDisposing);
+			base.Dispose(disposing);
 		} // proc Dispose
 
 		#endregion
@@ -104,13 +104,13 @@ namespace TecWare.DE.Server.Applications
 			{
 				// Erzeuge die Tokens
 				var currentServerSecurityVersion = Server.SecurityGroupsVersion;
-				if (securityTokens == null || iServerSecurityVersion != currentServerSecurityVersion)
+				if (securityTokens == null || serverSecurityVersion != currentServerSecurityVersion)
 				{
 					// Erzeuge die Tokens
 					securityTokens = Server.BuildSecurityTokens(Config.GetAttribute("groups", String.Empty));
 
 					// Setze die Version
-					iServerSecurityVersion = currentServerSecurityVersion;
+					serverSecurityVersion = currentServerSecurityVersion;
 				}
 			}
 		} // proc RefreshSecurityTokens
@@ -125,19 +125,19 @@ namespace TecWare.DE.Server.Applications
 				{
 					var l = ProcsDE.PasswordCompare(testPassword, Config.GetAttribute("passwordHash", null));
 					if (!l)
-						Log.LogMsg(LogMsgType.Warning, "Authentifizierung fehlgeschlagen.");
+						Log.LogMsg(LogMsgType.Warning, String.Format("Autentification failed ({0}).", "Password"));
 					return l;
 				}
 				catch (Exception e)
 				{
-					Log.LogMsg(LogMsgType.Error, "Authentifizierung fehlgeschlagen ({0}).", e.Message);
+					Log.LogMsg(LogMsgType.Error, "Autentification failed ({0}).", e.Message);
 					return false;
 				}
 		} // func TestPassword
 
 		#endregion
 
-		public override string Icon { get { return "/images/user1.png"; } }
+		public override string Icon => "/images/user1.png";
 	} // class DEUser
 
 	#endregion
