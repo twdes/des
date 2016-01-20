@@ -591,8 +591,8 @@ namespace TecWare.DE.Server
 
 		private static void CreateArgumentExpressionsByInfo(dynamic alternateParameterInfo, ParameterInfo parameterInfo, out Expression parameterName, out Expression parameterDefault)
 		{
-			var parameterNameString = (string)(alternateParameterInfo.Name ?? parameterInfo.Name);
-			var parameterDefaultValue = (object)(alternateParameterInfo.Default ?? parameterInfo.DefaultValue);
+			var parameterNameString = (string)(alternateParameterInfo?.Name ?? parameterInfo.Name);
+			var parameterDefaultValue = (object)(alternateParameterInfo?.Default ?? parameterInfo.DefaultValue);
 
 			if (parameterNameString == null)
 				throw new ArgumentNullException("parameterName");
