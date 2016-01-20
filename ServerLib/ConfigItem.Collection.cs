@@ -342,7 +342,7 @@ namespace TecWare.DE.Server
 		/// <returns>Enumerator</returns>
 		IEnumerator<T> GetEnumerator(int start, int count);
 
-		/// <summary>Gesamtanzahl der Elemente</summary>
+		/// <summary>Total number of rows, if the number is unknown, than return -1.</summary>
 		int Count { get; }
 	} // interface IDERangeEnumerator<T>
 
