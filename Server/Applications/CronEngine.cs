@@ -260,8 +260,7 @@ namespace TecWare.DE.Server
 			{
 				if (cronItemCache == null) // first initialization, start idle
 					Server.Queue.RegisterIdle(procCronIdle);
-
-
+				
 				// Lies die Liste mit den zuletzt gelaufenen Zeiten und errechne den nächsten Start
 				lock (cronItemCacheLock)
 				{
@@ -396,7 +395,7 @@ namespace TecWare.DE.Server
 						var now = DateTime.Now;
 						for (int i = 0; i < cronItemCache.Length; i++)
 						{
-							if (cronItemCache[i].NextRun.Value < now)
+							if (cronItemCache[i].NextRun.HasValue && cronItemCache[i].NextRun.Value < now)
 							{
 								if (!StartJob(cronItemCache[i].Job))
 								{

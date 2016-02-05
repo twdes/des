@@ -125,7 +125,7 @@
 					</xs:attribute>
 					<xs:attribute name="recursive" type="xs:boolean" use="optional" default="false">
 						<xs:annotation>
-							<xs:documentation>Value indicating whether subdirectories within the specified path should be monitored.</xs:documentation>
+							<xs:documentation>Value indicating whether subdirectories within the specified path should be monitored (default: false).</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
 					<xs:attribute name="method" default="None">
