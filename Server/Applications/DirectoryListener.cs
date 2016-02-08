@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Neo.IronLua;
@@ -187,7 +188,10 @@ namespace TecWare.DE.Server
 				lock (notifyQueue)
 				{
 					RemoveNotifyEvent(e2.OldName);
-					notifyQueue.Add(new FileNotifyEvent(e));
+
+					// check if the new name requires the filter criteria
+					if (Regex.IsMatch(e.Name, Procs.FileFilterToRegex(fileSystemWatcher.Filter)))
+						notifyQueue.Add(new FileNotifyEvent(e));
 				}
 			}
 			else if ((e.ChangeType & WatcherChangeTypes.Changed) != 0) // attributes or lastwrite changed
