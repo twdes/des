@@ -115,6 +115,7 @@
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
     <Compile Include="Applications\CronEngine.cs" />
+    <Compile Include="Applications\DirectoryListener.cs" />
     <Compile Include="Applications\Group.cs" />
     <Compile Include="Applications\HttpServer.cs" />
     <Compile Include="Applications\LuaEngine.cs" />

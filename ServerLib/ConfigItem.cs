@@ -169,6 +169,10 @@ namespace TecWare.DE.Server
 		T RegisterSubItem<T>(XElement config)
 			where T : DEConfigItem;
 
+		/// <summary>Adds that gets executed on the end of configuration process.</summary>
+		/// <param name="action"></param>
+		void EndReadAction(Action action);
+
 		/// <summary>Bildet den Dateinamen relative zur Konfiguration.</summary>
 		/// <param name="fileName">Relativer Dateiname, oder <c>null</c> für das Konfigurationsverzeichnis.</param>
 		/// <returns>Vollständiger Pfad</returns>
@@ -185,7 +189,7 @@ namespace TecWare.DE.Server
 		
 		/// <summary>Daten</summary>
 		PropertyDictionary Tags { get; }
-
+		
 		/// <summary>Von wann ist die Konfigurationsdatei</summary>
 		DateTime LastWrite { get; }
 	} // interface IDEConfigLoading
@@ -231,6 +235,7 @@ namespace TecWare.DE.Server
 			private IDisposable itemLock = null;
 			private Exception loadException = null;
 			private PropertyDictionary data = null;
+			private LinkedList<Action> endReadConfig = new LinkedList<Action>();
 
 			#region -- Ctor/Dtor ------------------------------------------------------------
 
@@ -340,7 +345,14 @@ namespace TecWare.DE.Server
 					item.currentConfig = configNew;
 					log.WriteLine($"BEGIN Aktiviere [{item.Name}]");
 					using (log.Indent())
+					{
+						// call end actions
+						foreach (var a in endReadConfig)
+							a();
+
+						// call ent configuration
 						item.OnEndReadConfiguration(this);
+					}
 					log.WriteLine($"END Aktiviere [{item.Name}]");
 					item.Log.LogMsg(LogMsgType.Information, "{0}: Konfiguration wurde erfolgreich geladen.", item.Name);
 					item.state = DEConfigItemState.Initialized;
@@ -391,6 +403,11 @@ namespace TecWare.DE.Server
 				item.OnNewSubItem(newItem);
 				return newItem;
 			} // proc RegisterSubItem
+
+			public void EndReadAction(Action action)
+			{
+				endReadConfig.AddLast(action);
+			} // proc EndReadAction
 
 			public string GetFullFileName(string fileName = null) => ProcsDE.GetFileName(configNew, fileName);
 
