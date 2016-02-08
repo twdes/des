@@ -164,6 +164,7 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnLuaCronBatch = MainNamespace + "cronBatch";
 		public static readonly XName xnLuaCronJob = MainNamespace + "luaCronJob";
 		public static readonly XName xnLuaProcess = MainNamespace + "process";
+		public static readonly XName xnDirectoryListener = MainNamespace + "directoryListener";
 
 		public static readonly XName xnLuaConfigItem = MainNamespace + "configItem";
 		public static readonly XName xnLuaConfigLogItem = MainNamespace + "configLogItem";

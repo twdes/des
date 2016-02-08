@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Neo.IronLua;
 using TecWare.DE.Stuff;
@@ -139,10 +140,6 @@ namespace TecWare.DE.Server
 					break;
 			}
 
-			// Schedule restart
-			if (notifyMethod == NotifyMethod.TimeStamp || notifyMethod == NotifyMethod.ArchiveBit)
-				StartRefreshFiles();
-
 			// run
 			Server.Queue.RegisterIdle(notifyCheck);
 			fileSystemWatcher.EnableRaisingEvents = true;
@@ -228,6 +225,7 @@ namespace TecWare.DE.Server
 				notifyQueue.RemoveAt(idx);
 		} // proc RemoveNotifyEvent
 
+		[LuaMember("StartRefreshFiles")]
 		private void StartRefreshFiles()
 		{
 			var refreshFiles = new Action(RefreshFiles);
@@ -248,6 +246,7 @@ namespace TecWare.DE.Server
 
 		private void RefreshFiles()
 		{
+			Thread.Sleep(500); // fix: initialization process is in this case broken
 			Func<FileInfo, bool> isFileProcessed;
 
 			if (notifyMethod == NotifyMethod.ArchiveBit)

@@ -646,6 +646,7 @@ namespace TecWare.DE.Server
 					xn == DEConfigurationConstants.xnLuaCronGroup ||
 					xn == DEConfigurationConstants.xnLuaCronJob ||
 					xn == DEConfigurationConstants.xnLuaProcess ||
+					xn == DEConfigurationConstants.xnDirectoryListener ||
 					xn == DEConfigurationConstants.xnLuaConfigItem ||
 					xn == DEConfigurationConstants.xnLuaConfigLogItem ||
 					xn == DEConfigurationConstants.xnHttpBasicUser ||
