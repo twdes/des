@@ -327,7 +327,6 @@ namespace TecWare.DE.Server
 								log.SetType(LogMsgType.Warning);
 								log.WriteLine("[{0}] {1} bei Zeile: {2}", e.GetType().Name, e.Message, line);
 							}
-
 						}
 					}
 				}
@@ -347,7 +346,7 @@ namespace TecWare.DE.Server
 			// recalculate times
 			for (int i = 0; i < cronItemCache.Length; i++)
 			{
-				if (cronItemCache[i].NextRun.HasValue)
+				if (cronItemCache[i].NextRun.HasValue) // redo outstanding tasks
 					continue;
 
 				if (!cronItemCache[i].Job.Bound.IsEmpty)
@@ -445,7 +444,7 @@ namespace TecWare.DE.Server
 
 		private void FinishJob(CurrentRunningJob jobRunning, Exception jobException)
 		{
-			lock(cronItemCache)
+			lock (cronItemCache)
 			{
 				using (EnterReadLock())
 				using (currentJobs.EnterWriteLock())
@@ -484,9 +483,9 @@ namespace TecWare.DE.Server
 						var index = Array.FindIndex(cronItemCache, c => c.Job == jobBound);
 						if (index >= 0)
 						{
-							DateTime dtNext = jobBound.Bound.GetNext(DateTime.Now);
-							cronItemCache[index].NextRun = dtNext;
-							jobBound.NotifyNextRun(dtNext);
+							var next = jobBound.Bound.GetNext(DateTime.Now);
+							cronItemCache[index].NextRun = next;
+							jobBound.NotifyNextRun(next);
 							SaveNextRuntime();
 						}
 					}
