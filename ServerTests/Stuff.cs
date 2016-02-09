@@ -157,8 +157,49 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void TimeTest01()
 		{
-			var cron = new CronBound("12:25");
+			var cron = new CronBound("0,10,*");
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 30, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 25, 6)));
+			Assert.AreEqual(new DateTime(2015, 12, 03, 13, 00, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 58, 6)));
+			Assert.AreEqual(new DateTime(2015, 12, 03, 13, 10, 0), cron.GetNext(new DateTime(2015, 12, 03, 13, 00, 6)));
+		}
+
+		[TestMethod]
+		public void TimeTest02()
+		{
+			var cron = new CronBound("12:00,10,*");
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 00, 0), cron.GetNext(new DateTime(2015, 12, 03, 08, 25, 6)));
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 00, 0), cron.GetNext(new DateTime(2015, 12, 03, 08, 58, 6)));
+			Assert.AreEqual(new DateTime(2015, 12, 04, 12, 00, 0), cron.GetNext(new DateTime(2015, 12, 03, 14, 25, 6)));
+			Assert.AreEqual(new DateTime(2015, 12, 04, 12, 00, 0), cron.GetNext(new DateTime(2015, 12, 03, 14, 58, 6)));
+
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 30, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 25, 6)));
+			Assert.AreEqual(new DateTime(2015, 12, 04, 12, 00, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 58, 6)));
+			Assert.AreEqual(new DateTime(2015, 12, 04, 12, 00, 0), cron.GetNext(new DateTime(2015, 12, 03, 13, 00, 6)));
+
+			cron = new CronBound("12:25");
+			Assert.AreEqual(new DateTime(2015, 12, 04, 12, 25, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 30, 6)));
 			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 25, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 0, 6)));
+
+			cron = new CronBound("");
+			Assert.AreEqual(new DateTime(2016, 02, 09, 13, 0, 0), cron.GetNext(new DateTime(2016, 02, 09, 12, 0, 0)));
+			Assert.AreEqual(new DateTime(2016, 02, 10, 00, 0, 0), cron.GetNext(new DateTime(2016, 02, 09, 23, 0, 0)));
+			Assert.AreEqual(new DateTime(2016, 02, 10, 01, 0, 0), cron.GetNext(new DateTime(2016, 02, 10, 00, 0, 0)));
+		}
+
+		[TestMethod]
+		public void TimeTest03()
+		{
+			var cron = new CronBound("1,31,Mi,So 1:00");
+
+			Assert.AreEqual(new DateTime(2016, 02, 01, 1, 0, 0), cron.GetNext(new DateTime(2016, 02, 01, 0, 2, 0)));
+			Assert.AreEqual(new DateTime(2016, 02, 01, 1, 0, 0), cron.GetNext(new DateTime(2016, 01, 31, 10, 0, 0)));
+			Assert.AreEqual(new DateTime(2016, 02, 28, 1, 0, 0), cron.GetNext(new DateTime(2016, 02, 27, 10, 0, 0)));
+
+			cron = new CronBound("31 1:00");
+
+			Assert.AreEqual(new DateTime(2016, 01, 31, 1, 0, 0), cron.GetNext(new DateTime(2016, 01, 05, 0, 2, 0)));
+			Assert.AreEqual(new DateTime(2016, 02, 29, 1, 0, 0), cron.GetNext(new DateTime(2016, 01, 31, 1, 2, 0)));
+			Assert.AreEqual(new DateTime(2016, 03, 31, 1, 0, 0), cron.GetNext(new DateTime(2016, 02, 29, 10, 0, 0)));
 		}
 	}
 }

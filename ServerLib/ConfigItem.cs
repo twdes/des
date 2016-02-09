@@ -646,6 +646,7 @@ namespace TecWare.DE.Server
 					xn == DEConfigurationConstants.xnLuaCronGroup ||
 					xn == DEConfigurationConstants.xnLuaCronJob ||
 					xn == DEConfigurationConstants.xnLuaProcess ||
+					xn == DEConfigurationConstants.xnDirectoryListener ||
 					xn == DEConfigurationConstants.xnLuaConfigItem ||
 					xn == DEConfigurationConstants.xnLuaConfigLogItem ||
 					xn == DEConfigurationConstants.xnHttpBasicUser ||
@@ -666,7 +667,41 @@ namespace TecWare.DE.Server
 				var load = config.Tags.GetProperty("ScriptLoad", Procs.EmptyStringArray);
 				var remove = config.Tags.GetProperty("ScriptRemove", Procs.EmptyStringArray);
 
-				// Erzeuge die Skriptverbindungen
+				// update variables
+				foreach (var xVariable in config.ConfigNew.Elements(DEConfigurationConstants.xnVariable))
+				{
+					var name = xVariable.GetAttribute("name", String.Empty);
+					var type = xVariable.GetAttribute("type", "string");
+					var data = xVariable.Value;
+					try
+					{
+						// set variable to nil
+						if (data == String.Empty)
+							data = null;
+
+						// convert value to the target type
+						var value = Procs.ChangeType(data, LuaType.GetType(type));
+
+						var nameList = name.Split('.');
+						var curTable = (LuaTable)this;
+						for (var i = 0; i < nameList.Length - 1; i++) // create the table structure
+						{
+							var t = nameList[i];
+							if (curTable[t] is LuaTable)
+								curTable[t] = new LuaTable();
+							curTable = (LuaTable)curTable[t];
+						}
+
+						// finally set the value
+						curTable[nameList[nameList.Length - 1]] = value;
+					}
+					catch (Exception e)
+					{
+						Log.Warn($"Variable not set {name} : {type} = {data}", e);
+					}
+				}
+
+				// Connect the scripts with the engine
 				if (engine == null)
 					Log.Warn("Script engine is not running, there will be no dynamic parts available.");
 				else
@@ -682,7 +717,7 @@ namespace TecWare.DE.Server
 					}
 				}
 
-				// Lösche Scriptverbindungen
+				// Disconnect unused scripts
 				foreach (var cur in remove)
 				{
 					var index = scripts.FindIndex(c => String.Compare(c.ScriptId, cur, StringComparison.OrdinalIgnoreCase) == 0);
@@ -693,13 +728,12 @@ namespace TecWare.DE.Server
 					}
 				}
 
-				// Aktualisiere die Skripte, falls nötig
-				foreach (var cur in scripts)
-					if (cur.NeedToRun && cur.IsCompiled)
-						cur.Run();
+				// Rerun scripts
+				foreach (var cur in scripts.Where(c => c.NeedToRun && c.IsCompiled))
+					cur.Run();
 			}
 
-			// Führe die Skript-Funktion aus
+			// Run script initialization routines
 			CallTableMethods(LuaConfiguration, config);
 		} // proc OnEndReadConfiguration
 

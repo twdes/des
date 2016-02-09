@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Neo.IronLua;
 using TecWare.DE.Stuff;
@@ -139,10 +141,6 @@ namespace TecWare.DE.Server
 					break;
 			}
 
-			// Schedule restart
-			if (notifyMethod == NotifyMethod.TimeStamp || notifyMethod == NotifyMethod.ArchiveBit)
-				StartRefreshFiles();
-
 			// run
 			Server.Queue.RegisterIdle(notifyCheck);
 			fileSystemWatcher.EnableRaisingEvents = true;
@@ -190,7 +188,10 @@ namespace TecWare.DE.Server
 				lock (notifyQueue)
 				{
 					RemoveNotifyEvent(e2.OldName);
-					notifyQueue.Add(new FileNotifyEvent(e));
+
+					// check if the new name requires the filter criteria
+					if (Regex.IsMatch(e.Name, Procs.FileFilterToRegex(fileSystemWatcher.Filter)))
+						notifyQueue.Add(new FileNotifyEvent(e));
 				}
 			}
 			else if ((e.ChangeType & WatcherChangeTypes.Changed) != 0) // attributes or lastwrite changed
@@ -228,6 +229,7 @@ namespace TecWare.DE.Server
 				notifyQueue.RemoveAt(idx);
 		} // proc RemoveNotifyEvent
 
+		[LuaMember("StartRefreshFiles")]
 		private void StartRefreshFiles()
 		{
 			var refreshFiles = new Action(RefreshFiles);
@@ -248,6 +250,7 @@ namespace TecWare.DE.Server
 
 		private void RefreshFiles()
 		{
+			Thread.Sleep(500); // fix: initialization process is in this case broken
 			Func<FileInfo, bool> isFileProcessed;
 
 			if (notifyMethod == NotifyMethod.ArchiveBit)

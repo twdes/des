@@ -48,12 +48,12 @@ namespace TecWare.DE.Server.Stuff
 				weekDays = null;
 				hours = null;
 				minutes = new byte[] { 0 };
-			} // proc Clear
+			}
 			else
 			{
 				var dtfi = GetDateTimeFormatInfo(formatProvider);
 				var timeSepLength = dtfi.TimeSeparator.Length;
-				bool[] values = ClearArray(new bool[60]);
+				var values = ClearArray(new bool[60]);
 
 				value = value.Trim();
 
@@ -61,13 +61,13 @@ namespace TecWare.DE.Server.Stuff
 				var daysSep = value.IndexOf(' ');
 				if (daysSep >= 0)
 				{
-					bool[] values2 = ClearArray(new bool[dtfi.ShortestDayNames.Length]);
+					var values2 = ClearArray(new bool[dtfi.ShortestDayNames.Length]);
 
-					// Bilde die BitMaske für die einzelnen Tage
+					// Create a bit mask for the weekdays
 					foreach (var segment in value.Substring(0, daysSep).Split(','))
 					{
 						int index;
-						if (int.TryParse(segment, out index))
+						if (Int32.TryParse(segment, out index))
 						{
 							if (index >= 0 && index < values.Length)
 								values[index] = true;
@@ -114,18 +114,18 @@ namespace TecWare.DE.Server.Stuff
 			}
 		} // ctor
 
-		private static byte[] GetValueArray(bool[] bValues, int iMin, int iMax)
+		private static byte[] GetValueArray(bool[] values, int min, int max)
 		{
-			var count = CountTrue(bValues, iMin, iMax);
+			var count = CountTrue(values, min, max);
 			if (count == 0)
 				return null;
 			else
 			{
 				var ret = new byte[count];
 				var offset = 0;
-				for (int i = iMin; i <= iMax; i++)
+				for (int i = min; i <= max; i++)
 				{
-					if (bValues[i])
+					if (values[i])
 						ret[offset++] = (byte)i;
 				}
 				return ret;
@@ -177,10 +177,10 @@ namespace TecWare.DE.Server.Stuff
 			return array;
 		} // func ClearArray
 
-		private static int CountTrue(bool[] array, int iMin, int iMax)
+		private static int CountTrue(bool[] array, int min, int max)
 		{
 			var count = 0;
-			for (var i = iMin; i <= iMax; i++)
+			for (var i = min; i <= max; i++)
 			{
 				if (array[i])
 					count++;
@@ -351,67 +351,117 @@ namespace TecWare.DE.Server.Stuff
 		public DateTime GetNext(DateTime lastTime)
 		{
 			var ret = new DateTime(lastTime.Year, lastTime.Month, lastTime.Day, lastTime.Hour, lastTime.Minute, 0); // Sekunden und Fragmente interessieren nicht
-			bool overflow;
+
 			var changed = false;
-
-			// Es fängt mit dem Tag an
-			var nextWeekDay = 0;
-			var nextDay = 0;
-
-			// Suche zuerst den nächsten Wochentag
-			if (weekDays != null)
+			var overflow = false;
+			
+			// first check the minues
+			if (minutes != null)
 			{
-				var cur = (byte)lastTime.DayOfWeek;
-				var next = GetFollowValue(weekDays, cur, hours != null, out overflow);
-				nextWeekDay = lastTime.Day + next - cur;
+				var cur = (byte)ret.Minute;
+				var next = GetFollowValue(minutes, cur, false, out overflow);
 				if (overflow)
-					nextWeekDay += 7;
+					next += 60;
+				if (cur < next)
+				{
+					ret = ret.AddMinutes(next - cur);
+					changed = true;
+				}
 			}
 
-			// Danach errechnen wir den nächsten Tag
-			if (days != null)
-			{
-				var cur = (byte)ret.Day;
-				var next = GetFollowValue(days, cur, hours != null, out overflow);
-				nextDay = next;
-				if (overflow)
-					nextDay += DateTime.DaysInMonth(ret.Year, ret.Month);
-			}
-
-			// Nimm den nächstgelegenen Wert für den Tag
-			var addDays = 0;
-			if (nextDay > 0 && (nextWeekDay == 0 || nextDay < nextWeekDay))
-				addDays = nextDay - ret.Day;
-			else if (nextWeekDay > 0 && (nextDay == 0 || nextWeekDay < nextDay))
-				addDays = nextWeekDay - ret.Day;
-
-			if (addDays > 0)
-			{
-				ret = ret.AddDays(addDays).Date; // Stunden löschen, da ein einer Tag beginnt
-				changed = true;
-			}
-
-			// Berechne die Stunde
+			// next check the hours
 			if (hours != null)
 			{
 				var cur = (byte)ret.Hour;
 				var next = GetFollowValue(hours, cur, changed, out overflow);
 				if (overflow)
 					next += 24;
-				ret = ret.AddHours(next - cur).AddMinutes(-ret.Minute);
-				changed = true;
+				if (cur < next)
+				{
+					ret = ret.AddHours(next - cur)
+						.AddMinutes((minutes?[0] ?? 0) - ret.Minute); // next hour start
+					changed = true;
+				}
 			}
 
-			// Berechne Minute
-			if (minutes != null)
+			if (days != null || weekDays != null)
 			{
-				var cur = (byte)ret.Minute;
-				var next = GetFollowValue(minutes, cur, changed, out overflow);
-				if (overflow && cur > 0)
-					next += 60;
-				ret = ret.AddMinutes(next - cur);
-				changed = true;
+				var overflowDay = false;
+				DateTime? nextDay = null;
+
+				// next check the days
+				if (days != null)
+				{
+					var cur = (byte)ret.Day;
+
+					var next = GetFollowValue(days, cur, changed, out overflow);
+					var daysOfMonth = DateTime.DaysInMonth(ret.Year, ret.Month);
+					if (next > daysOfMonth && !overflow) // overflow if the month has less than 31 days, and we use days before
+					{
+						next = days[0];
+						if (next > daysOfMonth) // only a date after the end is given, use the last date of the month
+							next = (byte)daysOfMonth;
+						else
+							overflow = true; // overflow to the next month
+					}
+
+					if (overflow)
+					{
+						var y = ret.Year;
+						var m = ret.Month + 1;
+
+						if (m > 12)
+						{
+							y++;
+							m = 1;
+						}
+
+						nextDay = new DateTime(y, m, Math.Min(next, DateTime.DaysInMonth(y, m)));
+						overflowDay = true;
+					}
+					else if (cur < next)
+					{
+						nextDay = new DateTime(ret.Year, ret.Month, next);
+						overflowDay = true;
+					}
+					else
+						nextDay = ret;
+				}
+
+				// next chect the weekdays
+				if (weekDays != null)
+				{
+					var cur = (byte)ret.DayOfWeek;
+					var next = GetFollowValue(weekDays, cur, changed, out overflow);
+					if (overflow)
+						next += 7;
+
+					var overflowWeekDay = false;
+					var nextWeekDay = ret;
+					if (cur < next)
+					{
+						nextWeekDay = ret.AddDays(next - cur);
+						overflowWeekDay = true;
+					}
+
+					if (!nextDay.HasValue || nextWeekDay < nextDay) // use earlier date
+					{
+						overflowDay = overflowWeekDay;
+						nextDay = nextWeekDay;
+					}
+				}
+
+				// reset the ret value, to the overflow
+				if (nextDay.HasValue && overflowDay)
+				{
+					ret = nextDay.Value
+						.AddHours(hours?[0] ?? 0)
+						.AddMinutes(minutes?[0] ?? 0);
+
+					changed = true;
+				}
 			}
+
 
 			if (!changed) // Nix passiert, also einfach einen Tag dazu
 				ret = ret.AddDays(1);
