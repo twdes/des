@@ -1050,6 +1050,10 @@ namespace TecWare.DE.Server
 				throw new Exception(error?.ToString());
 		} // func LuaError
 
+		[LuaMember("type")]
+		public string LuaGetType(object v)
+			=> v == null ? "object" : (LuaType.GetType(v is Type ? (Type)v : v.GetType()).AliasOrFullName);
+
 		[LuaMember("String")]
 		private static LuaType LuaString => LuaType.GetType(typeof(String));
 
