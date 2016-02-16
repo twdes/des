@@ -1000,7 +1000,7 @@ namespace TecWare.DE.Server
 
 		int IDEBaseLog.TotalLogCount
 		{
-			get { return propertyLogCount.Value; }
+			get { return propertyLogCount?.Value ?? 0; }
 			set { propertyLogCount.Value = value; }
 		} // prop TotalLogCount
 
