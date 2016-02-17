@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Neo.IronLua;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -66,7 +67,8 @@ namespace TecWare.DE.Server
 				{
 					var sNew = e.AcceptSocket;
 
-					createHandler.BeginInvoke(server.CreateConnection(e.AcceptSocket),
+					// wrap the call, that all kind of methods will work
+					internalCreateHanlder.BeginInvoke(createHandler, server.CreateConnection(e.AcceptSocket),
 						EndCreateHandler, e.AcceptSocket);
 
 					e.AcceptSocket = null;
@@ -82,16 +84,23 @@ namespace TecWare.DE.Server
 					BeginAccept(e);
 			} // proc BeginAccept
 
+			private static readonly Action<Action<Stream>, Stream> internalCreateHanlder = InternalCreateHandler;
+
+			private static void InternalCreateHandler(Action<Stream> createHandler, Stream networkStream)
+			{
+				createHandler(networkStream);
+			} // proc InternalCreateHandler
+
 			private void EndCreateHandler(IAsyncResult ar)
 			{
-				var sNew = (Socket)ar.AsyncState;
+				var socketNew = (Socket)ar.AsyncState;
 				try
 				{
-					createHandler.EndInvoke(ar);
+					internalCreateHanlder.EndInvoke(ar);
 				}
 				catch (Exception e)
 				{
-					server.Log.Except(String.Format("Spawn failed for socket '{0}'.", FormatEndPoint(sNew.RemoteEndPoint)), e);
+					server.Log.Except(String.Format("Spawn failed for socket '{0}'.", FormatEndPoint(socketNew.RemoteEndPoint)), e);
 				}
 			} // func EndCreateHandler
 
@@ -349,6 +358,7 @@ namespace TecWare.DE.Server
 			connections.Remove(connection);
 		} // proc RemoveConnection
 
+		[LuaMember("RegisterListener")]
 		public IListenerTcp RegisterListener(IPEndPoint endPoint, Action<Stream> createHandler)
 		{
 			return new ListenerTcp(this, endPoint, createHandler);
