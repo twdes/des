@@ -601,7 +601,7 @@ namespace TecWare.DE.Server
 			parameterDefault =
 				parameterDefaultValue == DBNull.Value || parameterDefaultValue == null ?
 					(Expression)Expression.Default(parameterInfo.ParameterType) :
-					Expression.Constant(parameterDefaultValue, parameterInfo.ParameterType);
+					Expression.Constant(Procs.ChangeType(parameterDefaultValue, parameterInfo.ParameterType), parameterInfo.ParameterType);
 		} // func CreateArgumentExpressionsByInfo
 
 		private LuaTable GetActionTable()

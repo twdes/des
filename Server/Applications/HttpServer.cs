@@ -435,7 +435,7 @@ namespace TecWare.DE.Server
 			{
 				var c = relativeStack.Peek();
 				var p = c.AbsolutePosition + subPath.Length;
-				if (AbsolutePath[p] == '/')
+				if (p < AbsolutePath.Length && AbsolutePath[p] == '/')
 					p++;
 				relativeStack.Push(new RelativeFrame(p, sp));
 			}

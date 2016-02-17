@@ -1000,7 +1000,7 @@ namespace TecWare.DE.Server
 
 		int IDEBaseLog.TotalLogCount
 		{
-			get { return propertyLogCount.Value; }
+			get { return propertyLogCount?.Value ?? 0; }
 			set { propertyLogCount.Value = value; }
 		} // prop TotalLogCount
 
@@ -1049,6 +1049,10 @@ namespace TecWare.DE.Server
 			else
 				throw new Exception(error?.ToString());
 		} // func LuaError
+
+		[LuaMember("type")]
+		public string LuaGetType(object v)
+			=> v == null ? "object" : (LuaType.GetType(v is Type ? (Type)v : v.GetType()).AliasOrFullName);
 
 		[LuaMember("String")]
 		private static LuaType LuaString => LuaType.GetType(typeof(String));
