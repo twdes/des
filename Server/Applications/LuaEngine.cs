@@ -695,7 +695,7 @@ namespace TecWare.DE.Server
 				}
 				else
 				{
-					var pos = path.IndexOf(path, offset);
+					var pos = path.IndexOf('/', offset);
 					if (pos == offset)
 						throw new ArgumentException("Invalid path format.");
 					if (pos == -1)
