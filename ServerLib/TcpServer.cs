@@ -41,7 +41,7 @@ namespace TecWare.DE.Server
 		Task<IPEndPoint> ResolveEndpointAsync(string dnsOrAddress, int port, CancellationToken cancellationToken);
 
 		/// <summary>Returns a informational string about the given stream. The stream should be
-		/// created from the server.</summary>
+		/// created from the tcp-server.</summary>
 		/// <param name="stream"></param>
 		/// <returns></returns>
 		string GetStreamInfo(Stream stream);
