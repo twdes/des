@@ -222,10 +222,8 @@ namespace TecWare.DE.Server.Configuration
 				=> new DEConfigurationStackException(currentFrame, x, message, innerException);
 
 			public bool IsDefined(string expr)
-			{
-				return currentFrame.GetMemberValue(expr) != null;
-			} // func IsDefined
-
+			 => currentFrame.GetMemberValue(expr) != null;
+			
 			public ParseFrame CurrentFrame => currentFrame;
 		} // class ParseContext
 
@@ -537,7 +535,7 @@ namespace TecWare.DE.Server.Configuration
 			if (newValue.StartsWith("$(", StringComparison.OrdinalIgnoreCase) && newValue.EndsWith(")"))
 			{
 				var propertyName = newValue.Substring(2, currentValue.Length - 3);
-				newValue = Procs.ChangeType<string>(context.GetMemberValue(propertyName, true));
+				newValue = Procs.ChangeType<string>(context.CurrentFrame.GetMemberValue(propertyName, true));
 
 				valueModified |= true;
 			}
