@@ -462,7 +462,7 @@ namespace TecWare.DE.Server
 							hEnvironment.Free();
 					}
 
-				CallMemberDirect("ProcessStarted", new object[] { process }, lThrowExceptions: false);
+				CallMemberDirect("ProcessStarted", new object[] { process }, throwExceptions: false);
 				HttpRefreshProperties();
 
 				return true;
@@ -504,7 +504,7 @@ namespace TecWare.DE.Server
 				{
 					var sendKillCommand = this[csSendKillCommand];
 					if (sendKillCommand != null)
-						isCommandSended = (bool)Lua.RtConvertValue(CallMemberDirect(csSendKillCommand, LuaResult.Empty.Values, lThrowExceptions: false), typeof(bool));
+						isCommandSended = (bool)Lua.RtConvertValue(CallMemberDirect(csSendKillCommand, LuaResult.Empty.Values, throwExceptions: false), typeof(bool));
 				}
 
 				//// Ctrl+C - muss via CreateRemoteThread ausgeführt werden!
@@ -536,7 +536,7 @@ namespace TecWare.DE.Server
 		{
 			if (this["ProcessLine"] != null)
 			{
-				var r = CallMemberDirect("ProcessLine", new object[] { type, line }, lThrowExceptions: false);
+				var r = CallMemberDirect("ProcessLine", new object[] { type, line }, throwExceptions: false);
 				var tmp = r[0];
 				if (tmp != null && tmp is string)
 					line = (string)tmp;
@@ -576,7 +576,7 @@ namespace TecWare.DE.Server
 				Log.LogMsg(LogMsgType.Information, "Prozess beendet (ExitCode={0})", unchecked((int)exitCode));
 
 				if (this["ProcessStopped"] != null)
-					CallMemberDirect("ProcessStopped", new object[] { (Process)state }, lThrowExceptions: false);
+					CallMemberDirect("ProcessStopped", new object[] { (Process)state }, throwExceptions: false);
 
 				HttpRefreshProperties();
 			}

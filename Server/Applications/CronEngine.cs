@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.IO;
 using System.Linq;
@@ -185,10 +186,11 @@ namespace TecWare.DE.Server
 		private object cronItemCacheLock = new object();
 		private CronCacheItem[] cronItemCache = null;
 
+		private bool isCronIdleActive = false;
 		private Action procCronIdle;
 		private Action procCancelJobs;
 		private Action procRefreshCronServices;
-
+		
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public DECronEngine(IServiceProvider sp, string name)
@@ -217,7 +219,7 @@ namespace TecWare.DE.Server
 				{
 					CancelJobs();
 
-					Server.Queue.CancelCommand(procCronIdle);
+					CronIdleActive = false;
 					Server.Queue.CancelCommand(procCancelJobs);
 					Server.Queue.CancelCommand(procRefreshCronServices);
 
@@ -259,7 +261,7 @@ namespace TecWare.DE.Server
 			if (cronItems.Count > 0)
 			{
 				if (cronItemCache == null) // first initialization, start idle
-					Server.Queue.RegisterIdle(procCronIdle);
+					CronIdleActive = true;
 				
 				// Lies die Liste mit den zuletzt gelaufenen Zeiten und errechne den nächsten Start
 				lock (cronItemCacheLock)
@@ -273,7 +275,7 @@ namespace TecWare.DE.Server
 			}
 			else if (cronItemCache != null && cronItems.Count == 0) // Items komplett entfernt
 			{
-				Server.Queue.CancelCommand(procCronIdle);
+				CronIdleActive = false;
 				lock (cronItemCacheLock)
 					cronItemCache = null;
 			}
@@ -392,7 +394,7 @@ namespace TecWare.DE.Server
 					if (cronItemCache != null)
 					{
 						var now = DateTime.Now;
-						for (int i = 0; i < cronItemCache.Length; i++)
+						for (var i = 0; i < cronItemCache.Length; i++)
 						{
 							if (cronItemCache[i].NextRun.HasValue && cronItemCache[i].NextRun.Value < now)
 							{
@@ -523,6 +525,32 @@ namespace TecWare.DE.Server
 		} // proc CancelJobs
 
 		#endregion
+
+		[
+		PropertyName("tw_cron_isActive"),
+		DisplayName("Active"),
+		Description("Is true if the cron idle check is registered.")
+		]
+		public bool CronIdleActive
+		{
+			get { return isCronIdleActive; }
+			set
+			{
+				Server.Queue.CancelCommand(procCronIdle);
+				if (value) // activate
+				{
+					Server.Queue.RegisterIdle(procCronIdle);
+					Log.Info("Cron idle registered.");
+					isCronIdleActive = true;
+				}
+				else // deactivate
+				{
+					Log.Info("Cron idle cleared.");
+					isCronIdleActive = false;
+				}
+				OnPropertyChanged(nameof(CronIdleActive));
+			}
+		} // prop CronIdleActive
 
 		public override string Icon { get { return "/images/clock.png"; } }
 	} // class DECronEngine
