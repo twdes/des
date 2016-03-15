@@ -1001,7 +1001,11 @@ namespace TecWare.DE.Server
 		int IDEBaseLog.TotalLogCount
 		{
 			get { return propertyLogCount?.Value ?? 0; }
-			set { propertyLogCount.Value = value; }
+			set
+			{
+				if (propertyLogCount != null)
+					propertyLogCount.Value = value;
+			}
 		} // prop TotalLogCount
 
 		#endregion
