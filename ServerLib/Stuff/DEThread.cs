@@ -424,7 +424,9 @@ namespace TecWare.DE.Server
 				{
 					var task = DequueTask();
 					if (task != null)
+					{
 						base.TryExecuteTask(task);
+					}
 					else
 						break;
 				}

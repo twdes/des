@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
+using TecWare.DE.Networking;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
 
@@ -238,8 +239,16 @@ namespace TecWare.DE.Server
 
 		#region -- WriteListCheckRange-----------------------------------------------------
 
-		private static void WriteListCheckRange(XmlWriter xml, ref int startAt, ref int count, int listCount)
+		private static void WriteListCheckRange(XmlWriter xml, ref int startAt, ref int count, int listCount, bool allowNegativeCount)
 		{
+			if (listCount < 0)
+			{
+				if (allowNegativeCount)
+					return;
+				else
+					listCount = 0;
+			}
+
 			// Prüfe den Start
 			if (startAt < 0) // setze von hinten auf
 			{
@@ -299,9 +308,9 @@ namespace TecWare.DE.Server
 
 		private class GenericWriter
 		{
-			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IReadOnlyList<T> list, int startAt, int count)
+			private static void WriteList<T>(IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, IReadOnlyList<T> list, int startAt, int count)
 			{
-				WriteListCheckRange(xml, ref startAt, ref count, list.Count);
+				WriteListCheckRange(xml, ref startAt, ref count, list.Count, false);
 
 				if (count > 0)
 				{
@@ -311,9 +320,9 @@ namespace TecWare.DE.Server
 				}
 			} // proc WriteList
 
-			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IList<T> list, int startAt, int count)
+			private static void WriteList<T>(IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, IList<T> list, int startAt, int count)
 			{
-				WriteListCheckRange(xml, ref startAt, ref count, list.Count);
+				WriteListCheckRange(xml, ref startAt, ref count, list.Count, false);
 
 				if (count > 0)
 				{
@@ -323,13 +332,13 @@ namespace TecWare.DE.Server
 				}
 			} // proc WriteList
 
-			private static void WriteList<T>(XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable2<T> list, int startAt, int count)
+			private static void WriteList<T>(IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable2<T> list, int startAt, int count)
 			{
-				WriteListCheckRange(xml, ref startAt, ref count, list.Count);
+				WriteListCheckRange(xml, ref startAt, ref count, list.Count, true);
 
 				if (count > 0)
 				{
-					using (var enumerator = list.GetEnumerator(startAt, count))
+					using (var enumerator = list.GetEnumerator(startAt, count, r))
 					{
 						while (count > 0)
 						{
@@ -346,20 +355,20 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private void WriteListFetchTyped(Type type, XmlWriter xml, IDEListDescriptor descriptor, object list, int startAt, int count)
+		private void WriteListFetchTyped(Type type, IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, object list, int startAt, int count)
 		{
 			Type typeGeneric = type.GetGenericTypeDefinition(); // Hole den generischen Typ ab
 
 			// Suche die passende procedure
-			var miWriteList = typeof(GenericWriter).GetTypeInfo().DeclaredMethods.Where(mi => mi.IsStatic && mi.Name == "WriteList" && mi.IsGenericMethodDefinition && mi.GetParameters()[2].ParameterType.Name == typeGeneric.Name).FirstOrDefault();
+			var miWriteList = typeof(GenericWriter).GetTypeInfo().DeclaredMethods.Where(mi => mi.IsStatic && mi.Name == "WriteList" && mi.IsGenericMethodDefinition && mi.GetParameters()[3].ParameterType.Name == typeGeneric.Name).FirstOrDefault();
 			if (miWriteList == null)
 				throw new ArgumentNullException("writelist", String.Format("Keinen generische Implementierung gefunden ({0}).", typeGeneric.FullName));
 
 			// Aufruf des Writers
-			var typeDelegate = typeof(Action<,,,,>).MakeGenericType(typeof(XmlWriter), typeof(IDEListDescriptor), type, typeof(int), typeof(int));
+			var typeDelegate = typeof(Action<,,,,,>).MakeGenericType(typeof(IPropertyReadOnlyDictionary), typeof(XmlWriter), typeof(IDEListDescriptor), type, typeof(int), typeof(int));
 			var miWriteListTyped = miWriteList.MakeGenericMethod(type.GetTypeInfo().GenericTypeArguments[0]);
 			var dlg = Delegate.CreateDelegate(typeDelegate, miWriteListTyped);
-			dlg.DynamicInvoke(xml, descriptor, list, startAt, count);
+			dlg.DynamicInvoke(r, xml, descriptor, list, startAt, count);
 		} // proc WriteListFetchListTyped
 
 		#endregion
@@ -368,7 +377,7 @@ namespace TecWare.DE.Server
 
 		private void WriteListFetchList(XmlWriter xml, IDEListDescriptor descriptor, IList list, int startAt, int count)
 		{
-			WriteListCheckRange(xml, ref startAt, ref count, list.Count);
+			WriteListCheckRange(xml, ref startAt, ref count, list.Count, false);
 
 			if (count > 0)
 			{
@@ -392,7 +401,7 @@ namespace TecWare.DE.Server
 			controller.OnBeforeList();
 
 			// Rückgabe
-			using (var tw = r.GetOutputTextWriter("text/xml"))
+			using (var tw = r.GetOutputTextWriter(MimeTypes.Text.Xml))
 			using (var xml = XmlWriter.Create(tw, GetSettings(tw)))
 			{
 				xml.WriteStartDocument();
@@ -472,7 +481,7 @@ namespace TecWare.DE.Server
 						case ListEnumeratorType.ReadOnlyList:
 						case ListEnumeratorType.ListTyped:
 						case ListEnumeratorType.RangeEnumerator:
-							WriteListFetchTyped(useInterfaceType, xml, descriptor, list, startAt, count);
+							WriteListFetchTyped(useInterfaceType, r, xml, descriptor, list, startAt, count);
 							break;
 
 

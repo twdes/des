@@ -454,6 +454,7 @@ namespace TecWare.DE.Server
 
 			public string Id => LogLineListId;
 			public string DisplayName => LogCategory;
+			public string SecurityToken => DEConfigItem.SecuritySys;
 			public System.Collections.IEnumerable List => configItem.logFile;
 			public IDEListDescriptor Descriptor => LogLineDescriptor.Instance;
 		} // class LogLineController

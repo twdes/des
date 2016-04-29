@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,9 +27,23 @@ namespace TecWare.DE.Server
 				this.action = action;
 			} // ctor
 
+			public override string ToString()
+				=> $"{GetType().Name}: {action?.Method}";
+
 			public int CompareTo(ActionItem other)
 			{
-				var r = Boundary - other.Boundary;
+				int r;
+
+				if (other.Boundary == Int32.MaxValue &&
+					Boundary == Int32.MaxValue)
+					r = 0;
+				else if (other.Boundary == Int32.MaxValue)
+					r = -1;
+				else if (Boundary == Int32.MaxValue)
+					r = 1;
+				else
+					r = unchecked(Boundary - other.Boundary);
+
 				return r == 0 ? other.Id - Id : r;
 			} // func CompareTo
 
@@ -208,6 +223,7 @@ namespace TecWare.DE.Server
 				else
 				{
 					// schedule the action, that sets the schedule in the same thread
+					RemoveAction(action);
 					if (IsActionAlive(action.Action))
 					{
 						Factory.StartNew(action.Execute).ContinueWith(
@@ -227,17 +243,18 @@ namespace TecWare.DE.Server
 
 						timeout = 0; // no timeout, run tasks
 					}
-					RemoveAction(action);
 				}
 			}
 
 			if (timeout > 0)
 			{
+				//Debug.Print("Wait {0}", timeout);
         WaitHandle.WaitAny(new WaitHandle[] {
 					StoppingEvent.WaitHandle,
 					FilledEventHandle,
 					actionEvent
 				}, timeout == Int32.MaxValue ? -1 : timeout);
+				//Debug.Print("End Wait.");
 			}
 		} // proc ExecuteLoop
 
@@ -288,6 +305,7 @@ namespace TecWare.DE.Server
 				else
 					actions.AddLast(action);
 
+				//Debug.Print("Insert Action: {0}", action);
 				actionEvent.Set(); // mark list is changed
 			}
 		} // proc InsertAction
@@ -295,7 +313,10 @@ namespace TecWare.DE.Server
 		private void RemoveAction(ActionItem action)
 		{
 			lock (actions)
+			{
+				//Debug.Print("Remove Action: {0}", action);
 				actions.Remove(action);
+			}
 		} // proc RemoveAction
 
 		private void RemoveItems(Action action)
