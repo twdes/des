@@ -229,6 +229,7 @@ namespace TecWare.DE.Server
 		IDisposable EnterWriteLock();
 
 		/// <summary>Wird ausgeführt, bevor die Liste zum Client gesendet wird.</summary>
+		/// <param name="arguments"></param>
 		void OnBeforeList();
 
 		/// <summary>Bezeichner der Liste</summary>
@@ -238,6 +239,9 @@ namespace TecWare.DE.Server
 
 		/// <summary>Daten der Liste</summary>
 		IEnumerable List { get; }
+
+		/// <summary></summary>
+		string SecurityToken { get; }
 
 		/// <summary>Wie soll die Liste aufgegeben werden.</summary>
 		IDEListDescriptor Descriptor { get; }
@@ -322,6 +326,7 @@ namespace TecWare.DE.Server
 
 		public string Id => id;
 		public virtual string DisplayName => displayName;
+		public virtual string SecurityToken => DEConfigItem.SecuritySys;
 		public abstract IEnumerable List { get; }
 		public IDEListDescriptor Descriptor => descriptor;
 
@@ -877,7 +882,7 @@ namespace TecWare.DE.Server
 		} // func HttpListAction
 
 		[
-		DEConfigHttpAction("listget", SecurityToken = SecuritySys),
+		DEConfigHttpAction("listget"),
 		Description("Gibt den Inhalt der angegebenen Liste zurück. (optional: desc, template)")
 		]
 		private void HttpListGetAction(IDEContext r, string id, int start = 0, int count = Int32.MaxValue)
@@ -887,6 +892,10 @@ namespace TecWare.DE.Server
 			if (controller == null)
 				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Liste '{0}' nicht gefunden.", id));
 
+			// check security token
+			r.DemandToken(controller.SecurityToken);
+
+			// write list
 			((IDEListService)Server).WriteList(r, controller, start, count);
 		} // func HttpListGetAction
 

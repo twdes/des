@@ -654,6 +654,7 @@ namespace TecWare.DE.Server
 
 			public string Id => "tw_http_cache";
 			public string DisplayName => "Http-Cache";
+			public string SecurityToken => DEConfigItem.SecuritySys;
 			public IDEListDescriptor Descriptor => CacheItemListDescriptor.Instance;
 
 			public IEnumerable List => item.cacheItems.Where(c => !c.IsEmpty);
@@ -1247,8 +1248,10 @@ namespace TecWare.DE.Server
 			{
 				using (var r = new DEHttpContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
 				{
+					DEContext.UpdateContext(r);
 					try
 					{
+
 						// authentificate user
 						r.AuthentificateUser(ctx.User);
 
@@ -1307,6 +1310,10 @@ namespace TecWare.DE.Server
 
 						ctx.Response.StatusCode = httpEx != null ? (int)httpEx.Code : (int)HttpStatusCode.InternalServerError;
 						ctx.Response.StatusDescription = FilterChar(ex.Message);
+					}
+					finally
+					{
+						DEContext.UpdateContext(null);
 					}
 				}
 			}

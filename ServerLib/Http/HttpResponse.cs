@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Web;
 using System.Xml;
 using System.Xml.Linq;
@@ -85,7 +86,7 @@ namespace TecWare.DE.Server.Http
 		string Protocol { get; }
 		/// <summary></summary>
 		[DEListTypePropertyAttribute("@security")]
-    string SecurityToken { get; }
+		string SecurityToken { get; }
 	} // interface IDEWebSocketProtocol
 
 	#endregion
@@ -199,7 +200,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="encoding"></param>
 		/// <param name="contentLength"></param>
 		/// <returns></returns>
-		TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength=-1);
+		TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength = -1);
 		/// <summary>Sends a redirect.</summary>
 		/// <param name="url"></param>
 		void Redirect(string url);
@@ -488,7 +489,7 @@ namespace TecWare.DE.Server.Http
 				lastModified = lastModified.ToUniversalTime();
 
 			context.OutputHeaders[HttpResponseHeader.LastModified] = lastModified.ToString("R", CultureInfo.InvariantCulture);
-      return context;
+			return context;
 		} // proc SetLastModified
 
 		/// <summary>Sets the content disposition to the given filename.</summary>
@@ -578,7 +579,7 @@ namespace TecWare.DE.Server.Http
 				() => new FileStream(fi.FullName, FileMode.Open, FileAccess.Read),
 				fi.DirectoryName + "\\[" + fi.Length + "," + fi.LastWriteTimeUtc.ToString("R") + "]\\" + fi.Name,
 				contentType);
-    } // func WriteFile
+		} // func WriteFile
 
 		/// <summary></summary>
 		/// <param name="context"></param>
@@ -604,7 +605,7 @@ namespace TecWare.DE.Server.Http
 			// Ermittle den ContentType
 			if (contentType == null)
 				contentType = context.Server.GetContentType(Path.GetExtension(resourceName));
-			
+
 			WriteContent(context,
 				() =>
 				{
@@ -642,7 +643,7 @@ namespace TecWare.DE.Server.Http
 				{
 					var isLua = contentType == MimeTypes.Text.Lua;
 					var isHtml = contentType == MimeTypes.Text.Html;
-          var cacheItem = isLua || isHtml || (src.CanSeek && src.Length < CacheSize);
+					var cacheItem = isLua || isHtml || (src.CanSeek && src.Length < CacheSize);
 					if (cacheItem)
 					{
 						var isText = contentType.StartsWith("text/");
@@ -681,7 +682,7 @@ namespace TecWare.DE.Server.Http
 				var c = (ILuaScript)o;
 				var r = c.Run(new LuaHttpTable(context, contentType), true);
 
-				if (!context.IsOutputStarted && r.Count >0)
+				if (!context.IsOutputStarted && r.Count > 0)
 					WriteObject(context, r[0], r.GetValueOrDefault(1, MimeTypes.Text.Html));
 			}
 			else if (o is byte[])
@@ -711,7 +712,7 @@ namespace TecWare.DE.Server.Http
 					"</head>",
 					"<body>",
 					$"  <pre>{value}</pre>",
-					"</body>"), 
+					"</body>"),
 				MimeTypes.Text.Html, Encoding.UTF8
 			);
 		} // proc WriteTextAsHtml
@@ -820,4 +821,37 @@ namespace TecWare.DE.Server.Http
 	} // class HttpResponseException
 
 	#endregion
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	public static class DEContext
+	{
+		private readonly static ThreadLocal<IDECommonContext> currentContext = new ThreadLocal<IDECommonContext>(false);
+
+		internal static void UpdateContext(IDECommonContext newContext)
+		{
+			currentContext.Value = newContext;
+		} // proc UpdateContext
+
+		public static T GetCurrentUser<T>() where T : class
+			=> CurrentContext.GetUser<T>();
+
+		public static bool TryGetCurrentContext(out IDECommonContext context)
+		{
+			context = currentContext.Value;
+			return context != null;
+		} // func TryGetCurrentContext
+
+		public static IDECommonContext CurrentContext
+		{
+			get
+			{
+				IDECommonContext context;
+				if (TryGetCurrentContext(out context))
+					return context;
+				else
+					throw new ArgumentNullException("no context, todo"); // todo
+			}
+		} // func CurrentContext
+	} // class DEContext
 }

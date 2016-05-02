@@ -174,6 +174,7 @@ namespace TecWare.DE.Server
 
 			public string Id => "tw_cron_items";
 			public string DisplayName => "Cron items";
+			public string SecurityToken => DEConfigItem.SecuritySys;
 
 			public IEnumerable List => owner.cronItemCache;
 		} // class CronItemCacheController 
