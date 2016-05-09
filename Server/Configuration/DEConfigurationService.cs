@@ -213,7 +213,28 @@ namespace TecWare.DE.Server.Configuration
 				if (!collectedFiles.Contains(fileName, StringComparer.OrdinalIgnoreCase))
 					collectedFiles.Add(fileName);
 
-				return XDocument.Load(fileName, LoadOptions.SetBaseUri | LoadOptions.SetLineInfo);
+				// test for assembly resource
+				var sep = fileName.LastIndexOf(',');
+				if (sep > 0)
+				{
+					var assemblyName = fileName.Substring(0, sep).Trim(); // first part is a assembly name
+					var resourceName = fileName.Substring(sep + 1).Trim(); // secound the resource name
+
+					var asm = Assembly.Load(assemblyName);
+					if (asm == null)
+						throw new ArgumentNullException("Assembly not loaded.");
+
+					using (var src = asm.GetManifestResourceStream(resourceName))
+					{
+						if (src == null)
+							throw new ArgumentNullException("Resource not found.");
+
+						using (var xml = XmlReader.Create(src, Procs.XmlReaderSettings, fileName))
+							return XDocument.Load(xml, LoadOptions.SetBaseUri | LoadOptions.SetLineInfo);
+					}
+				}
+				else
+					return XDocument.Load(fileName, LoadOptions.SetBaseUri | LoadOptions.SetLineInfo);
 			} // proc LoadFile
 
 			#endregion

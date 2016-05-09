@@ -108,6 +108,7 @@
     <EmbeddedResource Include="Configuration\DEScron.xsd">
       <SubType>Designer</SubType>
     </EmbeddedResource>
+    <None Include="des.licenseheader" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
