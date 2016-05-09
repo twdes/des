@@ -318,7 +318,7 @@ namespace TecWare.DE.Server
 			// create selector
 			if (selector != null)
 			{
-				throw new NotImplementedException();
+				//throw new NotImplementedException();
 			}
 
 			// find the range to search in
