@@ -570,7 +570,7 @@ namespace TecWare.DE.Server
 		{
 			using (EnterWriteLock())
 				innerDictionary.Add(key, value);
-		} // Add
+		} // proc Add
 
 		void ICollection<KeyValuePair<TKey, TItem>>.Add(KeyValuePair<TKey, TItem> item)
 		{

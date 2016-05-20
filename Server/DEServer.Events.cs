@@ -97,7 +97,7 @@ namespace TecWare.DE.Server
 			public string Event { get { return eventId; } }
 			public string Index { get { return index; } }
 			public int Revision { get { return revision; } }
-		} // struct FiredEvent
+		} // class FiredEvent
 
 		#endregion
 

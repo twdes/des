@@ -732,17 +732,7 @@ namespace TecWare.DE.Server.Http
 				value.Save(tw);
 		} // proc WriteXml
 
-		public static void WriteDataReader(this IDEContext context, IDataReader value)
-		{
-			throw new NotImplementedException();
-		} // proc WriteDataReader
-
-		public static void WriteDataRecord(this IDEContext context, IDataRecord value)
-		{
-			throw new NotImplementedException();
-		} // proc WriteDataRecord
-
-		public static void WriteObject(this IDEContext context, object value, string contentType = null)
+        public static void WriteObject(this IDEContext context, object value, string contentType = null)
 		{
 			if (value == null)
 				throw new ArgumentNullException("value");
@@ -750,10 +740,6 @@ namespace TecWare.DE.Server.Http
 				WriteXml(context, (XElement)value, contentType ?? MimeTypes.Text.Xml);
 			else if (value is XDocument)
 				WriteXml(context, (XDocument)value, contentType ?? MimeTypes.Text.Xml);
-			else if (value is IDataReader)
-				WriteDataReader(context, (IDataReader)value);
-			else if (value is IDataRecord)
-				WriteDataRecord(context, (IDataRecord)value);
 			else if (value is string)
 				WriteText(context, (string)value, contentType ?? MimeTypes.Text.Plain);
 			else if (value is Stream)
