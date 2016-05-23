@@ -43,7 +43,7 @@ namespace TecWare.DE.Server
 		{
 			this.Stamp = stamp;
 			this.Typ = typ;
-			this.Text = text;
+			this.Text = text ?? String.Empty;
 		} // ctor
 
 		public override string ToString()
