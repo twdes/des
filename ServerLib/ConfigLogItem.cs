@@ -529,8 +529,8 @@ namespace TecWare.DE.Server
 		
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEConfigLogItem(IServiceProvider sp, string sName)
-			: base(sp, sName)
+		public DEConfigLogItem(IServiceProvider sp, string name)
+			: base(sp, name)
 		{
 			this.logFileName = new Lazy<string>(() => Path.Combine(Server.LogPath, GetFullLogName()));
 
