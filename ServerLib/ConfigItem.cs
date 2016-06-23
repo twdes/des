@@ -515,18 +515,7 @@ namespace TecWare.DE.Server
 				if (disposeList != null)
 				{
 					foreach (var c in disposeList.Values)
-						try
-						{
-							// Führe eine Methode aus
-							if (c.Key is string && (c.Value is Delegate || c.Value is ILuaMethod))
-								Lua.RtInvoke(c.Value);
-
-							// Rufe Dispose des Objektes
-							var d = c.Value as IDisposable;
-							if (d != null)
-								d.Dispose();
-						}
-						catch (Exception e) { Log.Warn(e); }
+						DisposeLuaValue(c.Key, c.Value);
 				}
 				// Gib die darunterliegenden Elemente frei
 				if (subItems != null)
@@ -556,6 +545,25 @@ namespace TecWare.DE.Server
 			Procs.FreeAndNil(ref lockConfig);
 			Debug.Print("END DISPOSE [{0}]", name);
 		} // proc Disposing
+
+		private void DisposeLuaValue(object key, object value)
+		{
+			if (value == null)
+				return;
+
+			try
+			{
+				// Führe eine Methode aus
+				if (key is string && Lua.RtInvokeable(value))
+					Lua.RtInvoke(value);
+
+				// Rufe Dispose des Objektes
+				var d = value as IDisposable;
+				if (d != null)
+					d.Dispose();
+			}
+			catch (Exception e) { Log.Warn(e); }
+		} // proc DisposeLuaValue
 
 		public int CompareTo(DEConfigItem other)
 			=> String.Compare(name, other.name, true);
@@ -1103,13 +1111,13 @@ namespace TecWare.DE.Server
 			}
 		} // proc CallTableMethods
 
-		private bool CheckKnownTable(object key, string sTableName, ref object r)
+		private bool CheckKnownTable(object key, string tableName, ref object r)
 		{
-			string sKey = key as string;
-			if (sKey != null && sKey == sTableName)
+			var stringKey = key as string;
+			if (stringKey != null && stringKey == tableName)
 			{
 				r = new LuaTable();
-				SetMemberValue(sTableName, r, lRawSet: true);
+				SetMemberValue(tableName, r, lRawSet: true);
 				return true;
 			}
 			else
@@ -1125,7 +1133,7 @@ namespace TecWare.DE.Server
 					!CheckKnownTable(key, LuaDispose, ref r) &&
 					!CheckKnownTable(key, LuaConfiguration, ref r))
 				{
-					LuaTable t = sp as LuaTable;
+					var t = sp as LuaTable;
 					if (t != null)
 						r = t[key];
 				}
@@ -1153,6 +1161,15 @@ namespace TecWare.DE.Server
 			else
 				return GetService(createServiceType(serviceType));
 		} // func GetService
+
+		[LuaMember(nameof(RegisterDisposable))]
+		private object RegisterDisposable(string key, object value)
+		{
+			var luaDispose = (LuaTable)GetMemberValue(LuaDispose);
+			DisposeLuaValue(key, luaDispose[key]);
+			luaDispose[key] = value;
+			return value;
+		} // proc RegisterDisposableObject
 
 		#endregion
 

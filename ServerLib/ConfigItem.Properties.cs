@@ -111,10 +111,13 @@ namespace TecWare.DE.Server
 		public SimpleConfigItemProperty(IServiceProvider sp, string name, string displayName, string category, string description, string format, T value)
 		{
 			this.service = sp.GetService<IDEConfigItemPropertyService>();
+
+			if (String.IsNullOrEmpty(name))
+				throw new ArgumentNullException("name");
 			
 			this.Name = name;
-			this.DisplayName = displayName;
-			this.Category = category;
+			this.DisplayName = displayName ?? name;
+			this.Category = category ?? "Misc";
 			this.Description = description;
 			this.Format = format;
 
@@ -259,6 +262,10 @@ namespace TecWare.DE.Server
 
 		public void RegisterPropertyDescriptor(string name, string format, PropertyDescriptor propertyDescriptor)
 			=> RegisterProperty(new ConfigItemProperty(this, name, format, propertyDescriptor));
+
+		[LuaMember(nameof(RegisterProperty))]
+		public IDEConfigItemProperty RegisterProperty<T>(string name, string displayName, string category, string description, string format, T value)
+			=> new SimpleConfigItemProperty<T>(this, name, displayName ?? name, category ?? "Misc", description, format, value);
 
 		public void RegisterProperty(IDEConfigItemProperty property)
 		{
