@@ -586,6 +586,12 @@ namespace TecWare.DE.Server.Configuration
 
 					valueModified |= true;
 				}
+				else if (attributeDefinition.TypeName == "PathArray")
+				{
+					newValue = Procs.JoinPaths(Procs.SplitPaths(newValue).Select(c => ProcsDE.GetFileName(x, c)));
+
+					valueModified |= true;
+				}
 				else if (attributeDefinition.TypeName == "CertificateType")
 				{
 					if (String.IsNullOrEmpty(newValue) || !newValue.StartsWith("store://"))

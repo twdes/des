@@ -777,6 +777,20 @@ namespace TecWare.DE.Server
 			}
 		} // proc UnregisterSubItem
 
+		public T[] CollectChildren<T>(Predicate<T> p = null, bool recursive = false, bool walkUnsafe = false)
+			where T : class
+		{
+			var children = new List<T>();
+
+			WalkChildren<T>(c =>
+			{
+				if (p?.Invoke(c) ?? true)
+					children.Add(c);
+			}, recursive, walkUnsafe);
+
+			return children.ToArray();
+		} // func CollectChildren
+
 		public void WalkChildren<T>(Action<T> action, bool recursive = false, bool walkUnsafe = false)
 			where T : class
 		{

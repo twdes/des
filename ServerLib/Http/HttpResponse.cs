@@ -732,7 +732,7 @@ namespace TecWare.DE.Server.Http
 				value.Save(tw);
 		} // proc WriteXml
 
-        public static void WriteObject(this IDEContext context, object value, string contentType = null)
+		public static void WriteObject(this IDEContext context, object value, string contentType = null)
 		{
 			if (value == null)
 				throw new ArgumentNullException("value");

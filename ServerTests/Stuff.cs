@@ -201,5 +201,20 @@ namespace TecWare.DE.Server
 			Assert.AreEqual(new DateTime(2016, 02, 29, 1, 0, 0), cron.GetNext(new DateTime(2016, 01, 31, 1, 2, 0)));
 			Assert.AreEqual(new DateTime(2016, 03, 31, 1, 0, 0), cron.GetNext(new DateTime(2016, 02, 29, 10, 0, 0)));
 		}
+
+		[TestMethod]
+		public void XmlSplitPaths()
+		{
+			var t = Procs.SplitPaths("a b c").ToArray();
+			Assert.AreEqual("a", t[0]);
+			Assert.AreEqual("b", t[1]);
+			Assert.AreEqual("c", t[2]);
+
+			t = Procs.SplitPaths("a \"b\" \"c\\\"").ToArray();
+			Assert.AreEqual("a", t[0]);
+			Assert.AreEqual("b", t[1]);
+			Assert.AreEqual("c\\", t[2]);
+		}
+
 	}
 }
