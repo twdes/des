@@ -171,15 +171,6 @@ namespace TecWare.DE.Stuff
 			=> Passwords.PasswordCompare(testPassword, passwordHash);
 
 		#endregion
-
-		public static string[] GetStrings(this XElement x, XName attribute, bool emptyArrayToNull = false)
-		{
-			var list = x?.GetAttribute(attribute, (string)null);
-			if (String.IsNullOrEmpty(list))
-				return emptyArrayToNull ? new string[0] : null;
-			else
-				return list.Split(new char[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-		} // func GetStrings
 	} // class ProcsDE
 
 	#endregion
