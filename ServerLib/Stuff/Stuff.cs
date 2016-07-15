@@ -171,6 +171,12 @@ namespace TecWare.DE.Stuff
 			=> Passwords.PasswordCompare(testPassword, passwordHash);
 
 		#endregion
+
+		/// <summary></summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static object NullIfDBNull(this object value)
+			=> value == DBNull.Value ? null : value;
 	} // class ProcsDE
 
 	#endregion

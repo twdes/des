@@ -110,7 +110,7 @@ namespace TecWare.DE.Server
 				// Suche alle Actions
 				actions =
 					(
-						from mi in type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.InvokeMethod)
+						from mi in type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.InvokeMethod)
 						let attr = mi.GetCustomAttribute<DEConfigHttpActionAttribute>()
 						let attrDesc = mi.GetCustomAttribute<DescriptionAttribute>()
 						where attr != null && mi.DeclaringType == type
