@@ -528,6 +528,8 @@ namespace TecWare.DE.Server.Configuration
 		private XElement FindConfigTreeElement(XElement xRootParent, XElement xSearch)
 		{
 			var elementDefinition = GetConfigurationElement(xSearch.Name);
+			if (elementDefinition == null)
+				throw new DEConfigurationException(xSearch, $"Definition for configuration element '{xSearch.Name}' is missing.");
 
 			// find primary key columns
 			var primaryKeys = (from c in elementDefinition.GetAttributes()
