@@ -19,6 +19,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Schema;
@@ -208,6 +209,9 @@ namespace TecWare.DE.Server.Configuration
 			{
 				try
 				{
+					// resolve macros
+					ChangeConfigurationStringValue(this, fileName, out fileName);
+					// load the file name
 					return LoadFile(ProcsDE.GetFileName(source, fileName));
 				}
 				catch (Exception e)
@@ -564,19 +568,11 @@ namespace TecWare.DE.Server.Configuration
 			return null;
 		} // func FindConfigTreeElement
 
+		private static Regex macroReplacement = new Regex("\\$\\(([\\w\\d]+)\\)", RegexOptions.Singleline | RegexOptions.Compiled);
+
 		private bool ChangeConfigurationValue(ParseContext context, XObject x, string currentValue, out string newValue)
 		{
-			var valueModified = false;
-
-			// first check for macro substitionen
-			newValue = currentValue.Trim(); // trim always the value
-			if (newValue.StartsWith("$(", StringComparison.OrdinalIgnoreCase) && newValue.EndsWith(")"))
-			{
-				var propertyName = newValue.Substring(2, currentValue.Length - 3);
-				newValue = Procs.ChangeType<string>(context.CurrentFrame.GetMemberValue(propertyName, true));
-
-				valueModified |= true;
-			}
+			var valueModified = ChangeConfigurationStringValue(context, currentValue, out newValue);
 
 			// first check for type converter
 			var attributeDefinition = GetAttribute(x);
@@ -606,6 +602,26 @@ namespace TecWare.DE.Server.Configuration
 
 			return valueModified;
 		} // func ChangeConfigurationValue
+
+		private static bool ChangeConfigurationStringValue(ParseContext context, string currentValue, out string newValue)
+		{
+			var valueModified = false;
+
+			// trim always the value
+			newValue = currentValue.Trim();
+
+			// first check for macro substitionen
+			newValue = macroReplacement.Replace(newValue,
+				m =>
+				{
+					// mark value as modified
+					valueModified |= true;
+					return context.CurrentFrame.GetOptionalValue<string>(m.Groups[1].Value, String.Empty, true);
+				}
+			);
+
+			return valueModified;
+		} // func ChangeConfigurationStringValue
 
 		#endregion
 
