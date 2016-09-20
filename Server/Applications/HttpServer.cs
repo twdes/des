@@ -699,17 +699,17 @@ namespace TecWare.DE.Server
 				else
 				{
 					if (uri[uri.Length - 1] != '/')
-						throw new ArgumentException("Ein Prefix muss auf / enden.");
+						throw new DEConfigurationException(x, "A prefix must and on '/'.");
 
 					// Prüfe das Protokoll
 					var pos = uri.IndexOf("://");
 					if (pos == -1)
-						throw new ArgumentException("Protokoll konnte nicht geparst werden.");
+						throw new DEConfigurationException(x, "Protocol was not parsable (missing '://').");
 
 					this.protocol = uri.Substring(0, pos);
 					if (protocol != "http" &&
 						protocol != "https")
-						throw new ArgumentException(String.Format("Unbekanntes Protokoll ({0}).", protocol));
+						throw new DEConfigurationException(x, $"Unknown protocol ({protocol}), only http, https allowed.");
 
 					// Teste den Hostnamen
 					var startAt = pos + 3;
@@ -724,7 +724,7 @@ namespace TecWare.DE.Server
 						pos = uri.IndexOf('/', startAt);
 
 						if (!int.TryParse(uri.Substring(startAt, pos - startAt), out this.port))
-							throw new ArgumentException("Port konnte nicht geparst werden.");
+							throw new DEConfigurationException(x, "Could not parse port.");
 					}
 					else
 						this.port = 80;
@@ -797,7 +797,7 @@ namespace TecWare.DE.Server
 			{
 				this.redirectPath = x.GetAttribute("path", "/");
 				if (String.IsNullOrEmpty(redirectPath) || redirectPath[0] != '/')
-					throw new ArgumentException("Ungültiger interner Pfad.");
+					throw new DEConfigurationException(x, "Invalid internal @path (must start with '/').");
 			} // ctor
 
 			public string Path => redirectPath;
@@ -816,7 +816,8 @@ namespace TecWare.DE.Server
 			public PrefixAuthentificationScheme(XElement x)
 				: base(x)
 			{
-				switch (x.GetAttribute("scheme", "none"))
+				var v = x.GetAttribute("scheme", "none");
+				switch (v)
 				{
 					case "ntlm":
 						scheme = AuthenticationSchemes.Ntlm | AuthenticationSchemes.Anonymous;
@@ -828,7 +829,7 @@ namespace TecWare.DE.Server
 						scheme = AuthenticationSchemes.Anonymous;
 						break;
 					default:
-						throw new ArgumentException("Unknown authentificationscheme");
+						throw new DEConfigurationException(x, $"Unknown authentification scheme ({v}).");
 				}
 			} // ctor
 

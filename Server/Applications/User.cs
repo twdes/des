@@ -69,12 +69,13 @@ namespace TecWare.DE.Server.Applications
 		private int serverSecurityVersion = 0;
 		private string[] securityTokens = null;
 
+		private string userName = null;
+
 		#region -- Ctor/Dtor/Configuration ------------------------------------------------
 
 		public DEUser(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
-			Server.RegisterUser(this);
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -83,6 +84,29 @@ namespace TecWare.DE.Server.Applications
 				Server.UnregisterUser(this);
 			base.Dispose(disposing);
 		} // proc Dispose
+
+		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
+		{
+			// unregister the user
+			if (userName != null)
+				Server.UnregisterUser(this);
+
+			base.OnBeginReadConfiguration(config);
+		} // proc OnBeginReadConfiguration
+
+		protected override void OnEndReadConfiguration(IDEConfigLoading config)
+		{
+			// get user name
+			userName = Config.GetAttribute("userName", Name);
+			var domain = Config.GetAttribute("domain", String.Empty);
+			if (!String.IsNullOrEmpty(domain))
+				userName = domain + '\\' + userName;
+
+			// register the user again
+			Server.RegisterUser(this);
+
+			base.OnEndReadConfiguration(config);
+		} // proc OnEndReadConfiguration
 
 		#endregion
 
@@ -96,7 +120,7 @@ namespace TecWare.DE.Server.Applications
 				else
 					return null;
 			else if (identity is HttpListenerBasicIdentity)
-				if (TestPassowrd(((HttpListenerBasicIdentity)identity).Password))
+				if (TestPassword(((HttpListenerBasicIdentity)identity).Password))
 					return new UserContext(this, identity);
 				else
 					return null;
@@ -130,7 +154,7 @@ namespace TecWare.DE.Server.Applications
 			}
 		} // proc RefreshSecurityTokens
 
-		private bool TestPassowrd(string testPassword)
+		private bool TestPassword(string testPassword)
 		{
 			var password = Config.GetAttribute("password", null);
 			if (password != null)
@@ -151,6 +175,8 @@ namespace TecWare.DE.Server.Applications
 		} // func TestPassword
 
 		#endregion
+
+		string IDEUser.Name => userName;
 
 		public override string Icon => "/images/user1.png";
 	} // class DEUser

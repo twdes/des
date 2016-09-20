@@ -11,6 +11,11 @@
 	<xs:complexType name="UserType">
 		<xs:complexContent>
 			<xs:extension base="ConfigItemType">
+				<xs:attribute name="userName" type="xs:string" use="optional">
+					<xs:annotation>
+						<xs:documentation>User name for the user. If this attribute is missing, the name attribute will be the user name.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
 				<xs:attribute name="groups" use="required">
 					<xs:annotation>
 						<xs:documentation>Definiert die Gruppen, Securitytoken, die dem Nutzer zugeordnet werden.</xs:documentation>
@@ -293,13 +298,24 @@
 							</xs:complexType>
 						</xs:element>
 
-						<xs:element name="ntmluser" minOccurs="0" maxOccurs="unbounded" type="UserType">
+						<xs:element name="ntmluser" minOccurs="0" maxOccurs="unbounded">
 							<xs:annotation>
 								<xs:appinfo>
 									<class>TecWare.DE.Server.Applications.DEUser</class>
 								</xs:appinfo>
 								<xs:documentation>Nutzer der sich Authentifizieren kann.</xs:documentation>
 							</xs:annotation>
+							<xs:complexType>
+								<xs:complexContent>
+									<xs:extension base="UserType">
+										<xs:attribute name="domain" type="xs:string" use="required">
+											<xs:annotation>
+												<xs:documentation>Name of the users domain</xs:documentation>
+											</xs:annotation>
+										</xs:attribute>
+									</xs:extension>
+								</xs:complexContent>
+							</xs:complexType>
 						</xs:element>
 
 						<xs:element name="mime" minOccurs="0" maxOccurs="unbounded">
