@@ -44,6 +44,7 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
   <Choose>
@@ -62,6 +63,7 @@
     <Compile Include="Configuration.cs" />
     <Compile Include="CsvTest.cs" />
     <Compile Include="Helper.cs" />
+    <Compile Include="LuaEx.cs" />
     <Compile Include="Oftp.cs" />
     <Compile Include="Stuff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
