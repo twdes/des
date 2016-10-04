@@ -746,6 +746,8 @@ namespace TecWare.DE.Server.Http
 				WriteStream(context, (Stream)value, contentType ?? MimeTypes.Application.OctetStream);
 			else if (value is byte[])
 				WriteBytes(context, (byte[])value, contentType ?? MimeTypes.Application.OctetStream);
+			else if (value is LuaTable)
+				WriteXml(context, new XDocument(Procs.ToXml((LuaTable)value)));
 			else
 				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Can not send return value of type '{0}'.", value.GetType().FullName));
 		} // proc WriteObject
@@ -754,25 +756,20 @@ namespace TecWare.DE.Server.Http
 
 		#region -- WriteSafeCall ----------------------------------------------------------
 
-		public static void WriteSafeCall(this IDEContext r, XElement x, string sSuccessMessage = null)
+		public static void WriteSafeCall(this IDEContext r, XElement x, string successMessage = null)
 		{
 			if (x == null)
 				x = new XElement("return");
 
-			x.SetAttributeValue("status", "ok");
-			if (!String.IsNullOrEmpty(sSuccessMessage))
-				x.SetAttributeValue("text", sSuccessMessage);
+			DEConfigItem.SetStatusAttributes(x, true, successMessage);
 
 			WriteXml(r, x);
 		} // proc WriteSafeCall
 
-		public static void WriteSafeCall(this IDEContext r, string sErrorMessage)
+		public static void WriteSafeCall(this IDEContext r, string errorMessage)
 		{
 			WriteXml(r,
-				new XElement("return",
-					new XAttribute("status", "error"),
-					new XAttribute("text", sErrorMessage)
-				)
+				DEConfigItem.CreateDefaultXmlReturn(false, errorMessage)
 			);
 		} // proc WriteSafeCall
 

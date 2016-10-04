@@ -628,6 +628,8 @@ namespace TecWare.DE.Server
 					await SendAnswerAsync(x, UseNode(x));
 				else if (command == "member")
 					await SendAnswerAsync(x, GetMember(x));
+				else if (command == "list")
+					await SendAnswerAsync(x, GetNodeList(x));
 				else // always, answer commands with a token
 					throw new ArgumentException($"Unknown command '{command}'.");
 			} // proc ProcessMessage
@@ -729,7 +731,37 @@ namespace TecWare.DE.Server
 					}
 				}
 			} // proc UseNode
-			
+
+			#endregion
+
+			#region -- List -----------------------------------------------------------------
+
+			private IEnumerable<XElement> GetNodeList(DEConfigItem current, bool recusive)
+			{
+				using (currentItem.EnterReadLock())
+				{
+					foreach (var c in current.UnsafeChildren)
+					{
+						var x = new XElement("n",
+							new XAttribute("name", c.Name),
+							new XAttribute("displayName", c.DisplayName)
+						);
+
+						if (recusive)
+							x.Add(GetNodeList(c, true));
+
+						yield return x;
+					}
+				}
+			} // func GetNodeList
+
+			private XElement GetNodeList(XElement xMessage)
+			{
+				return new XElement("list",
+					GetNodeList(currentItem, xMessage.GetAttribute("r", false))
+				);
+			} // func GetNodeList
+
 			#endregion
 
 			public WebSocket Socket => context.WebSocket;
@@ -762,6 +794,9 @@ namespace TecWare.DE.Server
 			// Register the service
 			var sc = sp.GetService<IServiceContainer>(true);
 			sc.AddService(typeof(IDELuaEngine), this);
+
+			// register context extensions
+			LuaType.RegisterTypeExtension(typeof(HttpResponseHelper));
 
 			// create the debug options
 			debugHook = new LuaEngineTraceLineDebugger(this);

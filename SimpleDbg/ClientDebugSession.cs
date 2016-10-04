@@ -18,19 +18,26 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	public sealed class ClientMemberValue
 	{
-		internal ClientMemberValue(string name, Type type, object value)
+		private readonly string name;
+		private readonly string typeName;
+		private readonly Type type; // is null if the value is not converted
+		private readonly object value;
+
+		internal ClientMemberValue(string name, string typeName, Type type, object value)
 		{
-			this.Name = name;
-			this.Type = type;
-			this.Value = value;
+			this.name = name;
+			this.typeName = typeName;
+			this.type = type;
+			this.value = value;
 		} // ctor
 
-		public string Name { get; }
-		public Type Type { get; }
-		public object Value { get; }
+		public string Name => name;
+		public string TypeName => typeName;
+		public object Value => value;
 
-		public string TypeAsString
-			=> LuaType.GetType(Type).AliasName ?? Type.Name;
+		public bool IsConverted => type != null;
+
+		public Type Type => type ?? typeof(string);
 
 		public string ValueAsString
 		{
@@ -55,40 +62,59 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- class ClientDebugSession -------------------------------------------------
+
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public class ClientDebugSession : IDisposable
 	{
+		public event EventHandler CurrentUsePathChanged;
+
 		#region -- class ReturnWait -------------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
 		private sealed class ReturnWait
 		{
+			private readonly int token;
+			private readonly TaskCompletionSource<XElement> source;
+
 			public ReturnWait(int token, CancellationToken cancellationToken)
 			{
-				this.Token = token;
-				this.Source = new TaskCompletionSource<XElement>();
+				this.token = token;
+				this.source = new TaskCompletionSource<XElement>();
+				cancellationToken.Register(source.SetCanceled);
 			} // ctor
 
-			public int Token { get; }
-			public TaskCompletionSource<XElement> Source { get; }
+			public int Token => token;
+			public TaskCompletionSource<XElement> Source => source;
 		} // class ReturnWait
 
 		#endregion
 
 		private readonly Uri serverUri;
-		private readonly ClientWebSocket socket = new ClientWebSocket();
 		private readonly Random random = new Random(Environment.TickCount);
 
-		private readonly Dictionary<int, ReturnWait> waits = new Dictionary<int, ReturnWait>();
 		private readonly CancellationTokenSource sessionDisposeClose;
-		private Task backgroundListener;
+		private readonly Task communicationProcess;
+
+		private string currentUsePath = null;
+		private int currentUseToken = -1;
+
+		private int defaultTimeout = 0;
+
+		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public ClientDebugSession(Uri serverUri)
 		{
-			this.serverUri = serverUri;
+			var scheme = serverUri.Scheme;
+			if (scheme == "http" || scheme == "https") // rewrite uri
+				this.serverUri = new Uri((scheme == "https" ? "wss" : "ws") + "://" + serverUri.Host + ":" + serverUri.Port + "/" + serverUri.AbsolutePath);
+			else // use uri
+				this.serverUri = serverUri;
+
 			this.sessionDisposeClose = new CancellationTokenSource();
+			this.communicationProcess = Task.Run(ConnectionProcessor).ContinueWith(CheckBackgroundTask);
 		} // ctor
 
 		public void Dispose()
@@ -101,53 +127,140 @@ namespace TecWare.DE.Server
 			if (disposing)
 			{
 				sessionDisposeClose.Cancel();
+				communicationProcess.Wait();
+				sessionDisposeClose.Dispose();
 			}
 		} // proc Dispose
 
-		public async Task ConnectAsync()
-		{
-			// create connection
-			socket.Options.AddSubProtocol("dedbg");
-			await socket.ConnectAsync(serverUri, CancellationToken.None);
+		#endregion
 
-			// background listener
-			backgroundListener = Task.Run(BackgroundListener, sessionDisposeClose.Token);
-		} // proc Connect
+		#region -- Communication ----------------------------------------------------------
 
-		private async Task BackgroundListener()
+		private object socketLock = new object();
+		private ClientWebSocket clientSocket = null;
+		private CancellationToken currentConnectionToken = CancellationToken.None;
+		private readonly Dictionary<int, ReturnWait> waits = new Dictionary<int, ReturnWait>();
+		
+		/// <summary>Main loop for the debug session.</summary>
+		/// <returns></returns>
+		private async Task ConnectionProcessor()
 		{
 			var recvOffset = 0;
 			var recvBuffer = new byte[1 << 20];
+			var lastNativeErrorCode = Int32.MinValue;
+			var currentConnectionTokenSource = (CancellationTokenSource)null;
 
-			while (true)
+			while (!sessionDisposeClose.IsCancellationRequested)
 			{
-				var recvRest = recvBuffer.Length - recvOffset;
-				if (recvRest == 0)
-				{
-					throw new OutOfMemoryException(); // todo:
-				}
+				var connectionEstablished = false;
 
-				var r = await socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), sessionDisposeClose.Token);
-				if (r.MessageType == WebSocketMessageType.Text)
+				// create the connection
+				var socket = new ClientWebSocket();
+				socket.Options.AddSubProtocol("dedbg");
+
+				try
 				{
-					recvOffset += r.Count;
-					if (r.EndOfMessage)
+					await socket.ConnectAsync(serverUri, sessionDisposeClose.Token);
+					connectionEstablished = true;
+					lock (socketLock)
 					{
-						try
-						{
-							var xAnswer = XElement.Parse(Encoding.UTF8.GetString(recvBuffer, 0, recvOffset));
-							ProcessAnswer(xAnswer);
-						}
-						catch (Exception e)
-						{
-							// todo:
-							Debug.Print(e.Message);
-						}
-						recvOffset = 0;
+						clientSocket = socket;
+						
+						currentConnectionTokenSource = new CancellationTokenSource();
+						currentConnectionToken = currentConnectionTokenSource.Token;
+					}
+					OnConnectionEstablished();
+				}
+				catch (WebSocketException e)
+				{
+					if (lastNativeErrorCode != e.NativeErrorCode)
+					{
+						OnConnectionFailure(e);
+						lastNativeErrorCode = e.NativeErrorCode;
 					}
 				}
+				catch (Exception e)
+				{
+					lastNativeErrorCode = Int32.MinValue;
+					OnConnectionFailure(e);
+				}
+
+				try
+				{
+					// reconnect set use
+					if (socket.State == WebSocketState.Open)
+					{
+						if (currentUsePath != null && currentUsePath != "/" && currentUsePath.Length > 0)
+							currentUseToken = (int)await SendAsync(socket, GetUseMessage(currentUsePath), false, sessionDisposeClose.Token);
+						else
+							CurrentUsePath = "/";
+					}
+
+					// wait for answers
+					recvOffset = 0;
+					while (socket.State == WebSocketState.Open &&
+						!sessionDisposeClose.IsCancellationRequested)
+					{
+						// check if the buffer is large enough
+						var recvRest = recvBuffer.Length - recvOffset;
+						if (recvRest == 0)
+							throw new OutOfMemoryException("Debug answer is to large.");
+
+						// receive the characters
+						var r = await socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), sessionDisposeClose.Token);
+						if (r.MessageType == WebSocketMessageType.Text)
+						{
+							recvOffset += r.Count;
+							if (r.EndOfMessage)
+							{
+								try
+								{
+									var xAnswer = XElement.Parse(Encoding.UTF8.GetString(recvBuffer, 0, recvOffset));
+									ProcessAnswer(xAnswer);
+								}
+								catch (Exception e)
+								{
+									lastNativeErrorCode = Int32.MinValue;
+									OnCommunicationException(e);
+								}
+								recvOffset = 0;
+							}
+						}
+					} // message loop
+				}
+				catch (WebSocketException e)
+				{
+					lastNativeErrorCode = e.NativeErrorCode;
+					OnCommunicationException(e);
+				}
+
+				// close connection
+				if (!sessionDisposeClose.IsCancellationRequested && connectionEstablished)
+					OnConnectionLost();
+
+				lock (socketLock)
+				{
+					clientSocket = null;
+
+					// dispose current cancellation token
+					if (currentConnectionTokenSource != null)
+					{
+						currentConnectionTokenSource.Cancel();
+						currentConnectionTokenSource.Dispose();
+						currentConnectionTokenSource = null;
+					}
+
+					currentConnectionToken = CancellationToken.None;
+				}
+				socket.Dispose();
 			}
-		} // proc BackgroundListener
+		} // func ConnectionProcessor
+
+		private void CheckBackgroundTask(Task t)
+		{
+			if (t.IsFaulted)
+				OnCommunicationException(t.Exception);
+		} // proc CheckBackgroundTask
 
 		private void ProcessAnswer(XElement x)
 		{
@@ -155,13 +268,24 @@ namespace TecWare.DE.Server
 			Debug.Print("[Client] Receive Message: {0}", token);
 			if (token != 0) // answer
 			{
-				var w = GetWait(token);
-				if (w != null)
+				if (currentUseToken == token) // was the use command successful
 				{
 					if (x.Name == "exception")
-						Task.Run(() => w.Source.SetException(new Exception(x.GetAttribute("message", String.Empty))), sessionDisposeClose.Token);
+						CurrentUsePath = "/";
 					else
-						Task.Run(() => w.Source.SetResult(x), sessionDisposeClose.Token);
+						CurrentUsePath = GetUsePathFromReturn(x);
+					currentUseToken = -1;
+				}
+				else // other messages
+				{
+					var w = GetWait(token);
+					if (w != null)
+					{
+						if (x.Name == "exception")
+							Task.Run(() => w.Source.SetException(new Exception(x.GetAttribute("message", String.Empty))), currentConnectionToken);
+						else
+							Task.Run(() => w.Source.SetResult(x), currentConnectionToken);
+					}
 				}
 			}
 			else // notify
@@ -192,80 +316,223 @@ namespace TecWare.DE.Server
 			return w.Source;
 		} // proc RegisterAnswer
 
-		public Task<XElement> SendAsync(XElement cmd)
-			=> SendAsync(cmd, sessionDisposeClose.Token);
+		private void UnregisterAnswer(int token)
+		{
+			lock (waits)
+				waits.Remove(token);
+		} // proc UnregisterAnswer
+
+		public Task<XElement> SendAsync(XElement xMessage)
+			=> SendAsync(xMessage, currentConnectionToken);
 
 		public async Task<XElement> SendAsync(XElement xMessage, CancellationToken cancellationToken)
+		{
+			ClientWebSocket sendSocket;
+			lock (socketLock)
+			{
+				if (clientSocket == null || clientSocket.State != WebSocketState.Open)
+					throw new ArgumentException("Debugsession is disconnected.");
+
+				sendSocket = clientSocket;
+			}
+
+			// send and wait for answer
+			CancellationTokenSource cancellationTokenSource = null;
+			if (cancellationToken == CancellationToken.None || cancellationToken == currentConnectionToken)
+			{
+				if (defaultTimeout > 0)
+				{
+					cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(currentConnectionToken);
+					cancellationTokenSource.CancelAfter(defaultTimeout);
+
+					cancellationToken = cancellationTokenSource.Token;
+				}
+				else
+				{
+					cancellationTokenSource = null;
+					cancellationToken = currentConnectionToken;
+				}
+			}
+			else
+			{
+				cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(currentConnectionToken, cancellationToken);
+				cancellationToken = cancellationTokenSource.Token;
+			}
+
+			var completionSource = (TaskCompletionSource<XElement>)await SendAsync(sendSocket, xMessage, true, cancellationToken);
+			if (cancellationTokenSource == null)
+				return await completionSource.Task;
+			else
+			{
+				return await completionSource.Task.ContinueWith(
+					t =>
+					{
+						cancellationTokenSource.Dispose();
+						return t.Result;
+					}
+				);
+			}
+		} // proc Send
+
+		private async Task<object> SendAsync(ClientWebSocket sendSocket, XElement xMessage, bool registerAnswer, CancellationToken cancellationToken)
 		{
 			// add token for the answer
 			var token = random.Next(1, Int32.MaxValue);
 			xMessage.SetAttributeValue("token", token);
+			var cancellationSource = (TaskCompletionSource<XElement>)null;
+
+			if (registerAnswer)
+				cancellationSource = RegisterAnswer(token, cancellationToken);
 
 			// send message to server
-			var messageBytes = Encoding.UTF8.GetBytes(xMessage.ToString(SaveOptions.None));
-			Debug.Print("[Client] Send Message: {0}", token);
-			await socket.SendAsync(new ArraySegment<byte>(messageBytes, 0, messageBytes.Length), WebSocketMessageType.Text, true, cancellationToken);
+			try
+			{
+				var messageBytes = Encoding.UTF8.GetBytes(xMessage.ToString(SaveOptions.None));
+				Debug.Print("[Client] Send Message: {0}", token);
+				await sendSocket.SendAsync(new ArraySegment<byte>(messageBytes, 0, messageBytes.Length), WebSocketMessageType.Text, true, cancellationToken);
+			}
+			catch
+			{
+				UnregisterAnswer(token);
+				throw;
+			}
 
-			// wait for answer
-			return await RegisterAnswer(token, cancellationToken).Task;
-		} // proc Send
+			return (object)cancellationSource ?? token;
+		} // proc SendAsync
+
+		protected virtual void OnConnectionLost() { }
+
+		protected virtual void OnConnectionEstablished() { }
+
+		protected virtual void OnConnectionFailure(Exception e)
+		{
+			Debug.Print("Connection failed: {0}", e.ToString());
+		} // proc OnConnectionFailure
+
+		protected virtual void OnCommunicationException(Exception e)
+		{
+			Debug.Print("Connection failed: {0}", e.ToString());
+		} // proc OnCommunicationException
+
+		public bool IsConnected
+		{
+			get
+			{
+				lock (socketLock)
+					return clientSocket != null && clientSocket.State == WebSocketState.Open;
+			}
+		} // prop IsConnected
+
+		#endregion
 
 		#region -- GetMemberValue, ParseReturn --------------------------------------------
 
+		private Type GetType(string typeString)
+		{
+			if (typeString.IndexOf(",") == -1)
+				return LuaType.GetType(typeString);
+			else
+			{
+				return Type.GetType(typeString,
+					name =>
+					{
+						// do not load new assemblies
+						var asm = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(c => c.FullName == name.FullName);
+						if (asm == null)
+							throw new TypeLoadException("Assembly is not loaded.");
+						return asm;
+					},
+					(asm, name, ignorecase) => LuaType.GetType(typeString).Type,
+					false
+				);
+			}
+		} // func GetType
+
 		public ClientMemberValue GetMemberValue(XElement x, int index)
 		{
+			// get the member name or index
 			var member = x.GetAttribute("n", String.Empty);
 			if (String.IsNullOrEmpty(member))
 				member = "$" + x.GetAttribute("i", index).ToString();
 
-			// convert value 
-			var type = LuaType.GetType(x.GetAttribute("t", "object")).Type ?? typeof(object);
-			object value;
-			try
-			{
-				value = Lua.RtConvertValue(x.Value, type);
-			}
-			catch (Exception)
-			{
-				value = x.Value;
-			}
+			// get type
+			var typeString = x.GetAttribute("t", "object");
+			var type = typeString == "table" ? null : GetType(typeString);
 
-			return new ClientMemberValue(member, type, value);
+			// check if the value is convertible (only convert core types)
+			object value;
+			if (typeString == "table") // table
+				value = ParseReturn(x, 1).ToArray();
+			else if (type != null)
+			{
+				try
+				{
+					value = Lua.RtConvertValue(x.Value, type);
+				}
+				catch (Exception)
+				{
+					type = null;
+					value = x.Value;
+				}
+			}
+			else
+				value = x.Value;
+
+			return new ClientMemberValue(member, typeString, type, value);
 		} // func GetMemberValue
 
-		private IEnumerable<ClientMemberValue> ParseReturn(XElement r)
-		{
-			var i = 0;
-			var p = new PropertyDictionary();
-
-			return from c in r.Elements("v")
-						 select GetMemberValue(c, i++);
-		} // func ParseReturn
+		private IEnumerable<ClientMemberValue> ParseReturn(XElement r, int index = 0)
+			 => from c in r.Elements("v")
+					select GetMemberValue(c, index++);
 
 		#endregion
 
 		#region -- Use --------------------------------------------------------------------
 
 		public Task<string> SendUseAsync(string node)
-			=> SendUseAsync(node, sessionDisposeClose.Token);
+			=> SendUseAsync(node, CancellationToken.None);
 
 		public async Task<string> SendUseAsync(string node, CancellationToken cancellationToken)
 		{
+			// send the use command
 			var r = await SendAsync(
-				new XElement("use",
-					new XAttribute("node", node)
-				),
+				GetUseMessage(node),
 				cancellationToken
 			);
-			return r.GetAttribute("node", "/");
+
+			// get the new use path
+			CurrentUsePath = GetUsePathFromReturn(r);
+			return CurrentUsePath;
 		} // proc SendUseAsync
+
+		private static XElement GetUseMessage(string node)
+			=> new XElement("use", new XAttribute("node", node));
+
+		private static string GetUsePathFromReturn(XElement r)
+			=> r.GetAttribute("node", "/");
+
+		protected virtual void OnCurrentUsePathChanged()
+			=> CurrentUsePathChanged?.Invoke(this, EventArgs.Empty);
+
+		public string CurrentUsePath
+		{
+			get { return currentUsePath; }
+			private set
+			{
+				if (currentUsePath != value)
+				{
+					currentUsePath = value;
+					OnCurrentUsePathChanged();
+				}
+			}
+		} // prop CurrentUsePath
 
 		#endregion
 
 		#region -- Execute ----------------------------------------------------------------
 
 		public Task<IEnumerable<ClientMemberValue>> SendExecuteAsync(string command)
-			=> SendExecuteAsync(command, sessionDisposeClose.Token);
+			=> SendExecuteAsync(command, CancellationToken.None);
 
 		public async Task<IEnumerable<ClientMemberValue>> SendExecuteAsync(string command, CancellationToken cancellationToken)
 		{
@@ -284,17 +551,29 @@ namespace TecWare.DE.Server
 		#region -- GlobalVars -------------------------------------------------------------
 
 		public Task<IEnumerable<ClientMemberValue>> SendMembersAsync(string memberPath)
-			=> SendMembersAsync(memberPath, sessionDisposeClose.Token);
+			=> SendMembersAsync(memberPath, CancellationToken.None);
 
 		public async Task<IEnumerable<ClientMemberValue>> SendMembersAsync(string memberPath, CancellationToken cancellationToken)
-		{
-			var r = await SendAsync(
-				new XElement("member")
-			);
-
-			return ParseReturn(r);
-		} // proc SendCommandAsync
+			=> ParseReturn(await SendAsync(new XElement("member"), cancellationToken));
 
 		#endregion
+
+		#region -- List -------------------------------------------------------------------
+
+		public Task<XElement> SendListAsync(bool recursive)
+			=> SendListAsync(recursive, CancellationToken.None);
+
+		public async Task<XElement> SendListAsync(bool recursive, CancellationToken cancellationToken)
+			=> await SendAsync(new XElement("list", new XAttribute("r", recursive)), cancellationToken);
+
+		#endregion
+
+		public int DefaultTimeout
+		{
+			get { return defaultTimeout; }
+			set { defaultTimeout = value < 0 ? 0 : value; }
+		} // prop DefaultTimeout
 	} // class ClientDebugSession
+
+	#endregion
 }

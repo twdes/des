@@ -999,17 +999,21 @@ namespace TecWare.DE.Server
 			if (returnValue == DBNull.Value) // NativeCall
 				return;
 			else if (r.IsOutputStarted)
+			{
 				if (returnValue == null)
 					return;
 				else
 					throw new ArgumentException("Return value expected.");
+			}
 			else if (returnValue == null)
+			{
 				returnValue = CreateDefaultXmlReturn(true, null);
+			}
 			else if (returnValue is XElement)
 			{
 				var x = (XElement)returnValue;
 				if (x.Attribute("status") == null)
-					x.SetAttributeValue("status", "ok");
+					SetStatusAttributes(x, true);
 			}
 			else if (returnValue is LuaResult)
 			{
@@ -1017,7 +1021,7 @@ namespace TecWare.DE.Server
 				XElement x = CreateDefaultXmlReturn(true, result[1] as string);
 
 				if (result[0] is LuaTable)
-					ConvertLuaTable(x, (LuaTable)result[0]);
+					Procs.ToXml((LuaTable)result[0], x);
 				else if (result[0] != null)
 					x.Add(result[0]);
 
@@ -1025,7 +1029,9 @@ namespace TecWare.DE.Server
 			}
 			else if (returnValue is LuaTable)
 			{
-				returnValue = ConvertLuaTable(CreateDefaultXmlReturn(true, null), (LuaTable)returnValue);
+				var x = CreateDefaultXmlReturn(true, null);
+				Procs.ToXml((LuaTable)returnValue, x);
+				returnValue = x;
 			}
 
 			// Schreibe die Rückgabe
@@ -1076,32 +1082,17 @@ namespace TecWare.DE.Server
 			return false;
 		} // func OnProcessRequest
 
-		private static XElement CreateDefaultXmlReturn(bool lState, string sText)
+		public static XElement SetStatusAttributes(XElement x, bool state, string text = null)
 		{
-			XElement x = new XElement("return", new XAttribute("status", lState ? "ok" : "error"));
-			if (sText != null)
-				x.SetAttributeValue("text", sText);
+			x.SetAttributeValue("status", state ? "ok" : "error");
+			if (text != null)
+				x.SetAttributeValue("text", text);
 			return x;
-		} // func CreateDefaultXmlReturn
+		} // func SetStatusAttributes
 
-		private static XElement ConvertLuaTable(XElement x, LuaTable t)
-		{
-			foreach (var c in t)
-				if (c.Key is string)
-				{
-					if (c.Value is LuaTable)
-						x.Add(ConvertLuaTable(new XElement((string)c.Key), (LuaTable)c.Value));
-					else
-						x.Add(new XElement((string)c.Key, c.Value.ToString()));
-				}
-				else if (c.Value is LuaTable)
-					ConvertLuaTable(x, (LuaTable)c.Value);
-				else
-					x.Add(c.Value.ToString());
-
-			return x;
-		}  // func ConvertLuaTable
-
+		public static XElement CreateDefaultXmlReturn(bool state, string text = null)
+			=> SetStatusAttributes(new XElement("return"), state, text);
+		
 		#endregion
 
 		#region -- Interface for Lua ------------------------------------------------------

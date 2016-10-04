@@ -2,16 +2,37 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public class DebugView
+	public sealed class DebugView
 	{
-		private object screenLock = new object();
+		private readonly object screenLock = new object();
+		private bool isConnected = false;
+		private string usePath = String.Empty;
 
+		public DebugView()
+		{
+			UpdateSateText();
+		} // ctor
+
+		public IDisposable LockScreen()
+		{
+			Monitor.Enter(screenLock);
+			return new DisposableScope(
+				() =>
+				{
+					Monitor.Exit(screenLock);
+					UpdateSateText();
+				}
+			);
+		} // func LockScreen
+		
 		public void WriteLine()
 		{
 			WriteLine(String.Empty);
@@ -19,7 +40,7 @@ namespace TecWare.DE.Server
 
 		public void WriteLine(string text)
 		{
-			lock (screenLock)
+			using (LockScreen())
 				Console.Out.WriteLine(text);
 		} // proc WriteLine
 
@@ -31,22 +52,28 @@ namespace TecWare.DE.Server
 				WriteLine(o.ToString());
 		} // proc WriteObject
 
-		public void WriteError(Exception exception)
+		public void WriteError(Exception exception, string message = null)
 		{
 			if (exception == null)
 				return;
+
+			if (!String.IsNullOrEmpty(message))
+			{
+				using (SetColor(ConsoleColor.DarkRed))
+					Console.WriteLine(message);
+			}
 
 			var aggEx = exception as AggregateException;
 			if (aggEx == null)
 			{
 				// write exception
-				lock(screenLock)
+				using (LockScreen())
 				{
 					using (SetColor(ConsoleColor.DarkRed))
 					{
 						Console.WriteLine($"[{exception.GetType().Name}]");
 						Console.WriteLine($"  {exception.Message}");
-          }
+					}
 				}
 
 				// chain exceptions
@@ -61,7 +88,7 @@ namespace TecWare.DE.Server
 
 		public void WriteError(string text)
 		{
-			lock (screenLock)
+			using (LockScreen())
 				Console.Error.WriteLine(text);
 		} // proc WriteError
 
@@ -70,7 +97,7 @@ namespace TecWare.DE.Server
 
 		public void Write(string text, ConsoleColor foreground, ConsoleColor background = ConsoleColor.Black)
 		{
-			lock (screenLock)
+			using (LockScreen())
 			{
 				using (SetColor(foreground, background))
 					Console.Write(text);
@@ -137,6 +164,48 @@ namespace TecWare.DE.Server
 			=> new ResetCursor(left ?? Console.CursorLeft, top ?? Console.CursorTop, visible ?? Console.CursorVisible);
 
 		#endregion
+
+		private void UpdateSateText()
+		{
+			using (SetColor(ConsoleColor.White, isConnected ? ConsoleColor.DarkGreen : ConsoleColor.DarkRed))
+			using (SetCursor(Console.WindowWidth - 20, Console.WindowTop, false))
+			{
+				var stateText = isConnected ? usePath : "Connecting...";
+
+				if (stateText.Length > 18)
+					stateText = " ..." + stateText.Substring(stateText.Length - 15, 15) + " ";
+				else
+					stateText = " " + stateText.PadRight(19);
+
+				Console.Write(stateText);
+			}
+		} // proc UpdateStateText
+
+		public bool IsConnected
+		{
+			get { return isConnected; }
+			set
+			{
+				if (isConnected != value)
+				{
+					isConnected = value;
+					UpdateSateText();
+				}
+			}
+		} // prop IsConnected
+
+		public string UsePath
+		{
+			get { return usePath; }
+			set
+			{
+				if (usePath != value)
+				{
+					usePath = value;
+					UpdateSateText();
+				}
+			}
+		} // prop UsePath
 
 		public object SyncRoot => screenLock;
 	} // class DebugView

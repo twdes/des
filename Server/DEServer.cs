@@ -438,18 +438,20 @@ namespace TecWare.DE.Server
 			ProcessStartInfo psi = new ProcessStartInfo(procDump, sbArgs.ToString());
 			psi.UseShellExecute = false;
 			psi.RedirectStandardOutput = true;
-      using (var p = Process.Start(psi))
+			using (var p = Process.Start(psi))
 			{
 				if (!p.WaitForExit(5 * 60 + 1000))
 					p.Kill();
 
 				var outputText = p.StandardOutput.ReadToEnd();
 
-				return new XElement("return",
-					new XAttribute("status", p.ExitCode > 0 ? "ok" : "error"),
-					new XAttribute("id", fi.Id),
-					new XAttribute("exitcode", p.ExitCode),
-					new XAttribute("text", outputText)
+				return DEConfigItem.SetStatusAttributes(
+					new XElement("return",
+						new XAttribute("id", fi.Id),
+						new XAttribute("exitcode", p.ExitCode)
+					),
+					p.ExitCode > 0,
+					outputText
 				);
 			}
 		} // proc HttpDumpAction

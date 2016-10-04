@@ -48,6 +48,38 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- class ConsoleDebugSession ------------------------------------------------
+
+	internal sealed class ConsoleDebugSession : ClientDebugSession
+	{
+		private readonly DebugView view;
+
+		public ConsoleDebugSession(DebugView view, Uri serverUri) 
+			: base(serverUri)
+		{
+			this.view = view;
+
+			this.DefaultTimeout = 10000;
+		} // ctor
+		
+		protected override void OnCurrentUsePathChanged()
+			=> view.UsePath = CurrentUsePath;
+
+		protected override void OnConnectionEstablished()
+			=> view.IsConnected = true;
+
+		protected override void OnConnectionLost()
+			=> view.IsConnected = false;
+
+		protected override void OnConnectionFailure(Exception e)
+			=> view.WriteError(e, "Connection failed.");
+		
+		protected override void OnCommunicationException(Exception e)
+			=> view.WriteError(e, "Communication exception.");
+	} // class ConsoleDebugSession
+
+	#endregion
+
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public class Program
@@ -56,7 +88,7 @@ namespace TecWare.DE.Server
 		private static readonly Regex commandSyntax = new Regex(@"\:(?<cmd>\w+)(?:\s+(?<args>(?:\`[^\`]*\`)|(?:[^\s]*)))*", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		private static StringBuilder currentCommand = new StringBuilder(); // holds the current script
-		private static ClientDebugSession session;
+		private static ConsoleDebugSession session;
 
 		#region -- Main, RunDebugProgram --------------------------------------------------
 
@@ -80,7 +112,7 @@ namespace TecWare.DE.Server
 					}
 					catch (Exception e)
 					{
-						view.WriteError(e);
+						view.WriteError(e, "Input loop failed. Application is aborted.");
 #if DEBUG
 						Console.ReadLine();
 #endif
@@ -102,10 +134,9 @@ namespace TecWare.DE.Server
 				await Task.Delay(arguments.Wait);
 
 			// connection
-			view.WriteLine("Connecting...");
-			session = new ClientDebugSession(new Uri(arguments.Uri));
-			await session.ConnectAsync();
-
+			view.IsConnected = false;
+			session = new ConsoleDebugSession(view, new Uri(arguments.Uri));
+			
 			// start request loop
 			while (true)
 			{
@@ -119,7 +150,14 @@ namespace TecWare.DE.Server
 						currentCommand.AppendLine();
 					else
 					{
-						await SendCommand(currentCommand.ToString());
+						try
+						{
+							await SendCommand(currentCommand.ToString());
+						}
+						catch (Exception e)
+						{
+							view.WriteError(e);
+						}
 						currentCommand.Clear();
 					}
 				}
@@ -263,28 +301,34 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private static void WriteReturn(IEnumerable<ClientMemberValue> r)
+		private static void WriteReturn(string indent, IEnumerable<ClientMemberValue> r)
 		{
 			foreach (var v in r)
 			{
 				lock (view.SyncRoot)
 				{
+					Console.Write(indent);
 					Console.Write(v.Name);
-					Console.Write(": ");
-					using (view.SetColor(ConsoleColor.DarkGray))
+					if (v.Value is IEnumerable<ClientMemberValue>)
+						WriteReturn(indent + "    ", (IEnumerable<ClientMemberValue>)v.Value);
+					else
 					{
-						Console.Write("(");
-						Console.Write(v.TypeAsString);
-						Console.Write(")");
+						Console.Write(": ");
+						using (view.SetColor(ConsoleColor.DarkGray))
+						{
+							Console.Write("(");
+							Console.Write(v.TypeName);
+							Console.Write(")");
+						}
+						Console.WriteLine(v.ValueAsString);
 					}
-					Console.WriteLine(v.ValueAsString);
 				}
 			}
 		} // proc WriteReturn
 
 		private static async Task SendCommand(string commandText)
 		{
-			WriteReturn(await session.SendExecuteAsync(commandText));
+			WriteReturn(String.Empty, await session.SendExecuteAsync(commandText));
 		} // proc SendCommand
 
 		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.")]
@@ -297,7 +341,32 @@ namespace TecWare.DE.Server
 		[InteractiveCommand("members", Short = "m", HelpText = "Lists the current available global variables.")]
 		private static async Task SendVariables()
 		{
-			WriteReturn(await session.SendMembersAsync(String.Empty));
+			WriteReturn(String.Empty, await session.SendMembersAsync(String.Empty));
 		} // proc SendVariables
+
+		private static void PrintList(string indent, XElement x)
+		{
+			foreach (var c in x.Elements("n"))
+			{
+				Console.WriteLine("{0}{1}: {2}", indent, c.GetAttribute("name", String.Empty), c.GetAttribute("displayName", String.Empty));
+				PrintList(indent + "    ", c);
+			}
+		} // proc PrintList
+
+		[InteractiveCommand("list", HelpText = "Lists the current nodes.")]
+		private static async Task SendList(bool recursive = false)
+		{
+			var x = await session.SendListAsync(recursive);
+			using (view.LockScreen())
+				PrintList(String.Empty, x);
+		} // func SendList
+
+		[InteractiveCommand("timeout", HelpText = "Sets the timeout in ms.")]
+		private static void SetTimeout(int timeout = -1)
+		{
+			if (timeout >= 0)
+				session.DefaultTimeout = timeout;
+			view.WriteLine($"Timeout is: {session.DefaultTimeout:N0}ms");
+		} // func SendList
 	} // class Program
 }
