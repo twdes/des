@@ -431,6 +431,11 @@
 							</xs:complexType>
 						</xs:element>
 					</xs:sequence>
+					<xs:attribute name="allowDebug" type="xs:boolean" use="optional" default="false">
+						<xs:annotation>
+							<xs:documentation>Sets if it is possible to connect with the debug protocol (Default: true)</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
 				</xs:extension>
 			</xs:complexContent>
 		</xs:complexType>

@@ -95,7 +95,7 @@ namespace TecWare.DE.Server.Http
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public interface IDECommonContext : IPropertyReadOnlyDictionary
+	public interface IDECommonContext : IPropertyReadOnlyDictionary, IDisposable
 	{
 		/// <summary>Returns the available parameter</summary>
 		string[] ParameterNames { get; }
@@ -121,7 +121,7 @@ namespace TecWare.DE.Server.Http
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public interface IDEWebSocketContext : IDECommonContext
+	public interface IDEWebSocketContext : IDECommonContext, IDisposable
 	{
 		WebSocket WebSocket { get; }
 	} // interface IDEWebSocketContext

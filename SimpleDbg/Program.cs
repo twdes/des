@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.WebSockets;
 using System.Reflection;
+using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -10,6 +12,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using CommandLine;
 using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -53,7 +56,7 @@ namespace TecWare.DE.Server
 	internal sealed class ConsoleDebugSession : ClientDebugSession
 	{
 		private readonly DebugView view;
-
+				
 		public ConsoleDebugSession(DebugView view, Uri serverUri) 
 			: base(serverUri)
 		{
@@ -61,19 +64,39 @@ namespace TecWare.DE.Server
 
 			this.DefaultTimeout = 10000;
 		} // ctor
-		
+
+		private ICredentials currentCredentials = CredentialCache.DefaultCredentials;
+
+		protected override ICredentials GetCredentials()
+			=> currentCredentials;
+
 		protected override void OnCurrentUsePathChanged()
 			=> view.UsePath = CurrentUsePath;
 
 		protected override void OnConnectionEstablished()
-			=> view.IsConnected = true;
+		{
+			view.IsConnected = true;
+		} // proc 
 
 		protected override void OnConnectionLost()
 			=> view.IsConnected = false;
 
-		protected override void OnConnectionFailure(Exception e)
-			=> view.WriteError(e, "Connection failed.");
-		
+		protected override bool OnConnectionFailure(Exception e)
+		{
+			var innerException = e.InnerException as WebException;
+			ClientAuthentificationInformation authentificationInfo = ClientAuthentificationInformation.Ntlm;
+			if (innerException != null && ClientAuthentificationInformation.TryGet(innerException, ref authentificationInfo, false)) // is this a authentification exception
+			{
+				currentCredentials = Program.GetCredentialsFromUserAsync(authentificationInfo.Realm).Result;
+				return true;
+			}
+			else
+			{
+				view.WriteError(e, "Connection failed.");
+				return false;
+			}
+		} // proc OnConnectionFailure
+
 		protected override void OnCommunicationException(Exception e)
 			=> view.WriteError(e, "Communication exception.");
 	} // class ConsoleDebugSession
@@ -89,6 +112,8 @@ namespace TecWare.DE.Server
 
 		private static StringBuilder currentCommand = new StringBuilder(); // holds the current script
 		private static ConsoleDebugSession session;
+
+		private static TaskCompletionSource<ICredentials> credentialGet = null;
 
 		#region -- Main, RunDebugProgram --------------------------------------------------
 
@@ -143,8 +168,13 @@ namespace TecWare.DE.Server
 				// read command
 				view.Write("> ");
 				var line = Console.ReadLine();
-
-				if (line.Length == 0) // nothing
+				if (credentialGet != null)
+				{
+					var t = credentialGet;
+					credentialGet = null;
+					t.SetResult(GetCredentialsFromUser((string)t.Task.AsyncState));
+				}
+				else if (line.Length == 0) // nothing
 				{
 					if (currentCommand.Length == 0) // no current script
 						currentCommand.AppendLine();
@@ -196,10 +226,53 @@ namespace TecWare.DE.Server
 				{
 					currentCommand.AppendLine(line);
 				}
-
-				//await socket.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(cmd)), WebSocketMessageType.Text, true, CancellationToken.None);
 			}
+
+			// dispose debug session
+			session.Dispose();
 		} // proc RunDebugProgram
+
+		public static Task<ICredentials> GetCredentialsFromUserAsync(string realm)
+		{
+			view.Write("Press Return to login");
+
+			credentialGet = new TaskCompletionSource<ICredentials>(realm);
+			return credentialGet.Task;
+		} // func GetCredentialsFromUserAsync
+
+		private static ICredentials GetCredentialsFromUser(string realm)
+		{
+			string userName = null;
+			var sec = new SecureString();
+
+			using (view.LockScreen())
+			{
+				Console.WriteLine("Login: {0}", realm);
+				Console.Write("User: ");
+				userName = Console.ReadLine();
+				if (String.IsNullOrEmpty(userName))
+					return null;
+
+				Console.Write("Password: ");
+				while (true)
+				{
+					var k = Console.ReadKey(true);
+
+					if (k.Key == ConsoleKey.Enter)
+						break;
+					else if (k.Key == ConsoleKey.Backspace || k.Key == ConsoleKey.Delete)
+						sec.Clear();
+					else
+					{
+						Console.Write("*");
+						sec.AppendChar(k.KeyChar);
+					}
+				}
+				Console.WriteLine();
+			}
+
+			return new NetworkCredential(userName, sec);
+		} // GetCredentialsFromUser
 
 		#endregion
 

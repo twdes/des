@@ -52,19 +52,21 @@ namespace TecWare.DE.Server
 		private readonly HttpListenerRequest request;
 		private readonly string absolutePath;
 
+		private readonly bool httpAuthentification;
 		private IDEAuthentificatedUser user = null;
 		private readonly Lazy<CultureInfo> clientCultureInfo;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		protected DECommonContext(DEHttpServer http, HttpListenerRequest request, string absolutePath)
+		protected DECommonContext(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification)
 		{
 			this.http = http;
 			this.queryString = new Lazy<NameValueCollection>(() => request.QueryString);
 			this.request = request;
 			this.absolutePath = absolutePath;
+			this.httpAuthentification = httpAuthentification;
 
-      this.clientCultureInfo = new Lazy<CultureInfo>(() =>
+			this.clientCultureInfo = new Lazy<CultureInfo>(() =>
 			{
 				try
 				{
@@ -123,6 +125,37 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- Security ---------------------------------------------------------------
+
+		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
+		/// <param name="securityToken">Zu prüfender Token.</param>
+		public void DemandToken(string securityToken)
+		{
+			if (!httpAuthentification || String.IsNullOrEmpty(securityToken))
+				return;
+
+			if (!TryDemandToken(securityToken))
+				throw CreateAuthorizationException(securityToken);
+		} // proc DemandToken
+
+		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
+		/// <param name="securityToken">Zu prüfender Token.</param>
+		/// <returns><c>true</c>, wenn der Token erlaubt ist.</returns>
+		public bool TryDemandToken(string securityToken)
+		{
+			if (!httpAuthentification)
+				return true;
+			if (String.IsNullOrEmpty(securityToken))
+				return true;
+
+			return User != null && User.IsInRole(securityToken);
+		} // proc TryDemandToken
+
+		public HttpResponseException CreateAuthorizationException(string securityText) // force user, if no user is given
+		 => new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
+
+		#endregion
+
 		#region -- Parameter --------------------------------------------------------------
 
 		private static string GetNameValueKeyIgnoreCase(NameValueCollection list, string name)
@@ -178,16 +211,40 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	internal sealed class DEWebSocketContext : DECommonContext, IDEWebSocketContext
 	{
-		private readonly HttpListenerWebSocketContext webSocketContext;
+		private readonly HttpListenerContext context;
+		private HttpListenerWebSocketContext webSocketContext;
 
-		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, HttpListenerWebSocketContext webSocketContext, string absolutePath)
-			: base(http, context.Request, absolutePath)
+		#region -- Ctor/Dtor --------------------------------------------------------------
+
+		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
+			: base(http, context.Request, absolutePath, httpAuthentification)
 		{
-			this.webSocketContext = webSocketContext;
-
+			this.context = context;
+			
 			AuthentificateUser(context.User);
 		} // ctor
-		
+
+		protected override void Dispose(bool disposing)
+		{
+			try
+			{
+				if (disposing)
+					webSocketContext?.WebSocket?.Dispose();
+			}
+			finally
+			{
+				base.Dispose(disposing);
+			}
+		} // proc Dispose
+
+		#endregion
+
+		internal async Task AcceptWebSocketAsync(string protocol)
+		{
+			webSocketContext = await context.AcceptWebSocketAsync(protocol);
+		} // proc AcceptWebSocketAsync
+
+		/// <summary>Returns the websocket</summary>
 		public WebSocket WebSocket => webSocketContext.WebSocket;
 	} // class DEWebSocketContext
 
@@ -217,7 +274,6 @@ namespace TecWare.DE.Server
 
 		private readonly HttpListenerContext context;
 		private LogMessageScopeProxy log = null;
-		private bool httpAuthentification;
 
 		private Stack<RelativeFrame> relativeStack = new Stack<RelativeFrame>();
 		private string currentRelativeSubPath = null;
@@ -228,10 +284,9 @@ namespace TecWare.DE.Server
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public DEHttpContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
-			: base(http, context.Request, absolutePath)
+			: base(http, context.Request, absolutePath, httpAuthentification)
 		{
 			this.context = context;
-			this.httpAuthentification = httpAuthentification;
 
 			// prepare response header
 			context.Response.Headers["Server"] = "DES";
@@ -288,37 +343,6 @@ namespace TecWare.DE.Server
 			if (log != null)
 				action(log);
 		} // proc Log
-
-		#endregion
-
-		#region -- Security ---------------------------------------------------------------
-
-		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
-		/// <param name="securityToken">Zu prüfender Token.</param>
-		public void DemandToken(string securityToken)
-		{
-			if (!httpAuthentification || String.IsNullOrEmpty(securityToken))
-				return;
-
-			if (!TryDemandToken(securityToken))
-				throw CreateAuthorizationException(securityToken);
-		} // proc DemandToken
-
-		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
-		/// <param name="securityToken">Zu prüfender Token.</param>
-		/// <returns><c>true</c>, wenn der Token erlaubt ist.</returns>
-		public bool TryDemandToken(string securityToken)
-		{
-			if (!httpAuthentification)
-				return true;
-			if (String.IsNullOrEmpty(securityToken))
-				return true;
-
-			return User != null && User.IsInRole(securityToken);
-		} // proc TryDemandToken
-
-		public HttpResponseException CreateAuthorizationException(string securityText) // force user, if no user is given
-		 => new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
 
 		#endregion
 
@@ -1231,6 +1255,40 @@ namespace TecWare.DE.Server
 				DEThread.CurrentThread.WaitFinish(500);
 		} // proc ExecuteHttpRequest
 
+		private async Task ProcessAcceptWebSocket(HttpListenerContext ctx, string absolutePath, AuthenticationSchemes authentificationScheme)
+		{
+			// search for the websocket endpoint
+			var subProtocol = GetWebSocketProtocol(absolutePath, Procs.ParseMultiValueHeader(ctx.Request.Headers["Sec-WebSocket-Protocol"]).ToArray());
+			if (subProtocol == null) // no endpoint registered -> close the socket
+			{
+				var webSocket = await ctx.AcceptWebSocketAsync(null);
+				await webSocket.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint is not defined.", CancellationToken.None);
+				webSocket.WebSocket.Dispose();
+			}
+			else
+			{
+				var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous);
+				try
+				{
+					// authentificate the user
+					context.DemandToken(subProtocol.SecurityToken);
+
+					// accept the protocol to the client
+					await context.AcceptWebSocketAsync(subProtocol.Protocol);
+					// accept the protocol to the server
+					if (!subProtocol.AcceptWebSocket(context)) // socket is not excepted
+					{
+						await context.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint is not defined.", CancellationToken.None);
+						context.WebSocket.Dispose();
+					}
+				}
+				catch
+				{
+					throw;
+				}
+			}
+		} // func ProcessAcceptWebSocket
+
 		private void ProcessRequest(HttpListenerContext ctx)
 		{
 			var url = ctx.Request.Url;
@@ -1247,17 +1305,17 @@ namespace TecWare.DE.Server
 
 			if (ctx.Request.IsWebSocketRequest)
 			{
-				var subProtocol = GetWebSocketProtocol(absolutePath, Procs.ParseMultiValueHeader(ctx.Request.Headers["Sec-WebSocket-Protocol"]).ToArray());
-				if (subProtocol != null)
+				try
 				{
-					var webSocketContext = ctx.AcceptWebSocketAsync(subProtocol.Protocol).Result;
-					if (!subProtocol.AcceptWebSocket(new DEWebSocketContext(this, ctx, webSocketContext, absolutePath)))
-						Task.Run(async () => await webSocketContext.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint failure", CancellationToken.None));
+					ProcessAcceptWebSocket(ctx, absolutePath, authentificationScheme).Wait(); // block worker
 				}
-				else
+				catch (AggregateException e)
 				{
-					var webSocket = ctx.AcceptWebSocketAsync(null).Result;
-					Task.Run(async () => await webSocket.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint is not defined.", CancellationToken.None));
+					ProcessResponeOnException(ctx, e.InnerException, null);
+				}
+				catch (Exception e)
+				{
+					ProcessResponeOnException(ctx, e, null);
 				}
 			}
 			else
@@ -1307,25 +1365,7 @@ namespace TecWare.DE.Server
 					}
 					catch (Exception e)
 					{
-						// extract target exception
-						var ex = e;
-						while (ex is TargetInvocationException)
-							ex = ex.InnerException;
-
-						// check for a http exception
-						var httpEx = ex as HttpResponseException;
-
-						// Start logging, or stop
-						if (httpEx != null && httpEx.Code == HttpStatusCode.Unauthorized)
-							r.LogStop();
-						else
-						{
-							r.LogStart();
-							r.Log(l => l.WriteException(ex));
-						}
-
-						ctx.Response.StatusCode = httpEx != null ? (int)httpEx.Code : (int)HttpStatusCode.InternalServerError;
-						ctx.Response.StatusDescription = FilterChar(ex.Message);
+						ProcessResponeOnException(ctx, e, r);
 					}
 					finally
 					{
@@ -1334,6 +1374,39 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc ProcessRequest
+
+		private void ProcessResponeOnException(HttpListenerContext ctx, Exception e, DEHttpContext r)
+		{
+			// extract target exception
+			var ex = e;
+			while (ex is TargetInvocationException)
+				ex = ex.InnerException;
+
+			// check for a http exception
+			var httpEx = ex as HttpResponseException;
+
+			// Start logging, or stop
+			if (httpEx != null && httpEx.Code == HttpStatusCode.Unauthorized)
+			{
+				r?.LogStop();
+			}
+			else
+			{
+				if (r != null)
+				{
+					r.LogStart();
+					r.Log(l => l.WriteException(ex));
+				}
+				else
+				{
+					Log.Except(e);
+				}
+			}
+
+			ctx.Response.StatusCode = httpEx != null ? (int)httpEx.Code : (int)HttpStatusCode.InternalServerError;
+			ctx.Response.StatusDescription = FilterChar(ex.Message);
+			ctx.Response.Close();
+		} // proc ProcessResponeOnException
 
 		private IDEWebSocketProtocol GetWebSocketProtocol(string absolutePath, string[] subProtocols)
 		{

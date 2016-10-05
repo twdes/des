@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -95,8 +97,9 @@ namespace TecWare.DE.Server
 		private readonly Uri serverUri;
 		private readonly Random random = new Random(Environment.TickCount);
 
-		private readonly CancellationTokenSource sessionDisposeClose;
+		private readonly CancellationTokenSource sessionDisposeSource;
 		private readonly Task communicationProcess;
+		private bool isDisposing = false;
 
 		private string currentUsePath = null;
 		private int currentUseToken = -1;
@@ -113,8 +116,8 @@ namespace TecWare.DE.Server
 			else // use uri
 				this.serverUri = serverUri;
 
-			this.sessionDisposeClose = new CancellationTokenSource();
-			this.communicationProcess = Task.Run(ConnectionProcessor).ContinueWith(CheckBackgroundTask);
+			this.sessionDisposeSource = new CancellationTokenSource();
+			this.communicationProcess = Task.Run(ConnectionProcessor, sessionDisposeSource.Token).ContinueWith(CheckBackgroundTask);
 		} // ctor
 
 		public void Dispose()
@@ -126,9 +129,17 @@ namespace TecWare.DE.Server
 		{
 			if (disposing)
 			{
-				sessionDisposeClose.Cancel();
+				isDisposing = true;
+
+				lock (socketLock)
+				{
+					if (clientSocket != null && clientSocket.State == WebSocketState.Open)
+						Task.Run(() => clientSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None)).Wait();
+				}
+
+				sessionDisposeSource.Cancel();
 				communicationProcess.Wait();
-				sessionDisposeClose.Dispose();
+				sessionDisposeSource.Dispose();
 			}
 		} // proc Dispose
 
@@ -149,23 +160,25 @@ namespace TecWare.DE.Server
 			var recvBuffer = new byte[1 << 20];
 			var lastNativeErrorCode = Int32.MinValue;
 			var currentConnectionTokenSource = (CancellationTokenSource)null;
+			var sessionDisposeToken = sessionDisposeSource.Token;
 
-			while (!sessionDisposeClose.IsCancellationRequested)
+			while (!isDisposing && !sessionDisposeToken.IsCancellationRequested )
 			{
 				var connectionEstablished = false;
 
 				// create the connection
 				var socket = new ClientWebSocket();
+				socket.Options.Credentials = GetCredentials();
 				socket.Options.AddSubProtocol("dedbg");
 
 				try
 				{
-					await socket.ConnectAsync(serverUri, sessionDisposeClose.Token);
+					await socket.ConnectAsync(serverUri, sessionDisposeToken);
 					connectionEstablished = true;
 					lock (socketLock)
 					{
 						clientSocket = socket;
-						
+
 						currentConnectionTokenSource = new CancellationTokenSource();
 						currentConnectionToken = currentConnectionTokenSource.Token;
 					}
@@ -173,11 +186,14 @@ namespace TecWare.DE.Server
 				}
 				catch (WebSocketException e)
 				{
-					if (lastNativeErrorCode != e.NativeErrorCode)
+					if (lastNativeErrorCode != e.NativeErrorCode) // connect exception
 					{
-						OnConnectionFailure(e);
-						lastNativeErrorCode = e.NativeErrorCode;
+						if (!OnConnectionFailure(e))
+							lastNativeErrorCode = e.NativeErrorCode;
 					}
+				}
+				catch (TaskCanceledException)
+				{
 				}
 				catch (Exception e)
 				{
@@ -191,7 +207,7 @@ namespace TecWare.DE.Server
 					if (socket.State == WebSocketState.Open)
 					{
 						if (currentUsePath != null && currentUsePath != "/" && currentUsePath.Length > 0)
-							currentUseToken = (int)await SendAsync(socket, GetUseMessage(currentUsePath), false, sessionDisposeClose.Token);
+							currentUseToken = (int)await SendAsync(socket, GetUseMessage(currentUsePath), false, sessionDisposeToken);
 						else
 							CurrentUsePath = "/";
 					}
@@ -199,15 +215,18 @@ namespace TecWare.DE.Server
 					// wait for answers
 					recvOffset = 0;
 					while (socket.State == WebSocketState.Open &&
-						!sessionDisposeClose.IsCancellationRequested)
+						!sessionDisposeToken.IsCancellationRequested)
 					{
 						// check if the buffer is large enough
 						var recvRest = recvBuffer.Length - recvOffset;
 						if (recvRest == 0)
-							throw new OutOfMemoryException("Debug answer is to large.");
+						{
+							await socket.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message to big.", sessionDisposeToken);
+							break;
+						}
 
 						// receive the characters
-						var r = await socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), sessionDisposeClose.Token);
+						var r = await socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), sessionDisposeToken);
 						if (r.MessageType == WebSocketMessageType.Text)
 						{
 							recvOffset += r.Count;
@@ -230,12 +249,18 @@ namespace TecWare.DE.Server
 				}
 				catch (WebSocketException e)
 				{
-					lastNativeErrorCode = e.NativeErrorCode;
-					OnCommunicationException(e);
+					if (!isDisposing)
+					{
+						lastNativeErrorCode = e.NativeErrorCode;
+						OnCommunicationException(e);
+					}
+				}
+				catch (TaskCanceledException)
+				{
 				}
 
 				// close connection
-				if (!sessionDisposeClose.IsCancellationRequested && connectionEstablished)
+				if (!isDisposing && connectionEstablished)
 					OnConnectionLost();
 
 				lock (socketLock)
@@ -255,6 +280,9 @@ namespace TecWare.DE.Server
 				socket.Dispose();
 			}
 		} // func ConnectionProcessor
+
+		protected virtual ICredentials GetCredentials()
+			=> null;
 
 		private void CheckBackgroundTask(Task t)
 		{
@@ -404,9 +432,10 @@ namespace TecWare.DE.Server
 
 		protected virtual void OnConnectionEstablished() { }
 
-		protected virtual void OnConnectionFailure(Exception e)
+		protected virtual bool OnConnectionFailure(Exception e)
 		{
 			Debug.Print("Connection failed: {0}", e.ToString());
+			return false;
 		} // proc OnConnectionFailure
 
 		protected virtual void OnCommunicationException(Exception e)

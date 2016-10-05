@@ -495,18 +495,18 @@ namespace TecWare.DE.Server
 		#region -- class LuaDebugSession --------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		private sealed class LuaDebugSession : IDisposable
+		/// <summary>Debug session and scope for the commands.</summary>
+		private sealed class LuaDebugSession : LuaTable, IDisposable
 		{
 			private readonly LuaEngine engine;
 			private readonly LoggerProxy log;
 			private readonly IDEWebSocketContext context;
 
-			private CancellationTokenSource cancelSessionTokenSource;
-			private Task sessionTask;
+			private readonly CancellationTokenSource cancelSessionTokenSource;
+			private readonly Task sessionTask;
 
-			private DEConfigItem currentItem = null;
-
+			private DEConfigItem currentItem = null; // current node, that is used as parent
+			
 			public LuaDebugSession(LuaEngine engine, IDEWebSocketContext context)
 			{
 				this.engine = engine;
@@ -517,61 +517,81 @@ namespace TecWare.DE.Server
 				sessionTask = Task.Run(Execute, cancelSessionTokenSource.Token);
 
 				UseNode("/");
+
+				Info("Debug session established.");
 			} // ctor
 
 			public void Dispose()
 			{
+				Info("Debug session closed.");
 				// Dispose session
 				cancelSessionTokenSource.Cancel();
+				cancelSessionTokenSource.Dispose();
+
+				// close context
+				context.Dispose();
 			} // proc Dispose
 
 			private async Task Execute()
 			{
 				var recvOffset = 0;
 				var recvBuffer = new byte[1 << 20]; // 1MB buffer
-				while (Socket.State == WebSocketState.Open)
+				try
 				{
-					var recvRest = recvBuffer.Length - recvOffset;
-
-					// buffer is too small, close connection
-					if (recvRest == 0)
+					while (Socket.State == WebSocketState.Open && !cancelSessionTokenSource.IsCancellationRequested)
 					{
-						Dispose();
-						return;
-					}
+						var recvRest = recvBuffer.Length - recvOffset;
 
-					// get bytes
-					var r = await Socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), cancelSessionTokenSource.Token);
-					if (r.MessageType == WebSocketMessageType.Text) // get only text messages
-					{
-						recvOffset += r.Count;
-						if (r.EndOfMessage) // eom
+						// buffer is too small, close connection
+						if (recvRest == 0)
+							break;
+
+						// get bytes
+						var r = await Socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), cancelSessionTokenSource.Token);
+						if (r.MessageType == WebSocketMessageType.Text) // get only text messages
 						{
-							// first decode message
-							try
+							recvOffset += r.Count;
+							if (r.EndOfMessage) // eom
 							{
-								var xMessage = XElement.Parse(Encoding.UTF8.GetString(recvBuffer, 0, recvOffset));
+								// first decode message
 								try
 								{
-									await ProcessMessage(xMessage);
+									var xMessage = XElement.Parse(Encoding.UTF8.GetString(recvBuffer, 0, recvOffset));
+									try
+									{
+										await ProcessMessage(xMessage);
+									}
+									catch (Exception e)
+									{
+										var token = xMessage.GetAttribute("token", 0);
+										if (token > 0) // answer requested
+											await SendAnswerAsync(xMessage, CreateException(new XElement("exception", new XAttribute("token", token)), e));
+										else
+											throw; // fall to next
+									}
 								}
 								catch (Exception e)
 								{
-									var token = xMessage.GetAttribute("token", 0);
-									if (token > 0) // answer requested
-										await SendAnswerAsync(xMessage, CreateException(new XElement("exception", new XAttribute("token", token)), e));
-									else
-										throw; // fall to next
+									log.Except(e);
 								}
-							}
-							catch (Exception e)
-							{
-								log.Except(e);
-							}
 
-							recvOffset = 0;
+								recvOffset = 0;
+							}
 						}
 					}
+				}
+				catch (WebSocketException e)
+				{
+					if (e.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely)
+						log.Except("Debug session closed.", e);
+				}
+				catch (Exception e)
+				{
+					log.Except("Debug session failed.", e);
+				}
+				finally
+				{
+					Dispose();
 				}
 			} // proc Execute
 
@@ -580,12 +600,12 @@ namespace TecWare.DE.Server
 				var aggE = e as AggregateException;
 				if (aggE != null)
 				{
-					var @enum = aggE.InnerExceptions.GetEnumerator();
-					if (@enum.MoveNext())
+					var enumerator = aggE.InnerExceptions.GetEnumerator();
+					if (enumerator.MoveNext())
 					{
-						CreateException(x, @enum.Current);
-						while (@enum.MoveNext())
-							x.Add(CreateException(new XElement("innerException"), @enum.Current));
+						CreateException(x, enumerator.Current);
+						while (enumerator.MoveNext())
+							x.Add(CreateException(new XElement("innerException"), enumerator.Current));
 					}
 					else
 						x.Add(new XAttribute("message", e.Message));
@@ -650,6 +670,12 @@ namespace TecWare.DE.Server
 				var buf = Encoding.UTF8.GetBytes(xAnswer.ToString(SaveOptions.None));
 				await Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, cancelSessionTokenSource.Token);
 			} // proc SendAnswerAsync
+
+			private void Info(string message)
+				=> log.Info(message);
+
+			protected override object OnIndex(object key)
+				=> base.OnIndex(key) ?? currentItem.GetValue(key);
 
 			#region -- Execute --------------------------------------------------------------
 
@@ -757,7 +783,7 @@ namespace TecWare.DE.Server
 
 			private XElement GetNodeList(XElement xMessage)
 			{
-				return new XElement("list",
+				return new XElement("return",
 					GetNodeList(currentItem, xMessage.GetAttribute("r", false))
 				);
 			} // func GetNodeList
@@ -957,6 +983,9 @@ namespace TecWare.DE.Server
 
 		bool IDEWebSocketProtocol.AcceptWebSocket(IDEWebSocketContext webSocket)
 		{
+			if (!Config.GetAttribute("allowDebug", false))
+				return false;
+
 			new LuaDebugSession(this, webSocket);
 			return true;
 		}
@@ -999,7 +1028,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		public override string Icon { get { return "/images/lua16.png"; } }
+		public override string Icon => "/images/lua16.png";
 	} // class LuaEngine
 
 	#endregion
