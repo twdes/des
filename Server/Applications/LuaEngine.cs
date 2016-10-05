@@ -685,7 +685,7 @@ namespace TecWare.DE.Server
 				var chunk = engine.Lua.CompileChunk(xMessage.Value, "remote.lua", null);
 
 				// run the chunk on the node
-				var r = chunk.Run(currentItem);
+				var r = chunk.Run(this);
 
 				// return the result
 				var xAnswer = new XElement("return");
@@ -789,6 +789,9 @@ namespace TecWare.DE.Server
 			} // func GetNodeList
 
 			#endregion
+
+			[LuaMember(nameof(CurrentNode))]
+			public DEConfigItem CurrentNode => currentItem;
 
 			public WebSocket Socket => context.WebSocket;
 		} // class LuaDebugSession

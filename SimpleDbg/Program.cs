@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using CommandLine;
+using CommandLine.Text;
 using Neo.IronLua;
 using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
@@ -146,8 +147,9 @@ namespace TecWare.DE.Server
 				},
 				errors =>
 				{
-					foreach (var e in errors)
-						Console.WriteLine(e.Tag.ToString());
+					var ht = HelpText.AutoBuild<SimpleDebugArguments>(r);
+					Console.WriteLine(ht.ToString());
+
 					return 1;
 				});
 		} // func Main
