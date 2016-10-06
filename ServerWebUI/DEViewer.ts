@@ -51,6 +51,13 @@ function formatValue(type: string, format: string, rawValue: string): string {
 } // formatValue
 
 
+function info(message: string, ...args:any[]) {
+  if (console != null) {
+    console.log(message, args);
+  }
+} // info
+
+
 class DETab {
   private app: DEViewer;
   private viewId: string;
@@ -103,24 +110,105 @@ class DETab {
 
 
 class DELogTab extends DETab {
+  private onLoading: boolean = false;
+  private currentLines: number = 0; // current loaded lines
+  private totalLines: number = 0; // last updatedtotal lines
+  private newTotalLines: number = 0; // per event notified total lines
+  private currentUrl: string;
+
+  private fetchLogButton: JQuery;
+
   constructor(app: DEViewer) {
     super(app, "tabLog");
-  }
+
+    this.fetchLogButton = $('#fetchAllAction');
+    this.fetchLogButton.css("visibility", "collapse");
+    this.fetchLogButton.click(
+      (function () {
+        this.reload2(true);
+      }).bind(this)
+    );
+  } // ctor
+
+  public unselect() {
+    super.unselect();
+  } // select
 
   public reload(url: string) {
     super.reload(url);
+    this.currentUrl = url;
+    this.reload2(false);
+  } // reload
+
+  private formatLogLine(lineStamp: Date, lineType: string, lineText: string): string {
+
+    return [
+      '<tr>',
+        '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumIntegerDigits: 3 }), '</td>',
+        '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
+      '</tr>'
+    ].join("");
+  } // formatLogLine
+
+  private appendToggleEvents(lines: JQuery) {
+    $('.logLineTime', lines).click(
+      function () {
+        var text = $('.logLineText', $(this).parent());
+        if (text.hasClass('logLineTextFull')) {
+          text.scrollTop(0);
+        }
+        text.toggleClass("logLineTextFull");
+        text.toggleClass("logLineTextSingle");
+      }
+    );
+  } // appendToggleEvents
+
+  private updateStatusBar() {
+
+    var currentCount = $('#currentCount', this.RootElement);
+    currentCount.text(this.currentLines.toLocaleString() + " Lines");
+
+    if (this.totalLines > this.currentLines) {
+      this.fetchLogButton.css("visibility", "visible");
+      this.fetchLogButton.text("Read (" + this.totalLines.toLocaleString() + ")");
+    }
+  } // updateFetchAllButton
+  
+  public reload2(all: boolean) {
 
     var firstDate: number = null;
+    var tabItems = $('#tabItems', this.RootElement);
 
-    this.RootElement.empty();
+    if (this.onLoading)
+      return;
+
+    tabItems.empty();
 
     if (!this.IsVisible)
       return;
 
-    this.App.serverGet(url + "?action=listget&id=tw_lines&start=-500", // last 500
+    this.onLoading = true;
+
+    var state = $('#state', this.RootElement);
+    
+    state.text('Loading...');
+    this.fetchLogButton.css("visibility", "collapse");
+
+    var listGetCommand = "?action=listget&id=tw_lines";
+    if (!all) {
+      listGetCommand += "&start=-100"; // last 100
+    }
+
+    this.App.serverGet(this.currentUrl + listGetCommand,
       (function (data) {
 
         var innerHtmlElements = new Array();
+
+        var startAt = Number($('items', data).attr('s'))
+        this.currentLines = Number($('items', data).attr('c'));
+        this.totalLines = Number($('items', data).attr('tc'));
+
+        state.text('Parse ' + this.currentLines.toString() + '...');
 
         $('items > line', data).get().reverse().forEach(
           (function (element) {
@@ -134,30 +222,106 @@ class DELogTab extends DETab {
               innerHtmlElements.push(['<tr><td colspan="2" class="logLineHeader">Datum: ', lineStamp.toLocaleDateString(), '</td></tr>']);
               firstDate = lineStamp.getDate();
             }
-            innerHtmlElements.push([
-              '<tr>',
-              '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumIntegerDigits: 3 }), '</td>',
-              '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
-            '</tr>'].join("")
-            );
+            innerHtmlElements.push(this.formatLogLine(lineStamp, lineType, lineText));
           }).bind(this)
         );
 
-        this.RootElement.html(innerHtmlElements.join(""));
+        // create html elements
+        var lines = $(innerHtmlElements.join(""));
 
-        // aktivate toggle
-        $('.logLineTime', this.RootElement).click(
-          function () {
-            var text = $('.logLineText', $(this).parent());
-            text.toggleClass("logLineTextFull");
-            text.toggleClass("logLineTextSingle");
-          }
-        );
+        // activate toggle
+        this.appendToggleEvents(lines);
+
+        // update view
+        tabItems.append(lines);
+
+        // set the the fetch all button
+        this.updateStatusBar();
 
         this.RootElement.scrollTop(0);
 
+      }).bind(this),
+      (function () {
+        state.text('Done.');
+        this.onLoading = false;
+
+        this.appendLines();
       }).bind(this));
   } // reload
+
+  private appendLines() {
+
+    if (this.onLoading) // do not load lines, durring full load
+      return;
+
+    // are there lines to append
+    var diff = this.newTotalLines - this.totalLines
+    if (diff <= 0)
+      return;
+
+    var tabItems = $('#tabItems', this.RootElement);
+    var listGetCommand = "?action=listget&id=tw_lines&start=" + this.totalLines + "&count=" + diff;
+
+    this.onLoading = true;
+    this.App.serverGet(this.currentUrl + listGetCommand,
+      // -- fnRet --
+      (function (data) {
+
+        var innerHtmlElements = new Array();
+        this.totalLines = this.newTotalLines; // update totalLines
+        this.currentLines = this.currentLines + diff;
+
+        $('items > line', data).get().reverse().forEach(
+          (function (element) {
+
+            var line = $(element);
+            innerHtmlElements.push(
+              this.formatLogLine(
+                new Date(Date.parse(line.attr('stamp'))),
+                line.attr('typ'),
+                line.text().replace(/\</g, '&lt;').replace(/\>/g, '&gt;')
+              )
+           );
+          }).bind(this)
+        );
+
+        // create html elements
+        var lines = $(innerHtmlElements.join(""));
+
+        // activate toggle
+        this.appendToggleEvents(lines);
+        $('.logLineTime', lines).fadeIn(700);
+        $('.logLineCell', lines).fadeIn(700);
+
+        // update view
+        var firstHeader = $('.logLineHeader', tabItems).first();
+        if (firstHeader == null)
+          tabItems.append(lines);
+        else
+          lines.insertAfter(firstHeader.parent());
+        
+        // set the the fetch all button
+        this.updateStatusBar();
+        
+      }).bind(this),
+
+      // -- fnFinish --
+      (function () {
+
+        this.onLoading = false;
+        this.appendLines();
+
+      }).bind(this)
+    );
+  } // appendLines
+
+  public updateLines(data: JQuery) {
+    
+    var lines = $('lines', data);
+
+    this.newTotalLines = Number(lines.attr('lineCount'));
+    this.appendLines();
+  } // updateLine
 
 } // class DELogTab
 
@@ -336,16 +500,17 @@ class DEServerInfo extends DETab {
 
 class DEViewer {
 	
-	private currentNodeElement: JQuery;
-  private currentUriElement: JQuery;
-  private currentImageElement: JQuery;
-  private refreshActionElement: JQuery;
-	private tabsElement: JQuery;
+	private currentNodeElement: JQuery;   // Combobox with the nodes
+  private currentUriElement: JQuery;    // shows the current selected uri
+  private currentImageElement: JQuery;  // element that shows the image of the current node
+  private refreshActionElement: JQuery; // refresh Link
+	private tabsElement: JQuery;          // is the base element that contains the tabs
 
   private onReloading: boolean = false;
-  private currentPath: string;
-  private currentHost: string;
-  private currentUri: string;
+  private currentPath: string;  // selected path
+  private currentHost: string;  // host
+  private currentUri: string = "";   // selected uri
+
   private currentWebSocket: WebSocket;
 
   private currentTab: DETab;
@@ -388,9 +553,11 @@ class DEViewer {
     this.selectTab(this.tabs[0]);
 
 		// initialize view empty
-		this.currentNodeElement.empty();
-    this.beginReloadIndex();
-  } // init
+    this.currentNodeElement.empty();
+
+    this.startEventListener(); // start event listener to monitor the connection to the server
+    this.beginReloadIndex(); // start also load of index
+ } // init
 
   public serverGet(request: string, fnRet: (data, status?: string, xhr?) => any, fnFinish?: () => any) {
 
@@ -414,7 +581,7 @@ class DEViewer {
       .fail(function (jqXHR, textStatus, errorThrown) {
         if (fnFinish != null)
           fnFinish();
-        alert("Befehl konnte nicht vom Server verarbeitet werden.\nFehler: " + errorThrown);
+        alert("Could not execute command.\nError: " + errorThrown);
       }
    );
   } // serverGet
@@ -442,7 +609,7 @@ class DEViewer {
 
     this.onReloading = true;
     this.refreshActionElement.toggleClass("actionButton", false);
-		this.currentUriElement.text("Loading...");
+    this.updateStatus("Loading...");
 
     var obj = this;
     this.serverGet('?action=list',
@@ -513,15 +680,10 @@ class DEViewer {
     this.beginRefreshTimer = setTimeout(
       (function () {
 
-        // stop listening for events
-        this.stopEventListener();
-
         // set the new node
         this.currentUri = option.attr('uri');
-        this.currentUriElement.text(this.currentHost + this.currentUri);
+        this.updateStatus(null);
         this.currentImageElement.attr("src", option.attr("icon"));
-
-        this.startEventListener();
 
         var hasLog = option.attr('hasLog') === "true";
 
@@ -572,18 +734,37 @@ class DEViewer {
       }).bind(this), 200);
   } // beginRefreshUri
 
-  private startEventListener() {
-    var wsHost = "ws" + this.currentHost.substring(4);
-    
-    this.currentWebSocket = new WebSocket(wsHost + this.currentUri, "des_event");
-    this.currentWebSocket.onmessage = this.eventListenerMessage.bind(this);
-  } // startEventListener
+  private updateStatus(state: string) {
+    if (state == null) {
+      state = this.currentHost + this.currentUri;
+    }
+    this.currentUriElement.text(state);
+  } // updateStatus
+  
+  /* 
+   * -- Event Listener --
+   * Controls the connection to the server, and updates the triggers updates to the ui.
+   * - the notification is started, with startEventListener
+   */ 
 
+  private startEventListener() {
+    // exchange the http to ws (it also changes https to wss)
+    var wsHost = "ws" + this.currentHost.substring(4);
+
+    // create the WebSocket
+    info("Connection to %s", wsHost);
+    this.updateStatus("Connecting...");
+    this.currentWebSocket = new WebSocket(wsHost, "des_event");
+    this.currentWebSocket.onopen = this.eventListenerOnOpen.bind(this);
+    this.currentWebSocket.onmessage = this.eventListenerMessage.bind(this);
+    this.currentWebSocket.onclose = this.eventListenerOnClose.bind(this);
+  } // startEventListener
+  
   private eventListenerMessage(ev: MessageEvent) {
     if (ev.type === "message") {
       var d = $(':root', $.parseXML(ev.data));
 
-      //console.log("raw event: " + ev.data);
+      //info("raw event: %s", ev.data);
 
       // check the path
       if (this.currentUri === d.attr('path').substring(1)) {
@@ -591,18 +772,39 @@ class DEViewer {
         if (eventId === 'tw_properties')
           (<DEProperties>this.tabs[1]).updateProperty(d.attr('index'), d.text());
         else if (eventId === 'tw_lines') {
-          // todo
+          (<DELogTab>this.tabs[0]).updateLines(d);
         }
       }
-
     }
   } // eventListenerMessage
-  
+
+  private eventListenerOnOpen() {
+
+    // notify ready state
+    info("Connection opened.");
+    this.updateStatus(null);
+
+    // refresh index, content
+    this.beginReloadIndex();
+  } // eventListenerOnOpen
+
+  private eventListenerOnClose(ev: CloseEvent) {
+
+    // connection lost, reconnect to server
+    info("Connection closed: %s", ev);
+
+    // reconnect to server
+    setTimeout(
+      this.startEventListener.bind(this), 5000
+    );
+  } // eventListenerOnClose
+
   private stopEventListener() {
-    if (this.currentWebSocket != null)
-      this.currentWebSocket.close();
+    var tmp = this.currentWebSocket;
     this.currentWebSocket = null;
-  } // startEventListener
+    if (tmp != null)
+      tmp.close();
+  } // stopEventListener
 
   get TabBarElement() { return this.tabsElement; }
 } // class DEViewer

@@ -1073,7 +1073,7 @@ namespace TecWare.DE.Server
 
 		public IDEServerQueue Queue => queue;
 
-		public override string Icon { get { return "/images/des16.png"; } }
+		public override string Icon => "/images/des16.png";
 
 		// -- Static --------------------------------------------------------------
 

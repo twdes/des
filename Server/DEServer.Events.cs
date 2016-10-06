@@ -259,7 +259,7 @@ namespace TecWare.DE.Server
 
 			if (count < 0) // Anzahl korrigieren
 				count = 0;
-			else if (startAt + count > listCount)
+			else if (count == Int32.MaxValue || startAt + count > listCount)
 			{
 				count = listCount - startAt;
 				if (count < 0)

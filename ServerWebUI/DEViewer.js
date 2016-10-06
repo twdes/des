@@ -45,6 +45,15 @@ function formatValue(type, format, rawValue) {
     else
         return rawValue;
 } // formatValue
+function info(message) {
+    var args = [];
+    for (var _i = 1; _i < arguments.length; _i++) {
+        args[_i - 1] = arguments[_i];
+    }
+    if (console != null) {
+        console.log(message, args);
+    }
+} // info
 var DETab = (function () {
     function DETab(app, viewId) {
         var _this = this;
@@ -99,21 +108,77 @@ var DETab = (function () {
         configurable: true
     });
     return DETab;
-})(); // class DETab
+}()); // class DETab
 var DELogTab = (function (_super) {
     __extends(DELogTab, _super);
     function DELogTab(app) {
         _super.call(this, app, "tabLog");
-    }
+        this.onLoading = false;
+        this.currentLines = 0; // current loaded lines
+        this.totalLines = 0; // last updatedtotal lines
+        this.newTotalLines = 0; // per event notified total lines
+        this.fetchLogButton = $('#fetchAllAction');
+        this.fetchLogButton.css("visibility", "collapse");
+        this.fetchLogButton.click((function () {
+            this.reload2(true);
+        }).bind(this));
+    } // ctor
+    DELogTab.prototype.unselect = function () {
+        _super.prototype.unselect.call(this);
+    }; // select
     DELogTab.prototype.reload = function (url) {
         _super.prototype.reload.call(this, url);
+        this.currentUrl = url;
+        this.reload2(false);
+    }; // reload
+    DELogTab.prototype.formatLogLine = function (lineStamp, lineType, lineText) {
+        return [
+            '<tr>',
+            '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumIntegerDigits: 3 }), '</td>',
+            '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
+            '</tr>'
+        ].join("");
+    }; // formatLogLine
+    DELogTab.prototype.appendToggleEvents = function (lines) {
+        $('.logLineTime', lines).click(function () {
+            var text = $('.logLineText', $(this).parent());
+            if (text.hasClass('logLineTextFull')) {
+                text.scrollTop(0);
+            }
+            text.toggleClass("logLineTextFull");
+            text.toggleClass("logLineTextSingle");
+        });
+    }; // appendToggleEvents
+    DELogTab.prototype.updateStatusBar = function () {
+        var currentCount = $('#currentCount', this.RootElement);
+        currentCount.text(this.currentLines.toLocaleString() + " Lines");
+        if (this.totalLines > this.currentLines) {
+            this.fetchLogButton.css("visibility", "visible");
+            this.fetchLogButton.text("Read (" + this.totalLines.toLocaleString() + ")");
+        }
+    }; // updateFetchAllButton
+    DELogTab.prototype.reload2 = function (all) {
         var firstDate = null;
-        this.RootElement.empty();
+        var tabItems = $('#tabItems', this.RootElement);
+        if (this.onLoading)
+            return;
+        tabItems.empty();
         if (!this.IsVisible)
             return;
-        this.App.serverGet(url + "?action=listget&id=tw_lines&start=-500", // last 500
-        (function (data) {
+        this.onLoading = true;
+        var state = $('#state', this.RootElement);
+        state.text('Loading...');
+        this.fetchLogButton.css("visibility", "collapse");
+        var listGetCommand = "?action=listget&id=tw_lines";
+        if (!all) {
+            listGetCommand += "&start=-100"; // last 100
+        }
+        this.App.serverGet(this.currentUrl + listGetCommand, (function (data) {
             var innerHtmlElements = new Array();
+            var startAt = Number($('items', data).attr('s'));
+            this.currentLines = Number($('items', data).attr('c'));
+            this.totalLines = Number($('items', data).attr('tc'));
+            state.text('Parse ' + this.currentLines.toString() + '...');
             $('items > line', data).get().reverse().forEach((function (element) {
                 var line = $(element);
                 var lineType = line.attr('typ');
@@ -123,25 +188,71 @@ var DELogTab = (function (_super) {
                     innerHtmlElements.push(['<tr><td colspan="2" class="logLineHeader">Datum: ', lineStamp.toLocaleDateString(), '</td></tr>']);
                     firstDate = lineStamp.getDate();
                 }
-                innerHtmlElements.push([
-                    '<tr>',
-                    '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', (_a = {}, _a["minimumIntegerDigits"] = 3, _a)), '</td>',
-                    '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
-                    '</tr>'].join(""));
-                var _a;
+                innerHtmlElements.push(this.formatLogLine(lineStamp, lineType, lineText));
             }).bind(this));
-            this.RootElement.html(innerHtmlElements.join(""));
-            // aktivate toggle
-            $('.logLineTime', this.RootElement).click(function () {
-                var text = $('.logLineText', $(this).parent());
-                text.toggleClass("logLineTextFull");
-                text.toggleClass("logLineTextSingle");
-            });
+            // create html elements
+            var lines = $(innerHtmlElements.join(""));
+            // activate toggle
+            this.appendToggleEvents(lines);
+            // update view
+            tabItems.append(lines);
+            // set the the fetch all button
+            this.updateStatusBar();
             this.RootElement.scrollTop(0);
+        }).bind(this), (function () {
+            state.text('Done.');
+            this.onLoading = false;
+            this.appendLines();
         }).bind(this));
     }; // reload
+    DELogTab.prototype.appendLines = function () {
+        if (this.onLoading)
+            return;
+        // are there lines to append
+        var diff = this.newTotalLines - this.totalLines;
+        if (diff <= 0)
+            return;
+        var tabItems = $('#tabItems', this.RootElement);
+        var listGetCommand = "?action=listget&id=tw_lines&start=" + this.totalLines + "&count=" + diff;
+        this.onLoading = true;
+        this.App.serverGet(this.currentUrl + listGetCommand, 
+        // -- fnRet --
+        (function (data) {
+            var innerHtmlElements = new Array();
+            this.totalLines = this.newTotalLines; // update totalLines
+            this.currentLines = this.currentLines + diff;
+            $('items > line', data).get().reverse().forEach((function (element) {
+                var line = $(element);
+                innerHtmlElements.push(this.formatLogLine(new Date(Date.parse(line.attr('stamp'))), line.attr('typ'), line.text().replace(/\</g, '&lt;').replace(/\>/g, '&gt;')));
+            }).bind(this));
+            // create html elements
+            var lines = $(innerHtmlElements.join(""));
+            // activate toggle
+            this.appendToggleEvents(lines);
+            $('.logLineTime', lines).fadeIn(700);
+            $('.logLineCell', lines).fadeIn(700);
+            // update view
+            var firstHeader = $('.logLineHeader', tabItems).first();
+            if (firstHeader == null)
+                tabItems.append(lines);
+            else
+                lines.insertAfter(firstHeader.parent());
+            // set the the fetch all button
+            this.updateStatusBar();
+        }).bind(this), 
+        // -- fnFinish --
+        (function () {
+            this.onLoading = false;
+            this.appendLines();
+        }).bind(this));
+    }; // appendLines
+    DELogTab.prototype.updateLines = function (data) {
+        var lines = $('lines', data);
+        this.newTotalLines = Number(lines.attr('lineCount'));
+        this.appendLines();
+    }; // updateLine
     return DELogTab;
-})(DETab); // class DELogTab
+}(DETab)); // class DELogTab
 var DEProperties = (function (_super) {
     __extends(DEProperties, _super);
     function DEProperties(app) {
@@ -185,7 +296,7 @@ var DEProperties = (function (_super) {
         td.html(formatValue(td.attr('type'), td.attr('format'), value));
     }; // updateProperty
     return DEProperties;
-})(DETab); // class DEProperties
+}(DETab)); // class DEProperties
 var DEConfig = (function (_super) {
     __extends(DEConfig, _super);
     function DEConfig(app) {
@@ -219,7 +330,7 @@ var DEConfig = (function (_super) {
         nodeUI.append('</div>');
     }; // loadElement
     return DEConfig;
-})(DETab); // class DEConfig
+}(DETab)); // class DEConfig
 var DEServerInfo = (function (_super) {
     __extends(DEServerInfo, _super);
     function DEServerInfo(app) {
@@ -259,10 +370,11 @@ var DEServerInfo = (function (_super) {
         });
     }; // reload
     return DEServerInfo;
-})(DETab); // class DEServerInfo
+}(DETab)); // class DEServerInfo
 var DEViewer = (function () {
     function DEViewer() {
         this.onReloading = false;
+        this.currentUri = ""; // selected uri
         this.beginRefreshTimer = -1;
         this.currentPath = $(location).attr('pathname');
         var lastShlash = this.currentPath.lastIndexOf('/');
@@ -293,7 +405,8 @@ var DEViewer = (function () {
         this.selectTab(this.tabs[0]);
         // initialize view empty
         this.currentNodeElement.empty();
-        this.beginReloadIndex();
+        this.startEventListener(); // start event listener to monitor the connection to the server
+        this.beginReloadIndex(); // start also load of index
     }; // init
     DEViewer.prototype.serverGet = function (request, fnRet, fnFinish) {
         var url = this.currentPath + request;
@@ -315,7 +428,7 @@ var DEViewer = (function () {
             .fail(function (jqXHR, textStatus, errorThrown) {
             if (fnFinish != null)
                 fnFinish();
-            alert("Befehl konnte nicht vom Server verarbeitet werden.\nFehler: " + errorThrown);
+            alert("Could not execute command.\nError: " + errorThrown);
         });
     }; // serverGet
     DEViewer.prototype.selectTab = function (tab) {
@@ -335,7 +448,7 @@ var DEViewer = (function () {
             return;
         this.onReloading = true;
         this.refreshActionElement.toggleClass("actionButton", false);
-        this.currentUriElement.text("Loading...");
+        this.updateStatus("Loading...");
         var obj = this;
         this.serverGet('?action=list', function (data) {
             obj.updateIndex(data);
@@ -386,13 +499,10 @@ var DEViewer = (function () {
         var refreshAction = this.refreshActionElement;
         var app = this;
         this.beginRefreshTimer = setTimeout((function () {
-            // stop listening for events
-            this.stopEventListener();
             // set the new node
             this.currentUri = option.attr('uri');
-            this.currentUriElement.text(this.currentHost + this.currentUri);
+            this.updateStatus(null);
             this.currentImageElement.attr("src", option.attr("icon"));
-            this.startEventListener();
             var hasLog = option.attr('hasLog') === "true";
             // reload tabs
             this.tabs[0].showTab(hasLog);
@@ -427,37 +537,69 @@ var DEViewer = (function () {
             });
         }).bind(this), 200);
     }; // beginRefreshUri
+    DEViewer.prototype.updateStatus = function (state) {
+        if (state == null) {
+            state = this.currentHost + this.currentUri;
+        }
+        this.currentUriElement.text(state);
+    }; // updateStatus
+    /*
+     * -- Event Listener --
+     * Controls the connection to the server, and updates the triggers updates to the ui.
+     * - the notification is started, with startEventListener
+     */
     DEViewer.prototype.startEventListener = function () {
+        // exchange the http to ws (it also changes https to wss)
         var wsHost = "ws" + this.currentHost.substring(4);
-        this.currentWebSocket = new WebSocket(wsHost + this.currentUri, "des_event");
+        // create the WebSocket
+        info("Connection to %s", wsHost);
+        this.updateStatus("Connecting...");
+        this.currentWebSocket = new WebSocket(wsHost, "des_event");
+        this.currentWebSocket.onopen = this.eventListenerOnOpen.bind(this);
         this.currentWebSocket.onmessage = this.eventListenerMessage.bind(this);
+        this.currentWebSocket.onclose = this.eventListenerOnClose.bind(this);
     }; // startEventListener
     DEViewer.prototype.eventListenerMessage = function (ev) {
         if (ev.type === "message") {
             var d = $(':root', $.parseXML(ev.data));
-            //console.log("raw event: " + ev.data);
+            //info("raw event: %s", ev.data);
             // check the path
             if (this.currentUri === d.attr('path').substring(1)) {
                 var eventId = d.attr('event');
                 if (eventId === 'tw_properties')
                     this.tabs[1].updateProperty(d.attr('index'), d.text());
                 else if (eventId === 'tw_lines') {
+                    this.tabs[0].updateLines(d);
                 }
             }
         }
     }; // eventListenerMessage
+    DEViewer.prototype.eventListenerOnOpen = function () {
+        // notify ready state
+        info("Connection opened.");
+        this.updateStatus(null);
+        // refresh index, content
+        this.beginReloadIndex();
+    }; // eventListenerOnOpen
+    DEViewer.prototype.eventListenerOnClose = function (ev) {
+        // connection lost, reconnect to server
+        info("Connection closed: %s", ev);
+        // reconnect to server
+        setTimeout(this.startEventListener.bind(this), 5000);
+    }; // eventListenerOnClose
     DEViewer.prototype.stopEventListener = function () {
-        if (this.currentWebSocket != null)
-            this.currentWebSocket.close();
+        var tmp = this.currentWebSocket;
         this.currentWebSocket = null;
-    }; // startEventListener
+        if (tmp != null)
+            tmp.close();
+    }; // stopEventListener
     Object.defineProperty(DEViewer.prototype, "TabBarElement", {
         get: function () { return this.tabsElement; },
         enumerable: true,
         configurable: true
     });
     return DEViewer;
-})(); // class DEViewer
+}()); // class DEViewer
 var desViewer = new DEViewer();
 $(document).ready(function (e) { return desViewer.init(); });
 //# sourceMappingURL=DEViewer.js.map

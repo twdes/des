@@ -113,10 +113,34 @@ span.actionButton:hover {
  * Log-Informationen
  */
 #tabLog {
+    width: 100%;
+}
+
+#tabLogInfoBar {
+    position: fixed;
+    border-top: solid 1px gray;
+    background-color: lightgray;
+    left: 0px;
+    right: 0px;
+    bottom: 0px;
+    height: 20px;
+    font-size: 12px;
+    text-align: right;
+}
+
+#tabItemBlock {
+    position: fixed;
+    display: block;
+    top: 60px;
+    left: 0px;
+    right: 0px;
+    bottom: 24px;
     overflow-x: hidden;
     overflow-y: scroll;
-    width: 100%;
-    height: 100%;
+}
+
+#tabItems {
+    width: 100%
 }
 
 .logLineHeader
