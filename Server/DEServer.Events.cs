@@ -101,12 +101,111 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private int sendedRevision = 0; // Zuletzt übertragene Revision
-		private int currentRevision = 1; // Aktuelle Revision
-		private Dictionary<string, FiredEvent> propertyChanged = new Dictionary<string, FiredEvent>(); // Liste mit allen Events, mit ihrer Revision (sortiert nach rev)
-		private List<IDEWebSocketContext> activeContexts = new List<IDEWebSocketContext>();
+		#region -- class EventSession -----------------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private sealed class EventSession : IDisposable
+		{
+			private readonly DEServer server;
+			private readonly IDEWebSocketContext context;
+
+			#region -- Ctor/Dtor ------------------------------------------------------------
+
+			public EventSession(DEServer server, IDEWebSocketContext context)
+			{
+				this.server = server;
+				this.context = context;
+
+				server.AddEventSession(this);
+			} // ctor
+
+			public void Dispose()
+			{
+				// close if still open
+				if (context.WebSocket.State == WebSocketState.Open)
+					Task.Run(() => CloseAsync(CancellationToken.None)).Wait(1000); // give 1s to close
+				
+				// dispose the context
+				context.Dispose();
+
+				// remove session
+				server.RemoveEventSession(this);
+			} // proc Dispose
+
+			public async Task DisposeAsync(CancellationToken cancellationToken)
+			{
+				await CloseAsync(cancellationToken);
+				await Task.Yield(); // switch context (reason is the list locking)
+				Dispose();
+			} // proc DisposeAsync
+
+			public async Task CloseAsync(CancellationToken cancellationToken)
+			{
+				if (Socket.State == WebSocketState.Open)
+					await context.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close.", cancellationToken);
+			} // proc CloseAsync
+
+			#endregion
+
+			public async Task NotifyAsync(string path, string eventId, string eventLine, CancellationToken cancellationToken)
+			{
+				try
+				{
+					// check if websocket still alive
+					if (Socket.State != WebSocketState.Open)
+					{
+						await DisposeAsync(cancellationToken);
+						return;
+					}
+
+					// check if the path is requested
+					if (context.AbsolutePath.Length > 0 && !path.StartsWith(context.AbsolutePath, StringComparison.OrdinalIgnoreCase))
+						return;
+
+					var segment = new ArraySegment<byte>(context.Server.Encoding.GetBytes(eventLine));
+					await Socket.SendAsync(segment, WebSocketMessageType.Text, true, cancellationToken);
+				}
+				catch (Exception e)
+				{
+					server.Log.Warn("Event Socket notify failed.", e);
+				}
+			} // proc NotifyAsync
+
+			public WebSocket Socket => context.WebSocket;
+		} // class EventSession
+
+		#endregion
+
+		private int sendedRevision = 0;		// Last revision sent to the client (any)
+		private int currentRevision = 1;	// Current revision
+		private readonly Dictionary<string, FiredEvent> propertyChanged = new Dictionary<string, FiredEvent>();	// List of all fired events, sorted by rev.
+		private readonly DEList<EventSession> eventSessions;                                                    // List with webSockets, they request events
+		private bool eventSessionsClosing = false;
 
 		private int lastEventClean = Environment.TickCount;
+
+		private void AddEventSession(EventSession eventSession)
+			=> eventSessions.Add(eventSession);
+
+		private void RemoveEventSession(EventSession eventSession)
+			=> eventSessions.Remove(eventSession);
+
+		private void CloseEventSessions()
+		{
+			eventSessionsClosing = true;
+
+			// close all connections
+			var closeTasks = new List<Task>();
+			while (eventSessions.Count > 0)
+			{
+				var es = eventSessions[eventSessions.Count - 1];
+				closeTasks.Add(es.DisposeAsync(CancellationToken.None));
+				eventSessions.Remove(es);
+			}
+			if (closeTasks.Count > 0)
+				Task.WaitAll(closeTasks.ToArray(), 5000);
+		} // proc CloseEventSessions
 
 		#region -- Events -----------------------------------------------------------------
 
@@ -128,7 +227,7 @@ namespace TecWare.DE.Server
 					propertyChanged[key] = ev = new FiredEvent(currentRevision, configPath, eventId, index, values);
 
 				// web socket event handling
-				FireEventOnSocket(configPath, ev.GetEvent());
+				FireEventOnSocket(configPath, eventId, ev.GetEvent());
 			}
 		} // proc AppendNewEvent
 
@@ -179,40 +278,31 @@ namespace TecWare.DE.Server
 
 		public bool AcceptWebSocket(IDEWebSocketContext webSocket)
 		{
-			lock(activeContexts)
-				activeContexts.Add(webSocket);
-			return true;
+			if (eventSessionsClosing)
+				return false;
+			else
+			{
+				new EventSession(this, webSocket);
+				return true;
+			}
 		} // func AcceptWebSocket
 
-		private void FireEventOnSocket(string path, XElement xEvent)
+		private void FireEventOnSocket(string path, string eventId, XElement xEvent)
 		{
 			// prepare line
 			var eventLine = xEvent.ToString(SaveOptions.DisableFormatting);
 
-			lock (activeContexts)
-			{
-				// remove dead sockets
-				for (int i = activeContexts.Count - 1; i >= 0; i--)
-				{
-					var c = activeContexts[i];
-					if (c.WebSocket.State != WebSocketState.Open) // check if the socket is available
-						activeContexts.RemoveAt(i);
-					else if (c.AbsolutePath.Length == 0 || path.StartsWith(c.AbsolutePath, StringComparison.OrdinalIgnoreCase)) // spawn thread
-						Task.Factory.StartNew(SendEventOnSocketAsync(c, eventLine).Wait);
-				}
-			}
-		} // proc FireEventOnSocket
+			var notifyTasks = new List<Task>();
 
-		private async Task SendEventOnSocketAsync(IDEWebSocketContext context, string eventLine)
-		{
-			var ws = context.WebSocket;
-			
-			if (ws.State == System.Net.WebSockets.WebSocketState.Open)
+			using (eventSessions.EnterReadLock())
 			{
-				var segment = new ArraySegment<byte>(context.Server.Encoding.GetBytes(eventLine));
-				await ws.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+				// a call to notify can cause a remove of this session, this will be done in a different thread
+				foreach (var es in eventSessions.List.Cast<EventSession>())
+					notifyTasks.Add(es.NotifyAsync(path, eventId, eventLine, CancellationToken.None));
 			}
-		} // proc SendEventOnSocketAsync
+
+			Task.Run(() => Task.WhenAll(notifyTasks));
+		} // proc FireEventOnSocket
 
 		string IDEWebSocketProtocol.Protocol => "des_event";
 		string IDEWebSocketProtocol.BasePath => String.Empty;

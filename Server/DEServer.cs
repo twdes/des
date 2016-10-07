@@ -122,6 +122,9 @@ namespace TecWare.DE.Server
 			AddAssemblyPath(Path.GetDirectoryName(GetType().Assembly.Location));
 			AppDomain.CurrentDomain.AssemblyResolve += resolveEventHandler;
 
+			// register session list
+			this.eventSessions = new DEList<EventSession>(this, "tw_eventsessions", "Event sessions");
+			
 			// create configurations service
 			this.configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
 			this.dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
@@ -135,6 +138,8 @@ namespace TecWare.DE.Server
 			if (disposing)
 			{
 				AppDomain.CurrentDomain.AssemblyResolve -= resolveEventHandler;
+
+				CloseEventSessions();
 
 				queue.ExecuteEvent(DEServerEvent.Shutdown);
 
