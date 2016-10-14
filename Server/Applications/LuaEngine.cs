@@ -614,7 +614,8 @@ namespace TecWare.DE.Server
 				{
 					x.Add(new XAttribute("message", e.Message));
 					x.Add(new XAttribute("type", LuaType.GetType(e.GetType()).AliasOrFullName));
-					x.Add(new XElement("stackTrace", e.StackTrace));
+					var data = LuaExceptionData.GetData(e);
+					x.Add(new XElement("stackTrace", data == null ? e.StackTrace : data.StackTrace));
 
 					if (e.InnerException != null)
 						x.Add(CreateException(new XElement("innerException"), e.InnerException));

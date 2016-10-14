@@ -130,6 +130,7 @@ namespace TecWare.DE.Server
 		private static ConsoleDebugSession session;
 
 		private static TaskCompletionSource<ICredentials> credentialGet = null;
+		private static ClientDebugException lastRemoteException = null;
 
 		#region -- Main, RunDebugProgram --------------------------------------------------
 
@@ -203,6 +204,7 @@ namespace TecWare.DE.Server
 						}
 						catch (Exception e)
 						{
+							SetLastRemoteException(e);
 							view.WriteError(e);
 						}
 						currentCommand.Clear();
@@ -451,12 +453,39 @@ namespace TecWare.DE.Server
 				PrintList(String.Empty, x);
 		} // func SendList
 
-		[InteractiveCommand("timeout", HelpText = "Sets the timeout in ms.")]
+		[InteractiveCommand("timeout", Short = "t", HelpText = "Sets the timeout in ms.")]
 		private static void SetTimeout(int timeout = -1)
 		{
 			if (timeout >= 0)
 				session.DefaultTimeout = timeout;
 			view.WriteLine($"Timeout is: {session.DefaultTimeout:N0}ms");
 		} // func SendList
+
+		private static void SetLastRemoteException(Exception e)
+		{
+			lastRemoteException = null;
+			while (e != null)
+			{
+				var re = e as ClientDebugException;
+				if (re != null)
+				{
+					lastRemoteException = re;
+					return;
+				}
+				e = e.InnerException;
+			}
+		} // proc SetLastRemoteException
+
+		[InteractiveCommand("lastex", HelpText = "Detail for the last remote exception.")]
+		private static void LastException()
+		{
+			if (lastRemoteException != null)
+			{
+				view.WriteError(lastRemoteException);
+				view.WriteLine();
+				view.WriteError(lastRemoteException.StackTrace);
+			}
+		} // proc ClearCommandBuffer
+
 	} // class Program
 }

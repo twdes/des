@@ -712,7 +712,7 @@ namespace TecWare.DE.Server
 			private readonly int port;
 			private readonly string relativeUriPath;
 
-			public PrefixDefinition(XElement x)
+			public PrefixDefinition(XElement x, bool allowFileName)
 			{
 				var uri = x.Value;
 
@@ -723,7 +723,18 @@ namespace TecWare.DE.Server
 				else
 				{
 					if (uri[uri.Length - 1] != '/')
-						throw new DEConfigurationException(x, "A prefix must and on '/'.");
+					{
+						if (allowFileName)  // cut to a relative path
+						{
+							var p = uri.LastIndexOf('/');
+							if (p == -1)
+								throw new DEConfigurationException(x, "A prefix must and on '/'.");
+							SetFileName(uri.Substring(p + 1));
+							uri = uri.Substring(0, p + 1);
+						}
+						else
+							throw new DEConfigurationException(x, "A prefix must and on '/'.");
+					}
 
 					// Prüfe das Protokoll
 					var pos = uri.IndexOf("://");
@@ -758,6 +769,8 @@ namespace TecWare.DE.Server
 				}
 			} // ctor
 
+			protected virtual void SetFileName(string fileName) { }
+
 			/// <summary>Fügt den Pfad an.</summary>
 			/// <param name="prefixes"></param>
 			public void AddHttpPrefix(List<string> prefixes)
@@ -786,10 +799,10 @@ namespace TecWare.DE.Server
 					prefixes.Add(uri);
 			} // proc AddHttpPrefix
 
-			public bool MatchPrefix(Uri url)
+			public virtual bool MatchPrefix(Uri url)
 			{
 				if (protocol == null)
-					return true;
+					return true; // default rule
 				else if (url.Scheme != protocol)
 					return false;
 				else if (hostname != "*" && hostname != "+" && hostname != url.Host)
@@ -804,6 +817,22 @@ namespace TecWare.DE.Server
 			public string PrefixPath => relativeUriPath;
 			/// <summary>Komplettes Prefix</summary>
 			public string Prefix => protocol == null ? null : protocol + "://" + hostname + ":" + port.ToString() + relativeUriPath;
+			/// <summary>Length of the prefix</summary>
+			public virtual int PrefixLength => protocol == null ? 0 : relativeUriPath.Length;
+
+			#region -- class PrefixLengthComparerImpl ---------------------------------------
+
+			///////////////////////////////////////////////////////////////////////////////
+			/// <summary></summary>
+			private sealed class PrefixLengthComparerImpl : IComparer<PrefixDefinition>
+			{
+				public int Compare(PrefixDefinition x, PrefixDefinition y)
+					=> y.PrefixLength - x.PrefixLength; // reverse sort
+			} // class PrefixLengthComparerImpl
+
+			#endregion
+
+			public static IComparer<PrefixDefinition> PrefixLengthComparer { get; } = new PrefixLengthComparerImpl();
 		} // class PrefixDefinition
 
 		#endregion
@@ -817,7 +846,7 @@ namespace TecWare.DE.Server
 			private readonly string redirectPath;
 
 			public PrefixPathTranslation(XElement x)
-				: base(x)
+				: base(x, false)
 			{
 				this.redirectPath = x.GetAttribute("path", "/");
 				if (String.IsNullOrEmpty(redirectPath) || redirectPath[0] != '/')
@@ -836,9 +865,10 @@ namespace TecWare.DE.Server
 		private sealed class PrefixAuthentificationScheme : PrefixDefinition
 		{
 			private readonly AuthenticationSchemes scheme;
+			private string fileName = null;
 
 			public PrefixAuthentificationScheme(XElement x)
-				: base(x)
+				: base(x, true)
 			{
 				var v = x.GetAttribute("scheme", "none");
 				switch (v)
@@ -857,7 +887,24 @@ namespace TecWare.DE.Server
 				}
 			} // ctor
 
+			protected override void SetFileName(string fileName)
+			{
+				this.fileName = fileName;
+			} // proc SetFileName
+
+			public override bool MatchPrefix(Uri url)
+			{
+				var r = base.MatchPrefix(url);
+				if (r && fileName != null)
+				{
+					r = url.AbsolutePath.Length == PrefixLength &&
+						url.AbsolutePath.Substring(PrefixPath.Length) == fileName;
+				}
+				return r ;
+			} // func MatchPrefix
+
 			public AuthenticationSchemes Scheme => scheme;
+			public override int PrefixLength => fileName == null ? base.PrefixLength : base.PrefixLength + fileName.Length;
 		} // class PrefixAuthentificationScheme
 
 		#endregion
@@ -999,9 +1046,9 @@ namespace TecWare.DE.Server
 				try
 				{
 					if (x.Name == xnHttpPrefix)
-						prefixPathTranslations.Add(new PrefixPathTranslation(x));
+						AddPrefix(prefixPathTranslations, new PrefixPathTranslation(x));
 					else if (x.Name == xnHttpAccess)
-						prefixAuthentificationSchemes.Add(new PrefixAuthentificationScheme(x));
+						AddPrefix(prefixAuthentificationSchemes, new PrefixAuthentificationScheme(x));
 					else if (x.Name == xnHttpMime) // Lade die Mime-Informationen
 					{
 						var name = x.GetAttribute("ext", String.Empty);
@@ -1459,6 +1506,23 @@ namespace TecWare.DE.Server
 					return false;
 			}
 		} // func ProcessRequestForConfigItem
+
+		private static void AddPrefix<T>(List<T> prefixes, T add)
+			where T : PrefixDefinition
+		{
+			lock (prefixes)
+			{
+				var p = prefixes.BinarySearch(add, PrefixDefinition.PrefixLengthComparer);
+				if (p < 0)
+					prefixes.Insert(~p, add);
+				else
+				{
+					while (p < prefixes.Count && PrefixDefinition.PrefixLengthComparer.Compare(prefixes[p], add) == 0)
+						p++;
+					prefixes.Insert(p, add);
+				}
+			}
+		} // func AddPrefix
 
 		private static T FindPrefix<T>(List<T> prefixes, Uri url)
 			where T : PrefixDefinition

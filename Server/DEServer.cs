@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Design;
@@ -1018,7 +1019,31 @@ namespace TecWare.DE.Server
 		#endregion
 
 		#region -- Base Lua Environment ---------------------------------------------------
-		
+
+		#region -- class ArrayIndexEnumerator ---------------------------------------------
+
+		private sealed class ArrayIndexEnumerator : IEnumerable<KeyValuePair<int, object>>
+		{
+			private readonly IEnumerable<object> array;
+
+			public ArrayIndexEnumerator(IEnumerable<object> array)
+			{
+				this.array = array;
+			} // ctor
+
+			public IEnumerator<KeyValuePair<int, object>> GetEnumerator()
+			{
+				var i = 1;
+				foreach (var c in array)
+					yield return new KeyValuePair<int, object>(i++, c);
+			} // func GetEnumerator
+
+			IEnumerator IEnumerable.GetEnumerator()
+				=> GetEnumerator();
+		} // class ArrayIndexEnumerator
+
+		#endregion
+
 		[LuaMember("rawget")]
 		private object LuaRawGet(LuaTable t, object key)
 			=> t.GetValue(key, true);
@@ -1047,6 +1072,54 @@ namespace TecWare.DE.Server
 		[LuaMember("rawarray")]
 		private IList<object> LuaRawArray(LuaTable t)
 			=> t.ArrayList;
+
+		private static LuaResult pairsEnum<TKey>(object s, object current)
+		{
+			var e = (System.Collections.IEnumerator)s;
+
+			// return value
+			if (e.MoveNext())
+			{
+				var k = (KeyValuePair<TKey, object>)e.Current;
+				return new LuaResult(k.Key, k.Value);
+			}
+			else
+			{
+				var d = e as IDisposable;
+				d?.Dispose();
+				return LuaResult.Empty;
+			}
+		} // func pairsEnum
+
+		/// <summary></summary>
+		/// <param name="t"></param>
+		/// <returns></returns>
+		[LuaMember("ipairs")]
+		private LuaResult LuaIPairs(LuaTable t)
+		{
+			var e = new ArrayIndexEnumerator( t.ArrayList).GetEnumerator();
+			return new LuaResult(new Func<object, object, LuaResult>(pairsEnum<int>), e, e);
+		} // func ipairs
+
+		/// <summary></summary>
+		/// <param name="t"></param>
+		/// <returns></returns>
+		[LuaMember("mpairs")]
+		private LuaResult LuaMPairs(LuaTable t)
+		{
+			var e = t.Members.GetEnumerator();
+			return new LuaResult(new Func<object, object, LuaResult>(pairsEnum<string>), e, e);
+		} // func LuaPairs
+
+		/// <summary></summary>
+		/// <param name="t"></param>
+		/// <returns></returns>
+		[LuaMember("pairs")]
+		private LuaResult LuaPairs(LuaTable t)
+		{
+			var e = ((System.Collections.IEnumerable)t).GetEnumerator();
+			return new LuaResult(new Func<object, object, LuaResult>(pairsEnum<object>), e, e);
+		} // func LuaPairs
 
 		[LuaMember("format")]
 		private string LuaFormat(string text, params object[] args)

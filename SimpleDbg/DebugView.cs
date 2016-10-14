@@ -86,7 +86,12 @@ namespace TecWare.DE.Server
 				{
 					using (SetColor(ConsoleColor.DarkRed))
 					{
-						Console.WriteLine($"[{exception.GetType().Name}]");
+						var cde = exception as ClientDebugException;
+						if (cde != null)
+							Console.WriteLine($"[R:{cde.ExceptionType}]");
+						else
+							Console.WriteLine($"[{exception.GetType().Name}]");
+
 						Console.WriteLine($"  {exception.Message}");
 					}
 				}

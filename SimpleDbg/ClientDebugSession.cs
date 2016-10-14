@@ -78,6 +78,28 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- class ClientDebugException -----------------------------------------------
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	public sealed class ClientDebugException : Exception
+	{
+		private readonly string remoteStackTrace;
+		private readonly string exceptionType;
+
+		public ClientDebugException(XElement x)
+			:base(x.GetAttribute("message", "No message"))
+		{
+			this.exceptionType = x.GetAttribute("type", "Exception");
+			this.remoteStackTrace = x.Element("stackTrace")?.Value;
+		} // ctor
+
+		public string ExceptionType => exceptionType;
+		public override string StackTrace => remoteStackTrace;
+	} // class ClientDebugException
+
+	#endregion
+
 	#region -- class ClientDebugSession -------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
@@ -165,7 +187,7 @@ namespace TecWare.DE.Server
 		private ClientWebSocket clientSocket = null;
 		private CancellationToken currentConnectionToken = CancellationToken.None;
 		private readonly Dictionary<int, ReturnWait> waits = new Dictionary<int, ReturnWait>();
-		
+
 		/// <summary>Main loop for the debug session.</summary>
 		/// <returns></returns>
 		private async Task ConnectionProcessor()
@@ -176,7 +198,7 @@ namespace TecWare.DE.Server
 			var currentConnectionTokenSource = (CancellationTokenSource)null;
 			var sessionDisposeToken = sessionDisposeSource.Token;
 
-			while (!isDisposing && !sessionDisposeToken.IsCancellationRequested )
+			while (!isDisposing && !sessionDisposeToken.IsCancellationRequested)
 			{
 				var connectionEstablished = false;
 
@@ -284,7 +306,8 @@ namespace TecWare.DE.Server
 					// dispose current cancellation token
 					if (currentConnectionTokenSource != null)
 					{
-						currentConnectionTokenSource.Cancel();
+						try { currentConnectionTokenSource.Cancel(); }
+						catch { }
 						currentConnectionTokenSource.Dispose();
 						currentConnectionTokenSource = null;
 					}
@@ -324,9 +347,9 @@ namespace TecWare.DE.Server
 					if (w != null)
 					{
 						if (x.Name == "exception")
-							Task.Run(() => w.Source.SetException(new Exception(x.GetAttribute("message", String.Empty))), currentConnectionToken);
+							Task.Run(() => w.Source.TrySetException(new ClientDebugException(x)), currentConnectionToken);
 						else
-							Task.Run(() => w.Source.SetResult(x), currentConnectionToken);
+							Task.Run(() => w.Source.TrySetResult(x), currentConnectionToken);
 					}
 				}
 			}
