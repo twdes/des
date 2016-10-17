@@ -535,7 +535,7 @@ namespace TecWare.DE.Server
 				{
 					exprGetParameter = Expression.Call(miGetPropertyObject, propertyDictionary, parameterName, parameterDefault);
 				}
-				else if (typeCode == TypeCode.Object) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
+				else if (typeCode == TypeCode.Object && !typeTo.IsValueType) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
 					if (typeTo == typeof(IDEContext))
 					{
