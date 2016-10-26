@@ -159,38 +159,29 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	public sealed class DEListItemWriter
 	{
+		private readonly static char[] isCDateEmitChar = new char[] { '<', '>', '\n', '\t', '/' };
 		private XmlWriter xml;
 
 		public DEListItemWriter(XmlWriter xml)
 		{
 			this.xml = xml;
 		} // ctor
-
-		private string ConvertValue(object value)
+		
+		public void WriteStartProperty(string propertyName)
 		{
-			if (value == null)
-				return null;
-			else if (value is Type)
-				return LuaType.GetType((Type)value).AliasOrFullName;
-			else
-				return Procs.ChangeType<string>(value);
-		} // func ConvertValue
-
-		public void WriteStartProperty(string sPropertyName)
-		{
-			xml.WriteStartElement(sPropertyName);
+			xml.WriteStartElement(propertyName);
 		} // proc WriteStartProperty
 
-		public void WriteValue(object value)
+		public void WriteValue(object _value)
 		{
-			string sValue = ConvertValue(value);
-			if (sValue == null)
+			var value = _value.ChangeType<string>();
+			if (value == null)
 				return;
 
-			if (sValue.IndexOfAny(new char[] { '<', '>', '\n', '\t' }) >= 0)
-				xml.WriteCData(sValue);
+			if (value.IndexOfAny(isCDateEmitChar) >= 0) // check for specials
+				xml.WriteCData(ProcsDE.RemoveInvalidXmlChars(value, '?'));
 			else
-				xml.WriteValue(sValue);
+				xml.WriteValue(ProcsDE.RemoveInvalidXmlChars(value, '?'));
 		} // proc WriteValue
 
 		public void WriteEndProperty()
@@ -198,18 +189,18 @@ namespace TecWare.DE.Server
 			xml.WriteEndElement();
 		} // proc WriteEndProperty
 
-		public void WriteElementProperty(string sPropertyName, object value)
+		public void WriteElementProperty(string propertyName, object _value)
 		{
-			WriteStartProperty(sPropertyName);
-			WriteValue(value);
+			WriteStartProperty(propertyName);
+			WriteValue(_value);
 			WriteEndProperty();
 		} // proc WriteElementProperty
 
-		public void WriteAttributeProperty(string sPropertyName, object value)
+		public void WriteAttributeProperty(string propertyName, object _value)
 		{
-			string sValue = ConvertValue(value);
-			if (sValue != null)
-				xml.WriteAttributeString(sPropertyName, sValue);
+			var value = _value.ChangeType<string>();
+			if (value != null)
+				xml.WriteAttributeString(propertyName, ProcsDE.RemoveInvalidXmlChars(value, '?'));
 		} // proc WriteAttributeProperty
 	} // class DEListItemWriter
 

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TecWare.DE.Server.Stuff;
 using TecWare.DE.Stuff;
@@ -214,6 +215,17 @@ namespace TecWare.DE.Server
 			Assert.AreEqual("a", t[0]);
 			Assert.AreEqual("b", t[1]);
 			Assert.AreEqual("c\\", t[2]);
+		}
+
+		[TestMethod]
+		public void XmlRemoveInvalidChars()
+		{
+			Assert.AreEqual(ProcsDE.RemoveInvalidXmlChars(null), null);
+			Assert.AreEqual(ProcsDE.RemoveInvalidXmlChars(String.Empty), String.Empty);
+			Assert.AreEqual(ProcsDE.RemoveInvalidXmlChars("String.Empty"), "String.Empty");
+			Assert.AreEqual(XmlConvert.VerifyXmlChars(ProcsDE.RemoveInvalidXmlChars("String\x1A.Empty")), "String.Empty");
+			Assert.AreEqual(XmlConvert.VerifyXmlChars(ProcsDE.RemoveInvalidXmlChars("\x001AEmp\x001Aty\x001A")), "Empty");
+			Assert.AreEqual(XmlConvert.VerifyXmlChars(ProcsDE.RemoveInvalidXmlChars("String\x001AEmp\x10000ty")), "StringEmp\x10000ty");
 		}
 
 	}
