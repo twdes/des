@@ -604,7 +604,7 @@ namespace TecWare.DE.Server
 			CallMember("Cancel");
 		} // proc OnCancel
 
-		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || this.GetMemberValue("Cancel", lRawGet: true) != null;
+		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || this.GetMemberValue("Cancel", rawGet: true) != null;
 
 		#endregion
 

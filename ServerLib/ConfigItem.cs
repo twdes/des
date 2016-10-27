@@ -1122,7 +1122,7 @@ namespace TecWare.DE.Server
 			if (stringKey != null && stringKey == tableName)
 			{
 				r = new LuaTable();
-				SetMemberValue(tableName, r, lRawSet: true);
+				SetMemberValue(tableName, r, rawSet: true);
 				return true;
 			}
 			else

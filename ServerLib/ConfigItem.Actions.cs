@@ -605,9 +605,7 @@ namespace TecWare.DE.Server
 		} // func CreateArgumentExpressionsByInfo
 
 		private LuaTable GetActionTable()
-		{
-			return this.GetMemberValue(LuaActions, lRawGet: true) as LuaTable;
-		} // func GetActionTable
+			=> this.GetMemberValue(LuaActions, rawGet: true) as LuaTable;
 
 		#endregion
 	} // class DEConfigItem
