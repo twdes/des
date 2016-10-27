@@ -257,6 +257,11 @@
 									<xs:documentation>Defines the access schema for http-Listener.</xs:documentation>
 								</xs:annotation>
 								<xs:complexType mixed="true">
+									<xs:attribute name="id" use="required" type="KeyType">
+										<xs:annotation>
+											<xs:documentation>This is a key, that make this access definition unique during the merge process.</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
 									<xs:attribute name="scheme" use="optional" default="none">
 										<xs:annotation>
 											<xs:documentation>Welches Security-Schema soll für diesen Knoten verwendet werden.</xs:documentation>
