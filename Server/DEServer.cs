@@ -1029,6 +1029,10 @@ namespace TecWare.DE.Server
 			{
 				return new LuaResult(true, Lua.RtInvoke(target, args));
 			}
+			catch (TargetInvocationException e)
+			{
+				return new LuaResult(false, e.InnerException.Message, e.InnerException);
+			}
 			catch (Exception e)
 			{
 				return new LuaResult(false, e.Message, e);
