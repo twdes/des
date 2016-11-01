@@ -1022,6 +1022,19 @@ namespace TecWare.DE.Server
 
 		private LuaGlobalPortable luaRuntime = null;
 	
+		[LuaMember("safecall")]
+		private LuaResult LuaSafeCall(object target, params object[] args)
+		{
+			try
+			{
+				return new LuaResult(true, Lua.RtInvoke(target, args));
+			}
+			catch (Exception e)
+			{
+				return new LuaResult(false, e.Message, e);
+			}
+		} // func LuaSafeCall
+
 		[LuaMember("format")]
 		private string LuaFormat(string text, params object[] args)
 			=> String.Format(text, args);
