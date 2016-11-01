@@ -1018,131 +1018,27 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Base Lua Environment ---------------------------------------------------
+		#region -- Lua Runtime ------------------------------------------------------------
 
-		#region -- class ArrayIndexEnumerator ---------------------------------------------
-
-		private sealed class ArrayIndexEnumerator : IEnumerable<KeyValuePair<int, object>>
-		{
-			private readonly IEnumerable<object> array;
-
-			public ArrayIndexEnumerator(IEnumerable<object> array)
-			{
-				this.array = array;
-			} // ctor
-
-			public IEnumerator<KeyValuePair<int, object>> GetEnumerator()
-			{
-				var i = 1;
-				foreach (var c in array)
-					yield return new KeyValuePair<int, object>(i++, c);
-			} // func GetEnumerator
-
-			IEnumerator IEnumerable.GetEnumerator()
-				=> GetEnumerator();
-		} // class ArrayIndexEnumerator
-
-		#endregion
-
-		[LuaMember("rawget")]
-		private object LuaRawGet(LuaTable t, object key)
-			=> t.GetValue(key, true);
-
-		[LuaMember("rawset")]
-		private object LuaRawSet(LuaTable t, object key, object value)
-			=> t.SetValue(key, value, true);
-
-		[LuaMember("safecall")]
-		private LuaResult LuaSafeCall(object target, params object[] args)
-		{
-			try
-			{
-				return new LuaResult(true, Lua.RtInvoke(target, args));
-			}
-			catch (Exception e)
-			{
-				return new LuaResult(false, e.Message, e);
-			}
-		} // func LuaSafeCall
-
-		[LuaMember("rawmembers")]
-		private IEnumerable<KeyValuePair<string, object>> LuaRawMembers(LuaTable t)
-			=> t.Members;
-
-		[LuaMember("rawarray")]
-		private IList<object> LuaRawArray(LuaTable t)
-			=> t.ArrayList;
-
-		private static LuaResult pairsEnum<TKey>(object s, object current)
-		{
-			var e = (System.Collections.IEnumerator)s;
-
-			// return value
-			if (e.MoveNext())
-			{
-				var k = (KeyValuePair<TKey, object>)e.Current;
-				return new LuaResult(k.Key, k.Value);
-			}
-			else
-			{
-				var d = e as IDisposable;
-				d?.Dispose();
-				return LuaResult.Empty;
-			}
-		} // func pairsEnum
-
-		/// <summary></summary>
-		/// <param name="t"></param>
-		/// <returns></returns>
-		[LuaMember("ipairs")]
-		private LuaResult LuaIPairs(LuaTable t)
-		{
-			var e = new ArrayIndexEnumerator( t.ArrayList).GetEnumerator();
-			return new LuaResult(new Func<object, object, LuaResult>(pairsEnum<int>), e, e);
-		} // func ipairs
-
-		/// <summary></summary>
-		/// <param name="t"></param>
-		/// <returns></returns>
-		[LuaMember("mpairs")]
-		private LuaResult LuaMPairs(LuaTable t)
-		{
-			var e = t.Members.GetEnumerator();
-			return new LuaResult(new Func<object, object, LuaResult>(pairsEnum<string>), e, e);
-		} // func LuaPairs
-
-		/// <summary></summary>
-		/// <param name="t"></param>
-		/// <returns></returns>
-		[LuaMember("pairs")]
-		private LuaResult LuaPairs(LuaTable t)
-		{
-			var e = ((System.Collections.IEnumerable)t).GetEnumerator();
-			return new LuaResult(new Func<object, object, LuaResult>(pairsEnum<object>), e, e);
-		} // func LuaPairs
-
+		private LuaGlobalPortable luaRuntime = null;
+	
 		[LuaMember("format")]
 		private string LuaFormat(string text, params object[] args)
 			=> String.Format(text, args);
 
-		[LuaMember("error")]
-		private void LuaError(object error)
+		internal void UpdateLuaRuntime(Lua lua)
 		{
-			if (error is Exception)
-				throw (Exception)error;
-			else
-				throw new Exception(error?.ToString());
-		} // func LuaError
+			this.luaRuntime = new LuaGlobalPortable(lua);
+		} // proc UpdateLuaRuntime
 
-		[LuaMember("type")]
-		public string LuaGetType(object v)
-			=> v == null ? "object" : (LuaType.GetType(v is Type ? (Type)v : v.GetType()).AliasOrFullName);
+		protected override object OnIndex(object key)
+			=> base.OnIndex(key) ?? luaRuntime?.GetValue(key);
 
-		[LuaMember("String")]
-		private static LuaType LuaString => LuaType.GetType(typeof(String));
+		[LuaMember("Basic")]
+		private LuaTable LuaRuntime => luaRuntime;
 
 		[LuaMember("LogMsgType")]
-		private static LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
+		private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
 
 		#endregion
 

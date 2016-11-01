@@ -832,6 +832,9 @@ namespace TecWare.DE.Server
 			debugHook = new LuaEngineTraceLineDebugger(this);
 			debugOptions = new LuaCompileOptions();
 			debugOptions.DebugEngine = debugHook;
+
+			// update lua runtime
+			sp.GetService<DEServer>(true).UpdateLuaRuntime(lua);
 		} // ctor
 
 		protected override void Dispose(bool disposing)

@@ -154,7 +154,8 @@ namespace TecWare.DE.Server.Configuration
 				sbStack.AppendLine();
 			} // proc GetStackFrame
 
-			protected override object OnIndex(object key) => base.OnIndex(key) ?? parentFrame?.GetValue(key);
+			protected override object OnIndex(object key)
+				=> base.OnIndex(key) ?? parentFrame?.GetValue(key);
 
 			public ParseFrame Parent => parentFrame as ParseFrame;
 			public bool IsDeleteNodes { get { return deleteNodes; } set { deleteNodes = value; } }

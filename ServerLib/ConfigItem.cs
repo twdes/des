@@ -1131,8 +1131,8 @@ namespace TecWare.DE.Server
 
 		protected override object OnIndex(object key)
 		{
-			object r = base.OnIndex(key);
-			if (r == null)
+			var r = base.OnIndex(key); // ask __metatable
+			if (r == null) // check for parent
 			{
 				if (!CheckKnownTable(key, LuaActions, ref r) &&
 					!CheckKnownTable(key, LuaDispose, ref r) &&
@@ -1140,7 +1140,7 @@ namespace TecWare.DE.Server
 				{
 					var t = sp as LuaTable;
 					if (t != null)
-						r = t[key];
+						return t.GetValue(key);
 				}
 			}
 			return r;
