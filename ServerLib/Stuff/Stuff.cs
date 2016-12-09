@@ -219,4 +219,24 @@ namespace TecWare.DE.Stuff
 	} // class ProcsDE
 
 	#endregion
+
+	#region -- class LuaArgument --------------------------------------------------------
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	[AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+	public sealed class LuaArgument : Attribute
+	{
+		private readonly string name;
+		
+		public LuaArgument(string name)
+		{
+			this.name = name;
+		} // ctor
+
+		public string Name => name;
+		public string Description { get; set; }
+	} // class LuaArgument
+
+	#endregion
 }
