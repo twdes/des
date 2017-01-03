@@ -270,6 +270,12 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
+		#region -- class XFileAnnotation --------------------------------------------------
+
+		public class XFileAnnotation { }
+
+		#endregion
+
 		/// <summary>Reads the configuration file and validates it agains the schema</summary>
 		/// <returns></returns>
 		public XElement ParseConfiguration()
@@ -290,8 +296,11 @@ namespace TecWare.DE.Server.Configuration
 					throw new InvalidDataException("Configuration version is invalid (expected: 330).");
 
 				// parse the tree
-				ParseConfiguration(context, doc);
+				ParseConfiguration(context, doc, new XFileAnnotation());
 				context.PopFrame(frame);
+
+				// remove all parse frames
+				RemoveFileAnnotations(doc.Root);
 			}
 			catch (Exception e)
 			{
@@ -306,6 +315,15 @@ namespace TecWare.DE.Server.Configuration
 			return doc.Root;
 		} // func ParseConfiguration
 
+		private void RemoveFileAnnotations(XElement cur)
+		{
+			foreach (var a in cur.Attributes())
+				a.RemoveAnnotations<XFileAnnotation>();
+
+			foreach (var c in cur.Elements())
+				RemoveFileAnnotations(c);
+		} // func RemoveFileAnnotations
+
 		private void ValidationEvent(object sender, ValidationEventArgs e)
 		{
 			if (e.Severity == XmlSeverityType.Warning)
@@ -314,7 +332,7 @@ namespace TecWare.DE.Server.Configuration
 				throw e.Exception;
 		} // proc ValidationEvent
 
-		private void ParseConfiguration(ParseContext context, XContainer x)
+		private void ParseConfiguration(ParseContext context, XContainer x, XFileAnnotation fileToken)
 		{
 			var c = x.FirstNode;
 			while (c != null)
@@ -342,11 +360,15 @@ namespace TecWare.DE.Server.Configuration
 						{
 							if (ChangeConfigurationValue(context, attr, attr.Value, out value))
 								attr.Value = value;
+
+							// mark the attribute with the current frame
+							if (attr.Annotation<XFileAnnotation>() == null)
+								attr.AddAnnotation(fileToken);
 						}
 
 						// Parse the current element
 						var newFrame = context.PushFrame(xCur);
-						ParseConfiguration(context, xCur);
+						ParseConfiguration(context, xCur, fileToken);
 						context.PopFrame(newFrame);
 
 						// Load assemblies -> they preprocessor needs them
@@ -469,18 +491,19 @@ namespace TecWare.DE.Server.Configuration
 			var xDoc = context.LoadFile(xPI, xPI.Data);
 
 			// parse the loaded document
+			var fileToken = new XFileAnnotation();
 			var newFrame = context.PushFrame(xPI);
 			if (xDoc.Root.Name != DEConfigurationConstants.xnFragment)
 				throw context.CreateConfigException(xDoc.Root, "<fragment> expected.");
 
-			ParseConfiguration(context, xDoc.Root);
+			ParseConfiguration(context, xDoc.Root, fileToken);
 			context.PopFrame(newFrame);
 
 			// merge the parsed nodes
-			MergeConfigTree(xPI.Document.Root, xDoc.Root);
+			MergeConfigTree(xPI.Document.Root, xDoc.Root, fileToken);
 		} // proc MergeConfigTree
 
-		private void MergeConfigTree(XElement xRoot, XElement xMerge)
+		private void MergeConfigTree(XElement xRoot, XElement xMerge, XFileAnnotation currentFileToken)
 		{
 			// merge attributes
 			var attributeMerge = xMerge.FirstAttribute;
@@ -499,7 +522,11 @@ namespace TecWare.DE.Server.Configuration
 						if (attributeDefinition.IsList) // list detected
 							attributeRoot.Value = attributeRoot.Value + " " + attributeMerge.Value;
 						else
-							attributeRoot.Value = attributeMerge.Value;
+						{
+							var a = attributeRoot.Annotation<XFileAnnotation>();
+							if (a != null && a != currentFileToken) // check for annotation, that marks the base file content
+								attributeRoot.Value = attributeMerge.Value;
+						}
 					}
 				}
 
@@ -523,7 +550,7 @@ namespace TecWare.DE.Server.Configuration
 						xRoot.Add(xCurMerge);
 					}
 					else // merge node
-						MergeConfigTree(xCurRoot, xCurMerge);
+						MergeConfigTree(xCurRoot, xCurMerge, currentFileToken);
 				}
 
 				xCurNodeMerge = xNextNode;

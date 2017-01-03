@@ -8,9 +8,16 @@
 	<xs:include id="DEScore" schemaLocation="DEScore.xsd" />
 
 	<!-- Definition for the log element -->
-	<xs:element name="log" type="LogType" />
+	<xs:element name="log" type="LogType">
+		<xs:annotation>
+			<xs:documentation>A log file for an item of a service node.</xs:documentation>
+		</xs:annotation>
+	</xs:element>
 
 	<xs:complexType name="ConfigServiceType">
+		<xs:annotation>
+			<xs:documentation>Defines a service node type.</xs:documentation>
+		</xs:annotation>
 		<xs:attribute name="displayname" type="xs:string" use="optional" >
 			<xs:annotation>
 				<xs:documentation>Displayname of the service node.</xs:documentation>
@@ -26,16 +33,22 @@
 		</xs:attribute>
 		<xs:attribute name="script" type="ScriptList" use="optional">
 			<xs:annotation>
-				<xs:documentation>Extentions of the service node.</xs:documentation>
+				<xs:documentation>Extensions of the service node.</xs:documentation>
 			</xs:annotation>
 		</xs:attribute>
 	</xs:complexType>
 
 	<xs:complexType name="ConfigItemType">
+		<xs:annotation>
+			<xs:documentation>Defines an item service node type.</xs:documentation>
+		</xs:annotation>
 		<xs:complexContent>
 			<xs:extension base="ConfigServiceType">
 				<xs:sequence minOccurs="0" maxOccurs="unbounded">
 					<xs:element name="variable" minOccurs="0" maxOccurs="unbounded">
+						<xs:annotation>
+							<xs:documentation>Variables that are used for the configuration of the service node.</xs:documentation>
+						</xs:annotation>
 						<xs:complexType>
 							<xs:simpleContent>
 								<xs:extension base="xs:string">
@@ -53,12 +66,12 @@
 							</xs:simpleContent>
 						</xs:complexType>
 					</xs:element>
-					
+
 					<xs:element ref="configItem" minOccurs="0" maxOccurs="unbounded" />
 				</xs:sequence>
 				<xs:attribute name="name" type="KeyType" use="required">
 					<xs:annotation>
-						<xs:documentation>Name of the current node, must be unique within the system.</xs:documentation>
+						<xs:documentation>Name of the current node, that needs to be unique within the system.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
 				<xs:attribute name="icon" type="xs:string" use="optional">
@@ -71,6 +84,9 @@
 	</xs:complexType>
 
 	<xs:complexType name="ConfigLogItemType">
+		<xs:annotation>
+			<xs:documentation>Defines a log item service node type.</xs:documentation>
+		</xs:annotation>
 		<xs:complexContent>
 			<xs:extension base="ConfigItemType">
 				<xs:sequence>
@@ -88,7 +104,7 @@
 
 	<xs:element name="configItem" type="ConfigItemType">
 		<xs:annotation>
-			<xs:documentation>Definiert ein Konfigurationselement.</xs:documentation>
+			<xs:documentation>A configurable item.</xs:documentation>
 			<xs:appinfo>
 				<class>TecWare.DE.Server.DEConfigItem, DE.Server, Version=3.2.0.0, Culture=neutral, PublicKeyToken=null</class>
 			</xs:appinfo>
@@ -97,7 +113,7 @@
 
 	<xs:element name="configLogItem" type="ConfigLogItemType" substitutionGroup="configItem">
 		<xs:annotation>
-			<xs:documentation>Definiert ein Konfigurationselement mit einer Logdatei.</xs:documentation>
+			<xs:documentation>A configurable item with a log file.</xs:documentation>
 			<xs:appinfo>
 				<class>TecWare.DE.Server.DEConfigLogItem, DE.Server, Version=3.2.0.0, Culture=neutral, PublicKeyToken=null</class>
 			</xs:appinfo>

@@ -7,16 +7,16 @@
 
 	<xs:simpleType name="KeyType">
 		<xs:annotation>
-			<xs:documentation>This type marks a attribute of an element as a key field, for the merge process.</xs:documentation>
+			<xs:documentation>Defines a type, that marks an attribute of an element as a key field for the merge process.</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
 			<xs:maxLength value="1024" />
 		</xs:restriction>
 	</xs:simpleType>
-	
+
 	<xs:simpleType name="PathType">
 		<xs:annotation>
-			<xs:documentation>File or paths, they are routed relativly to the current configuration file.</xs:documentation>
+			<xs:documentation>Defines a file or path, that is relatively routed to the current configuration file.</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
 			<xs:maxLength value="1024" />
@@ -25,14 +25,14 @@
 
 	<xs:simpleType name="PathArray">
 		<xs:annotation>
-			<xs:documentation>File or paths, they are routed relativly to the current configuration file.</xs:documentation>
+			<xs:documentation>Defines a list of files and paths, that are relatively routed to the current configuration file.</xs:documentation>
 		</xs:annotation>
 		<xs:list itemType="PathType" />
 	</xs:simpleType>
 	
 	<xs:simpleType name="CertificateType">
 		<xs:annotation>
-			<xs:documentation>File or search expression for the certificate store.</xs:documentation>
+			<xs:documentation>Defines a file or search expression, that is used for the certificate store.</xs:documentation>
 		</xs:annotation>
 		<xs:union memberTypes="PathType xs:string" />
 	</xs:simpleType>
@@ -46,7 +46,7 @@
 
 	<xs:complexType name="LogType">
 		<xs:annotation>
-			<xs:documentation>Configuration of the log file.</xs:documentation>
+			<xs:documentation>Defines a log file configuration type.</xs:documentation>
 		</xs:annotation>
 		<xs:attribute name="min" type="xs:unsignedInt" use="optional" default="3670016">
 			<xs:annotation>
@@ -61,16 +61,22 @@
 	</xs:complexType>
 
 	<xs:simpleType name="CronBound">
+		<xs:annotation>
+			<xs:documentation>Defines a time based boundary.</xs:documentation>
+		</xs:annotation>
 		<xs:union memberTypes="xs:string" />
 	</xs:simpleType>
 
 	<xs:simpleType name="TimeSpan">
+		<xs:annotation>
+			<xs:documentation>Defines a time interval.</xs:documentation>
+		</xs:annotation>
 		<xs:union memberTypes="xs:string" />
 	</xs:simpleType>
 
 	<xs:simpleType name="LuaAliasesType">
 		<xs:annotation>
-			<xs:documentation>Definition of type lua aliases.</xs:documentation>
+			<xs:documentation>Defines Lua type aliases.</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
 			<xs:enumeration value="byte" />
@@ -100,16 +106,19 @@
 	
 	<xs:simpleType name="LuaType">
 		<xs:annotation>
-			<xs:documentation>Defines a type.</xs:documentation>
+			<xs:documentation>Defines a Lua type.</xs:documentation>
 		</xs:annotation>
 		<xs:union memberTypes="LuaAliasesType xs:string" />
 	</xs:simpleType>
 
 	<xs:simpleType name="EncodingStrictType">
+		<xs:annotation>
+			<xs:documentation>Defines standard encoding types.</xs:documentation>
+		</xs:annotation>
 		<xs:restriction base="xs:string">
 			<xs:enumeration value="IBM037">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (USA-Kanada) (Codepage: 37)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (USA-Canada) (Codepage: 37)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM437">
@@ -124,322 +133,322 @@
 			</xs:enumeration>
 			<xs:enumeration value="ASMO-708">
 				<xs:annotation>
-					<xs:documentation>Arabisch (ASMO 708) (Codepage: 708)</xs:documentation>
+					<xs:documentation>Arabic (ASMO 708) (Codepage: 708)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="DOS-720">
 				<xs:annotation>
-					<xs:documentation>Arabisch (DOS) (Codepage: 720)</xs:documentation>
+					<xs:documentation>Arabic (DOS) (Codepage: 720)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ibm737">
 				<xs:annotation>
-					<xs:documentation>Griechisch (DOS) (Codepage: 737)</xs:documentation>
+					<xs:documentation>Greek (DOS) (Codepage: 737)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ibm775">
 				<xs:annotation>
-					<xs:documentation>Baltisch (DOS) (Codepage: 775)</xs:documentation>
+					<xs:documentation>Baltic (DOS) (Codepage: 775)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ibm850">
 				<xs:annotation>
-					<xs:documentation>Westeuropäisch (DOS) (Codepage: 850)</xs:documentation>
+					<xs:documentation>Western European (DOS) (Codepage: 850)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ibm852">
 				<xs:annotation>
-					<xs:documentation>Mitteleuropäisch (DOS) (Codepage: 852)</xs:documentation>
+					<xs:documentation>Central European (DOS) (Codepage: 852)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM855">
 				<xs:annotation>
-					<xs:documentation>OEM Kyrillisch (Codepage: 855)</xs:documentation>
+					<xs:documentation>OEM Cyrillic (Codepage: 855)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ibm857">
 				<xs:annotation>
-					<xs:documentation>Türkisch (DOS) (Codepage: 857)</xs:documentation>
+					<xs:documentation>Turkish (DOS) (Codepage: 857)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM00858">
 				<xs:annotation>
-					<xs:documentation>OEM Multilingual Lateinisch 1 (Codepage: 858)</xs:documentation>
+					<xs:documentation>OEM Multilingual Latin 1 (Codepage: 858)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM860">
 				<xs:annotation>
-					<xs:documentation>Portugiesisch (DOS) (Codepage: 860)</xs:documentation>
+					<xs:documentation>Portuguese (DOS) (Codepage: 860)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ibm861">
 				<xs:annotation>
-					<xs:documentation>Isländisch (DOS) (Codepage: 861)</xs:documentation>
+					<xs:documentation>Icelandic (DOS) (Codepage: 861)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="DOS-862">
 				<xs:annotation>
-					<xs:documentation>Hebräisch (DOS) (Codepage: 862)</xs:documentation>
+					<xs:documentation>Hebrew (DOS) (Codepage: 862)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM863">
 				<xs:annotation>
-					<xs:documentation>Französisch, Kanada (DOS) (Codepage: 863)</xs:documentation>
+					<xs:documentation>Canadian French (DOS) (Codepage: 863)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM864">
 				<xs:annotation>
-					<xs:documentation>Arabisch (864) (Codepage: 864)</xs:documentation>
+					<xs:documentation>Arabic (864) (Codepage: 864)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM865">
 				<xs:annotation>
-					<xs:documentation>Nordisch (DOS) (Codepage: 865)</xs:documentation>
+					<xs:documentation>Nordic (DOS) (Codepage: 865)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="cp866">
 				<xs:annotation>
-					<xs:documentation>Kyrillisch (DOS) (Codepage: 866)</xs:documentation>
+					<xs:documentation>Cyrillic (DOS) (Codepage: 866)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ibm869">
 				<xs:annotation>
-					<xs:documentation>Griechisch, modern (DOS) (Codepage: 869)</xs:documentation>
+					<xs:documentation>Greek, modern (DOS) (Codepage: 869)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM870">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Multilingual Lateinisch-2) (Codepage: 870)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Multilingual Latin-2) (Codepage: 870)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-874">
 				<xs:annotation>
-					<xs:documentation>Thailändisch (Windows) (Codepage: 874)</xs:documentation>
+					<xs:documentation>Thai (Windows) (Codepage: 874)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="cp875">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Griechisch, modern) (Codepage: 875)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Greek, modern) (Codepage: 875)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="shift_jis">
 				<xs:annotation>
-					<xs:documentation>Japanisch (Shift-JIS) (Codepage: 932)</xs:documentation>
+					<xs:documentation>Japanese (Shift-JIS) (Codepage: 932)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="gb2312">
 				<xs:annotation>
-					<xs:documentation>Chinesisch vereinfacht (GB2312) (Codepage: 936)</xs:documentation>
+					<xs:documentation>Simplified Chinese (GB2312) (Codepage: 936)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="ks_c_5601-1987">
 				<xs:annotation>
-					<xs:documentation>Koreanisch (Codepage: 949)</xs:documentation>
+					<xs:documentation>Korean (Codepage: 949)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="big5">
 				<xs:annotation>
-					<xs:documentation>Chinesisch traditionell (Big5) (Codepage: 950)</xs:documentation>
+					<xs:documentation>Traditional Chinese (Big5) (Codepage: 950)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM1026">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Türkisch, Lateinisch-5) (Codepage: 1026)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Turkish, Latin-5) (Codepage: 1026)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01047">
 				<xs:annotation>
-					<xs:documentation>IBM Lateinisch-1 (Codepage: 1047)</xs:documentation>
+					<xs:documentation>IBM Latin-1 (Codepage: 1047)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01140">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (USA-Kanada-Europäisch) (Codepage: 1140)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (USA-Canada-European) (Codepage: 1140)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01141">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Deutschland-Europäisch) (Codepage: 1141)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Germany-European) (Codepage: 1141)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01142">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Dänemark-Norwegen-Europäisch) (Codepage: 1142)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Denmark-Norway-European) (Codepage: 1142)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01143">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Finnland-Schweden-Europäisch) (Codepage: 1143)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Finland-Sweden-European) (Codepage: 1143)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01144">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Italien-Europäisch) (Codepage: 1144)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Italy-European) (Codepage: 1144)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01145">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Spanisch-Europäisch) (Codepage: 1145)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Spanish-European) (Codepage: 1145)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01146">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Großbritannien-Europäisch) (Codepage: 1146)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (United Kingdom-European) (Codepage: 1146)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01147">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Frankreich-Europäisch) (Codepage: 1147)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (France-European) (Codepage: 1147)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01148">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (International-Europäisch) (Codepage: 1148)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (International-European) (Codepage: 1148)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM01149">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Isländisch-Europäisch) (Codepage: 1149)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Icelandic-European) (Codepage: 1149)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="utf-16">
 				<xs:annotation>
-					<xs:documentation>Unicode (Codepage: 1200)</xs:documentation>
+					<xs:documentation>Unicode (UTF-16) (Codepage: 1200)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="utf-16BE">
 				<xs:annotation>
-					<xs:documentation>Unicode (Big-Endian) (Codepage: 1201)</xs:documentation>
+					<xs:documentation>Unicode (UTF-16 big-endian) (Codepage: 1201)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1250">
 				<xs:annotation>
-					<xs:documentation>Mitteleuropäisch (Windows) (Codepage: 1250)</xs:documentation>
+					<xs:documentation>Central European (Windows) (Codepage: 1250)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1251">
 				<xs:annotation>
-					<xs:documentation>Kyrillisch (Windows) (Codepage: 1251)</xs:documentation>
+					<xs:documentation>Cyrillic (Windows) (Codepage: 1251)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="Windows-1252">
 				<xs:annotation>
-					<xs:documentation>Westeuropäisch (Windows) (Codepage: 1252)</xs:documentation>
+					<xs:documentation>Western European (Windows) (Codepage: 1252)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1253">
 				<xs:annotation>
-					<xs:documentation>Griechisch (Windows) (Codepage: 1253)</xs:documentation>
+					<xs:documentation>Greek (Windows) (Codepage: 1253)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1254">
 				<xs:annotation>
-					<xs:documentation>Türkisch (Windows) (Codepage: 1254)</xs:documentation>
+					<xs:documentation>Turkish (Windows) (Codepage: 1254)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1255">
 				<xs:annotation>
-					<xs:documentation>Hebräisch (Windows) (Codepage: 1255)</xs:documentation>
+					<xs:documentation>Hebrew (Windows) (Codepage: 1255)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1256">
 				<xs:annotation>
-					<xs:documentation>Arabisch (Windows) (Codepage: 1256)</xs:documentation>
+					<xs:documentation>Arabic (Windows) (Codepage: 1256)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1257">
 				<xs:annotation>
-					<xs:documentation>Baltisch (Windows) (Codepage: 1257)</xs:documentation>
+					<xs:documentation>Baltic (Windows) (Codepage: 1257)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="windows-1258">
 				<xs:annotation>
-					<xs:documentation>Vietnamesisch (Windows) (Codepage: 1258)</xs:documentation>
+					<xs:documentation>Vietnamese (Windows) (Codepage: 1258)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="Johab">
 				<xs:annotation>
-					<xs:documentation>Koreanisch (Johab) (Codepage: 1361)</xs:documentation>
+					<xs:documentation>Korean (Johab) (Codepage: 1361)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="macintosh">
 				<xs:annotation>
-					<xs:documentation>Westeuropäisch (Mac) (Codepage: 10000)</xs:documentation>
+					<xs:documentation>Western European (Mac) (Codepage: 10000)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-japanese">
 				<xs:annotation>
-					<xs:documentation>Japanisch (Mac) (Codepage: 10001)</xs:documentation>
+					<xs:documentation>Japanese (Mac) (Codepage: 10001)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-chinesetrad">
 				<xs:annotation>
-					<xs:documentation>Chinesisch traditionell (Mac) (Codepage: 10002)</xs:documentation>
+					<xs:documentation>Traditional Chinese (Mac) (Codepage: 10002)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-korean">
 				<xs:annotation>
-					<xs:documentation>Koreanisch (Mac) (Codepage: 10003)</xs:documentation>
+					<xs:documentation>Korean (Mac) (Codepage: 10003)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-arabic">
 				<xs:annotation>
-					<xs:documentation>Arabisch (Mac) (Codepage: 10004)</xs:documentation>
+					<xs:documentation>Arabic (Mac) (Codepage: 10004)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-hebrew">
 				<xs:annotation>
-					<xs:documentation>Hebräisch (Mac) (Codepage: 10005)</xs:documentation>
+					<xs:documentation>Hebrew (Mac) (Codepage: 10005)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-greek">
 				<xs:annotation>
-					<xs:documentation>Griechisch (Mac) (Codepage: 10006)</xs:documentation>
+					<xs:documentation>Greek (Mac) (Codepage: 10006)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-cyrillic">
 				<xs:annotation>
-					<xs:documentation>Kyrillisch (Mac) (Codepage: 10007)</xs:documentation>
+					<xs:documentation>Cyrillic (Mac) (Codepage: 10007)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-chinesesimp">
 				<xs:annotation>
-					<xs:documentation>Chinesisch vereinfacht (Mac) (Codepage: 10008)</xs:documentation>
+					<xs:documentation>Simplified Chinese (Mac) (Codepage: 10008)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-romanian">
 				<xs:annotation>
-					<xs:documentation>Rumänisch (Mac) (Codepage: 10010)</xs:documentation>
+					<xs:documentation>Romanian (Mac) (Codepage: 10010)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-ukrainian">
 				<xs:annotation>
-					<xs:documentation>Ukrainisch (Mac) (Codepage: 10017)</xs:documentation>
+					<xs:documentation>Ukrainian (Mac) (Codepage: 10017)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-thai">
 				<xs:annotation>
-					<xs:documentation>Thailändisch (Mac) (Codepage: 10021)</xs:documentation>
+					<xs:documentation>Thai (Mac) (Codepage: 10021)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-ce">
 				<xs:annotation>
-					<xs:documentation>Mitteleuropäisch (Mac) (Codepage: 10029)</xs:documentation>
+					<xs:documentation>Central European (Mac) (Codepage: 10029)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-icelandic">
 				<xs:annotation>
-					<xs:documentation>Isländisch (Mac) (Codepage: 10079)</xs:documentation>
+					<xs:documentation>Icelandic (Mac) (Codepage: 10079)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-turkish">
 				<xs:annotation>
-					<xs:documentation>Türkisch (Mac) (Codepage: 10081)</xs:documentation>
+					<xs:documentation>Turkish (Mac) (Codepage: 10081)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-mac-croatian">
 				<xs:annotation>
-					<xs:documentation>Kroatisch (Mac) (Codepage: 10082)</xs:documentation>
+					<xs:documentation>Croatian (Mac) (Codepage: 10082)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="utf-32">
@@ -449,12 +458,12 @@
 			</xs:enumeration>
 			<xs:enumeration value="utf-32BE">
 				<xs:annotation>
-					<xs:documentation>Unicode (UTF-32 Big-Endian) (Codepage: 12001)</xs:documentation>
+					<xs:documentation>Unicode (UTF-32 big-endian) (Codepage: 12001)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-Chinese-CNS">
 				<xs:annotation>
-					<xs:documentation>Chinesisch traditionell (CNS) (Codepage: 20000)</xs:documentation>
+					<xs:documentation>Traditional Chinese (CNS) (Codepage: 20000)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-cp20001">
@@ -464,7 +473,7 @@
 			</xs:enumeration>
 			<xs:enumeration value="x-Chinese-Eten">
 				<xs:annotation>
-					<xs:documentation>Chinesisch traditionell (Eten) (Codepage: 20002)</xs:documentation>
+					<xs:documentation>Traditional Chinese (Eten) (Codepage: 20002)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-cp20003">
@@ -484,22 +493,22 @@
 			</xs:enumeration>
 			<xs:enumeration value="x-IA5">
 				<xs:annotation>
-					<xs:documentation>Westeuropäisch (IA5) (Codepage: 20105)</xs:documentation>
+					<xs:documentation>Western European (IA5) (Codepage: 20105)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-IA5-German">
 				<xs:annotation>
-					<xs:documentation>Deutsch (IA5) (Codepage: 20106)</xs:documentation>
+					<xs:documentation>German (IA5) (Codepage: 20106)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-IA5-Swedish">
 				<xs:annotation>
-					<xs:documentation>Schwedisch (IA5) (Codepage: 20107)</xs:documentation>
+					<xs:documentation>Swedish (IA5) (Codepage: 20107)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-IA5-Norwegian">
 				<xs:annotation>
-					<xs:documentation>Norwegisch (IA5) (Codepage: 20108)</xs:documentation>
+					<xs:documentation>Norwegian (IA5) (Codepage: 20108)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="us-ascii">
@@ -519,27 +528,27 @@
 			</xs:enumeration>
 			<xs:enumeration value="IBM273">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Deutschland) (Codepage: 20273)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Germany) (Codepage: 20273)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM277">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Dänemark-Norwegen) (Codepage: 20277)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Denmark-Norway) (Codepage: 20277)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM278">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Finnland-Schweden) (Codepage: 20278)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Finland-Sweden) (Codepage: 20278)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM280">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Italien) (Codepage: 20280)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Italy) (Codepage: 20280)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM284">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Spanien) (Codepage: 20284)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Spain) (Codepage: 20284)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM285">
@@ -549,202 +558,202 @@
 			</xs:enumeration>
 			<xs:enumeration value="IBM290">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Japanisch Katakana) (Codepage: 20290)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Japanese Katakana) (Codepage: 20290)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM297">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Frankreich) (Codepage: 20297)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (France) (Codepage: 20297)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM420">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Arabisch) (Codepage: 20420)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Arabic) (Codepage: 20420)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM423">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Griechisch) (Codepage: 20423)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Greek) (Codepage: 20423)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM424">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Hebräisch) (Codepage: 20424)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Hebrew) (Codepage: 20424)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-EBCDIC-KoreanExtended">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Koreanisch, erweitert) (Codepage: 20833)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Korean, extended) (Codepage: 20833)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM-Thai">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Thailändisch) (Codepage: 20838)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Thai) (Codepage: 20838)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="koi8-r">
 				<xs:annotation>
-					<xs:documentation>Kyrillisch (KOI8-R) (Codepage: 20866)</xs:documentation>
+					<xs:documentation>Cyrillic (KOI8-R) (Codepage: 20866)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM871">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Isländisch) (Codepage: 20871)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Icelandic) (Codepage: 20871)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM880">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Kyrillisch, Russisch) (Codepage: 20880)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Cyrillic, Russian) (Codepage: 20880)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM905">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Türkisch) (Codepage: 20905)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Turkish) (Codepage: 20905)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="IBM00924">
 				<xs:annotation>
-					<xs:documentation>IBM Lateinisch-1 (Codepage: 20924)</xs:documentation>
+					<xs:documentation>IBM Latin-1 (Codepage: 20924)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="EUC-JP">
 				<xs:annotation>
-					<xs:documentation>Japanisch (JIS 0208-1990 und 0212-1990) (Codepage: 20932)</xs:documentation>
+					<xs:documentation>Japanese (JIS 0208-1990 und 0212-1990) (Codepage: 20932)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-cp20936">
 				<xs:annotation>
-					<xs:documentation>GB2312-80 Chinesisch (vereinfacht) (Codepage: 20936)</xs:documentation>
+					<xs:documentation>GB2312-80 Chinese (simplified) (Codepage: 20936)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-cp20949">
 				<xs:annotation>
-					<xs:documentation>Koreanisch Wansung (Codepage: 20949)</xs:documentation>
+					<xs:documentation>Korean KS X 1001 (Codepage: 20949)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="cp1025">
 				<xs:annotation>
-					<xs:documentation>IBM EBCDIC (Kyrillisch, Serbisch-Bulgarisch) (Codepage: 21025)</xs:documentation>
+					<xs:documentation>IBM EBCDIC (Cyrillic, Serbian-Bulgarian) (Codepage: 21025)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="koi8-u">
 				<xs:annotation>
-					<xs:documentation>Kyrillisch (KOI8-U) (Codepage: 21866)</xs:documentation>
+					<xs:documentation>Cyrillic (KOI8-U) (Codepage: 21866)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-1">
 				<xs:annotation>
-					<xs:documentation>Westeuropäisch (ISO) (Codepage: 28591)</xs:documentation>
+					<xs:documentation>Western European (ISO) (Codepage: 28591)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-2">
 				<xs:annotation>
-					<xs:documentation>Mitteleuropäisch (ISO) (Codepage: 28592)</xs:documentation>
+					<xs:documentation>Central European (ISO) (Codepage: 28592)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-3">
 				<xs:annotation>
-					<xs:documentation>Lateinisch 3 (ISO) (Codepage: 28593)</xs:documentation>
+					<xs:documentation>Latin 3 (ISO) (Codepage: 28593)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-4">
 				<xs:annotation>
-					<xs:documentation>Baltisch (ISO) (Codepage: 28594)</xs:documentation>
+					<xs:documentation>Baltic (ISO) (Codepage: 28594)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-5">
 				<xs:annotation>
-					<xs:documentation>Kyrillisch (ISO) (Codepage: 28595)</xs:documentation>
+					<xs:documentation>Cyrillic (ISO) (Codepage: 28595)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-6">
 				<xs:annotation>
-					<xs:documentation>Arabisch (ISO) (Codepage: 28596)</xs:documentation>
+					<xs:documentation>Arabic (ISO) (Codepage: 28596)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-7">
 				<xs:annotation>
-					<xs:documentation>Griechisch (ISO) (Codepage: 28597)</xs:documentation>
+					<xs:documentation>Greek (ISO) (Codepage: 28597)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-8">
 				<xs:annotation>
-					<xs:documentation>Hebräisch (ISO-Visual) (Codepage: 28598)</xs:documentation>
+					<xs:documentation>Hebrew (ISO-Visual) (Codepage: 28598)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-9">
 				<xs:annotation>
-					<xs:documentation>Türkisch (ISO) (Codepage: 28599)</xs:documentation>
+					<xs:documentation>Turkish (ISO) (Codepage: 28599)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-13">
 				<xs:annotation>
-					<xs:documentation>Estnisch (ISO) (Codepage: 28603)</xs:documentation>
+					<xs:documentation>Estonian (ISO) (Codepage: 28603)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-15">
 				<xs:annotation>
-					<xs:documentation>Lateinisch 9 (ISO) (Codepage: 28605)</xs:documentation>
+					<xs:documentation>Latin 9 (ISO) (Codepage: 28605)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-Europa">
 				<xs:annotation>
-					<xs:documentation>Europa (Codepage: 29001)</xs:documentation>
+					<xs:documentation>Europe (Codepage: 29001)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-8859-8-i">
 				<xs:annotation>
-					<xs:documentation>Hebräisch (ISO-Logical) (Codepage: 38598)</xs:documentation>
+					<xs:documentation>Hebrew (ISO-Logical) (Codepage: 38598)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-2022-jp">
 				<xs:annotation>
-					<xs:documentation>Japanisch (JIS) (Codepage: 50220)</xs:documentation>
+					<xs:documentation>Japanese (JIS) (Codepage: 50220)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="csISO2022JP">
 				<xs:annotation>
-					<xs:documentation>Japanisch (JIS, 1 Byte Kana erlaubt) (Codepage: 50221)</xs:documentation>
+					<xs:documentation>Japanese (JIS, 1 byte Kana allowed) (Codepage: 50221)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-2022-jp">
 				<xs:annotation>
-					<xs:documentation>Japanisch (JIS, 1 Byte Kana erlaubt - SO/SI) (Codepage: 50222)</xs:documentation>
+					<xs:documentation>Japanese (JIS, 1 byte Kana allowed - SO/SI) (Codepage: 50222)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="iso-2022-kr">
 				<xs:annotation>
-					<xs:documentation>Koreanisch (ISO) (Codepage: 50225)</xs:documentation>
+					<xs:documentation>Korean (ISO) (Codepage: 50225)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-cp50227">
 				<xs:annotation>
-					<xs:documentation>Chinesisch vereinfacht (ISO-2022) (Codepage: 50227)</xs:documentation>
+					<xs:documentation>Simplified Chinese (ISO-2022) (Codepage: 50227)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="euc-jp">
 				<xs:annotation>
-					<xs:documentation>Japanisch (EUC) (Codepage: 51932)</xs:documentation>
+					<xs:documentation>Japanese (EUC) (Codepage: 51932)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="EUC-CN">
 				<xs:annotation>
-					<xs:documentation>Chinesisch vereinfacht (EUC) (Codepage: 51936)</xs:documentation>
+					<xs:documentation>Simplified Chinese (EUC) (Codepage: 51936)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="euc-kr">
 				<xs:annotation>
-					<xs:documentation>Koreanisch (EUC) (Codepage: 51949)</xs:documentation>
+					<xs:documentation>Korean (EUC) (Codepage: 51949)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="hz-gb-2312">
 				<xs:annotation>
-					<xs:documentation>Chinesisch vereinfacht (HZ) (Codepage: 52936)</xs:documentation>
+					<xs:documentation>Simplified Chinese (HZ) (Codepage: 52936)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="GB18030">
 				<xs:annotation>
-					<xs:documentation>Chinesisch vereinfacht (GB18030) (Codepage: 54936)</xs:documentation>
+					<xs:documentation>Simplified Chinese (GB18030) (Codepage: 54936)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-iscii-de">
@@ -769,7 +778,7 @@
 			</xs:enumeration>
 			<xs:enumeration value="x-iscii-as">
 				<xs:annotation>
-					<xs:documentation>ISCII Assamesisch (Codepage: 57006)</xs:documentation>
+					<xs:documentation>ISCII Assamese (Codepage: 57006)</xs:documentation>
 				</xs:annotation>
 			</xs:enumeration>
 			<xs:enumeration value="x-iscii-or">
@@ -811,10 +820,16 @@
 	</xs:simpleType>
 
 	<xs:simpleType name="EncodingType">
+		<xs:annotation>
+			<xs:documentation>Defines an encoding type.</xs:documentation>
+		</xs:annotation>
 		<xs:union memberTypes="EncodingStrictType xs:int xs:string" />
 	</xs:simpleType>
 
 	<xs:simpleType name="VirtualSubPathType">
+		<xs:annotation>
+			<xs:documentation>Defines a virtual subpath type.</xs:documentation>
+		</xs:annotation>
 		<xs:restriction base="xs:string">
 			<xs:pattern value="([A-Za-z0-9_]+\/)+" />
 		</xs:restriction>

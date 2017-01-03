@@ -408,7 +408,7 @@
 								<xs:documentation>Definiert ein Lua-Script für die Ausführung. Das Skript wird kompiliert im Speicher gehalten und kann mit anderen Elementen verknüpft werden.</xs:documentation>
 							</xs:annotation>
 							<xs:complexType>
-								<xs:attribute name="id" type="xs:string" use="required">
+								<xs:attribute name="id" type="KeyType" use="required">
 									<xs:annotation>
 										<xs:documentation>Id of the script</xs:documentation>
 									</xs:annotation>
@@ -448,7 +448,7 @@
 
 	<xs:element name ="serverTcp">
 		<xs:annotation>
-			<xs:documentation>Initializes a generell propose tcp server</xs:documentation>
+			<xs:documentation>Initializes a general purpose tcp server.</xs:documentation>
 			<xs:appinfo>
 				<class>TecWare.DE.Server.TcpServer</class>
 			</xs:appinfo>
