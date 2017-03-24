@@ -220,7 +220,7 @@ namespace TecWare.DE.Server.Http
 
 	#region -- class LuaHttpTable -------------------------------------------------------
 
-	internal sealed class LuaHttpTable : LuaTable
+	internal sealed class LuaHttpTable : LuaTable, IDisposable
 	{
 		private IDEContext context;
 		private string contentType;
@@ -652,7 +652,7 @@ namespace TecWare.DE.Server.Http
 						else if (isHtml)
 						{
 							bool isPlainText;
-							var content = ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out isPlainText);
+                     var content = "otext('text/html');" + ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out isPlainText);
 							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader(content));
 						}
 						else if (isText)
@@ -680,7 +680,9 @@ namespace TecWare.DE.Server.Http
 			else if (o is ILuaScript)
 			{
 				var c = (ILuaScript)o;
-				var r = c.Run(new LuaHttpTable(context, contentType), true);
+            LuaResult r;
+            using (var g = new LuaHttpTable(context, contentType))
+               r = c.Run(g, true);
 
 				if (!context.IsOutputStarted && r.Count > 0)
 					WriteObject(context, r[0], r.GetValueOrDefault(1, MimeTypes.Text.Html));

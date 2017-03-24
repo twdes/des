@@ -1025,12 +1025,8 @@ namespace TecWare.DE.Server
 		} // func AttachScript
 
 		public ILuaScript CreateScript(Func<TextReader> code, string name, params KeyValuePair<string, Type>[] parameters)
-		{
-			var s = new LuaMemoryScript(this, code, name, parameters);
-			AddScript(s);
-			return s;
-		} // func CreateScript
-
+		   => new LuaMemoryScript(this, code, name, parameters);
+			
 		public Lua Lua => lua;
 
 		#endregion
