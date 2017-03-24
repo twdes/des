@@ -458,16 +458,15 @@ namespace TecWare.DE.Server
 			if (subPath.Length > 0 && subPath[0] == '/')
 				throw new ArgumentException("Invalid subPath.", "subPath");
 
-			// is the current item available for the current user
-			var item = sp as IDEConfigItem;
-			if (item != null)
-				DemandToken(item.SecurityToken);
-
-			// Prüfe die Position
+			// check the path position
 			if (subPath.Length > 0 && !RelativeSubPath.StartsWith(subPath, StringComparison.OrdinalIgnoreCase))
 				return false;
 
-			// Erzeuge einen neuen Frame
+			// is the current item available for the current user
+			if (sp is IDEConfigItem item)
+				DemandToken(item.SecurityToken);
+
+			// create a new frame for stack 
 			if (relativeStack.Count == 0)
 				relativeStack.Push(new RelativeFrame(1, sp));
 			else
@@ -769,10 +768,13 @@ namespace TecWare.DE.Server
 				}
 			} // ctor
 
+			public override string ToString()
+				=> $"[{GetType().Name}] {protocol}://{hostname}:{port}/{relativeUriPath}";
+
 			protected virtual void SetFileName(string fileName) { }
 
-			/// <summary>Fügt den Pfad an.</summary>
-			/// <param name="prefixes"></param>
+			/// <summary>Add the path to HttpListener prefix list.</summary>
+			/// <param name="prefixes">Prefixes to add to the HttpListener</param>
 			public void AddHttpPrefix(List<string> prefixes)
 			{
 				var addPrefix = true;
@@ -799,11 +801,11 @@ namespace TecWare.DE.Server
 					prefixes.Add(uri);
 			} // proc AddHttpPrefix
 
-			public virtual bool MatchPrefix(Uri url)
+			public virtual bool MatchPrefix(Uri url, bool ignoreProtocol)
 			{
 				if (protocol == null)
 					return true; // default rule
-				else if (url.Scheme != protocol)
+				else if (!ignoreProtocol && url.Scheme != protocol)
 					return false;
 				else if (hostname != "*" && hostname != "+" && hostname != url.Host)
 					return false;
@@ -887,14 +889,17 @@ namespace TecWare.DE.Server
 				}
 			} // ctor
 
+			public override string ToString()
+				=> fileName == null ? base.ToString() : base.ToString() + fileName;
+
 			protected override void SetFileName(string fileName)
 			{
 				this.fileName = fileName;
 			} // proc SetFileName
 
-			public override bool MatchPrefix(Uri url)
+			public override bool MatchPrefix(Uri url, bool ignorePrefix)
 			{
-				var r = base.MatchPrefix(url);
+				var r = base.MatchPrefix(url, ignorePrefix);
 				if (r && fileName != null)
 				{
 					r = url.AbsolutePath.Length == PrefixLength &&
@@ -1275,7 +1280,7 @@ namespace TecWare.DE.Server
 
 		private AuthenticationSchemes GetAuthenticationScheme(HttpListenerRequest r)
 		{
-			var prefixScheme = FindPrefix(prefixAuthentificationSchemes, r.Url);
+			var prefixScheme = FindPrefix(prefixAuthentificationSchemes, r.Url, true);
 			return prefixScheme == null ? AuthenticationSchemes.Anonymous : prefixScheme.Scheme;
 		} // func GetAuthenticationScheme
 
@@ -1341,7 +1346,7 @@ namespace TecWare.DE.Server
 			var url = ctx.Request.Url;
 
 			// Find the prefix for a alternating path
-			var pathTranslation = FindPrefix(prefixPathTranslations, url);
+			var pathTranslation = FindPrefix(prefixPathTranslations, url, false);
 			string absolutePath;
 			if (pathTranslation == null || pathTranslation.Prefix == null)
 				absolutePath = url.AbsolutePath;
@@ -1372,7 +1377,6 @@ namespace TecWare.DE.Server
 					DEContext.UpdateContext(r);
 					try
 					{
-
 						// authentificate user
 						r.AuthentificateUser(ctx.User);
 
@@ -1524,11 +1528,11 @@ namespace TecWare.DE.Server
 			}
 		} // func AddPrefix
 
-		private static T FindPrefix<T>(List<T> prefixes, Uri url)
+		private static T FindPrefix<T>(List<T> prefixes, Uri url, bool ignoreProtocol)
 			where T : PrefixDefinition
 		{
 			lock (prefixes)
-				return prefixes.Find(c => c.MatchPrefix(url));
+				return prefixes.Find(c => c.MatchPrefix(url, ignoreProtocol));
 		} // func FindPrefix
 
 		private static string FilterChar(string sMessage)
