@@ -534,7 +534,7 @@ namespace TecWare.DE.Server.Http
 		public static void WriteBytes(this IDEContext context, byte[] value, string contentType = MimeTypes.Application.OctetStream)
 		{
 			using (var dst = context.GetOutputStream(contentType, value.Length))
-				dst.Write(value, 0, value.Length);
+				dst?.Write(value, 0, value.Length);
 		} // proc WriteText
 
 		/// <summary>Writes the stream to the output.</summary>
@@ -545,7 +545,10 @@ namespace TecWare.DE.Server.Http
 		{
 			var length = stream.CanSeek ? stream.Length : -1L;
 			using (var dst = context.GetOutputStream(contentType, length))
-				stream.CopyTo(dst);
+			{
+				if (dst != null)
+					stream.CopyTo(dst);
+			}
 		} // proc WriteStream
 
 		#endregion
@@ -652,7 +655,7 @@ namespace TecWare.DE.Server.Http
 						else if (isHtml)
 						{
 							bool isPlainText;
-                     var content = "otext('text/html');" + ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out isPlainText);
+							var content = "otext('text/html');" + ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out isPlainText);
 							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader(content));
 						}
 						else if (isText)
@@ -680,9 +683,9 @@ namespace TecWare.DE.Server.Http
 			else if (o is ILuaScript)
 			{
 				var c = (ILuaScript)o;
-            LuaResult r;
-            using (var g = new LuaHttpTable(context, contentType))
-               r = c.Run(g, true);
+				LuaResult r;
+				using (var g = new LuaHttpTable(context, contentType))
+					r = c.Run(g, true);
 
 				if (!context.IsOutputStarted && r.Count > 0)
 					WriteObject(context, r[0], r.GetValueOrDefault(1, MimeTypes.Text.Html));

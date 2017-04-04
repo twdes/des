@@ -25,6 +25,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Security.Principal;
@@ -416,13 +417,13 @@ namespace TecWare.DE.Server
 			if (compress.Value)
 			{
 				context.Response.Headers["Content-Encoding"] = "gzip";
-				return new GZipStream(context.Response.OutputStream, CompressionMode.Compress);
+				return IsHeadRequest ? null : new GZipStream(context.Response.OutputStream, CompressionMode.Compress);
 			}
 			else
 			{
 				if (contentLength >= 0)
 					context.Response.ContentLength64 = contentLength;
-				return context.Response.OutputStream;
+				return IsHeadRequest ? null : context.Response.OutputStream;
 			}
 		} // func GetOutputStream
 
@@ -430,7 +431,8 @@ namespace TecWare.DE.Server
 		{
 			// add encoding to the content type
 			contentType = contentType + "; charset=" + (encoding ?? Http.Encoding).WebName;
-			return new StreamWriter(GetOutputStream(contentType, contentLength, contentLength == -1));
+			var outputStream = GetOutputStream(contentType, contentLength, contentLength == -1);
+			return outputStream == null ? null : new StreamWriter(outputStream);
 		} // func GetOutputTextWriter
 
 		public void Redirect(string url)
@@ -440,6 +442,7 @@ namespace TecWare.DE.Server
 			context.Response.Redirect(url);
 		} // proc Redirect
 
+		public bool IsHeadRequest => context.Request.HttpMethod == HttpMethod.Head.Method;
 		public CookieCollection OutputCookies => context.Response.Cookies;
 		public WebHeaderCollection OutputHeaders => context.Response.Headers;
 
