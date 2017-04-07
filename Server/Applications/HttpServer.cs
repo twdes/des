@@ -875,21 +875,33 @@ namespace TecWare.DE.Server
 			public PrefixAuthentificationScheme(XElement x)
 				: base(x, true)
 			{
-				var v = x.GetAttribute("scheme", "none");
-				switch (v)
+				var v = x.GetAttribute("scheme", String.Empty);
+				if (String.IsNullOrEmpty(v))
+					v = "none";
+
+				var schemeValue = AuthenticationSchemes.None;
+				foreach (var cur in v.Split(new char[] { ' ', ';', ',' }, StringSplitOptions.RemoveEmptyEntries))
 				{
-					case "ntlm":
-						scheme = AuthenticationSchemes.Ntlm | AuthenticationSchemes.Anonymous;
-						break;
-					case "basic":
-						scheme = AuthenticationSchemes.Basic | AuthenticationSchemes.Anonymous;
-						break;
-					case "none":
-						scheme = AuthenticationSchemes.Anonymous;
-						break;
-					default:
-						throw new DEConfigurationException(x, $"Unknown authentification scheme ({v}).");
+					switch (cur)
+					{
+						case "ntlm":
+							schemeValue |= AuthenticationSchemes.Ntlm;
+							break;
+						case "digest":
+							schemeValue |= AuthenticationSchemes.Digest;
+							break;
+						case "basic":
+							schemeValue |= AuthenticationSchemes.Basic;
+							break;
+						case "none":
+							schemeValue |= AuthenticationSchemes.Anonymous;
+							break;
+						default:
+							throw new DEConfigurationException(x, $"Unknown authentification scheme ({v}).");
+					}
 				}
+
+				this.scheme = schemeValue;
 			} // ctor
 
 			public override string ToString()

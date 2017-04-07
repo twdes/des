@@ -267,11 +267,16 @@
 											<xs:documentation>Welches Security-Schema soll für diesen Knoten verwendet werden.</xs:documentation>
 										</xs:annotation>
 										<xs:simpleType>
-											<xs:restriction base="xs:string">
-												<xs:enumeration value="none" />
-												<xs:enumeration value="basic" />
-												<xs:enumeration value="ntlm" />
-											</xs:restriction>
+											<xs:list>
+												<xs:simpleType>
+													<xs:restriction base="xs:string">
+														<xs:enumeration value="none" />
+														<xs:enumeration value="basic" />
+														<xs:enumeration value="digest" />
+														<xs:enumeration value="ntlm" />
+													</xs:restriction>
+												</xs:simpleType>
+											</xs:list>
 										</xs:simpleType>
 									</xs:attribute>
 								</xs:complexType>
