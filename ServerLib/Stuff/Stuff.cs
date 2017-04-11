@@ -172,6 +172,12 @@ namespace TecWare.DE.Stuff
 		public static bool PasswordCompare(string testPassword, string passwordHash)
 			=> Passwords.PasswordCompare(testPassword, passwordHash);
 
+		public static bool PasswordCompare(string testPassword, byte[] passwordHash)
+			=> Passwords.PasswordCompare(testPassword, passwordHash);
+
+		public static byte[] ParsePasswordHash(string passwordHash)
+			=> Passwords.ParsePasswordHash(passwordHash);
+
 		#endregion
 
 		#region -- RemoveInvalidXmlChars ----------------------------------------------------

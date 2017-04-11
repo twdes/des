@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Cryptography;
@@ -10,42 +11,40 @@ namespace TecWare.DE.Stuff
 
 	internal static class Passwords
 	{
-		private const string hexAlpha = "0123456789ABCDEF";
-
 		#region -- Password ---------------------------------------------------------------
+
+		public static byte[] ParsePasswordHash(string passwordHash)
+		{
+			if (String.IsNullOrEmpty(passwordHash))
+				return null;
+
+			if (passwordHash.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+			{
+				if ((passwordHash.Length & 1) != 0) // Gerade Zahl erwartet
+					throw new ArgumentException("invalid hash", nameof(passwordHash));
+
+				var hash = new byte[(passwordHash.Length >> 1) - 1];
+				var i = 2;
+				var j = 0;
+				while (i < passwordHash.Length)
+				{
+					hash[j] = Byte.Parse(passwordHash.Substring(i, 2), NumberStyles.AllowHexSpecifier);
+					i += 2;
+					j++;
+				}
+
+				return hash;
+			}
+			else
+				return Convert.FromBase64String(passwordHash);
+		} // func ParsePasswordHash
 
 		public static bool PasswordCompare(string testPassword, string passwordHash)
 		{
 			if (passwordHash == null || testPassword == null)
 				return true;
 
-			if (passwordHash.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-			{
-				if ((passwordHash.Length & 1) != 0) // Gerade Zahl erwartet
-					throw new ArgumentException("invalid hash");
-
-				var hash = new byte[(passwordHash.Length / 2) - 1];
-				var i = 2;
-				var j = 0;
-				while (i < passwordHash.Length)
-				{
-					var t = hexAlpha.IndexOf(Char.ToUpper(passwordHash[i]));
-					if (t == -1)
-						throw new ArgumentException("invalid hash");
-					hash[j] = (byte)(t << 4);
-					i++;
-					t = hexAlpha.IndexOf(passwordHash[i]);
-					if (t == -1)
-						throw new ArgumentException("invalid hash");
-					hash[j] = (byte)(hash[j] | t);
-					i++;
-					j++;
-				}
-
-				return PasswordCompare(testPassword, hash);
-			}
-			else
-				return PasswordCompare(testPassword, Convert.FromBase64String(passwordHash));
+			return PasswordCompare(testPassword, ParsePasswordHash(passwordHash));
 		} // func PasswordCompare
 
 		public static bool PasswordCompare(string testPassword, byte[] passwordHash)
@@ -53,14 +52,14 @@ namespace TecWare.DE.Stuff
 			if (passwordHash == null)
 				return String.IsNullOrEmpty(testPassword);
 			if (passwordHash.Length < 6)
-				throw new ArgumentException("invalid hash-length");
+				throw new ArgumentException("invalid hash-length", nameof(passwordHash));
 
 			if (BitConverter.ToInt16(passwordHash, 0) != 2)
-				throw new ArgumentException("invalid hash-version");
+				throw new ArgumentException("invalid hash-version", nameof(passwordHash));
 
 			var testPasswordBytes = Encoding.Unicode.GetBytes(testPassword);
 
-			// Errechne den SHA256 hash (Password + Salt)
+			// create the SHA256 hash (Password + Salt)
 			var sha = SHA512Managed.Create();
 			sha.TransformBlock(testPasswordBytes, 0, testPasswordBytes.Length, testPasswordBytes, 0);
 			sha.TransformFinalBlock(passwordHash, 2, 4);
@@ -70,41 +69,41 @@ namespace TecWare.DE.Stuff
 
 		public unsafe static byte[] HashPassword(string password)
 		{
-			var pPassword = Marshal.StringToHGlobalUni(password);
+			var passwordPtr = Marshal.StringToHGlobalUni(password);
 			try
 			{
-				return HashPassword(pPassword, password.Length, new Random().Next());
+				return HashPassword(passwordPtr, password.Length, new Random().Next());
 			}
 			finally
 			{
-				Marshal.ZeroFreeGlobalAllocUnicode(pPassword);
+				Marshal.ZeroFreeGlobalAllocUnicode(passwordPtr);
 			}
 		} // func HashPassword
 
 		public unsafe static byte[] HashPassword(SecureString password)
 		{
-			var pPassword = Marshal.SecureStringToGlobalAllocUnicode(password);
+			var passwordPtr = Marshal.SecureStringToGlobalAllocUnicode(password);
 			try
 			{
-				return HashPassword(pPassword, password.Length, new Random().Next());
+				return HashPassword(passwordPtr, password.Length, new Random().Next());
 			}
 			finally
 			{
-				Marshal.ZeroFreeGlobalAllocUnicode(pPassword);
+				Marshal.ZeroFreeGlobalAllocUnicode(passwordPtr);
 			}
 		} // func HashPassword
 
-		public unsafe static byte[] HashPassword(IntPtr pPassword, int iLength, int iSalt)
+		public unsafe static byte[] HashPassword(IntPtr passwordPtr, int length, int salt)
 		{
-			char* c = (char*)pPassword.ToPointer();
+			var c = (char*)passwordPtr.ToPointer();
 
-			// Errechne den Hash-Wert
+			// create hash function
 			var sha = SHA512Managed.Create();
 
 			var b = new byte[2];
 			var i = 0;
 
-			while (i < iLength)
+			while (i < length)
 			{
 				unchecked
 				{
@@ -116,7 +115,7 @@ namespace TecWare.DE.Stuff
 				i++;
 			}
 
-			b = BitConverter.GetBytes(iSalt);
+			b = BitConverter.GetBytes(salt);
 			sha.TransformFinalBlock(b, 0, 4);
 
 			// Erzeuge Salt+Hash
