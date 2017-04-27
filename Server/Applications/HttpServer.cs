@@ -201,8 +201,8 @@ namespace TecWare.DE.Server
 		public string AbsolutePath => absolutePath;
 		public DEHttpServer Http => http;
 		IDEContextServer IDECommonContext.Server => http;
-    public IDEAuthentificatedUser User => user;
-  } // class DECommonContext
+		public IDEAuthentificatedUser User => user;
+	} // class DECommonContext
 
 	#endregion
 
@@ -221,7 +221,7 @@ namespace TecWare.DE.Server
 			: base(http, context.Request, absolutePath, httpAuthentification)
 		{
 			this.context = context;
-			
+
 			AuthentificateUser(context.User);
 		} // ctor
 
@@ -920,7 +920,7 @@ namespace TecWare.DE.Server
 					r = url.AbsolutePath.Length == PrefixLength &&
 						url.AbsolutePath.Substring(PrefixPath.Length) == fileName;
 				}
-				return r ;
+				return r;
 			} // func MatchPrefix
 
 			public AuthenticationSchemes Scheme => scheme;
@@ -1580,8 +1580,8 @@ namespace TecWare.DE.Server
 		Description("Ist die Protokollierung der Http-Request aktiv."),
 		]
 		public bool IsDebug { get { return debugMode; } private set { SetProperty(ref debugMode, value); } }
-	
+
 		/// <summary></summary>
 		public CultureInfo DefaultCultureInfo => defaultCultureInfo;
-  } // class DEHttpServer
+	} // class DEHttpServer
 }

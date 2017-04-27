@@ -816,7 +816,7 @@ namespace TecWare.DE.Server.Http
 	{
 		private readonly static ThreadLocal<IDECommonContext> currentContext = new ThreadLocal<IDECommonContext>(false);
 
-		internal static void UpdateContext(IDECommonContext newContext)
+		public static void UpdateContext(IDECommonContext newContext)
 		{
 			currentContext.Value = newContext;
 		} // proc UpdateContext
@@ -834,8 +834,7 @@ namespace TecWare.DE.Server.Http
 		{
 			get
 			{
-				IDECommonContext context;
-				if (TryGetCurrentContext(out context))
+				if (TryGetCurrentContext(out var context))
 					return context;
 				else
 					throw new ArgumentNullException("no context, todo"); // todo
