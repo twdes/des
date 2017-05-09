@@ -139,7 +139,9 @@ namespace TecWare.DE.Stuff
 			var p2 = filterExpression.LastIndexOf('*');
 			if (p1 == p2) // only one start
 			{
-				if (p1 == 0) // => endswith
+				if (p1 == -1) // compare
+					return String.Compare(value, filterExpression, StringComparison.OrdinalIgnoreCase) == 0;
+				else if (p1 == 0) // => endswith
 					if (value.Length == 1)
 						return true;
 					else

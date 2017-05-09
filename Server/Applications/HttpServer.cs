@@ -153,7 +153,7 @@ namespace TecWare.DE.Server
 		} // proc TryDemandToken
 
 		public HttpResponseException CreateAuthorizationException(string securityText) // force user, if no user is given
-		 => new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
+			=> new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
 
 		#endregion
 
@@ -893,6 +893,9 @@ namespace TecWare.DE.Server
 						case "basic":
 							schemeValue |= AuthenticationSchemes.Basic;
 							break;
+						case "negotiate":
+							schemeValue |= AuthenticationSchemes.Negotiate;
+							break;
 						case "none":
 							schemeValue |= AuthenticationSchemes.Anonymous;
 							break;
@@ -1032,6 +1035,22 @@ namespace TecWare.DE.Server
 						alternativePaths.Select(c => new XElement(xnAlternativeRoot, c))
 					);
 				}
+
+				// add security
+				xFiles.Add(
+					new XElement(xnSecurityDef,
+						new XAttribute("filter", "des.html"),
+						SecuritySys
+					),
+					new XElement(xnSecurityDef,
+						new XAttribute("filter", "DEViewer.css"),
+						SecuritySys
+					),
+					new XElement(xnSecurityDef,
+						new XAttribute("filter", "DEViewer.js"),
+						SecuritySys
+					)
+				);
 
 				config.Add(xFiles);
 			}
@@ -1296,7 +1315,30 @@ namespace TecWare.DE.Server
 		private AuthenticationSchemes GetAuthenticationScheme(HttpListenerRequest r)
 		{
 			var prefixScheme = FindPrefix(prefixAuthentificationSchemes, r.Url, true);
-			return prefixScheme == null ? AuthenticationSchemes.Anonymous : prefixScheme.Scheme;
+			if (prefixScheme == null)
+				return AuthenticationSchemes.Anonymous;
+			else
+			{
+				var allowMultipleAuthentification = r.Headers["des-multiple-authentifications"];
+				if (Boolean.TryParse(allowMultipleAuthentification, out var t) && t)
+					return prefixScheme.Scheme;
+				else // standard browser's only accept one authentification scheme
+				{
+					var scheme = prefixScheme.Scheme;
+
+					// select the best for the remote host (currenlty we try to use the highest sec level)
+					if ((scheme & AuthenticationSchemes.Ntlm) != 0)
+						scheme = AuthenticationSchemes.Ntlm;
+					else if ((scheme & AuthenticationSchemes.Negotiate) != 0)
+						scheme = AuthenticationSchemes.Negotiate;
+					else if ((scheme & AuthenticationSchemes.Digest) != 0)
+						scheme = AuthenticationSchemes.Digest;
+					else if ((scheme & AuthenticationSchemes.Basic) != 0)
+						scheme = AuthenticationSchemes.Basic;
+				
+					return prefixScheme == null ? AuthenticationSchemes.Anonymous : scheme;
+				}
+			}
 		} // func GetAuthenticationScheme
 
 		private void ExecuteHttpRequest()

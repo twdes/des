@@ -1,4 +1,19 @@
-﻿using System;
+﻿#region -- copyright --
+//
+// Licensed under the EUPL, Version 1.1 or - as soon they will be approved by the
+// European Commission - subsequent versions of the EUPL(the "Licence"); You may
+// not use this work except in compliance with the Licence.
+//
+// You may obtain a copy of the Licence at:
+// http://ec.europa.eu/idabc/eupl
+//
+// Unless required by applicable law or agreed to in writing, software distributed
+// under the Licence is distributed on an "AS IS" basis, WITHOUT WARRANTIES OR
+// CONDITIONS OF ANY KIND, either express or implied. See the Licence for the
+// specific language governing permissions and limitations under the Licence.
+//
+#endregion
+using System;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -36,10 +51,9 @@ namespace TecWare.DE.Server.Http
 		private bool TestFilter(XElement x, string subPath)
 		{
 			var value = x.GetAttribute<string>("filter", null);
-			if (value == null || value.Length == 0 || value == "*")
-				return true;
-			else
-				return ProcsDE.IsFilterEqual(subPath, value);
+			return value == null || value.Length == 0 || value == "*" 
+				? true
+				: ProcsDE.IsFilterEqual(subPath, value);
 		} // func TestFilter
 
 		protected string GetFileContentType(string subPath)
@@ -187,9 +201,7 @@ namespace TecWare.DE.Server.Http
 				namespaceRoot = namespaceRoot + ".";
 
 			// load alternative
-			nonePresentAlternativeExtensions = config.ConfigNew.GetAttribute("nonePresentAlternativeExtensions", String.Empty).Split( new char[] { ' ' },StringSplitOptions.RemoveEmptyEntries);
-			if (nonePresentAlternativeExtensions != null && nonePresentAlternativeExtensions.Length == 0)
-				nonePresentAlternativeExtensions = null;
+			nonePresentAlternativeExtensions = config.ConfigNew.GetStrings("nonePresentAlternativeExtensions", true);
 
 			alternativeRoots = config.ConfigNew.Elements(xnAlternativeRoot).Where(x => !String.IsNullOrEmpty(x.Value)).Select(x => x.Value).ToArray();
 			if (alternativeRoots != null && alternativeRoots.Length == 0)
@@ -210,7 +222,7 @@ namespace TecWare.DE.Server.Http
 				DateTime stamp;
 				// try to open the resource stream
 				var forceAlternativeCheck = nonePresentAlternativeExtensions != null && nonePresentAlternativeExtensions.FirstOrDefault(c => resourceName.EndsWith(c, StringComparison.OrdinalIgnoreCase)) != null;
-        src = assembly.GetManifestResourceStream(resourceName);
+				src = assembly.GetManifestResourceStream(resourceName);
 				if (src == null && !forceAlternativeCheck) // nothing...
 					return false;
 
@@ -219,10 +231,10 @@ namespace TecWare.DE.Server.Http
 				{
 					var relativeFileName = ProcsDE.GetLocalPath(r.RelativeSubPath);
 					var alternativeFile = (from c in alternativeRoots
-																 let fi = new FileInfo(Path.Combine(c, relativeFileName))
-																 where fi.Exists && (forceAlternativeCheck || fi.LastWriteTimeUtc > assemblyStamp)
-																 orderby fi.LastWriteTimeUtc descending
-																 select fi).FirstOrDefault();
+										   let fi = new FileInfo(Path.Combine(c, relativeFileName))
+										   where fi.Exists && (forceAlternativeCheck || fi.LastWriteTimeUtc > assemblyStamp)
+										   orderby fi.LastWriteTimeUtc descending
+										   select fi).FirstOrDefault();
 
 					if (alternativeFile != null)
 					{
@@ -245,7 +257,7 @@ namespace TecWare.DE.Server.Http
 				}
 
 				// security
-				DemandFile(r, resourceName);
+				DemandFile(r, r.RelativeSubPath);
 				// send the file
 				r.SetLastModified(stamp)
 					.WriteStream(src, GetFileContentType(resourceName) ?? r.Server.GetContentType(Path.GetExtension(resourceName)));

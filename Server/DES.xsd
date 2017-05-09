@@ -274,6 +274,7 @@
 														<xs:enumeration value="basic" />
 														<xs:enumeration value="digest" />
 														<xs:enumeration value="ntlm" />
+														<xs:enumeration value="negotiate" />
 													</xs:restriction>
 												</xs:simpleType>
 											</xs:list>
