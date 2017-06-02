@@ -32,15 +32,13 @@ namespace TecWare.DE.Server
 			{
 			}
 
-			public int Read(byte[] buf, int offset, int count, out bool isEoR)
+			public Task<(int readed, bool isEoR)> ReadAsync(byte[] buf, int offset, int count)
 			{
 				if (recordIndex == src.Length)
-				{
-					isEoR = true;
-					return -1;
-				}
+					return Task.FromResult((-1, true));
 				else
 				{
+					bool isEoR;
 					var srcBuffer = src[recordIndex];
 					var l = Math.Min(count, srcBuffer.Length - recordOffset);
 					Array.Copy(srcBuffer, recordOffset, buf, offset, l);
@@ -53,12 +51,12 @@ namespace TecWare.DE.Server
 					}
 					else
 						isEoR = false;
-					return l;
+					return Task.FromResult((l, isEoR));
 				}
 			} // func Read
 
-			public void SetTransmissionError(OdetteAnswerReason answerReason, string reasonText, bool retryFlag) { throw new NotImplementedException(); }
-			public void SetTransmissionState() { throw new NotImplementedException(); }
+			public Task SetTransmissionErrorAsync(OdetteAnswerReason answerReason, string reasonText, bool retryFlag) { throw new NotImplementedException(); }
+			public Task SetTransmissionStateAsync() { throw new NotImplementedException(); }
 
 			public IOdetteFile Name { get { throw new NotImplementedException(); } }
 			public long RecordCount { get { throw new NotImplementedException(); } }
@@ -72,8 +70,10 @@ namespace TecWare.DE.Server
 
 			public DummyWriter()
 			{
-				dst = new List<MemoryStream>();
-				dst.Add(new MemoryStream()); // initial record
+				dst = new List<MemoryStream>
+				{
+					new MemoryStream() // initial record
+				};
 			} // ctor
 
 			public void AssertData(byte[][] src)
@@ -94,14 +94,15 @@ namespace TecWare.DE.Server
 			{
 			}
 
-			public void Write(byte[] buf, int offset, int count, bool isEoR)
+			public Task WriteAsync(byte[] buf, int offset, int count, bool isEoR)
 			{
 				dst[dst.Count - 1].Write(buf, offset, count);
 				if (isEoR)
 					dst.Add(new MemoryStream());
+				return Task.CompletedTask;
 			} // proc Write
 
-			public void CommitFile(long recordCount, long unitCount) { throw new NotImplementedException(); }
+			public Task CommitFileAsync(long recordCount, long unitCount) { throw new NotImplementedException(); }
 
 			public IOdetteFile Name { get { throw new NotImplementedException(); } }
 
@@ -114,13 +115,12 @@ namespace TecWare.DE.Server
 			var reader = new DummyReader(src);
 			var writer = new DummyWriter();
 			var buffer = new byte[bufferSize];
-			int filledBuffer;
 
 			while (true)
 			{
-				var eos = OdetteFtp.FillFromStreamInternal(reader, allowCompressing, buffer, out filledBuffer);
-				OdetteFtp.WriteToStreamInternal(writer, buffer, filledBuffer);
-				if (eos)
+				var eos = OdetteFtp.FillFromStreamInternalAsync(reader, allowCompressing, buffer).Result;
+				OdetteFtp.WriteToStreamInternalAsync(writer, buffer, eos.dataLength).Wait();
+				if (eos.endOfStream)
 					break;
 			}
 
@@ -146,7 +146,7 @@ namespace TecWare.DE.Server
 				Header(4, false, true), (byte)'W', (byte)'e', (byte)'l', (byte)'t'
 			};
 
-			Assert.IsTrue(OdetteFtp.WriteToStreamInternal(writer, buf, buf.Length), "eor not reached.");
+			Assert.IsTrue(OdetteFtp.WriteToStreamInternalAsync(writer, buf, buf.Length).Result, "eor not reached.");
 
 			writer.AssertData(
 				new byte[][]
