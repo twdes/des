@@ -241,7 +241,7 @@ namespace TecWare.DE.Server
 
 			foreach (var t in names)
 			{
-				var m = Regex.Match(t.Item2, DirectoryFileServiceItem.FileSelectorRegEx);
+				var m = Regex.Match(t.Item2, DirectoryFileServiceItem.fileSelectorRegEx);
 				Assert.AreEqual(t.Item1, m.Success, String.Format("{0}",t));
 				if (m.Success)
 				{

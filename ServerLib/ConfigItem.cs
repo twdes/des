@@ -1032,8 +1032,8 @@ namespace TecWare.DE.Server
 			}
 			else if (returnValue is LuaResult)
 			{
-				LuaResult result = (LuaResult)returnValue;
-				XElement x = CreateDefaultXmlReturn(true, result[1] as string);
+				var result = (LuaResult)returnValue;
+				var x = CreateDefaultXmlReturn(true, result[1] as string);
 
 				if (result[0] is LuaTable)
 					Procs.ToXml((LuaTable)result[0], x);
@@ -1112,9 +1112,9 @@ namespace TecWare.DE.Server
 
 		#region -- Interface for Lua ------------------------------------------------------
 
-		protected void CallTableMethods(string sTableName, params object[] args)
+		protected void CallTableMethods(string tableName, params object[] args)
 		{
-			var table = GetMemberValue(sTableName, false, true) as LuaTable;
+			var table = GetMemberValue(tableName, false, true) as LuaTable;
 			if (table == null)
 				return;
 
@@ -1126,18 +1126,30 @@ namespace TecWare.DE.Server
 				}
 				catch (Exception e)
 				{
-					Log.Except(String.Format("Failed to call {0}.{1}.", sTableName, c.Key), e);
+					Log.Except(String.Format("Failed to call {0}.{1}.", tableName, c.Key), e);
 				}
 			}
 		} // proc CallTableMethods
 
-		private bool CheckKnownTable(object key, string tableName, ref object r)
+		protected virtual bool IsMemberTableMethod(string key)
 		{
-			var stringKey = key as string;
-			if (stringKey != null && stringKey == tableName)
+			switch (key)
+			{
+				case LuaActions:
+				case LuaDispose:
+				case LuaConfiguration:
+					return true;
+				default:
+					return false;
+			}
+		} // func IsMemberTableMethod
+
+		private bool CheckKnownTable(object key, ref object r)
+		{
+			if (key is string stringKey && IsMemberTableMethod(stringKey))
 			{
 				r = new LuaTable();
-				SetMemberValue(tableName, r, rawSet: true);
+				SetMemberValue(stringKey, r, rawSet: true);
 				return true;
 			}
 			else
@@ -1149,9 +1161,7 @@ namespace TecWare.DE.Server
 			var r = base.OnIndex(key); // ask __metatable
 			if (r == null) // check for parent
 			{
-				if (!CheckKnownTable(key, LuaActions, ref r) &&
-					!CheckKnownTable(key, LuaDispose, ref r) &&
-					!CheckKnownTable(key, LuaConfiguration, ref r))
+				if (!CheckKnownTable(key, ref r))
 				{
 					var t = sp as LuaTable;
 					if (t != null)

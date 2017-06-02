@@ -284,7 +284,7 @@ namespace TecWare.DE.Server
 
 		/// <summary>Access to the service log.</summary>
 		private IServiceLog ServiceLog { get { return serviceLog; } set { serviceLog = value; } }
-		
+
 		// -- Static --------------------------------------------------------------
 
 		#region -- Service registration ---------------------------------------------------
@@ -403,7 +403,7 @@ namespace TecWare.DE.Server
 #if DEBUG
 			var readlineAtTheEnd = false;
 #endif
-			
+
 			var printHeader = new Action(() =>
 			{
 				Console.WriteLine(HeadingInfo.Default.ToString());
@@ -424,14 +424,14 @@ namespace TecWare.DE.Server
 				});
 
 				// work with arguments
-        var  r = parser.ParseArguments(args, new Type[] { typeof(RunOptions), typeof(RegisterOptions), typeof(UnregisterOptions) });
+				var r = parser.ParseArguments(args, new Type[] { typeof(RunOptions), typeof(RegisterOptions), typeof(UnregisterOptions) });
 				r.MapResult<RunOptions, RegisterOptions, UnregisterOptions, bool>(
 					opts =>  // run
 					{
 						// print heading
-						if(opts.Verbose)
+						if (opts.Verbose)
 							printHeader();
-						
+
 						// validate arguments
 						opts.Validate();
 
@@ -467,7 +467,7 @@ namespace TecWare.DE.Server
 						// register the service
 						RegisterService(opts.ServiceName, serviceCommandLine);
 						Console.WriteLine("Service '{0}{1}' created/modified.", ServicePrefix, opts.ServiceName);
-						
+
 						return true;
 					},
 					opts => // unregister
