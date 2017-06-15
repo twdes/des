@@ -38,7 +38,8 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server
 {
-	///////////////////////////////////////////////////////////////////////////////
+	#region -- interface IDEServerResolver ----------------------------------------------
+
 	/// <summary></summary>
 	internal interface IDEServerResolver
 	{
@@ -51,7 +52,8 @@ namespace TecWare.DE.Server
 		Assembly Load(string assemblyName);
 	} // interface IDEServerResolver
 
-	///////////////////////////////////////////////////////////////////////////////
+	#endregion
+
 	/// <summary></summary>
 	internal partial class DEServer : DEConfigLogItem, IDEBaseLog, IDEServer, IDEServerResolver
 	{
@@ -63,7 +65,7 @@ namespace TecWare.DE.Server
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
 		[DEListTypePropertyAttribute("dump")]
-    private sealed class DumpFileInfo
+		private sealed class DumpFileInfo
 		{
 			public DumpFileInfo(int id, string fileName)
 			{
@@ -140,14 +142,14 @@ namespace TecWare.DE.Server
 
 			// register session list
 			this.eventSessions = new DEList<EventSession>(this, "tw_eventsessions", "Event sessions");
-			
+
 			// create configurations service
 			this.configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
 			this.dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
 
 			PublishItem(dumpFiles);
 			PublishItem(new DEConfigItemPublicAction("dump") { DisplayName = "Dump" });
-    } // ctor
+		} // ctor
 
 		protected override void Dispose(bool disposing)
 		{
@@ -174,7 +176,7 @@ namespace TecWare.DE.Server
 				queue = new DEQueueScheduler(this); // Start the queue thread, this is needed for the configuration initialization.
 				InitConfiguration(); // Start the configuration system
 				InitServerInfo(); // initialize server info
-			// the rest will be started from the configuration system
+								  // the rest will be started from the configuration system
 			}
 			catch (Exception e)
 			{
@@ -226,7 +228,7 @@ namespace TecWare.DE.Server
 
 		private SimpleConfigItemProperty<long> propertyMemory = null;
 		private long lastMemory = 0;
-		
+
 		private void InitServerInfo()
 		{
 			// Zeige die Versionsnummer an
@@ -443,7 +445,7 @@ namespace TecWare.DE.Server
 				sbArgs.Append("-ma "); // dump all
 			sbArgs.Append("-o "); // overwrite existing dump
 			sbArgs.Append("-accepteula "); // accept eula
-      sbArgs.Append(Process.GetCurrentProcess().Id).Append(' '); // process id
+			sbArgs.Append(Process.GetCurrentProcess().Id).Append(' '); // process id
 
 			// create the dump in the temp directory
 			DumpFileInfo fi;
@@ -486,19 +488,19 @@ namespace TecWare.DE.Server
 			// get the dump file
 			DumpFileInfo di = null;
 			using (dumpFiles.EnterReadLock())
-				{
-					var index = dumpFiles.FindIndex(c => c.Id == id);
-					if (index >= 0)
-						di = dumpFiles[index];
-				}
-			
+			{
+				var index = dumpFiles.FindIndex(c => c.Id == id);
+				if (index >= 0)
+					di = dumpFiles[index];
+			}
+
 			// send the file
 			if (di == null)
 				throw new ArgumentException("dump id is wrong.");
 			var fi = new FileInfo(di.FileName);
 			if (!fi.Exists)
 				throw new ArgumentException("dump id is invalid.");
-			
+
 			r.SetAttachment(fi.Name)
 				.WriteFile(fi.FullName, MimeTypes.Application.OctetStream + ";gzip");
 		} // HttpDumpLoadAction
@@ -926,7 +928,7 @@ namespace TecWare.DE.Server
 
 		private void AddAssemblyPath(string path)
 		{
-			lock(searchPaths)
+			lock (searchPaths)
 			{
 				path = GetAssemblyNormalizedPath(path);
 				if (searchPaths.Exists(cur => String.Compare(cur, path, StringComparison.OrdinalIgnoreCase) == 0))
@@ -938,7 +940,7 @@ namespace TecWare.DE.Server
 
 		private void RemoveAssemblyPath(string path)
 		{
-			lock(searchPaths)
+			lock (searchPaths)
 			{
 				if (searchPaths == null || searchPaths.Count == 0)
 					return;
@@ -956,8 +958,8 @@ namespace TecWare.DE.Server
 			// Is the assembly loaded
 			var assemblyFilter =
 				(from c in AppDomain.CurrentDomain.GetAssemblies()
-				where String.Compare(c.GetName().Name, fileName.Name, StringComparison.OrdinalIgnoreCase) == 0
-				select c).ToArray();
+				 where String.Compare(c.GetName().Name, fileName.Name, StringComparison.OrdinalIgnoreCase) == 0
+				 select c).ToArray();
 
 			var assembly = assemblyFilter.Where(c => c.GetName().Version == fileName.Version).FirstOrDefault();
 			if (assembly != null)
@@ -981,7 +983,7 @@ namespace TecWare.DE.Server
 								if (String.Compare(testName.Name, fileName.Name, StringComparison.OrdinalIgnoreCase) == 0)
 									fileList.Add(new KeyValuePair<AssemblyName, FileInfo>(testName, fi));
 							}
-							catch(Exception e)
+							catch (Exception e)
 							{
 								Log.Warn(String.Format("Assembly '{0}' not loaded.", fi.FullName), e);
 							}
@@ -997,7 +999,7 @@ namespace TecWare.DE.Server
 			for (var i = 0; i < fileList.Count; i++)
 			{
 				var currentStamp = fileList[i].Value.LastWriteTime;
-        if (currentStamp > stampLastWrite)
+				if (currentStamp > stampLastWrite)
 					bestByStamp = i;
 				if (currentStamp > versionLastWrite && fileList[i].Key.Version == fileName.Version)
 					bestByVersion = i;
@@ -1036,7 +1038,7 @@ namespace TecWare.DE.Server
 		#region -- Lua Runtime ------------------------------------------------------------
 
 		private LuaGlobalPortable luaRuntime = null;
-	
+
 		[LuaMember("safecall")]
 		private LuaResult LuaSafeCall(object target, params object[] args)
 		{

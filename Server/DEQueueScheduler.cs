@@ -1,4 +1,19 @@
-﻿using System;
+﻿#region -- copyright --
+//
+// Licensed under the EUPL, Version 1.1 or - as soon they will be approved by the
+// European Commission - subsequent versions of the EUPL(the "Licence"); You may
+// not use this work except in compliance with the Licence.
+//
+// You may obtain a copy of the Licence at:
+// http://ec.europa.eu/idabc/eupl
+//
+// Unless required by applicable law or agreed to in writing, software distributed
+// under the Licence is distributed on an "AS IS" basis, WITHOUT WARRANTIES OR
+// CONDITIONS OF ANY KIND, either express or implied. See the Licence for the
+// specific language governing permissions and limitations under the Licence.
+//
+#endregion
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -48,11 +63,10 @@ namespace TecWare.DE.Server
 			} // func CompareTo
 
 			public virtual void Execute()
-			{
-				action();
-			} // proc Execute
+				=> action();
 
-			public virtual bool IsDue() => unchecked(Boundary - Environment.TickCount) <= 0;
+			public virtual bool IsDue() 
+				=> unchecked(Boundary - Environment.TickCount) <= 0;
 
 			public int Id { get; }
 			public Action Action => action;
@@ -172,7 +186,7 @@ namespace TecWare.DE.Server
 			lock (actions)
 			{
 				var eventActions = actions.OfType<EventItem>().Where(c => c.EventType == eventType).ToArray();
-        foreach (var action in eventActions)
+				foreach (var action in eventActions)
 				{
 					try
 					{
@@ -249,7 +263,7 @@ namespace TecWare.DE.Server
 			if (timeout > 0)
 			{
 				//Debug.Print("Wait {0}", timeout);
-        WaitHandle.WaitAny(new WaitHandle[] {
+				WaitHandle.WaitAny(new WaitHandle[] {
 					StoppingEvent.WaitHandle,
 					FilledEventHandle,
 					actionEvent

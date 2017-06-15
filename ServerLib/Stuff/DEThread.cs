@@ -130,7 +130,7 @@ namespace TecWare.DE.Server
 		{
 			var lastExceptionTick = 0;    // Wann wurde die Letzte Exeption abgefangen
 			var exceptionCount = 0;   // Wieviele wurde im letzten Zeitfenster gefangen
-			
+
 			// mark start of the thread
 			log.Start(thread.Name);
 			RegisterThread(this);
@@ -349,7 +349,7 @@ namespace TecWare.DE.Server
 
 			public void Clear()
 			{
-				lock(tasks)
+				lock (tasks)
 				{
 					tasks.Clear();
 					taskFilled.Dispose();
@@ -380,7 +380,7 @@ namespace TecWare.DE.Server
 
 			protected override void QueueTask(Task task)
 			{
-				lock(tasks)
+				lock (tasks)
 				{
 					tasks.AddLast(task);
 					taskFilled.Set();
@@ -418,7 +418,7 @@ namespace TecWare.DE.Server
 
 			protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
 			{
-				lock(tasks)
+				lock (tasks)
 				{
 					if (taskWasPreviouslyQueued)
 						tasks.Remove(task);
@@ -464,10 +464,10 @@ namespace TecWare.DE.Server
 		{
 			this.cancellationSource = new CancellationTokenSource();
 			this.scheduler = new ThreadTaskScheduler(this);
-      this.factory = new TaskFactory(cancellationSource.Token, TaskCreationOptions.AttachedToParent, TaskContinuationOptions.AttachedToParent, scheduler);
+			this.factory = new TaskFactory(cancellationSource.Token, TaskCreationOptions.AttachedToParent, TaskContinuationOptions.AttachedToParent, scheduler);
 
 			StartThread(name, priority, true, ApartmentState.STA);
-    } // ctor
+		} // ctor
 
 		protected override void Dispose(bool disposing)
 		{
@@ -480,7 +480,7 @@ namespace TecWare.DE.Server
 		} // proc Dispose
 
 		protected void ExecuteScheduler(int timeout) => scheduler.ExecuteLoop(timeout);
-		
+
 		protected override void ExecuteLoop()
 		{
 			ExecuteScheduler(-1);
@@ -517,12 +517,12 @@ namespace TecWare.DE.Server
 		private readonly ThreadDelegate action;
 
 		public DEThread(IServiceProvider sp, string name, ThreadDelegate action, string categoryName = ThreadCategory, ThreadPriority priority = ThreadPriority.Normal, bool isBackground = false, ApartmentState apartmentState = ApartmentState.MTA)
-			:base(sp, name, categoryName)
+			: base(sp, name, categoryName)
 		{
 			this.action = action;
 
 			StartThread(name, priority, isBackground, apartmentState);
-    } // ctor
+		} // ctor
 
 		protected override void ExecuteLoop() => action();
 
@@ -538,37 +538,37 @@ namespace TecWare.DE.Server
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public sealed class DEThreadList : IDisposable
-  {
-    private IServiceProvider sp;
-    private string name;
-    private string categoryName;
-    private ThreadDelegate threadStart;
+	{
+		private IServiceProvider sp;
+		private string name;
+		private string categoryName;
+		private ThreadDelegate threadStart;
 
-    private List<DEThread> threads = new List<DEThread>();
+		private List<DEThread> threads = new List<DEThread>();
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public DEThreadList(IServiceProvider sp, string categoryName, string name, ThreadDelegate threadStart)
-    {
-      if (sp == null)
-        throw new ArgumentNullException("sp");
-      if (String.IsNullOrEmpty(categoryName))
-        throw new ArgumentNullException("categoryName");
-      if (String.IsNullOrEmpty(name))
-        throw new ArgumentNullException("name");
-      if (threadStart == null)
-        throw new ArgumentNullException();
+		{
+			if (sp == null)
+				throw new ArgumentNullException("sp");
+			if (String.IsNullOrEmpty(categoryName))
+				throw new ArgumentNullException("categoryName");
+			if (String.IsNullOrEmpty(name))
+				throw new ArgumentNullException("name");
+			if (threadStart == null)
+				throw new ArgumentNullException();
 
-      this.sp = sp;
-      this.categoryName = categoryName;
-      this.name = name;
+			this.sp = sp;
+			this.categoryName = categoryName;
+			this.name = name;
 
-      this.threadStart = threadStart;
-    } // ctor
+			this.threadStart = threadStart;
+		} // ctor
 
-    public void Dispose()
-    {
-      lock (threads)
+		public void Dispose()
+		{
+			lock (threads)
 			{
 				while (threads.Count > 0)
 				{
@@ -576,32 +576,32 @@ namespace TecWare.DE.Server
 					threads.RemoveAt(0);
 				}
 			}
-    } // proc Dispose
+		} // proc Dispose
 
 		#endregion
 
 		public int Count
-    {
-      get { lock (threads) return threads.Count; }
-      set
-      {
-        value = Math.Min(Math.Max(1, value), 1000);
-        lock (threads)
-        {
-          while (value < threads.Count) // Zerstöre Threads
-          {
-            threads[threads.Count - 1].Dispose();
-            threads.RemoveAt(threads.Count - 1);
-          }
-          while (value > threads.Count) // Erzeuge Worker
-          {
+		{
+			get { lock (threads) return threads.Count; }
+			set
+			{
+				value = Math.Min(Math.Max(1, value), 1000);
+				lock (threads)
+				{
+					while (value < threads.Count) // Zerstöre Threads
+					{
+						threads[threads.Count - 1].Dispose();
+						threads.RemoveAt(threads.Count - 1);
+					}
+					while (value > threads.Count) // Erzeuge Worker
+					{
 						var currentName = name + threads.Count.ToString("000");
 						threads.Add(new DEThread(sp, currentName, threadStart, categoryName));
-          }
-        }
-      }
-    } // prop Count
-  } // class DEThreadList
+					}
+				}
+			}
+		} // prop Count
+	} // class DEThreadList
 
 	#endregion
 }

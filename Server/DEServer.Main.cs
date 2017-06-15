@@ -34,7 +34,7 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	internal partial class DEServer
 	{
-		private const string ServicePrefix = "Tw_DES_";
+		private const string servicePrefix = "Tw_DES_";
 
 		#region -- interface IServiceLog --------------------------------------------------
 
@@ -299,7 +299,7 @@ namespace TecWare.DE.Server
 			{
 				commandLine = String.Concat("\"", Assembly.GetExecutingAssembly().Location, "\" ", commandLine);
 
-				var serviceName = ServicePrefix + name;
+				var serviceName = servicePrefix + name;
 				var hService = NativeMethods.OpenService(hScm, serviceName, 0x01 | 0x02);
 				if (hService == IntPtr.Zero)
 				{
@@ -358,7 +358,7 @@ namespace TecWare.DE.Server
 
 			try
 			{
-				var hService = NativeMethods.OpenService(hScm, ServicePrefix + name, 0x00010000); // DELETE
+				var hService = NativeMethods.OpenService(hScm, servicePrefix + name, 0x00010000); // DELETE
 				if (hService != IntPtr.Zero)
 					try
 					{
@@ -447,7 +447,7 @@ namespace TecWare.DE.Server
 						}
 						else
 						{
-							ServiceBase.Run(new Service(ServicePrefix + opts.ServiceName, app)); // Start as a windows service
+							ServiceBase.Run(new Service(servicePrefix + opts.ServiceName, app)); // Start as a windows service
 						}
 
 						return true;
@@ -466,7 +466,7 @@ namespace TecWare.DE.Server
 
 						// register the service
 						RegisterService(opts.ServiceName, serviceCommandLine);
-						Console.WriteLine("Service '{0}{1}' created/modified.", ServicePrefix, opts.ServiceName);
+						Console.WriteLine("Service '{0}{1}' created/modified.", servicePrefix, opts.ServiceName);
 
 						return true;
 					},
@@ -476,7 +476,7 @@ namespace TecWare.DE.Server
 						printHeader();
 
 						UnregisterService(opts.ServiceName);
-						Console.WriteLine("Service '{0}{1}' removed.", ServicePrefix, opts.ServiceName);
+						Console.WriteLine("Service '{0}{1}' removed.", servicePrefix, opts.ServiceName);
 
 						return true;
 					},

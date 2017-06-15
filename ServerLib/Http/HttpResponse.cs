@@ -818,7 +818,7 @@ namespace TecWare.DE.Server.Http
 	} // class HttpResponseException
 
 	#endregion
-
+	
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public static class DEContext
