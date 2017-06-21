@@ -235,8 +235,7 @@ namespace TecWare.DE.Server
 
 				var configPath = item.ConfigPath;
 				var key = GetEventKey(configPath, eventId, index);
-				FiredEvent ev;
-				if (propertyChanged.TryGetValue(key, out ev))
+				if (propertyChanged.TryGetValue(key, out var ev))
 					ev.Reset(currentRevision, values);
 				else
 					propertyChanged[key] = ev = new FiredEvent(currentRevision, configPath, eventId, index, values);

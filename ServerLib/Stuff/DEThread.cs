@@ -18,137 +18,294 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TecWare.DE.Stuff;
+using System.Runtime.CompilerServices;
 
 namespace TecWare.DE.Server
 {
+	#region -- class DEThreadContext ----------------------------------------------------
+
+	public class DEThreadContext : SynchronizationContext
+	{
+		private readonly DEThreadBase thread;
+
+		public DEThreadContext(DEThreadBase thread)
+			=> this.thread = thread;
+
+		public override SynchronizationContext CreateCopy()
+			=> new DEThreadContext(thread);
+
+		public override void Post(SendOrPostCallback d, object state)
+			=> thread.Post(d, state);
+
+		public override void Send(SendOrPostCallback d, object state)
+			=> thread.Send(d, state);
+
+		public DEThreadBase Thread => thread;
+	} // class DEThreadContext
+
+	#endregion
+
+	#region -- class DEScopeContext -----------------------------------------------------
+
+	public class DEScopeContext : DEThreadContext, IDisposable
+	{
+		private readonly DEThreadContext parentContext;
+		
+		private DEScopeContext(DEThreadContext parentContext)
+			:base(parentContext.Thread)
+		{
+			this.parentContext = parentContext ?? throw new ArgumentNullException(nameof(parentContext));
+		} // ctor
+
+		public void Dispose()
+		{
+			// restore context
+			if (Current == this)
+				SetSynchronizationContext(parentContext);
+		} // proc parentContext
+
+		public override SynchronizationContext CreateCopy()
+			=> new DEScopeContext(parentContext);
+
+		public static T CreateContext<T>()
+			where T : DEScopeContext
+		{
+			if (Current is DEThreadContext parentContext)
+				return (T)Activator.CreateInstance(typeof(T), parentContext);
+			else
+				throw new ArgumentNullException();
+		} // func CreateContext
+	} // class DEScopeContext
+
+	#endregion
+
 	#region -- class DEThreadBase -------------------------------------------------------
 
-	/////////////////////////////////////////////////////////////////////////////
-	/// <summary>Basisklasse für alle Threads in der Anwendung. Es wird eine 
-	/// Log-Datei verwaltet und er startet im Fehlerfall automatisch wieder
-	/// neu.</summary>
 	public abstract class DEThreadBase : IServiceProvider, IDisposable
 	{
 		public const string ThreadCategory = "Thread";
 
-		private Thread thread = null;
-		private ManualResetEventSlim startedEvent;
-		private ManualResetEventSlim stoppingEvent;
+		private readonly Thread thread = null;
+		private readonly DEThreadContext context;
 
-		private IServiceProvider sp;
-		private LoggerProxy log;
-		private SimpleConfigItemProperty<int> propertyRestarts = null;
-		private SimpleConfigItemProperty<string> propertyRunning = null;
+		private readonly IServiceProvider sp;
+		private readonly LoggerProxy log;
+		private readonly SimpleConfigItemProperty<int> propertyRestarts;
+		private readonly SimpleConfigItemProperty<string> propertyRunning;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		private readonly CancellationTokenSource threadCancellation;
+		private readonly ManualResetEventSlim tasksFilled;
+
+		private bool isDisposed = false;
+
+		#region -- Ctor/Dtor ------------------------------------------------------------
 
 		public DEThreadBase(IServiceProvider sp, string name, string categoryName = ThreadCategory)
 		{
-			this.sp = sp;
+			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
 
 			if (String.IsNullOrEmpty(name))
-				throw new ArgumentNullException("name");
+				throw new ArgumentNullException(nameof(name));
 
 			// create the log information
-			this.log = sp.LogProxy();
-			if (log == null)
-				throw new ArgumentNullException("log", "Service provider must provide logging.");
+			this.log = sp.LogProxy() ?? throw new ArgumentNullException("log", "Service provider must provide logging.");
 
+			// register properties
 			propertyRestarts = new SimpleConfigItemProperty<int>(sp,
 				$"tw_thread_restarts_{name}",
-				$"{name} - Neustarts",
+				$"{name} - Restarts",
 				categoryName,
-				"Anzahl der Neustarts des Threads.",
+				"The number of restarts of this thread.",
 				"{0:N0}",
 				0
 			);
 			propertyRunning = new SimpleConfigItemProperty<string>(sp,
 				$"tw_thread_running_{name}",
-				$"{name} - Aktiv",
+				$"{name} - State",
 				categoryName,
-				"Ist der Thread noch aktiv.",
+				"Is the thread still active.",
 				null,
 				"Läuft"
 			);
-		} // ctor
-
-		protected void StartThread(string name, ThreadPriority priority = ThreadPriority.Normal, bool isBackground = false, ApartmentState apartmentState = ApartmentState.MTA)
-		{
-			// create the thread
-			thread = new Thread(Execute);
-			thread.SetApartmentState(apartmentState);
-			thread.IsBackground = isBackground;
-			thread.Priority = priority;
-			thread.Name = name;
 
 			// start the thread
-			startedEvent = new ManualResetEventSlim(false);
-			stoppingEvent = new ManualResetEventSlim(false);
-			thread.Start();
-			if (!startedEvent.Wait(3000))
-				throw new Exception(String.Format("Could not start thread '{0}'.", name));
+			thread = new Thread(Execute) { Name = name };
+			SetThreadParameter(thread);
 
-			Procs.FreeAndNil(ref startedEvent);
-		} // proc StartThread
+			this.context = new DEThreadContext(this);
 
-		~DEThreadBase()
+			// start the thread
+			using (var startedEvent = new ManualResetEventSlim(false))
+			{
+				threadCancellation = new CancellationTokenSource();
+				tasksFilled = new ManualResetEventSlim(false);
+
+				thread.Start(startedEvent);
+				if (!startedEvent.Wait(3000))
+					throw new Exception(String.Format("Could not start thread '{0}'.", name));
+			}
+		} // ctor
+
+		protected virtual void SetThreadParameter(Thread thread)
 		{
-			Dispose(false);
-		} // dtor
+			thread.SetApartmentState(ApartmentState.STA);
+			thread.IsBackground = true;
+			thread.Priority = ThreadPriority.Normal;
+		} // proc SetThreadParameter
 
 		public void Dispose()
-		{
-			GC.SuppressFinalize(this);
-			Dispose(true);
-		} // proc Dispose
+			=> Dispose(true);
 
 		protected virtual void Dispose(bool disposing)
 		{
-			stoppingEvent?.Set();
+			if (isDisposed)
+				throw new ObjectDisposedException(nameof(DEThreadBase));
+
+			isDisposed = true;
+			threadCancellation.Cancel();
 			if (disposing)
 			{
 				// stop the thread
 				if (!thread.Join(3000))
 					thread.Abort();
-				thread = null;
 
 				// clear objects
-				Procs.FreeAndNil(ref stoppingEvent);
+				threadCancellation.Dispose();
+				tasksFilled.Dispose();
 
 				// Remove properties
-				Procs.FreeAndNil(ref propertyRestarts);
-				Procs.FreeAndNil(ref propertyRunning);
+				propertyRestarts.Dispose();
+				propertyRunning.Dispose();
 			}
 		} // proc Dispose
 
+		#endregion
+
+		#region -- Message Loop ---------------------------------------------------------
+
+		private void VerifyThreadAccess()
+		{
+			if (thread != Thread.CurrentThread)
+				throw new InvalidOperationException($"Process of the queued task is only allowed in the same thread.(queue threadId {thread.ManagedThreadId}, caller thread id: {Thread.CurrentThread.ManagedThreadId})");
+		} // proc VerifyThreadAccess
+
+		internal void Post(SendOrPostCallback d, object state)
+			=> EnqueueTask(d, state, null);
+
+		internal void Send(SendOrPostCallback d, object state)
+		{
+			if (thread == Thread.CurrentThread)
+				throw new InvalidOperationException($"Send can not be called from the same thread (Deadlock).");
+
+			using (var waitHandle = new ManualResetEventSlim(false))
+			{
+				EnqueueTask(d, state, waitHandle);
+				waitHandle.Wait();
+			}
+		} // proc Send
+
+		protected abstract void EnqueueTask(SendOrPostCallback d, object state, ManualResetEventSlim waitHandle);
+
+		protected abstract bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait);
+
+		protected void ResetMessageLoopUnsafe()
+			=> tasksFilled.Reset();
+
+		protected void PulseMessageLoop()
+		{
+			lock (tasksFilled)
+				tasksFilled.Set();
+		} // proc PulseMessageLoop
+
+		protected void ProcessMessageLoopUnsafe(CancellationToken cancellationToken)
+		{
+			// if cancel, then run the loop, we avoid an TaskCanceledException her
+			cancellationToken.Register(PulseMessageLoop);
+
+			// process messages until cancel
+			while (!cancellationToken.IsCancellationRequested && IsRunning)
+			{
+				// process queue
+				while (TryDequeueTask(cancellationToken, out var d, out var state, out var wait))
+				{
+					try
+					{
+						d(state);
+					}
+					finally
+					{
+						if (wait != null)
+							wait.Set();
+					}
+				}
+
+				// wait for event
+				tasksFilled.Wait();
+			}
+		} // proc ProcessMessageLoop
+
+		/// <summary>Run the message loop until the task is completed.</summary>
+		/// <param name="onCompletion"></param>
+		public void ProcessMessageLoop(INotifyCompletion onCompletion)
+		{
+			using (var cancellationTokenSource = new CancellationTokenSource())
+			{
+				onCompletion.OnCompleted(cancellationTokenSource.Cancel);
+				ProcessMessageLoop(cancellationTokenSource.Token);
+			}
+		} // proc ProcessMessageLoop
+
+		/// <summary>Run the message loop until is canceled.</summary>
+		/// <param name="cancellationToken"></param>
+		public void ProcessMessageLoop(CancellationToken cancellationToken)
+		{
+			VerifyThreadAccess();
+			ProcessMessageLoopUnsafe(cancellationToken);
+		} // proc ProcessMessageLoop
+
+		protected object MessageLoopSync => tasksFilled;
 
 		#endregion
 
-		#region -- Execute ----------------------------------------------------------------
+		#region -- Execute --------------------------------------------------------------
 
-		private void Execute()
+		private void Execute(object obj)
 		{
-			var lastExceptionTick = 0;    // Wann wurde die Letzte Exeption abgefangen
-			var exceptionCount = 0;   // Wieviele wurde im letzten Zeitfenster gefangen
+			var lastExceptionTick = 0;	// last time an exception get caught
+			var exceptionCount = 0;		// exception counter for the last window
+
+			var threadStarted = (ManualResetEventSlim)obj;
+
+			SynchronizationContext.SetSynchronizationContext(context);
 
 			// mark start of the thread
 			log.Start(thread.Name);
 			RegisterThread(this);
 			try
 			{
-				startedEvent?.Set();
+				threadStarted.Set();
+				threadStarted = null;
 				do
 				{
-					try
-					{
-						ExecuteLoop();
-					}
-					catch (ThreadAbortException)
+					void CancelThread()
 					{
 						log.Abort(Thread.CurrentThread.Name);
 						if (propertyRunning != null)
 							propertyRunning.Value = "Abgebrochen";
-						UnregisterThread();
+					} // proc CancelThread
+
+					try
+					{
+						ProcessMessageLoop(threadCancellation.Token);
+					}
+					catch (TaskCanceledException)
+					{
+						CancelThread();
+						return;
+					}
+					catch (ThreadAbortException)
+					{
+						CancelThread();
 						return;
 					}
 					catch (Exception e)
@@ -163,13 +320,13 @@ namespace TecWare.DE.Server
 
 							if (exceptionCount > 3)
 							{
-								propertyRunning.Value = "Fehlerhaft";
-								Thread.CurrentThread.Abort(); // mehr als 3 Exeption in 1500 ms ist fatal
+								propertyRunning.Value = "Error";
+								Thread.CurrentThread.Abort(); // more then 3 exeptions in 1500 ms is a clear fail
 							}
 							else
 							{
 								log.LogMsg(LogMsgType.Error,
-									String.Format("Thread '{0}' neugestartet: {1}" + Environment.NewLine + Environment.NewLine +
+									String.Format("Thread '{0}' restarted: {1}" + Environment.NewLine + Environment.NewLine +
 										"{2}", thread.Name, exceptionCount, e.GetMessageString()));
 								Thread.Sleep(100);
 							}
@@ -180,55 +337,58 @@ namespace TecWare.DE.Server
 						propertyRestarts.Value += 1;
 					}
 				} while (IsRunning);
-
+			}
+			catch (TaskCanceledException) { }
+			catch (ThreadAbortException) { }
+			finally
+			{
 				// stop the thread
 				log.Stop(thread.Name);
 				propertyRunning.Value = "Beendet";
 				UnregisterThread(this);
-			}
-			catch (ThreadAbortException)
-			{
-				UnregisterThread(this);
+				SynchronizationContext.SetSynchronizationContext(null);
+				OnThreadFinished();
 			}
 		} // proc Execute
 
-		protected abstract void ExecuteLoop();
+		protected virtual void OnThreadFinished() { }
 
 		protected virtual bool OnHandleException(Exception e)
-		{
-			return false;
-		} // proc OnHandleException
+			=> false;
 
 		#endregion
 
-		#region -- IServiceProvider members -----------------------------------------------
+		public object GetService(Type serviceType)
+			 => sp?.GetService(serviceType);
 
-		public virtual object GetService(Type serviceType) => sp?.GetService(serviceType);
-
-		#endregion
-
-		/// <summary>Wait for stop.</summary>
-		/// <param name="millisecondsTimeout"></param>
-		/// <returns></returns>
-		public bool WaitFinish(int millisecondsTimeout = -1) => stoppingEvent.Wait(millisecondsTimeout);
-		/// <summary>Gets a WaitHandle for the stop event.</summary>
-		public ManualResetEventSlim StoppingEvent => stoppingEvent;
-
-		/// <summary></summary>
-		public int ManagedThreadId => thread?.ManagedThreadId ?? -1;
-		/// <summary>Name des Threads.</summary>
+		/// <summary>Managed thread id</summary>
+		public int ManagedThreadId => thread.ManagedThreadId;
+		/// <summary>Name of the thread.</summary>
 		public string Name => thread.Name;
-		/// <summary>Status des Threads.</summary>
-		public bool IsRunning => stoppingEvent != null && !stoppingEvent.IsSet;
-		/// <summary>Attached log file.</summary>
+		/// <summary>Current state of this thread.</summary>
+		public bool IsRunning => !isDisposed && !threadCancellation.IsCancellationRequested;
+		/// <summary></summary>
+		public bool IsDisposed => isDisposed;
+		/// <summary>Attached log context.</summary>
 		public LoggerProxy Log => log;
+		/// <summary>Root context of this thread.</summary>
+		public DEThreadContext RootContext => context;
+		/// <summary>Context of the thread</summary>
+		public DEThreadContext CurrentContext
+		{
+			get
+			{
+				DEThreadContext r = null;
+				ExecutionContext.Run(thread.ExecutionContext, s => r = SynchronizationContext.Current as DEThreadContext, null);
+				return r ?? RootContext;
+			}
+		} // prop CurrentContext
 
-		// -- Static --------------------------------------------------------------
+		// -- Static --------------------------------------------------------------------
 
 		/// <summary>Notifies changes on the thread list.</summary>
 		public static event EventHandler ThreadListChanged;
 
-		private static readonly List<Thread> runningThreads = new List<Thread>();
 		private static readonly List<DEThreadBase> runningDEThreads = new List<DEThreadBase>();
 
 		private static int lastZombieCheck = 0;
@@ -237,274 +397,60 @@ namespace TecWare.DE.Server
 		{
 			if (unchecked(Environment.TickCount - lastZombieCheck) > 500)
 			{
-				for (var i = runningThreads.Count - 1; i >= 0; i--)
+				for (var i = runningDEThreads.Count - 1; i >= 0; i--)
 				{
-					if (runningThreads[i].ThreadState == ThreadState.Stopped)
-						runningThreads.RemoveAt(i);
+					if (runningDEThreads[i].thread.ThreadState == ThreadState.Stopped)
+						runningDEThreads.RemoveAt(i);
 				}
 
 				lastZombieCheck = Environment.TickCount;
 			}
 		} // proc RemoveZombies
-
-		public static void RegisterThread() => AddRunningThread(Thread.CurrentThread);
-
-		private static void AddRunningThread(Thread thread)
-		{
-			lock (runningThreads)
-			{
-				RemoveZombies(); // remove zombies
-
-				// add the thread
-				if (runningThreads.IndexOf(thread) == -1)
-				{
-					runningThreads.Add(thread);
-
-					// Notify list change
-					ThreadListChanged?.Invoke(null, EventArgs.Empty);
-				}
-			}
-		} // proc AddRunningThread
-
+		
 		private static void RegisterThread(DEThreadBase thread)
 		{
 			if (thread == null)
 				throw new ArgumentNullException("thread");
 
-			lock (runningThreads)
+			lock (runningDEThreads)
 			{
+				// remove zombies
+				RemoveZombies(); 
 				// append a de-managed thread
 				runningDEThreads.Add(thread);
-				AddRunningThread(thread.thread);
+
+				ThreadListChanged?.Invoke(null, EventArgs.Empty);
 			}
 		} // proc RegisterThread
 
 		public static DEThreadBase FromThread(Thread thread)
 		{
-			lock (runningThreads)
+			lock (runningDEThreads)
 				return runningDEThreads.Find(cur => cur.thread == thread);
 		} // func FromThread
-
-		public static void UnregisterThread() => UnregisterRunningThread(Thread.CurrentThread);
-
-		private static void UnregisterRunningThread(Thread thread)
-		{
-			lock (runningThreads)
-			{
-				RemoveZombies(); // remove zombies
-
-				// remove the thread
-				runningThreads.Remove(Thread.CurrentThread);
-
-				// Notify list change
-				if (ThreadListChanged != null)
-					ThreadListChanged(null, EventArgs.Empty);
-			}
-		} // proc UnregisterRunningThread
-
+		
 		private static void UnregisterThread(DEThreadBase thread)
 		{
-			lock (runningThreads)
+			lock (runningDEThreads)
 			{
-				// remove de-managed thread
+				RemoveZombies(); // remove zombies
+								 // remove de-managed thread
 				runningDEThreads.Remove(thread);
-				UnregisterRunningThread(thread.thread);
+
+				ThreadListChanged?.Invoke(null, EventArgs.Empty);
 			}
 		} // proc UnregisterThread
 
-		public static DEThreadBase CurrentThread { get { return FromThread(Thread.CurrentThread); } }
+		public static DEThreadBase CurrentThread => SynchronizationContext.Current is DEThreadContext t ? t.Thread : null;
 
-		public static int ThreadCount { get { lock (runningThreads) return runningThreads.Count; } }
-		public static Thread[] ThreadList { get { lock (runningThreads) return runningThreads.ToArray(); } }
-	} // class class DEThreadBase
-
-	#endregion
-
-	#region -- class DEThreadLoop -------------------------------------------------------
-
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary>Safety thread that implements a scheduler for async task queue.</summary>
-	public class DEThreadLoop : DEThreadBase
-	{
-		#region -- class ThreadTaskScheduler ----------------------------------------------
-
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		private sealed class ThreadTaskScheduler : TaskScheduler
-		{
-			private DEThreadLoop thread;
-			private readonly LinkedList<Task> tasks = new LinkedList<Task>();
-			private readonly ManualResetEventSlim taskFilled = new ManualResetEventSlim(false);
-
-			#region -- Ctor/Dtor ------------------------------------------------------------
-
-			public ThreadTaskScheduler(DEThreadLoop thread)
-			{
-				this.thread = thread;
-			} // ctor
-
-			#endregion
-
-			#region -- Scheduler ------------------------------------------------------------
-
-			public void Clear()
-			{
-				lock (tasks)
-				{
-					tasks.Clear();
-					taskFilled.Dispose();
-				}
-			} // proc Clear
-
-			protected override IEnumerable<Task> GetScheduledTasks()
-			{
-				var lockToken = false;
-				try
-				{
-					Monitor.TryEnter(tasks, ref lockToken);
-					if (lockToken)
-					{
-						var r = new Task[tasks.Count];
-						tasks.CopyTo(r, 0);
-						return r;
-					}
-					else
-						throw new NotSupportedException();
-				}
-				finally
-				{
-					if (lockToken)
-						Monitor.Exit(tasks);
-				}
-			} // func GetScheduledTasks
-
-			protected override void QueueTask(Task task)
-			{
-				lock (tasks)
-				{
-					tasks.AddLast(task);
-					taskFilled.Set();
-				}
-			} // proc QueueTask
-
-			private Task DequueTask()
-			{
-				lock (tasks)
-				{
-					if (tasks.Count == 0)
-						return null;
-
-					var t = tasks.First.Value;
-					tasks.RemoveFirst();
-
-					if (tasks.Count == 0)
-						taskFilled.Reset();
-
-					return t;
-				}
-			} // func DequueTask
-
-
-			protected override bool TryDequeue(Task task)
-			{
-				lock (tasks)
-				{
-					var r = tasks.Remove(task);
-					if (r && tasks.Count == 0)
-						taskFilled.Reset();
-					return r;
-				}
-			} // func TryDequeue
-
-			protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
-			{
-				lock (tasks)
-				{
-					if (taskWasPreviouslyQueued)
-						tasks.Remove(task);
-
-					QueueTask(task);
-				}
-				return false;
-			} // func TryExecuteTaskInline
-
-			#endregion
-
-			#region -- ExecuteLoop ----------------------------------------------------------
-
-			public void ExecuteLoop(int timeout)
-			{
-				var timeStart = Environment.TickCount;
-				while (timeout == -1 || unchecked(Environment.TickCount - timeStart) < timeout)
-				{
-					var task = DequueTask();
-					if (task != null)
-					{
-						base.TryExecuteTask(task);
-					}
-					else
-						break;
-				}
-			} // proc Execute
-
-			#endregion
-
-			/// <summary>Is <c>true</c>, as long there are items in the queue.</summary>
-			public ManualResetEventSlim FilledEvent => taskFilled;
-		} // class ThreadTaskScheduler
-
-		#endregion
-
-		private readonly ThreadTaskScheduler scheduler;
-		private readonly TaskFactory factory;
-		private readonly CancellationTokenSource cancellationSource;
-
-		public DEThreadLoop(IServiceProvider sp, string name, string categoryName = ThreadCategory, ThreadPriority priority = ThreadPriority.Normal)
-			: base(sp, name, categoryName)
-		{
-			this.cancellationSource = new CancellationTokenSource();
-			this.scheduler = new ThreadTaskScheduler(this);
-			this.factory = new TaskFactory(cancellationSource.Token, TaskCreationOptions.AttachedToParent, TaskContinuationOptions.AttachedToParent, scheduler);
-
-			StartThread(name, priority, true, ApartmentState.STA);
-		} // ctor
-
-		protected override void Dispose(bool disposing)
-		{
-			if (disposing)
-			{
-				cancellationSource.Cancel();
-				scheduler.Clear();
-			}
-			base.Dispose(disposing);
-		} // proc Dispose
-
-		protected void ExecuteScheduler(int timeout) => scheduler.ExecuteLoop(timeout);
-
-		protected override void ExecuteLoop()
-		{
-			ExecuteScheduler(-1);
-			WaitHandle.WaitAny(
-				new WaitHandle[]
-				{
-					StoppingEvent.WaitHandle,
-					FilledEventHandle
-				}
-			);
-		} // proc ExecuteLoop
-
-		public TaskFactory Factory => factory;
-
-		/// <summary>Waits for items in the queue.</summary>
-		protected WaitHandle FilledEventHandle => scheduler.FilledEvent.WaitHandle;
-	} // class DEThreadLoop
+		public static int ThreadCount { get { lock (runningDEThreads) return runningDEThreads.Count; } }
+		public static DEThreadBase[] ThreadList { get { lock (runningDEThreads) return runningDEThreads.ToArray(); } }
+	} // class DEContextThread
 
 	#endregion
 
 	#region -- class DEThread -----------------------------------------------------------
 
-	/// <summary>Thread delegate</summary>
-	public delegate void ThreadDelegate();
 	/// <summary>Thread to handle thread exceptions.</summary>
 	/// <param name="e">Exception.</param>
 	/// <returns><c>true</c>, if the exception is accepted.</returns>
@@ -514,56 +460,96 @@ namespace TecWare.DE.Server
 	/// <summary>Safety thread that runs a delegate in a loop.</summary>
 	public sealed class DEThread : DEThreadBase
 	{
-		private readonly ThreadDelegate action;
+		#region -- struct CurrentTaskItem -----------------------------------------------
 
-		public DEThread(IServiceProvider sp, string name, ThreadDelegate action, string categoryName = ThreadCategory, ThreadPriority priority = ThreadPriority.Normal, bool isBackground = false, ApartmentState apartmentState = ApartmentState.MTA)
+		private struct CurrentTaskItem
+		{
+			public SendOrPostCallback Callback;
+			public object State;
+			public ManualResetEventSlim Wait;
+		} // struct CurrentTaskItem
+
+		#endregion
+
+		private readonly Queue<CurrentTaskItem> currentTasks = new Queue<CurrentTaskItem>();
+		
+		public DEThread(IServiceProvider sp, string name, Func<Task> action, string categoryName = ThreadCategory)
 			: base(sp, name, categoryName)
 		{
-			this.action = action;
-
-			StartThread(name, priority, isBackground, apartmentState);
+			if (action != null)
+			{
+				EnqueueTask(
+				  s => ((Func<Task>)s).Invoke().GetAwaiter().OnCompleted(Dispose),
+				  action,
+				  null);
+			}
 		} // ctor
 
-		protected override void ExecuteLoop() => action();
+		protected override void SetThreadParameter(Thread thread)
+		{
+			base.SetThreadParameter(thread);
+			thread.IsBackground = true;
+		} // proc SetThreadParameter
 
-		protected override bool OnHandleException(Exception e) => HandleException?.Invoke(e) ?? false;
+		protected override void EnqueueTask(SendOrPostCallback d, object state, ManualResetEventSlim waitHandle)
+		{
+			lock (MessageLoopSync)
+			{
+				currentTasks.Enqueue(new CurrentTaskItem() { Callback = d, State = state, Wait = waitHandle });
+				PulseMessageLoop();
+			}
+		} // proc EnqueueTask
 
+		protected override bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait)
+		{
+			lock (MessageLoopSync)
+			{
+				if (currentTasks.Count == 0)
+				{
+					ResetMessageLoopUnsafe();
+					d = null;
+					state = null;
+					wait = null;
+					return false;
+				}
+				else
+				{
+					var currentTask = currentTasks.Dequeue();
+					d = currentTask.Callback;
+					state = currentTask.State;
+					wait = currentTask.Wait;
+					return true;
+				}
+			}
+		} // proc TryDequeueTask
+
+		protected override bool OnHandleException(Exception e) 
+			=> HandleException?.Invoke(e) ?? false;
+	
 		public ThreadExceptionDelegate HandleException { get; set; }
 	} // class DEThread
 
 	#endregion
 
-	#region -- class DEThreadList -------------------------------------------------------
+	#region -- class DEThreadPool -------------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public sealed class DEThreadList : IDisposable
+	public sealed class DEThreadPool : IDisposable
 	{
 		private IServiceProvider sp;
 		private string name;
 		private string categoryName;
-		private ThreadDelegate threadStart;
 
 		private List<DEThread> threads = new List<DEThread>();
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEThreadList(IServiceProvider sp, string categoryName, string name, ThreadDelegate threadStart)
+		public DEThreadPool(IServiceProvider sp, string categoryName, string name)
 		{
-			if (sp == null)
-				throw new ArgumentNullException("sp");
-			if (String.IsNullOrEmpty(categoryName))
-				throw new ArgumentNullException("categoryName");
-			if (String.IsNullOrEmpty(name))
-				throw new ArgumentNullException("name");
-			if (threadStart == null)
-				throw new ArgumentNullException();
-
-			this.sp = sp;
-			this.categoryName = categoryName;
-			this.name = name;
-
-			this.threadStart = threadStart;
+			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
+			this.categoryName = categoryName ?? throw new ArgumentNullException(nameof(categoryName)); ;
+			this.name = name ?? throw new ArgumentNullException(nameof(name));
 		} // ctor
 
 		public void Dispose()
@@ -596,12 +582,39 @@ namespace TecWare.DE.Server
 					while (value > threads.Count) // Erzeuge Worker
 					{
 						var currentName = name + threads.Count.ToString("000");
-						threads.Add(new DEThread(sp, currentName, threadStart, categoryName));
+						threads.Add(new DEThread(sp, currentName, null, categoryName));
 					}
 				}
 			}
 		} // prop Count
 	} // class DEThreadList
+
+	#endregion
+
+	#region -- class Threading ----------------------------------------------------------
+
+	public static class Threading
+	{
+		public static void AwaitTask(this Task task)
+		{
+			if (SynchronizationContext.Current is DEThreadContext c)
+				c.Thread.ProcessMessageLoop(task.GetAwaiter());
+			else
+				task.Wait();
+		} // proc AwaitTask
+
+		public static T AwaitTask<T>(this Task<T> task)
+		{
+			if (SynchronizationContext.Current is DEThreadContext c)
+			{
+				var awaiter = task.GetAwaiter();
+				c.Thread.ProcessMessageLoop(awaiter);
+				return awaiter.GetResult();
+			}
+			else
+				return task.Result;
+		} // func AwaitTask
+	} // class Threading
 
 	#endregion
 }

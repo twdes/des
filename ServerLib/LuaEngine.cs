@@ -40,8 +40,10 @@ namespace TecWare.DE.Server
 		/// <returns>Erzeugte Script</returns>
 		ILuaScript CreateScript(Func<TextReader> code, string name, params KeyValuePair<string, Type>[] parameter);
 
-		/// <summary>Zugriff auf die interne Lua-Script-Engine.</summary>
+		/// <summary>Access to the internal Lua-Script-Engine.</summary>
 		Lua Lua { get; }
+		/// <summary>Is debugging active.</summary>
+		bool IsDebugAllowed { get; }
 	} // interface IDELuaEngine
 
 	#endregion

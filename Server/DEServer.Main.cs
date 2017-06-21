@@ -24,8 +24,10 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Text;
+using System.Threading.Tasks;
 using CommandLine;
 using CommandLine.Text;
+using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -146,6 +148,45 @@ namespace TecWare.DE.Server
 				LogMessage(EventLogEntryType.Information, String.Format("Wait additional: {0}ms", milliseconds), 0, 0, null);
 			} // proc RequestAdditionalTime
 		} // class ConsoleLog
+
+		#endregion
+
+		#region -- class DebugLog -------------------------------------------------------
+
+		///////////////////////////////////////////////////////////////////////////////
+		/// <summary></summary>
+		private class DebugLog : IServiceLog
+		{
+			private readonly Action<ConsoleColor, string> writeMessage;
+
+			public DebugLog(MethodInfo writeMessageMethodInfo)
+			{
+				this.writeMessage = (Action<ConsoleColor, string>)Delegate.CreateDelegate(typeof(Action<ConsoleColor, string>), writeMessageMethodInfo);
+			} // ctor
+
+			public void LogMessage(EventLogEntryType type, string message, int id, short category, byte[] rawData)
+			{
+				switch (type)
+				{
+					case EventLogEntryType.Error:
+					case EventLogEntryType.FailureAudit:
+						writeMessage(ConsoleColor.Red, message);
+						break;
+					case EventLogEntryType.SuccessAudit:
+					case EventLogEntryType.Information:
+						writeMessage(ConsoleColor.Gray, message);
+						break;
+					case EventLogEntryType.Warning:
+						writeMessage(ConsoleColor.DarkGreen, message);
+						break;
+				}
+			} // proc LogMessage
+
+			public void RequestAdditionalTime(int milliseconds)
+			{
+				LogMessage(EventLogEntryType.Information, String.Format("Wait additional: {0}ms", milliseconds), 0, 0, null);
+			} // proc RequestAdditionalTime
+		} // class DebugLog
 
 		#endregion
 
@@ -389,6 +430,45 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- InvokeDebugger -------------------------------------------------------
+
+		private bool InvokeDebugger()
+		{
+			// wait for service
+			if (!IsInitializedAsync().Result)
+				return false;
+
+			// load debugger implementation
+			var simpleDbgAssembly = ResolveAssembly("DESimpleDbg", typeof(DEServer).Assembly);
+			if (simpleDbgAssembly == null)
+				return false;
+
+			var debuggerProgram = simpleDbgAssembly.GetType("TecWare.DE.Server.Program", true);
+
+			var runProgramAsync = debuggerProgram.GetRuntimeMethod("RunDebugProgramAsync", new Type[] { typeof(Uri) })
+				?? throw new ArgumentException("RunDebugProgramAsync not found.");
+			var writeMessage = debuggerProgram.GetRuntimeMethod("WriteMessage", new Type[] { typeof(ConsoleColor), typeof(string) })
+				?? throw new ArgumentException("WriteMessage not found.");
+
+			// check debugging
+			var luaEngine = this.GetService<IDELuaEngine>(true);
+			if (!luaEngine.IsDebugAllowed)
+				return false;
+
+			var http = this.GetService<IDEHttpServer>(true);
+			var uri = new Uri(http.DefaultBaseUri, ((IDEConfigItem)luaEngine).Name);
+
+			// switch logging
+			ServiceLog = new DebugLog(writeMessage);
+
+			// todo: method to get the uri
+			var debuggerTask = (Task)runProgramAsync.Invoke(null, new object[] { uri });
+			debuggerTask.Wait();
+			return true;
+		} // proc InvokeDebugger
+
+		#endregion
+
 		public static void AddToProcessEnvironment(string path)
 		{
 			var pathList = Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Process).Split(';');
@@ -442,7 +522,8 @@ namespace TecWare.DE.Server
 							app.ServiceLog = new ConsoleLog();
 							app.OnStart();
 							Console.WriteLine("Service is started.");
-							Console.ReadLine();
+							if (!app.InvokeDebugger())
+								Console.ReadLine();
 							app.OnStop();
 						}
 						else

@@ -17,17 +17,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.WebSockets;
 using System.Reflection;
 using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using CommandLine;
 using CommandLine.Text;
-using Neo.IronLua;
 using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
@@ -100,7 +97,7 @@ namespace TecWare.DE.Server
 		protected override bool OnConnectionFailure(Exception e)
 		{
 			var innerException = e.InnerException as WebException;
-			ClientAuthentificationInformation authentificationInfo = ClientAuthentificationInformation.Ntlm;
+			var authentificationInfo = ClientAuthentificationInformation.Ntlm;
 			if (innerException != null && ClientAuthentificationInformation.TryGet(innerException, ref authentificationInfo, false)) // is this a authentification exception
 			{
 				currentCredentials = Program.GetCredentialsFromUserAsync(authentificationInfo.Realm).Result;
@@ -121,7 +118,7 @@ namespace TecWare.DE.Server
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public class Program
+	public static class Program
 	{
 		private static readonly DebugView view = new DebugView();
 		private static readonly Regex commandSyntax = new Regex(@"\:(?<cmd>\w+)(?:\s+(?<args>(?:\`[^\`]*\`)|(?:[^\s]*)))*", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -176,10 +173,30 @@ namespace TecWare.DE.Server
 			if (arguments.Wait > 0)
 				await Task.Delay(arguments.Wait);
 
+			await RunDebugProgramAsync(new Uri(arguments.Uri));
+		} // proc RunDebugProgram
+
+		public static async Task RunDebugProgramAsync(Uri uri)
+		{
 			// connection
 			view.IsConnected = false;
-			session = new ConsoleDebugSession(view, new Uri(arguments.Uri));
-			
+			session = new ConsoleDebugSession(view, uri);
+
+			// should be post in the thread context
+			Task.Run(() => session.RunProtocolAsync()).ContinueWith(
+				t=>
+				{
+					try
+					{
+						t.Wait();
+					}
+					catch(Exception e)
+					{
+						view.WriteError(e.ToString());
+					}
+				}
+			).GetAwaiter();
+
 			// start request loop
 			while (true)
 			{
@@ -249,7 +266,14 @@ namespace TecWare.DE.Server
 
 			// dispose debug session
 			session.Dispose();
-		} // proc RunDebugProgram
+		} // proc RunDebugProgramAsync
+
+		/// <summary>Gets called for the server.</summary>
+		public static void WriteMessage(ConsoleColor foreground, string text)
+		{
+			view.Write(text, foreground);
+			view.WriteLine();
+		} // proc WriteMessage
 
 		public static Task<ICredentials> GetCredentialsFromUserAsync(string realm)
 		{
@@ -291,7 +315,7 @@ namespace TecWare.DE.Server
 			}
 
 			return new NetworkCredential(userName, sec);
-		} // GetCredentialsFromUser
+		} // func GetCredentialsFromUser
 
 		#endregion
 
@@ -486,6 +510,5 @@ namespace TecWare.DE.Server
 				view.WriteError(lastRemoteException.StackTrace);
 			}
 		} // proc ClearCommandBuffer
-
 	} // class Program
 }

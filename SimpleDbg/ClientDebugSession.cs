@@ -108,7 +108,7 @@ namespace TecWare.DE.Server
 	{
 		public event EventHandler CurrentUsePathChanged;
 
-		#region -- class ReturnWait -------------------------------------------------------
+		#region -- class ReturnWait -----------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -134,7 +134,6 @@ namespace TecWare.DE.Server
 		private readonly Random random = new Random(Environment.TickCount);
 
 		private readonly CancellationTokenSource sessionDisposeSource;
-		private readonly Task communicationProcess;
 		private bool isDisposing = false;
 
 		private string currentUsePath = null;
@@ -153,7 +152,6 @@ namespace TecWare.DE.Server
 				this.serverUri = serverUri;
 
 			this.sessionDisposeSource = new CancellationTokenSource();
-			this.communicationProcess = Task.Run(ConnectionProcessor, sessionDisposeSource.Token).ContinueWith(CheckBackgroundTask);
 		} // ctor
 
 		public void Dispose()
@@ -174,23 +172,22 @@ namespace TecWare.DE.Server
 				}
 
 				sessionDisposeSource.Cancel();
-				communicationProcess.Wait();
 				sessionDisposeSource.Dispose();
 			}
 		} // proc Dispose
-
+		
 		#endregion
 
-		#region -- Communication ----------------------------------------------------------
+		#region -- Communication --------------------------------------------------------
 
-		private object socketLock = new object();
+		private readonly object socketLock = new object();
 		private ClientWebSocket clientSocket = null;
 		private CancellationToken currentConnectionToken = CancellationToken.None;
 		private readonly Dictionary<int, ReturnWait> waits = new Dictionary<int, ReturnWait>();
 
-		/// <summary>Main loop for the debug session.</summary>
+		/// <summary>Main loop for the debug session, that runs the protocol handlers.</summary>
 		/// <returns></returns>
-		private async Task ConnectionProcessor()
+		public async Task RunProtocolAsync()
 		{
 			var recvOffset = 0;
 			var recvBuffer = new byte[1 << 20];
@@ -207,6 +204,7 @@ namespace TecWare.DE.Server
 				socket.Options.Credentials = GetCredentials();
 				socket.Options.AddSubProtocol("dedbg");
 
+				#region -- connect --
 				try
 				{
 					await socket.ConnectAsync(serverUri, sessionDisposeToken);
@@ -236,6 +234,7 @@ namespace TecWare.DE.Server
 					lastNativeErrorCode = Int32.MinValue;
 					OnConnectionFailure(e);
 				}
+				#endregion
 
 				try
 				{
@@ -250,8 +249,8 @@ namespace TecWare.DE.Server
 
 					// wait for answers
 					recvOffset = 0;
-					while (socket.State == WebSocketState.Open &&
-						!sessionDisposeToken.IsCancellationRequested)
+					while (socket.State == WebSocketState.Open 
+						&& !sessionDisposeToken.IsCancellationRequested)
 					{
 						// check if the buffer is large enough
 						var recvRest = recvBuffer.Length - recvOffset;
@@ -321,16 +320,10 @@ namespace TecWare.DE.Server
 		protected virtual ICredentials GetCredentials()
 			=> null;
 
-		private void CheckBackgroundTask(Task t)
-		{
-			if (t.IsFaulted)
-				OnCommunicationException(t.Exception);
-		} // proc CheckBackgroundTask
-
 		private void ProcessAnswer(XElement x)
 		{
 			var token = x.GetAttribute("token", 0);
-			Debug.Print("[Client] Receive Message: {0}", token);
+			DebugPrint($"[Client] Receive Message: {token}");
 			if (token != 0) // answer
 			{
 				if (currentUseToken == token) // was the use command successful
@@ -347,9 +340,9 @@ namespace TecWare.DE.Server
 					if (w != null)
 					{
 						if (x.Name == "exception")
-							Task.Run(() => w.Source.TrySetException(new ClientDebugException(x)), currentConnectionToken);
+							w.Source.TrySetException(new ClientDebugException(x));
 						else
-							Task.Run(() => w.Source.TrySetResult(x), currentConnectionToken);
+							w.Source.TrySetResult(x);
 					}
 				}
 			}
@@ -362,8 +355,7 @@ namespace TecWare.DE.Server
 		{
 			lock (waits)
 			{
-				ReturnWait w;
-				if (waits.TryGetValue(token, out w))
+				if (waits.TryGetValue(token, out var w))
 				{
 					waits.Remove(token);
 					return w;
@@ -465,20 +457,23 @@ namespace TecWare.DE.Server
 			return (object)cancellationSource ?? token;
 		} // proc SendAsync
 
-		protected virtual void OnConnectionLost() { }
+		protected virtual void OnConnectionLost()
+			=> DebugPrint("Connection lost.");
 
-		protected virtual void OnConnectionEstablished() { }
+		protected virtual void OnConnectionEstablished()
+			=> DebugPrint("Connection established.");
 
 		protected virtual bool OnConnectionFailure(Exception e)
 		{
-			Debug.Print("Connection failed: {0}", e.ToString());
+			DebugPrint($"Connection failed: {e}");
 			return false;
 		} // proc OnConnectionFailure
 
 		protected virtual void OnCommunicationException(Exception e)
-		{
-			Debug.Print("Connection failed: {0}", e.ToString());
-		} // proc OnCommunicationException
+			=> DebugPrint($"Connection failed: {e}");
+		
+		protected virtual void DebugPrint(string message)
+			=> Debug.Print(message);
 
 		public bool IsConnected
 		{

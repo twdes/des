@@ -1,15 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <des xmlns="http://tecware-gmbh.de/dev/des/2014" version="330" >
-	<server logpath="Log" >
-		<!--dependonservice maxtime="2000">SQLAgent$DEV</dependonservice--> <!-- Dienst, auf den gewartet werden soll, bevor die Konfiguration geladen wird-->
+	<server logpath="Log">
+		<resolve>..\..\SimpleDbg\bin\Debug</resolve>
 	</server>
-	<http threads="2" defaultUserLanguage="de-de" encoding="utf-8" displayname="Hallo" realm="sdfaasdf">
+	
+		
+	<http realm="Test Server">
 	</http>
-
-
-	<luaengine script="test" displayname="ttt" >
-		<script debug="true" encoding="utf-8" id="ha" filename="ha.lua" />
+	
+	<luaengine displayname="ttt" allowDebug="true">
 	</luaengine>
-
-	<luaCronJob script="ha" name="ha" bound="12:48" />
 </des>

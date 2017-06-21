@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.26430.13
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Extern", "Extern", "{19C46279-A2EA-4356-A0C7-4D172B97FD2E}"
 EndProject
@@ -13,6 +13,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "Server\Server.csp
 	ProjectSection(ProjectDependencies) = postProject
 		{72EED527-236E-4124-B360-54B25F0F9105} = {72EED527-236E-4124-B360-54B25F0F9105}
 		{0496732B-0812-4E06-B7FE-212F2761EBAF} = {0496732B-0812-4E06-B7FE-212F2761EBAF}
+		{95374A74-71DE-43B1-A3B6-F5DEC5887815} = {95374A74-71DE-43B1-A3B6-F5DEC5887815}
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerTests", "ServerTests\ServerTests.csproj", "{B1B84A00-DDC4-485A-A799-9FEC23BE43B9}"

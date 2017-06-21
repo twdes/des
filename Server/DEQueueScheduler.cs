@@ -26,31 +26,22 @@ namespace TecWare.DE.Server
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal class DEQueueScheduler : DEThreadLoop, IDEServerQueue
+	internal class DEQueueScheduler : DEThreadBase, IDEServerQueue
 	{
-		#region -- class ActionItem -------------------------------------------------------
+		#region -- class QueueItem ------------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		private abstract class ActionItem : IComparable<ActionItem>
+		private abstract class QueueItem : IComparable<QueueItem>
 		{
-			private readonly Action action;
-
-			public ActionItem(int id, Action action)
+			public QueueItem(int id)
 			{
 				this.Id = id;
-				this.action = action;
 			} // ctor
-
-			public override string ToString()
-				=> $"{GetType().Name}: {action?.Method}";
-
-			public int CompareTo(ActionItem other)
+			
+			public int CompareTo(QueueItem other)
 			{
 				int r;
 
-				if (other.Boundary == Int32.MaxValue &&
-					Boundary == Int32.MaxValue)
+				if (other.Boundary == Int32.MaxValue && Boundary == Int32.MaxValue)
 					r = 0;
 				else if (other.Boundary == Int32.MaxValue)
 					r = -1;
@@ -62,20 +53,117 @@ namespace TecWare.DE.Server
 				return r == 0 ? other.Id - Id : r;
 			} // func CompareTo
 
-			public virtual void Execute()
-				=> action();
+			public abstract void Execute();
 
-			public virtual bool IsDue() 
+			public virtual bool IsDue()
 				=> unchecked(Boundary - Environment.TickCount) <= 0;
 
 			public int Id { get; }
-			public Action Action => action;
 			public abstract int Boundary { get; }
 		} // class ActionItem
 
 		#endregion
 
-		#region -- class ExecuteItem ------------------------------------------------------
+		#region -- class TaskItem -------------------------------------------------------
+
+		private sealed class TaskItem : QueueItem
+		{
+			private readonly QueueScheduler scheduler;
+			private readonly Task task;
+			private readonly int boundary;
+
+			public TaskItem(int id, QueueScheduler scheduler, Task task)
+				: base(id)
+			{
+				this.scheduler = scheduler;
+				this.task = task;
+				this.boundary = Environment.TickCount;
+			} // ctor
+
+			public override void Execute() 
+				=> scheduler.ExecuteTaskEntry(task);
+
+			public override bool IsDue()
+				=> true;
+
+			public override int Boundary => boundary;
+			public Task Task => task;
+		} // class TaskItem
+
+		#endregion
+
+		#region -- class SendOrPostItem -------------------------------------------------
+
+		private sealed class SendOrPostItem : QueueItem
+		{
+			private readonly SendOrPostCallback callback;
+			private readonly object state;
+			private readonly ManualResetEventSlim waitHandle;
+			private readonly int boundary;
+
+			public SendOrPostItem(int id, SendOrPostCallback callback, object state, ManualResetEventSlim waitHandle)
+				: base(id)
+			{
+				this.callback = callback;
+				this.state = state;
+				this.waitHandle = waitHandle;
+
+				this.boundary = Environment.TickCount;
+			} // ctor
+
+			public override void Execute()
+				=> throw new NotImplementedException();
+
+			public override int Boundary => boundary;
+
+			public SendOrPostCallback Callback => callback;
+			public object State => state;
+			public ManualResetEventSlim WaitHandle => waitHandle;
+		} // class SendOrPostItem
+
+		#endregion
+
+		#region -- class ActionItem -----------------------------------------------------
+
+		/// <summary></summary>
+		private abstract class ActionItem : QueueItem
+		{
+			private readonly Action action;
+
+			public ActionItem(int id, Action action)
+				: base(id)
+			{
+				this.action = action ?? throw new ArgumentNullException(nameof(action));
+			} // ctor
+
+			public override string ToString()
+				=> $"{GetType().Name}: {action.Method}";
+
+			public int CompareTo(ActionItem other)
+			{
+				int r;
+
+				if (other.Boundary == Int32.MaxValue && Boundary == Int32.MaxValue)
+					r = 0;
+				else if (other.Boundary == Int32.MaxValue)
+					r = -1;
+				else if (Boundary == Int32.MaxValue)
+					r = 1;
+				else
+					r = unchecked(Boundary - other.Boundary);
+
+				return r == 0 ? other.Id - Id : r;
+			} // func CompareTo
+
+			public override void Execute()
+				=> action();
+
+			public Action Action => action;
+		} // class ActionItem
+
+		#endregion
+
+		#region -- class ExecuteItem ----------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -94,7 +182,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class EventItem --------------------------------------------------------
+		#region -- class EventItem ------------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -114,7 +202,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class IdleItem ---------------------------------------------------------
+		#region -- class IdleItem -------------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -154,23 +242,85 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private DEServer server;
+		#region -- class QueueScheduler -------------------------------------------------
+
+		private sealed class QueueScheduler : TaskScheduler
+		{
+			private readonly DEQueueScheduler scheduler;
+
+			public QueueScheduler(DEQueueScheduler scheduler)
+			{
+				this.scheduler = scheduler;
+			} // ctor
+
+			protected override IEnumerable<Task> GetScheduledTasks()
+			{
+				lock (scheduler.MessageLoopSync)
+					return scheduler.GetQueuedItemsUnsafe<TaskItem>().Select(c => c.Task).ToArray();
+			} // func GetScheduledTasks
+
+			protected override bool TryDequeue(Task task) 
+				=> scheduler.RemoveTask(task);
+
+			protected override void QueueTask(Task task)
+			{
+				if ((task.CreationOptions & TaskCreationOptions.LongRunning) != 0)
+				{
+					Task.Run(() => task, scheduler.cancellationTokenSource.Token);
+					return;
+				}
+
+				scheduler.InsertAction(new TaskItem(scheduler.GetNextId(), this, task));
+			} // QueueTask
+
+			protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
+			{
+				lock(scheduler.MessageLoopSync)
+				{
+					if (taskWasPreviouslyQueued)
+						scheduler.RemoveTask(task);
+
+					QueueTask(task);
+				}
+				return false;
+			} // func TryExecuteTaskInline
+
+			internal void ExecuteTaskEntry(Task t)
+				=> base.TryExecuteTask(t);
+
+			public override int MaximumConcurrencyLevel => 1;
+		} // class QueueScheduler
+
+		#endregion
+
+		private readonly DEServer server;
+		private readonly TaskFactory factory;
+		private readonly CancellationTokenSource cancellationTokenSource;
 		private int lastItemId = 0;
-		private readonly LinkedList<ActionItem> actions = new LinkedList<ActionItem>();
-		private AutoResetEvent actionEvent = new AutoResetEvent(false);
+		private readonly LinkedList<QueueItem> actions = new LinkedList<QueueItem>();
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public DEQueueScheduler(DEServer server)
-			: base(server, "des_main", priority: ThreadPriority.BelowNormal)
+			: base(server, "des_main")
 		{
 			this.server = server;
+			this.cancellationTokenSource = new CancellationTokenSource();
+			this.factory = new TaskFactory(cancellationTokenSource.Token, TaskCreationOptions.None, TaskContinuationOptions.ExecuteSynchronously, new QueueScheduler(this));
 		} // ctor
+
+		protected override void SetThreadParameter(Thread thread)
+		{
+			thread.SetApartmentState(ApartmentState.MTA);
+			thread.IsBackground = false;
+			thread.Priority = ThreadPriority.BelowNormal;
+		}
 
 		protected override void Dispose(bool disposing)
 		{
 			if (disposing)
 			{
+				cancellationTokenSource.Cancel();
 				lock (actions)
 					actions.Clear();
 			}
@@ -216,61 +366,64 @@ namespace TecWare.DE.Server
 						return true;
 				}
 			}
-		} // func GetActionLock
+		} // func IsActionAlive
 
-		protected override void ExecuteLoop()
+		private static void ExecuteCallback(object state)
+			=> ((QueueItem)state).Execute();
+
+		protected override bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait)
 		{
-			// execute tasks
-			ExecuteScheduler(1000);
-
+			redo:
 			// execute actions
-			var timeout = Int32.MaxValue;
-			while (true)
+			var item = GetNextAction(true);
+			if (item == null)
 			{
-				var action = GetNextAction(true);
-				if (action == null)
+				lock (MessageLoopSync)
 				{
-					action = GetNextAction(false);
-					timeout = action == null || action is EventItem ? Int32.MaxValue : unchecked(action.Boundary - Environment.TickCount);
-					break;
+					item = GetNextAction(false);
+					var timeout = item == null || item is EventItem ? Int32.MaxValue : unchecked(item.Boundary - Environment.TickCount);
+					if (timeout < Int32.MaxValue)
+					{
+						if (timeout > 0)
+						{
+							ResetMessageLoopUnsafe();
+							Task.Delay(timeout).GetAwaiter().OnCompleted(PulseMessageLoop);
+						}
+						else
+							PulseMessageLoop();
+					}
+					else
+						ResetMessageLoopUnsafe();
+				}
+
+				d = null;
+				state = null;
+				wait = null;
+				return false;
+			}
+			else
+			{
+				RemoveAction(item);
+				if (item is ActionItem action && !IsActionAlive(action.Action))
+				{
+					goto redo;
+				}
+				else if (item is SendOrPostItem callback)
+				{
+					d = callback.Callback;
+					state = callback.State;
+					wait = callback.WaitHandle;
+					return true;
 				}
 				else
 				{
-					// schedule the action, that sets the schedule in the same thread
-					RemoveAction(action);
-					if (IsActionAlive(action.Action))
-					{
-						Factory.StartNew(action.Execute).ContinueWith(
-							t =>
-							{
-								try
-								{
-									t.Wait();
-								}
-								finally
-								{
-									// re-execute action
-									if (action is IdleItem)
-										InsertAction(action);
-								}
-							}, this.Factory.CancellationToken, TaskContinuationOptions.ExecuteSynchronously, Factory.Scheduler);
-
-						timeout = 0; // no timeout, run tasks
-					}
+					d = ExecuteCallback;
+					state = item;
+					wait = null;
+					return true;
 				}
 			}
-
-			if (timeout > 0)
-			{
-				//Debug.Print("Wait {0}", timeout);
-				WaitHandle.WaitAny(new WaitHandle[] {
-					StoppingEvent.WaitHandle,
-					FilledEventHandle,
-					actionEvent
-				}, timeout == Int32.MaxValue ? -1 : timeout);
-				//Debug.Print("End Wait.");
-			}
-		} // proc ExecuteLoop
+		} // func TryDequeueTask
 
 		#endregion
 
@@ -278,13 +431,13 @@ namespace TecWare.DE.Server
 
 		private int GetNextId()
 		{
-			lock (actions)
+			lock (MessageLoopSync)
 				return ++lastItemId;
 		} // func GetNextId
 
-		private ActionItem GetNextAction(bool dueOnly)
+		private QueueItem GetNextAction(bool dueOnly)
 		{
-			lock (actions)
+			lock (MessageLoopSync)
 			{
 				var c = actions.First;
 				if (c == null)
@@ -302,9 +455,12 @@ namespace TecWare.DE.Server
 			}
 		} // func GetNextAction
 
-		private void InsertAction(ActionItem action)
+		protected override void EnqueueTask(SendOrPostCallback d, object state, ManualResetEventSlim waitHandle)
+			=> InsertAction(new SendOrPostItem(GetNextId(), d, state, waitHandle));
+
+		private void InsertAction(QueueItem action)
 		{
-			lock (actions)
+			lock (MessageLoopSync)
 			{
 				var pos = actions.First;
 				while (pos != null)
@@ -320,13 +476,27 @@ namespace TecWare.DE.Server
 					actions.AddLast(action);
 
 				//Debug.Print("Insert Action: {0}", action);
-				actionEvent.Set(); // mark list is changed
+				PulseMessageLoop(); // mark list is changed
 			}
 		} // proc InsertAction
 
-		private void RemoveAction(ActionItem action)
+		private IEnumerable<T> GetQueuedItemsUnsafe<T>()
+			where T : QueueItem
 		{
-			lock (actions)
+			var n = actions.First;
+			while (n != null)
+			{
+				var c = n;
+				n = c.Next;
+
+				if (c.Value is T)
+					yield return (T)c.Value;
+			}
+		} // func GetQueuedItemsUnsafe
+
+		private void RemoveAction(QueueItem action)
+		{
+			lock (MessageLoopSync)
 			{
 				//Debug.Print("Remove Action: {0}", action);
 				actions.Remove(action);
@@ -335,19 +505,27 @@ namespace TecWare.DE.Server
 
 		private void RemoveItems(Action action)
 		{
-			lock (actions)
+			lock (MessageLoopSync)
 			{
-				var n = actions.First;
-				while (n != null)
-				{
-					var c = n;
-					n = c.Next;
-
-					if (c.Value.Action == action)
-						actions.Remove(c);
-				}
+				foreach (var cur in GetQueuedItemsUnsafe<ActionItem>().Where(c => c.Action == action))
+					actions.Remove(cur);
 			}
 		} // proc RemoveItems
+
+		private bool RemoveTask(Task task)
+		{
+			lock (MessageLoopSync)
+			{
+				var cur = GetQueuedItemsUnsafe<TaskItem>().FirstOrDefault(c => c.Task == task);
+				if (cur != null)
+				{
+					actions.Remove(cur);
+					return true;
+				}
+				else
+					return false;
+			}
+		} // proc RemoveTask
 
 		void IDEServerQueue.RegisterIdle(Action action, int timebetween)
 			=> InsertAction(new IdleItem(GetNextId(), action, timebetween));
@@ -364,8 +542,10 @@ namespace TecWare.DE.Server
 		bool IDEServerQueue.IsQueueRunning => IsRunning;
 		bool IDEServerQueue.IsQueueRequired => ManagedThreadId == Thread.CurrentThread.ManagedThreadId;
 
+		TaskFactory IDEServerQueue.Factory => factory;
+
 		#endregion
 	} // class DEQueueScheduler
 
-	#endregion
+#endregion
 }

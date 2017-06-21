@@ -933,7 +933,8 @@ namespace TecWare.DE.Server
 
 		private Encoding encoding = Encoding.UTF8;                // Encoding für die Textdaten von Datenströmen
 		private HttpListener httpListener = new HttpListener();   // Zugriff auf den HttpListener
-		private DEThreadList httpThreads = null;                  // Threads, die die Request behandeln
+		private DEThread httpThreads = null;                    // Threads, die die Request behandeln
+		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
 
 		private Dictionary<string, string> mimeInfo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // Hält die Mime-Informationen
 		private List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
@@ -952,7 +953,7 @@ namespace TecWare.DE.Server
 		public DEHttpServer(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
-			httpThreads = new DEThreadList(this, "Http-Threads", "HTTP", ExecuteHttpRequest);
+			httpThreads = new DEThread(this, "Http-Threads", ExecuteHttpRequestAsyc, "Http");
 
 			ClearHttpCache();
 			httpListener.AuthenticationSchemeSelectorDelegate = GetAuthenticationScheme;
@@ -1114,7 +1115,7 @@ namespace TecWare.DE.Server
 			if (httpListener.IsListening && httpListener.Prefixes.Count == prefixes.Count)
 			{
 				var currentPrefixes = httpListener.Prefixes.ToArray();
-				for (int i = 0; i < currentPrefixes.Length; i++)
+				for (var i = 0; i < currentPrefixes.Length; i++)
 				{
 					if (currentPrefixes[i] != prefixes[i])
 					{
@@ -1136,15 +1137,23 @@ namespace TecWare.DE.Server
 					httpListener.Prefixes.Clear();
 
 					// re add prefixes
-					foreach (string c in prefixes)
+					var first = true;
+					foreach (var c in prefixes)
+					{
+						if (first)
+						{
+							defaultBaseUri = new Uri(c, UriKind.Absolute);
+							first = false;
+						}
 						httpListener.Prefixes.Add(c);
+					}
 				}
 			}
 
 			var configNode = new XConfigNode(Server.Configuration[xnHttp], config.ConfigNew);
 
-			// create the fixed worker
-			httpThreads.Count = configNode.GetAttribute<int>("threads");
+			//// create the fixed worker
+			//httpThreads.Count = configNode.GetAttribute<int>("threads");
 			// set a new realm
 			httpListener.Realm = configNode.GetAttribute<string>("realm");
 			// read the default encoding
@@ -1163,7 +1172,10 @@ namespace TecWare.DE.Server
 				{
 					// no prefixes set, set the default
 					if (httpListener.Prefixes.Count == 0)
-						httpListener.Prefixes.Add("http://localhost:8080/");
+					{
+						defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
+						httpListener.Prefixes.Add(defaultBaseUri.OriginalString);
+					}
 
 					// Start the listener
 					if (!httpListener.IsListening)
@@ -1340,27 +1352,30 @@ namespace TecWare.DE.Server
 			}
 		} // func GetAuthenticationScheme
 
-		private void ExecuteHttpRequest()
+		private async Task ExecuteHttpRequestAsyc()
 		{
-			if (IsHttpListenerRunning)
+			while (httpThreads.IsRunning)
 			{
-				HttpListenerContext ctx = null;
-				try
+				if (IsHttpListenerRunning)
 				{
-					ctx = httpListener.GetContext();
+					HttpListenerContext ctx = null;
+					try
+					{
+						ctx = await httpListener.GetContextAsync();
+					}
+					catch (HttpListenerException e)
+					{
+						if (e.ErrorCode != 995)
+							throw;
+					}
+					if (ctx != null)
+					{
+						ProcessRequest(ctx);
+					}
 				}
-				catch (HttpListenerException e)
-				{
-					if (e.ErrorCode != 995)
-						throw;
-				}
-				if (ctx != null)
-				{
-					ProcessRequest(ctx);
-				}
+				else
+					await Task.Delay(500);
 			}
-			else
-				DEThread.CurrentThread.WaitFinish(500);
 		} // proc ExecuteHttpRequest
 
 		private async Task ProcessAcceptWebSocket(HttpListenerContext ctx, string absolutePath, AuthenticationSchemes authentificationScheme)
@@ -1621,6 +1636,8 @@ namespace TecWare.DE.Server
 		Description("Ist die Protokollierung der Http-Request aktiv."),
 		]
 		public bool IsDebug { get { return debugMode; } private set { SetProperty(ref debugMode, value); } }
+
+		public Uri DefaultBaseUri => defaultBaseUri;
 
 		/// <summary></summary>
 		public CultureInfo DefaultCultureInfo => defaultCultureInfo;

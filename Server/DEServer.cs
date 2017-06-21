@@ -28,6 +28,7 @@ using System.Security.Principal;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;
@@ -211,8 +212,7 @@ namespace TecWare.DE.Server
 				{
 					var name = c.Substring(0, equalAt).Trim();
 					var value = c.Substring(equalAt + 1).Trim();
-					int t1;
-					if (Int32.TryParse(value, out t1))
+					if (Int32.TryParse(value, out var t1))
 						configurationProperties.SetProperty(name, typeof(int), value);
 					else
 						configurationProperties.SetProperty(name, typeof(string), value);
@@ -424,7 +424,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- HttpDumpAction -----------------------------------------------------------
+		#region -- HttpDumpAction -------------------------------------------------------
 
 		private int lastDumpFileInfoId = 0;
 
@@ -458,9 +458,11 @@ namespace TecWare.DE.Server
 			sbArgs.Append(fi.FileName);
 
 			// prepare calling procdump
-			ProcessStartInfo psi = new ProcessStartInfo(procDump, sbArgs.ToString());
-			psi.UseShellExecute = false;
-			psi.RedirectStandardOutput = true;
+			var psi = new ProcessStartInfo(procDump, sbArgs.ToString())
+			{
+				UseShellExecute = false,
+				RedirectStandardOutput = true
+			};
 			using (var p = Process.Start(psi))
 			{
 				if (!p.WaitForExit(5 * 60 + 1000))
@@ -526,11 +528,12 @@ namespace TecWare.DE.Server
 
 		#region -- Configuration Load -----------------------------------------------------
 
-		private Action refreshConifg;
+		private Action refreshConfig;
+		private readonly TaskCompletionSource<bool> serviceInitialized = new TaskCompletionSource<bool>();
 
 		private void InitConfiguration()
 		{
-			refreshConifg = InternalRefreshConfiguration;
+			refreshConfig = InternalRefreshConfiguration;
 
 			PublishItem(new DEConfigItemPublicAction("readconfig") { DisplayName = "Refresh(Configuration)" });
 
@@ -549,10 +552,10 @@ namespace TecWare.DE.Server
 		]
 		private void ReadConfiguration()
 		{
-			Queue.CancelCommand(refreshConifg);
-			Queue.RegisterCommand(refreshConifg, 500);
+			Queue.CancelCommand(refreshConfig);
+			Queue.RegisterCommand(refreshConfig, 500);
 		} // proc ReadConfiguration
-
+		
 		private void BeginReadConfiguration(DEConfigLoading config)
 		{
 			// Lade die aktuelle Konfiguration
@@ -562,13 +565,13 @@ namespace TecWare.DE.Server
 			if (config.IsLoadedSuccessful)
 			{
 				// Lade die SubItems
-				foreach (DEConfigLoading cur in config.SubLoadings)
+				foreach (var cur in config.SubLoadings)
 					BeginReadConfiguration(cur);
 
 				// Aktiviere die Konfiguration
 				if (config.IsConfigurationChanged)
 				{
-					Exception e = config.EndReadConfiguration();
+					var e = config.EndReadConfiguration();
 					if (e != null)
 					{
 						config.Log
@@ -587,7 +590,7 @@ namespace TecWare.DE.Server
 
 		private void InternalRefreshConfiguration()
 		{
-			// Ohne Log, werden die Informationen in das Windows-Erreignisprotokoll geschrieben.
+			// write message for the configuration read
 			if (!HasLog)
 				LogMsg(EventLogEntryType.Information, "Reread configuration.");
 
@@ -600,14 +603,20 @@ namespace TecWare.DE.Server
 					log.WriteLine("BEGIN Load configuration");
 					using (log.Indent())
 					{
-						using (DEConfigLoading config = new DEConfigLoading(this, log, xConfig, configuration.ConfigurationStamp))
+						using (var config = new DEConfigLoading(this, log, xConfig, configuration.ConfigurationStamp))
 							BeginReadConfiguration(config);
 					}
 					log.WriteLine("END Load configuration");
+
+					if (!serviceInitialized.Task.IsCompleted)
+						serviceInitialized.SetResult(true);
 				}
 				catch (Exception e)
 				{
 					log.WriteException(e);
+
+					if (!serviceInitialized.Task.IsCompleted)
+						serviceInitialized.SetResult(false);
 
 					if (!HasLog || !Queue.IsQueueRunning) // Schreib die Fehlermeldung ins Windowsprotokoll
 						LogMsg(e);
@@ -615,6 +624,9 @@ namespace TecWare.DE.Server
 
 			FireEvent("refresh");
 		} // proc InternalRefreshConfiguration
+
+		public Task<bool> IsInitializedAsync()
+			=> serviceInitialized.Task;
 
 		#endregion
 

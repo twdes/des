@@ -990,7 +990,7 @@ namespace TecWare.DE.Server
 
 		bool IDEWebSocketProtocol.AcceptWebSocket(IDEWebSocketContext webSocket)
 		{
-			if (!Config.GetAttribute("allowDebug", false))
+			if (!IsDebugAllowed)
 				return false;
 
 			new LuaDebugSession(this, webSocket);
@@ -1030,6 +1030,8 @@ namespace TecWare.DE.Server
 		public Lua Lua => lua;
 
 		#endregion
+
+		public bool IsDebugAllowed => Config.GetAttribute("allowDebug", false);
 
 		public override string Icon => "/images/lua16.png";
 	} // class LuaEngine

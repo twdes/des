@@ -73,6 +73,9 @@ namespace TecWare.DE.Server.Http
 		/// <param name="cache">Objekt</param>
 		/// <returns>Wurde der Eintrag in den Cache aufgenommen</returns>
 		bool UpdateWebCache(string cacheId, object cache);
+
+		/// <summary>Default uri for the service.</summary>
+		Uri DefaultBaseUri { get; }
 	} // interface IDEHttpServer
 
 	#endregion
