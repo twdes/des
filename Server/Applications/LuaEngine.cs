@@ -502,8 +502,7 @@ namespace TecWare.DE.Server
 			private readonly LoggerProxy log;
 			private readonly IDEWebSocketContext context;
 
-			private readonly CancellationTokenSource cancelSessionTokenSource;
-			private readonly Task sessionTask;
+			private readonly DEThread sessionThread;
 
 			private DEConfigItem currentItem = null; // current node, that is used as parent
 			
@@ -513,8 +512,7 @@ namespace TecWare.DE.Server
 				this.log = LoggerProxy.Create(engine.Log, "Debug Session");
 				this.context = context;
 
-				cancelSessionTokenSource = new CancellationTokenSource();
-				sessionTask = Task.Run(Execute, cancelSessionTokenSource.Token);
+				sessionThread = new DEThread(engine, "LuaDebug", Execute, "LuaDebug"); // create a new thread for a new context!
 
 				UseNode("/");
 
@@ -525,8 +523,7 @@ namespace TecWare.DE.Server
 			{
 				Info("Debug session closed.");
 				// Dispose session
-				cancelSessionTokenSource.Cancel();
-				cancelSessionTokenSource.Dispose();
+				sessionThread.Dispose();
 
 				// close context
 				context.Dispose();
@@ -534,11 +531,17 @@ namespace TecWare.DE.Server
 
 			private async Task Execute()
 			{
+				// runs the initialization code
+				var initFunc = engine.DebugEnvironment.GetValue("InitSession", true);
+				if (initFunc != null)
+					Lua.RtInvoke(initFunc, this);
+
+				// start message loop
 				var recvOffset = 0;
 				var recvBuffer = new byte[1 << 20]; // 1MB buffer
 				try
 				{
-					while (Socket.State == WebSocketState.Open && !cancelSessionTokenSource.IsCancellationRequested)
+					while (Socket.State == WebSocketState.Open && sessionThread.IsRunning)
 					{
 						var recvRest = recvBuffer.Length - recvOffset;
 
@@ -547,7 +550,7 @@ namespace TecWare.DE.Server
 							break;
 
 						// get bytes
-						var r = await Socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), cancelSessionTokenSource.Token);
+						var r = await Socket.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, recvRest), sessionThread.CancellationToken);
 						if (r.MessageType == WebSocketMessageType.Text) // get only text messages
 						{
 							recvOffset += r.Count;
@@ -597,8 +600,7 @@ namespace TecWare.DE.Server
 
 			private XElement CreateException(XElement x, Exception e)
 			{
-				var aggE = e as AggregateException;
-				if (aggE != null)
+				if (e is AggregateException aggE)
 				{
 					var enumerator = aggE.InnerExceptions.GetEnumerator();
 					if (enumerator.MoveNext())
@@ -669,14 +671,16 @@ namespace TecWare.DE.Server
 
 				// encode and send
 				var buf = Encoding.UTF8.GetBytes(xAnswer.ToString(SaveOptions.None));
-				await Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, cancelSessionTokenSource.Token);
+				await Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, sessionThread.CancellationToken);
 			} // proc SendAnswerAsync
 
 			private void Info(string message)
 				=> log.Info(message);
 
 			protected override object OnIndex(object key)
-				=> base.OnIndex(key) ?? currentItem.GetValue(key);
+				=> base.OnIndex(key) ?? 
+					engine.DebugEnvironment.GetValue(key, true) ??  
+					currentItem.GetValue(key);
 
 			#region -- Execute --------------------------------------------------------------
 
@@ -808,6 +812,7 @@ namespace TecWare.DE.Server
 		private readonly LuaEngineTraceLineDebugger debugHook;  // Trace Line Debugger interface
 		private readonly LuaCompileOptions debugOptions;        // options for the debugging of scripts
 		private bool debugSocketRegistered = false;
+		private readonly LuaTable debugEnvironment;
 
 		#region -- Ctor/Dtor/Configuration ------------------------------------------------
 
@@ -830,8 +835,11 @@ namespace TecWare.DE.Server
 
 			// create the debug options
 			debugHook = new LuaEngineTraceLineDebugger(this);
-			debugOptions = new LuaCompileOptions();
-			debugOptions.DebugEngine = debugHook;
+			debugOptions = new LuaCompileOptions()
+			{
+				DebugEngine = debugHook
+			};
+			this.debugEnvironment = new LuaTable();
 
 			// update lua runtime
 			sp.GetService<DEServer>(true).UpdateLuaRuntime(lua);
@@ -907,25 +915,25 @@ namespace TecWare.DE.Server
 			if (String.IsNullOrEmpty(scriptId))
 				throw new ArgumentNullException("@id", "ScriptId is expected.");
 
-			// Lese den Dateinamen
-			string sFileName = cur.GetAttribute<string>("filename");
-			if (String.IsNullOrEmpty(sFileName))
-				throw new ArgumentNullException("@filename", "Dateiname nicht gefunden.");
+			// Read filename
+			var fileName = cur.GetAttribute<string>("filename");
+			if (String.IsNullOrEmpty(fileName))
+				throw new ArgumentNullException("@filename", "Filename is empty.");
 
-			// Lese die Parameter der Scriptdatei
+			// Read parameter
 			var forceDebugMode = cur.GetAttribute<bool>("debug");
 			var encoding = cur.GetAttribute<Encoding>("encoding");
 
-			LuaScript script = FindScript(scriptId);
-			LuaFileScript fileScript = script as LuaFileScript;
+			var script = FindScript(scriptId);
+			var fileScript = script as LuaFileScript;
 
 			if (fileScript == null) // script noch nicht vorhanden --> also legen wir es mal an
 			{
 				if (script != null)
-					throw new ArgumentException(String.Format("Script '{0}' schon vorhanden.", scriptId));
-				FileInfo fi = new FileInfo(sFileName);
+					throw new ArgumentException(String.Format("Script '{0}' already exists.", scriptId));
+				var fi = new FileInfo(fileName);
 				if (!fi.Exists)
-					throw new ArgumentException(String.Format("Datei '{0}' nicht gefunden.", fi.FullName));
+					throw new ArgumentException(String.Format("File '{0}' not found.", fi.FullName));
 
 				new LuaFileScript(this, scriptId, fi, encoding, forceDebugMode);
 			}
@@ -1030,6 +1038,9 @@ namespace TecWare.DE.Server
 		public Lua Lua => lua;
 
 		#endregion
+
+		[LuaMember("DebugEnv")]
+		public LuaTable DebugEnvironment => debugEnvironment;
 
 		public bool IsDebugAllowed => Config.GetAttribute("allowDebug", false);
 

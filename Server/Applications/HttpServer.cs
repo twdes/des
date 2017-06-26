@@ -41,30 +41,28 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server
 {
-	#region -- class DECommonContext ----------------------------------------------------
+	#region -- class DECommonWebContext -------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal abstract class DECommonContext : IDECommonContext, IDisposable
+	internal abstract class DECommonWebContext : DETransactionContext
 	{
 		private readonly DEHttpServer http;
 		private readonly Lazy<NameValueCollection> queryString;
 		private readonly HttpListenerRequest request;
 		private readonly string absolutePath;
 
-		private readonly bool httpAuthentification;
-		private IDEAuthentificatedUser user = null;
 		private readonly Lazy<CultureInfo> clientCultureInfo;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		protected DECommonContext(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification)
+		protected DECommonWebContext(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification)
+			: base(http, httpAuthentification)
 		{
 			this.http = http;
 			this.queryString = new Lazy<NameValueCollection>(() => request.QueryString);
 			this.request = request;
 			this.absolutePath = absolutePath;
-			this.httpAuthentification = httpAuthentification;
 
 			this.clientCultureInfo = new Lazy<CultureInfo>(() =>
 			{
@@ -74,7 +72,7 @@ namespace TecWare.DE.Server
 					if (userLanguages == null || userLanguages.Length == 0)
 						return http.DefaultCultureInfo;
 					else
-						return CultureInfo.GetCultureInfo(userLanguages[0]);
+						return System.Globalization.CultureInfo.GetCultureInfo(userLanguages[0]);
 				}
 				catch
 				{
@@ -84,123 +82,46 @@ namespace TecWare.DE.Server
 			);
 		} // ctor
 
-		public void Dispose()
-		{
-			Dispose(true);
-		} // proc Dispose
-
-		protected virtual void Dispose(bool disposing)
-		{
-			if (disposing)
-				Procs.FreeAndNil(ref user);
-		} // proc Dispose
-
 		#endregion
 
-		#region -- User -------------------------------------------------------------------
+		#region -- TryGetProperty -------------------------------------------------------
 
-		/// <summary>Change the current user on the context, to a server user. Is the given user null, the result is also null.</summary>
-		internal void AuthentificateUser(IPrincipal authentificateUser)
+		private bool TryGetNameValueKeyIgnoreCase(NameValueCollection list, string name, out object value)
 		{
-			if (authentificateUser != null)
-			{
-				user = http.Server.AuthentificateUser(authentificateUser.Identity);
-				if (user == null)
-					throw new HttpResponseException(HttpStatusCode.Unauthorized, String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Identity.Name));
-			}
-		} // proc AuthentificateUser
-
-		public T GetUser<T>()
-			where T : class
-		{
-			if (user == null)
-				throw new HttpResponseException(HttpStatusCode.Unauthorized, "Authorization expected.");
-
-			T r = user as T;
-			if (r == null)
-				throw new NotImplementedException(String.Format("User class does not implement '{0}.", typeof(T).FullName));
-
-			return r;
-		} // func GetUser
-
-		#endregion
-
-		#region -- Security ---------------------------------------------------------------
-
-		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
-		/// <param name="securityToken">Zu prüfender Token.</param>
-		public void DemandToken(string securityToken)
-		{
-			if (!httpAuthentification || String.IsNullOrEmpty(securityToken))
-				return;
-
-			if (!TryDemandToken(securityToken))
-				throw CreateAuthorizationException(securityToken);
-		} // proc DemandToken
-
-		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
-		/// <param name="securityToken">Zu prüfender Token.</param>
-		/// <returns><c>true</c>, wenn der Token erlaubt ist.</returns>
-		public bool TryDemandToken(string securityToken)
-		{
-			if (!httpAuthentification)
-				return true;
-			if (String.IsNullOrEmpty(securityToken))
-				return true;
-
-			return User != null && User.IsInRole(securityToken);
-		} // proc TryDemandToken
-
-		public HttpResponseException CreateAuthorizationException(string securityText) // force user, if no user is given
-			=> new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityText));
-
-		#endregion
-
-		#region -- Parameter --------------------------------------------------------------
-
-		private static string GetNameValueKeyIgnoreCase(NameValueCollection list, string name)
-		{
-			var value = list[name];
+			value = list[name];
 			if (value == null)
 			{
 				name = list.AllKeys.FirstOrDefault(c => String.Compare(name, c, StringComparison.OrdinalIgnoreCase) == 0);
 				if (name != null)
 					value = list[name];
 			}
-			return value;
-		} // func GetNameValueKeyIgnoreCase
-
-		public bool TryGetProperty(string name, out object value)
-		{
-			// check for query parameter
-			value = GetNameValueKeyIgnoreCase(queryString.Value, name);
-
-			// check for header field
-			if (value == null)
-				value = GetNameValueKeyIgnoreCase(request.Headers, name);
-
 			return value != null;
+		} // func TryGetNameValueKeyIgnoreCase
+
+		public override bool TryGetProperty(string name, out object value)
+		{
+			if (TryGetNameValueKeyIgnoreCase(queryString.Value, name, out value)
+				|| TryGetNameValueKeyIgnoreCase(request.Headers, name, out value))
+				return true;
+			return base.TryGetProperty(name, out value);
 		} // func TryGetProperty
 
-		/// <summary></summary>
-		/// <param name="name"></param>
-		/// <param name="default"></param>
-		/// <returns></returns>
-		public object GetProperty(string name, object @default)
-			=> PropertyDictionaryExtensions.GetProperty(this, name, @default);
-
-		public string[] ParameterNames => queryString.Value.AllKeys;
-		public string[] HeaderNames => request.Headers.AllKeys;
+		public override Exception CreateAuthorizationException(string message)
+			=> new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, message);
 
 		#endregion
-
+		
+		/// <summary>Parameter names</summary>
+		public string[] ParameterNames => queryString.Value.AllKeys;
+		/// <summary>Header names</summary>
+		public string[] HeaderNames => request.Headers.AllKeys;
+		
 		/// <summary>Client culture</summary>
-		public CultureInfo CultureInfo => clientCultureInfo.Value;
-
+		public override CultureInfo CultureInfo => clientCultureInfo.Value;
+		/// <summary>Request path, absolute</summary>
 		public string AbsolutePath => absolutePath;
-		public DEHttpServer Http => http;
-		IDEContextServer IDECommonContext.Server => http;
-		public IDEAuthentificatedUser User => user;
+		/// <summary>Access to the http server</summary>
+		public IDEHttpServer Http => http;
 	} // class DECommonContext
 
 	#endregion
@@ -209,7 +130,7 @@ namespace TecWare.DE.Server
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal sealed class DEWebSocketContext : DECommonContext, IDEWebSocketContext
+	internal sealed class DEWebSocketContext : DECommonWebContext, IDEWebSocketContext
 	{
 		private readonly HttpListenerContext context;
 		private HttpListenerWebSocketContext webSocketContext;
@@ -220,8 +141,6 @@ namespace TecWare.DE.Server
 			: base(http, context.Request, absolutePath, httpAuthentification)
 		{
 			this.context = context;
-
-			AuthentificateUser(context.User);
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -240,9 +159,7 @@ namespace TecWare.DE.Server
 		#endregion
 
 		internal async Task AcceptWebSocketAsync(string protocol)
-		{
-			webSocketContext = await context.AcceptWebSocketAsync(protocol);
-		} // proc AcceptWebSocketAsync
+			=> webSocketContext = await context.AcceptWebSocketAsync(protocol);
 
 		/// <summary>Returns the websocket</summary>
 		public WebSocket WebSocket => webSocketContext.WebSocket;
@@ -250,11 +167,11 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEHttpContext ------------------------------------------------------
+	#region -- class DEWebRequestContext ------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal sealed class DEHttpContext : DECommonContext, IDEContext
+	internal sealed class DEWebRequestContext : DECommonWebContext, IDEWebRequestContext
 	{
 		#region -- struct RelativeFrame ---------------------------------------------------
 
@@ -283,7 +200,7 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEHttpContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
+		public DEWebRequestContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
 			: base(http, context.Request, absolutePath, httpAuthentification)
 		{
 			this.context = context;
@@ -318,7 +235,7 @@ namespace TecWare.DE.Server
 			if (log != null)
 				return; // Log schon gestartet
 
-			log = Http.LogProxy().GetScope(LogMsgType.Information, true, true);
+			log = ((DEHttpServer)Http).LogProxy().GetScope(LogMsgType.Information, true, true);
 			log.WriteLine("{0}: {1}", InputMethod, context.Request.Url);
 			log.WriteLine();
 			log.WriteLine("UrlReferrer: {0}", context.Request.UrlReferrer);
@@ -429,7 +346,7 @@ namespace TecWare.DE.Server
 		public TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength = -1)
 		{
 			// add encoding to the content type
-			contentType = contentType + "; charset=" + (encoding ?? Http.Encoding).WebName;
+			contentType = contentType + "; charset=" + (encoding ?? Http.DefaultEncoding).WebName;
 			var outputStream = GetOutputStream(contentType, contentLength, contentLength == -1);
 			return outputStream == null ? null : new StreamWriter(outputStream);
 		} // func GetOutputTextWriter
@@ -516,7 +433,7 @@ namespace TecWare.DE.Server
 				if (currentRelativeSubNode == null)
 				{
 					if (relativeStack.Count == 0)
-						currentRelativeSubNode = Http.Server;
+						currentRelativeSubNode = Server;
 					else
 						currentRelativeSubNode = relativeStack.Peek().Item;
 				}
@@ -559,7 +476,7 @@ namespace TecWare.DE.Server
 		public IDEConfigItem CurrentNode => RelativeSubNode as IDEConfigItem;
 
 		#endregion
-	} // class DEHttpContext
+	} // class DEWebRequestContext
 
 	#endregion
 
@@ -953,7 +870,7 @@ namespace TecWare.DE.Server
 		public DEHttpServer(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
-			httpThreads = new DEThread(this, "Http-Threads", ExecuteHttpRequestAsyc, "Http");
+			httpThreads = new DEThread(this, "Http-Thread", ExecuteHttpRequestAsyc, "Http");
 
 			ClearHttpCache();
 			httpListener.AuthenticationSchemeSelectorDelegate = GetAuthenticationScheme;
@@ -1152,8 +1069,6 @@ namespace TecWare.DE.Server
 
 			var configNode = new XConfigNode(Server.Configuration[xnHttp], config.ConfigNew);
 
-			//// create the fixed worker
-			//httpThreads.Count = configNode.GetAttribute<int>("threads");
 			// set a new realm
 			httpListener.Realm = configNode.GetAttribute<string>("realm");
 			// read the default encoding
@@ -1370,7 +1285,7 @@ namespace TecWare.DE.Server
 					}
 					if (ctx != null)
 					{
-						ProcessRequest(ctx);
+						await ProcessRequestAsync(ctx);
 					}
 				}
 				else
@@ -1391,6 +1306,10 @@ namespace TecWare.DE.Server
 			else
 			{
 				var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous);
+
+				// start authentification
+				await context.AuthentificateUserAsync(ctx.User);
+
 				try
 				{
 					// authentificate the user
@@ -1412,17 +1331,15 @@ namespace TecWare.DE.Server
 			}
 		} // func ProcessAcceptWebSocket
 
-		private void ProcessRequest(HttpListenerContext ctx)
+		private async Task ProcessRequestAsync(HttpListenerContext ctx)
 		{
 			var url = ctx.Request.Url;
 
 			// Find the prefix for a alternating path
 			var pathTranslation = FindPrefix(prefixPathTranslations, url, false);
-			string absolutePath;
-			if (pathTranslation == null || pathTranslation.Prefix == null)
-				absolutePath = url.AbsolutePath;
-			else
-				absolutePath = pathTranslation.Path + url.AbsolutePath.Substring(pathTranslation.PrefixPath.Length);
+			var absolutePath = pathTranslation == null || pathTranslation.Prefix == null
+				? url.AbsolutePath
+				: pathTranslation.Path + url.AbsolutePath.Substring(pathTranslation.PrefixPath.Length);
 
 			var authentificationScheme = GetAuthenticationScheme(ctx.Request);
 
@@ -1430,7 +1347,7 @@ namespace TecWare.DE.Server
 			{
 				try
 				{
-					ProcessAcceptWebSocket(ctx, absolutePath, authentificationScheme).Wait(); // block worker
+					await ProcessAcceptWebSocket(ctx, absolutePath, authentificationScheme);
 				}
 				catch (AggregateException e)
 				{
@@ -1443,43 +1360,44 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				using (var r = new DEHttpContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
+				using (var context = new DEWebRequestContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
 				{
-					DEContext.UpdateContext(r);
 					try
 					{
 						// authentificate user
-						r.AuthentificateUser(ctx.User);
+						await context.AuthentificateUserAsync(ctx.User);
 
-						// Start logging
-						if (debugMode)
-							r.LogStart();
-
-						// change the current cultur to the client culture
-						Thread.CurrentThread.CurrentCulture = r.CultureInfo;
-						Thread.CurrentThread.CurrentUICulture = r.CultureInfo;
-
-						// start to find the endpoint
-						if (r.TryEnterSubPath(Server, String.Empty))
+						// use a background thread, may be rewrite EnterReadLock to Async
+						await Task.Run(() =>
 						{
-							try
+							SynchronizationContext.SetSynchronizationContext(context);
+
+							// Start logging
+							if (debugMode)
+								context.LogStart();
+
+							// start to find the endpoint
+							if (context.TryEnterSubPath(Server, String.Empty))
 							{
-								// try to map a node
-								if (!ProcessRequestForConfigItem(r, (DEConfigItem)Server))
+								try
 								{
-									// Search all http worker nodes
-									using (EnterReadLock())
+									// try to map a node
+									if (!ProcessRequestForConfigItem(context, (DEConfigItem)Server))
 									{
-										if (!UnsafeProcessRequest(r))
-											throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
+										// Search all http worker nodes
+										using (EnterReadLock())
+										{
+											if (!UnsafeProcessRequest(context))
+												throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
+										}
 									}
 								}
+								finally
+								{
+									context.ExitSubPath(Server);
+								}
 							}
-							finally
-							{
-								r.ExitSubPath(Server);
-							}
-						}
+						});
 
 						// check the return value
 						if (ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
@@ -1487,20 +1405,18 @@ namespace TecWare.DE.Server
 					}
 					catch (Exception e)
 					{
-						ProcessResponeOnException(ctx, e, r);
-					}
-					finally
-					{
-						DEContext.UpdateContext(null);
+						ProcessResponeOnException(ctx, e, context);
 					}
 				}
 			}
 		} // proc ProcessRequest
 
-		private void ProcessResponeOnException(HttpListenerContext ctx, Exception e, DEHttpContext r)
+		private void ProcessResponeOnException(HttpListenerContext ctx, Exception e, DEWebRequestContext r)
 		{
 			// extract target exception
 			var ex = e;
+			while (ex is AggregateException)
+				ex = ex.InnerException;
 			while (ex is TargetInvocationException)
 				ex = ex.InnerException;
 
@@ -1548,7 +1464,7 @@ namespace TecWare.DE.Server
 			return null;
 		} // func GetWebSocketProtocol
 
-		private bool ProcessRequestForConfigItem(IDEContext r, DEConfigItem current)
+		private bool ProcessRequestForConfigItem(IDEWebRequestContext r, DEConfigItem current)
 		{
 			using (current.EnterReadLock())
 			{
@@ -1608,7 +1524,7 @@ namespace TecWare.DE.Server
 
 		private static string FilterChar(string sMessage)
 		{
-			StringBuilder sb = new StringBuilder();
+			var sb = new StringBuilder();
 			for (int i = 0; i < sMessage.Length; i++)
 			{
 				char c = sMessage[i];
@@ -1626,20 +1542,20 @@ namespace TecWare.DE.Server
 
 		public override string Icon { get { return "/images/http16.png"; } }
 
-		/// <summary>Encodierung für Textdateien</summary>
-		public Encoding Encoding { get { return encoding; } }
+		/// <summary>Default encoding for requests.</summary>
+		public Encoding DefaultEncoding { get { return encoding; } }
 
 		[
 		PropertyName("tw_http_debugmode"),
 		DisplayName("Protokollierung"),
 		Category("Http"),
-		Description("Ist die Protokollierung der Http-Request aktiv."),
+		Description("Turn on/off the protocol requests."),
 		]
 		public bool IsDebug { get { return debugMode; } private set { SetProperty(ref debugMode, value); } }
 
 		public Uri DefaultBaseUri => defaultBaseUri;
 
-		/// <summary></summary>
+		/// <summary>Default culture</summary>
 		public CultureInfo DefaultCultureInfo => defaultCultureInfo;
 	} // class DEHttpServer
 }

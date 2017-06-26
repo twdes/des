@@ -178,7 +178,7 @@ namespace TecWare.DE.Server
 					if (context.AbsolutePath.Length > 0 && !path.StartsWith(context.AbsolutePath, StringComparison.OrdinalIgnoreCase))
 						return;
 
-					var segment = new ArraySegment<byte>(context.Server.Encoding.GetBytes(eventLine));
+					var segment = new ArraySegment<byte>(context.Http.DefaultEncoding.GetBytes(eventLine));
 					await Socket.SendAsync(segment, WebSocketMessageType.Text, true, cancellationToken);
 				}
 				catch (Exception e)
@@ -493,7 +493,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		void IDEListService.WriteList(IDEContext r, IDEListController controller, int startAt, int count)
+		void IDEListService.WriteList(IDEWebRequestContext r, IDEListController controller, int startAt, int count)
 		{
 			var sendTypeDefinition = String.Compare(r.GetProperty("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
 

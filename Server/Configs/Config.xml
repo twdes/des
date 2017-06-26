@@ -4,10 +4,10 @@
 		<resolve>..\..\SimpleDbg\bin\Debug</resolve>
 	</server>
 	
-		
 	<http realm="Test Server">
 	</http>
 	
-	<luaengine displayname="ttt" allowDebug="true">
+	<luaengine displayname="LuaEngine" allowDebug="true" script="debugEnv">
+		<script id="debugEnv" filename="InitDebug.lua" />
 	</luaengine>
 </des>

@@ -22,9 +22,20 @@ using System.Runtime.CompilerServices;
 
 namespace TecWare.DE.Server
 {
+	#region -- interface IDEThreadSource ------------------------------------------------
+
+	/// <summary>Access to the base thread.</summary>
+	public interface IDEThreadSource
+	{
+		DEThreadBase Thread { get; }
+	} // interface IDEThreadSource
+
+	#endregion
+
 	#region -- class DEThreadContext ----------------------------------------------------
 
-	public class DEThreadContext : SynchronizationContext
+	/// <summary>Simple synchronization context, that post all tasks/actions back to this thread.</summary>
+	public sealed class DEThreadContext : SynchronizationContext, IDEThreadSource
 	{
 		private readonly DEThreadBase thread;
 
@@ -47,34 +58,78 @@ namespace TecWare.DE.Server
 
 	#region -- class DEScopeContext -----------------------------------------------------
 
-	public class DEScopeContext : DEThreadContext, IDisposable
+	/// <summary>Context that holds information for the execution thread.</summary>
+	public class DEScopeContext : SynchronizationContext, IDEThreadSource, IDisposable
 	{
-		private readonly DEThreadContext parentContext;
-		
-		private DEScopeContext(DEThreadContext parentContext)
-			:base(parentContext.Thread)
+		private readonly DEScopeContext parentScope;
+		private readonly SynchronizationContext parentThreadContext;
+
+		protected DEScopeContext()
 		{
-			this.parentContext = parentContext ?? throw new ArgumentNullException(nameof(parentContext));
+			if (Current is DEScopeContext t)
+			{
+				this.parentScope = t;
+				this.parentThreadContext = t.parentThreadContext;
+			}
+			else
+			{
+				this.parentScope = null;
+				this.parentThreadContext = Current;
+			}
+
+			// change current context
+			SetSynchronizationContext(this);
 		} // ctor
 
 		public void Dispose()
 		{
-			// restore context
-			if (Current == this)
-				SetSynchronizationContext(parentContext);
+			Dispose(true);
 		} // proc parentContext
 
-		public override SynchronizationContext CreateCopy()
-			=> new DEScopeContext(parentContext);
-
-		public static T CreateContext<T>()
-			where T : DEScopeContext
+		protected virtual void Dispose(bool disposing)
 		{
-			if (Current is DEThreadContext parentContext)
-				return (T)Activator.CreateInstance(typeof(T), parentContext);
+			// restore context
+			if (Current == this)
+				SetSynchronizationContext(parentScope ?? parentThreadContext);
+		} // proc Dispose
+
+		public override SynchronizationContext CreateCopy()
+			=> this;
+
+		private void ExecuteWithContext(object state)
+		{
+			var tuple = (Tuple<SendOrPostCallback, object>)state;
+			var oldContext = Current;
+			SetSynchronizationContext(this);
+			try
+			{
+				tuple.Item1(tuple.Item2);
+			}
+			finally
+			{
+				SetSynchronizationContext(oldContext);
+			}
+		} // proc PostWithContext
+
+		public override void Post(SendOrPostCallback d, object state)
+		{
+			var t = new Tuple<SendOrPostCallback, object>(d, state);
+			if (parentThreadContext != null)
+				parentThreadContext.Post(ExecuteWithContext, t);
 			else
-				throw new ArgumentNullException();
-		} // func CreateContext
+				ThreadPool.QueueUserWorkItem(ExecuteWithContext, t);
+		} // proc Post
+
+		public override void Send(SendOrPostCallback d, object state)
+		{
+			var t = new Tuple<SendOrPostCallback, object>(d, state);
+			if (parentThreadContext != null)
+				parentThreadContext.Send(ExecuteWithContext, t);
+			else
+				ExecuteWithContext(new Tuple<SendOrPostCallback, object>(d, state));
+		} // proc Send
+
+		public DEThreadBase Thread => (parentThreadContext as IDEThreadSource)?.Thread;
 	} // class DEScopeContext
 
 	#endregion
@@ -166,7 +221,7 @@ namespace TecWare.DE.Server
 			if (disposing)
 			{
 				// stop the thread
-				if (!thread.Join(3000))
+				if (thread != Thread.CurrentThread && !thread.Join(3000))
 					thread.Abort();
 
 				// clear objects
@@ -384,6 +439,8 @@ namespace TecWare.DE.Server
 			}
 		} // prop CurrentContext
 
+		public CancellationToken CancellationToken => threadCancellation.Token;
+
 		// -- Static --------------------------------------------------------------------
 
 		/// <summary>Notifies changes on the thread list.</summary>
@@ -531,63 +588,27 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEThreadPool -------------------------------------------------------
+	#region -- class ThreadContextSecurity ----------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
-	public sealed class DEThreadPool : IDisposable
+	public sealed class ThreadContextSecurity : IDisposable
 	{
-		private IServiceProvider sp;
-		private string name;
-		private string categoryName;
+		private readonly SynchronizationContext synchronizationContext;
+		private bool rollbackContext = true;
 
-		private List<DEThread> threads = new List<DEThread>();
-
-		#region -- Ctor/Dtor --------------------------------------------------------------
-
-		public DEThreadPool(IServiceProvider sp, string categoryName, string name)
+		public ThreadContextSecurity()
 		{
-			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
-			this.categoryName = categoryName ?? throw new ArgumentNullException(nameof(categoryName)); ;
-			this.name = name ?? throw new ArgumentNullException(nameof(name));
+			this.synchronizationContext = SynchronizationContext.Current;
 		} // ctor
 
 		public void Dispose()
 		{
-			lock (threads)
-			{
-				while (threads.Count > 0)
-				{
-					threads[0].Dispose();
-					threads.RemoveAt(0);
-				}
-			}
+			if (rollbackContext)
+				SynchronizationContext.SetSynchronizationContext(synchronizationContext);
 		} // proc Dispose
 
-		#endregion
-
-		public int Count
-		{
-			get { lock (threads) return threads.Count; }
-			set
-			{
-				value = Math.Min(Math.Max(1, value), 1000);
-				lock (threads)
-				{
-					while (value < threads.Count) // Zerstöre Threads
-					{
-						threads[threads.Count - 1].Dispose();
-						threads.RemoveAt(threads.Count - 1);
-					}
-					while (value > threads.Count) // Erzeuge Worker
-					{
-						var currentName = name + threads.Count.ToString("000");
-						threads.Add(new DEThread(sp, currentName, null, categoryName));
-					}
-				}
-			}
-		} // prop Count
-	} // class DEThreadList
+		public void Discard()
+			=> rollbackContext = false;
+	} // class ThreadContextSecurity
 
 	#endregion
 
@@ -595,17 +616,31 @@ namespace TecWare.DE.Server
 
 	public static class Threading
 	{
+		/// <summary>Retrieve current context.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		public static T GetCurrentScope<T>() where T : DEScopeContext
+			=> SynchronizationContext.Current is T t ? t : null;
+
+		public static ThreadContextSecurity SecureCurrentContext()
+			=> new ThreadContextSecurity();
+
 		public static void AwaitTask(this Task task)
 		{
-			if (SynchronizationContext.Current is DEThreadContext c)
-				c.Thread.ProcessMessageLoop(task.GetAwaiter());
+			if (SynchronizationContext.Current is IDEThreadSource c)
+			{
+				var awaiter = task.GetAwaiter();
+				if (awaiter.IsCompleted)
+					return;
+				c.Thread.ProcessMessageLoop(awaiter);
+			}
 			else
 				task.Wait();
 		} // proc AwaitTask
 
 		public static T AwaitTask<T>(this Task<T> task)
 		{
-			if (SynchronizationContext.Current is DEThreadContext c)
+			if (SynchronizationContext.Current is IDEThreadSource c)
 			{
 				var awaiter = task.GetAwaiter();
 				c.Thread.ProcessMessageLoop(awaiter);

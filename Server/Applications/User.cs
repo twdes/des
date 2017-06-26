@@ -16,10 +16,31 @@
 using System;
 using System.Net;
 using System.Security.Principal;
+using System.Threading.Tasks;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Applications
 {
+	#region -- class DEUserNamePrincipal ------------------------------------------------
+
+	internal sealed class DEUserNamePrincipal : IPrincipal, IIdentity
+	{
+		private readonly string userName;
+
+		public DEUserNamePrincipal(string userName)
+			=> this.userName = userName ?? throw new ArgumentNullException(nameof(userName));
+
+		public IIdentity Identity => this;
+		public string Name => userName;
+		public string AuthenticationType => "basic";
+		public bool IsAuthenticated => false;
+
+		public bool IsInRole(string role)
+			=> false;
+	} // class DEUserNamePrincipal
+
+	#endregion
+
 	#region -- class DEUser -------------------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
@@ -112,21 +133,21 @@ namespace TecWare.DE.Server.Applications
 
 		#region -- Security ---------------------------------------------------------------
 
-		public IDEAuthentificatedUser Authentificate(IIdentity identity)
+		public Task<IDEAuthentificatedUser> AuthentificateAsync(IIdentity identity)
 		{
 			if (identity is WindowsIdentity)
 				if (identity.IsAuthenticated)
-					return new UserContext(this, identity);
+					return Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity));
 				else
 					return null;
 			else if (identity is HttpListenerBasicIdentity)
 				if (TestPassword(((HttpListenerBasicIdentity)identity).Password))
-					return new UserContext(this, identity);
+					return Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity));
 				else
 					return null;
 			else
 				return null;
-		} // func Authentificate
+		} // func AuthentificateAsync
 
 		private bool DemandToken(string securityToken)
 		{

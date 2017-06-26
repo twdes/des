@@ -58,14 +58,12 @@ namespace TecWare.DE.Server.Configuration
 			}
 			else if (attribute.TypeName == "EncodingType")
 			{
-				int codePage;
-
 				if (String.IsNullOrEmpty(attributeValue))
 					attributeValue = attribute.DefaultValue;
 
 				if (String.IsNullOrEmpty(attributeValue))
 					return Encoding.Default;
-				else if (int.TryParse(attributeValue, out codePage))
+				else if (Int32.TryParse(attributeValue, out var codePage))
 					return Encoding.GetEncoding(codePage);
 				else
 					return Encoding.GetEncoding(attributeValue);

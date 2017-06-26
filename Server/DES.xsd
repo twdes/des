@@ -356,12 +356,6 @@
 						</xs:annotation>
 					</xs:attribute>
 
-					<xs:attribute name="threads" type="xs:int" use="optional" default="10" >
-						<xs:annotation>
-							<xs:documentation>Number of HttpWorker-Threads to be generate (Default: 10, Min: 1, Max: 1000).</xs:documentation>
-						</xs:annotation>
-					</xs:attribute>
-
 					<xs:attribute name="encoding" type="EncodingType" use="optional" default="utf-8">
 						<xs:annotation>
 							<xs:documentation>Specifies the default encoding for the server.</xs:documentation>
@@ -447,12 +441,17 @@
 							<xs:documentation>Sets if it is possible to connect with the debug protocol (Default: true)</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
+					<xs:attribute name="debugEnvironment" type="ScriptList" use="optional">
+						<xs:annotation>
+							<xs:appinfo>Script list, that initializes a debug session.</xs:appinfo>
+						</xs:annotation>
+					</xs:attribute>
 				</xs:extension>
 			</xs:complexContent>
 		</xs:complexType>
 	</xs:element>
 
-	<xs:element name ="serverTcp">
+	<xs:element name="serverTcp">
 		<xs:annotation>
 			<xs:documentation>Initializes a general purpose tcp server.</xs:documentation>
 			<xs:appinfo>

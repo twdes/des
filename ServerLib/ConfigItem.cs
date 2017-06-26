@@ -630,14 +630,13 @@ namespace TecWare.DE.Server
 		/// <param name="config"></param>
 		protected virtual void OnBeginReadConfiguration(IDEConfigLoading config)
 		{
-			// Vergleiche die Skripte
-			var scriptList = config.ConfigNew.GetAttribute("script", null);
-
+			// check scripts, that will be loaded or removed
 			var loadIds = new List<string>();
 			var removeIds = new List<string>(from s in scripts select s.ScriptId);
-			if (!String.IsNullOrEmpty(scriptList))
+			var scriptList = config.ConfigNew.GetStrings("script", true);
+			if (scriptList != null)
 			{
-				foreach (var cur in scriptList.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+				foreach (var cur in scriptList)
 				{
 					var index = removeIds.FindIndex(c => String.Compare(c, cur, StringComparison.OrdinalIgnoreCase) == 0);
 					if (index != -1)
@@ -650,7 +649,7 @@ namespace TecWare.DE.Server
 			config.Tags.SetProperty("ScriptLoad", loadIds.ToArray());
 			config.Tags.SetProperty("ScriptRemove", removeIds.ToArray());
 
-			// Update des Sicherheitstokens
+			// Update security token
 			securityToken = config.ConfigNew.GetAttribute("security", null);
 
 			// load extensions
@@ -1006,7 +1005,7 @@ namespace TecWare.DE.Server
 
 		#region -- Process Request/Action -------------------------------------------------
 
-		internal void UnsafeInvokeHttpAction(string sAction, IDEContext r)
+		internal void UnsafeInvokeHttpAction(string sAction, IDEWebRequestContext r)
 		{
 			var returnValue = InvokeAction(sAction, r);
 
@@ -1061,7 +1060,7 @@ namespace TecWare.DE.Server
 		/// <param name="r"></param>
 		/// <param name="sLocalPath"></param>
 		/// <returns></returns>
-		internal bool UnsafeProcessRequest(IDEContext r)
+		internal bool UnsafeProcessRequest(IDEWebRequestContext r)
 		{
 			foreach (var w in from c in this.UnsafeChildren
 												let cHttp = c as HttpWorker
@@ -1092,7 +1091,7 @@ namespace TecWare.DE.Server
 		/// <summary>Wird aufgerufen, wenn eine Http-Anfrage am Knoten verarbeitet werden soll.</summary>
 		/// <param name="r">Http-Response</param>
 		/// <returns><c>true</c>, wenn die Anfrage beantwortet wurde.</returns>
-		protected virtual bool OnProcessRequest(IDEContext r)
+		protected virtual bool OnProcessRequest(IDEWebRequestContext r)
 		{
 			return false;
 		} // func OnProcessRequest

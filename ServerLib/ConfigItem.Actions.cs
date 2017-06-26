@@ -34,7 +34,7 @@ namespace TecWare.DE.Server
 	/// <param name="item"></param>
 	/// <param name="args"></param>
 	/// <returns></returns>
-	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEContext context);
+	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEWebRequestContext context);
 
 	#endregion
 
@@ -56,12 +56,12 @@ namespace TecWare.DE.Server
 			this.securityToken = securityToken;
 			this.description = description;
 			this.action = action;
-			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEContext));
+			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEWebRequestContext));
 			this.isSafeCall = isNativeCall ? false : isSafeCall;
 			this.methodDescription = methodDescription;
 		} // ctor
 
-		public object Invoke(DEConfigItem item, IDEContext context)
+		public object Invoke(DEConfigItem item, IDEWebRequestContext context)
 		{
 			if (action != null)
 				if (isNativeCall)
@@ -352,7 +352,7 @@ namespace TecWare.DE.Server
 		/// <param name="actionName">Name der Aktion</param>
 		/// <param name="context">Parameter, die übergeben werden sollen.</param>
 		/// <returns>Rückgabe</returns>
-		public object InvokeAction(string actionName, IDEContext context)
+		public object InvokeAction(string actionName, IDEWebRequestContext context)
 		{
 			// Suche die Action im Cache
 			DEConfigAction a;
@@ -468,7 +468,7 @@ namespace TecWare.DE.Server
 		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate @delegate = null, Func<int, object> alternateParameterDescription = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
-			var argCaller = Expression.Parameter(typeof(IDEContext), "#arg");
+			var argCaller = Expression.Parameter(typeof(IDEWebRequestContext), "#arg");
 
 			ParameterInfo[] parameterInfo;
 			var parameterOffset = 0;
@@ -552,12 +552,12 @@ namespace TecWare.DE.Server
 				}
 				else if (typeCode == TypeCode.Object && !typeTo.IsValueType) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
-					if (typeTo == typeof(IDEContext))
+					if (typeTo == typeof(IDEWebRequestContext))
 					{
 						exprGetParameter = Expression.Condition(
-							Expression.TypeIs(arg, typeof(IDEContext)),
-							Expression.Convert(arg, typeof(IDEContext)),
-							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEContext))
+							Expression.TypeIs(arg, typeof(IDEWebRequestContext)),
+							Expression.Convert(arg, typeof(IDEWebRequestContext)),
+							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEWebRequestContext))
 						);
 					}
 					else if (typeTo.IsAssignableFrom(GetType()))

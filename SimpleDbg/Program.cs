@@ -184,17 +184,17 @@ namespace TecWare.DE.Server
 
 			// should be post in the thread context
 			Task.Run(() => session.RunProtocolAsync()).ContinueWith(
-				t=>
+				t =>
 				{
 					try
 					{
 						t.Wait();
 					}
-					catch(Exception e)
+					catch (Exception e)
 					{
 						view.WriteError(e.ToString());
 					}
-				}
+				}, TaskContinuationOptions.ExecuteSynchronously
 			).GetAwaiter();
 
 			// start request loop

@@ -16,12 +16,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
+using System.Globalization;
 using System.Security.Principal;
-using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using TecWare.DE.Server.Configuration;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
@@ -46,7 +47,7 @@ namespace TecWare.DE.Server
 		/// <summary>Erzeugt einen authentifizierten Nutzer.</summary>
 		/// <param name="identity">Übergibt die originale Identität der Anmeldung mit dessen Hilfe die Security-Tokens geprüft werden können.</param>
 		/// <returns>Context für diesen Nutzer.</returns>
-		IDEAuthentificatedUser Authentificate(IIdentity identity);
+		Task<IDEAuthentificatedUser> AuthentificateAsync(IIdentity identity);
 
 		/// <summary>Name des Nutzers</summary>
 		string Name { get; }
@@ -149,10 +150,10 @@ namespace TecWare.DE.Server
 		/// <summary>Entfernt den Nutzer aus dem HttpServer.</summary>
 		/// <param name="user"></param>
 		void UnregisterUser(IDEUser user);
-		/// <summary>Ermittelt das Server-Principal für den angegebenen Nutzer.</summary>
-		/// <param name="user"></param>
-		/// <returns></returns>
-		IDEAuthentificatedUser AuthentificateUser(IIdentity user);
+		/// <summary>Create authentificated user.</summary>
+		/// <param name="user">Identity of the user.</param>
+		/// <returns>Context of the user.</returns>
+		Task<IDEAuthentificatedUser> AuthentificateUserAsync(IIdentity user);
 		/// <summary>Erzeugt aus der Token-Zeichenfolge eine Tokenliste.</summary>
 		/// <param name="securityTokens">Token-Zeichenfolge</param>
 		/// <returns>Security-Token-Array</returns>
@@ -168,6 +169,160 @@ namespace TecWare.DE.Server
 		/// <summary>Version der SecurityTokens</summary>
 		int SecurityGroupsVersion { get; }
 	} // interface IDEServer
+
+	#endregion
+
+	#region -- interface IDECommonContext -----------------------------------------------
+
+	///////////////////////////////////////////////////////////////////////////////
+	/// <summary></summary>
+	public interface IDECommonContext : IPropertyReadOnlyDictionary, IDisposable
+	{
+		/// <summary>Accepted language</summary>
+		CultureInfo CultureInfo { get; }
+
+		/// <summary>Access to the user context.</summary>
+		T GetUser<T>() where T : class;
+
+		/// <summary>Access to the base server.</summary>
+		IDEServer Server { get; }
+	} // interface IDECommonContext
+
+	#endregion
+
+	#region -- class DETransactionContext -----------------------------------------------
+
+	public class DETransactionContext : DEScopeContext, IDECommonContext
+	{
+		private readonly List<Func<Task>> commitActions = new List<Func<Task>>();
+		private readonly List<Func<Task>> rollbackActions = new List<Func<Task>>();
+		private readonly List<IDisposable> autoDispose = new List<IDisposable>();
+
+		private readonly IServiceProvider sp;
+		private readonly IDEServer server;
+		private readonly bool useAuthentification;
+		private IDEAuthentificatedUser user = null;
+
+		private bool? isCommitted = null;
+
+		#region -- Ctor/Dtor ------------------------------------------------------------
+
+		public DETransactionContext(IServiceProvider sp, bool useAuthentification)
+			: base()
+		{
+			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
+			this.server = sp.GetService<IDEServer>(true);
+			this.useAuthentification = useAuthentification;
+		} // ctor
+
+		public override SynchronizationContext CreateCopy()
+			=> this; // reference!
+
+		protected override void Dispose(bool disposing)
+		{
+			if (!isCommitted.HasValue)
+				RollbackAsync().AwaitTask();
+
+			// dispose resources
+			foreach (var dispose in autoDispose)
+				dispose.Dispose();
+			user?.Dispose();
+
+			base.Dispose(disposing);
+		} // proc Dispose
+
+		private async Task RunActionsAsync(IEnumerable<Func<Task>> actions)
+		{
+			foreach (var cur in actions)
+				await cur();
+		} // proc RunActions
+
+		public Task CommitAsync()
+		{
+			isCommitted = true;
+			return RunActionsAsync(commitActions);
+		} // proc Commit
+
+		public Task RollbackAsync()
+		{
+			isCommitted = false;
+			return RunActionsAsync(rollbackActions);
+		} // proc Rollback
+
+		#endregion
+
+		#region -- User -------------------------------------------------------------------
+
+		/// <summary>Change the current user on the context, to a server user. Is the given user null, the result is also null.</summary>
+		public async Task AuthentificateUserAsync(IPrincipal authentificateUser)
+		{
+			if (authentificateUser != null)
+			{
+				user = await server.AuthentificateUserAsync(authentificateUser.Identity);
+				if (user == null)
+					throw CreateAuthorizationException(String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Identity.Name));
+			}
+		} // proc AuthentificateUser
+
+		public T GetUser<T>()
+			where T : class
+		{
+			if (user == null)
+				throw CreateAuthorizationException("Authorization expected.");
+
+			var r = user as T;
+			if (r == null)
+				throw new NotImplementedException(String.Format("User class does not implement '{0}.", typeof(T).FullName));
+
+			return r;
+		} // func GetUser
+
+		#endregion
+
+		#region -- Security ---------------------------------------------------------------
+
+		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
+		/// <param name="securityToken">Zu prüfender Token.</param>
+		public void DemandToken(string securityToken)
+		{
+			if (!useAuthentification || String.IsNullOrEmpty(securityToken))
+				return;
+
+			if (!TryDemandToken(securityToken))
+				throw CreateAuthorizationException(String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityToken));
+		} // proc DemandToken
+
+		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
+		/// <param name="securityToken">Zu prüfender Token.</param>
+		/// <returns><c>true</c>, wenn der Token erlaubt ist.</returns>
+		public bool TryDemandToken(string securityToken)
+		{
+			if (!useAuthentification)
+				return true;
+			if (String.IsNullOrEmpty(securityToken))
+				return true;
+
+			return User != null && User.IsInRole(securityToken);
+		} // proc TryDemandToken
+
+		public virtual Exception CreateAuthorizationException(string message) // force user, if no user is given
+			=> new ArgumentException(message);
+
+		#endregion
+
+		public virtual bool TryGetProperty(string name, out object value)
+		{
+			value = null;
+			return false;
+		} // func TryGetProperty
+
+		/// <summary>Server</summary>
+		public IDEServer Server => server;
+		/// <summary>Current user</summary>
+		public IDEAuthentificatedUser User => user;
+		/// <summary>Current culture info</summary>
+		public virtual CultureInfo CultureInfo => CultureInfo.CurrentUICulture;
+	} // class DETransactionContext
 
 	#endregion
 

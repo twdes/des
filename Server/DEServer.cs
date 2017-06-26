@@ -32,6 +32,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;
+using TecWare.DE.Server.Applications;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
@@ -485,7 +486,7 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("dumpload", SecurityToken = SecuritySys),
 		Description("Sends the dump to the client.")
 		]
-		private void HttpDumpLoadAction(IDEContext r, int id = -1)
+		private void HttpDumpLoadAction(IDEWebRequestContext r, int id = -1)
 		{
 			// get the dump file
 			DumpFileInfo di = null;
@@ -513,7 +514,7 @@ namespace TecWare.DE.Server
 
 		#region -- OnProcessRequest -------------------------------------------------------
 
-		protected override bool OnProcessRequest(IDEContext r)
+		protected override bool OnProcessRequest(IDEWebRequestContext r)
 		{
 			if (String.Compare(r.RelativeSubPath, "favicon.ico", true) == 0)
 			{
@@ -831,23 +832,75 @@ namespace TecWare.DE.Server
 		{
 			lock (users)
 			{
-				IDEUser tmp;
-				if (users.TryGetValue(user.Name, out tmp) && tmp == user)
+				if (users.TryGetValue(user.Name, out var tmp) && tmp == user)
 					users.Remove(user.Name);
 			}
 		} // proc UnregisterUser
 
-		public IDEAuthentificatedUser AuthentificateUser(IIdentity user)
+		public Task<IDEAuthentificatedUser> AuthentificateUserAsync(IIdentity user)
 		{
 			lock (users)
 			{
-				IDEUser u;
-				if (users.TryGetValue(user.Name, out u))
-					return u.Authentificate(user);
+				if (users.TryGetValue(user.Name, out var u))
+					return u.AuthentificateAsync(user);
 				else
 					return null;
 			}
 		} // func AuthentificateUser
+
+		[LuaMember("SetScope")]
+		public DETransactionContext LuaSetSope(string userName = null)
+		{
+			// destroy current scope
+			var current = Threading.GetCurrentScope<DETransactionContext>();
+			if (current != null)
+				current.Dispose();
+
+			// create a new
+			SetUserTransactionContextAsync(userName).AwaitTask();
+
+			return Threading.GetCurrentScope<DETransactionContext>();
+		} // proc LuaSetScope
+
+		[LuaMember("GetScope")]
+		public DETransactionContext LuaGetCurrentScope()
+		{
+			var current = Threading.GetCurrentScope<DETransactionContext>();
+			if (current == null)
+				LuaSetSope();
+			return Threading.GetCurrentScope<DETransactionContext>() ?? throw new ArgumentException("No scope created.");
+		} // func LuaGetCurrentScope
+
+		[LuaMember("EndScope")]
+		public DETransactionContext LuaEndScope(bool commit, bool newScope)
+		{
+			var current = Threading.GetCurrentScope<DETransactionContext>();
+			IIdentity currentUser = null;
+			if (current != null)
+			{
+				if (commit)
+					current.CommitAsync().AwaitTask();
+				else
+					current.RollbackAsync().AwaitTask();
+
+				currentUser = current.User?.Identity;
+			}
+			return newScope ? LuaSetSope(currentUser?.Name) : null;
+		} // func LuaEndScope
+
+		public Task SetUserTransactionContextAsync(string userName = null)
+			=> SetUserTransactionContextAsync(userName != null ? new DEUserNamePrincipal(userName) : null);
+
+		public async Task SetUserTransactionContextAsync(IPrincipal user = null)
+		{
+			using (var currentContext = Threading.SecureCurrentContext())
+			{
+				var newContext = new DETransactionContext(this, user != null);
+				if (user != null)
+					await newContext.AuthentificateUserAsync(user);
+				currentContext.Discard();
+			}
+		} // proc SetUserTransactionContext
 
 		#endregion
 

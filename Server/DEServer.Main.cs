@@ -38,7 +38,7 @@ namespace TecWare.DE.Server
 	{
 		private const string servicePrefix = "Tw_DES_";
 
-		#region -- interface IServiceLog --------------------------------------------------
+		#region -- interface IServiceLog ------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -50,7 +50,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class Service ----------------------------------------------------------
+		#region -- class Service --------------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Service-Wrapper</summary>
@@ -115,7 +115,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class ConsoleLog -------------------------------------------------------
+		#region -- class ConsoleLog -----------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -190,7 +190,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class ServerOptions ----------------------------------------------------
+		#region -- class ServerOptions --------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -258,7 +258,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class RunOptions -------------------------------------------------------
+		#region -- class RunOptions -----------------------------------------------------
 
 		[Verb("run", HelpText = "Executes a configuration.")]
 		private sealed class RunOptions : ServerOptions
@@ -278,7 +278,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class RegisterOptions --------------------------------------------------
+		#region -- class RegisterOptions ------------------------------------------------
 
 		[Verb("register", HelpText = "Installs a configuration as a service.")]
 		private class RegisterOptions : ServerOptions
@@ -287,7 +287,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class UnregisterOptions ------------------------------------------------
+		#region -- class UnregisterOptions ----------------------------------------------
 
 		[Verb("unregister", HelpText = "Uninstalls the configuration from the service controll manager.")]
 		private sealed class UnregisterOptions
@@ -300,7 +300,7 @@ namespace TecWare.DE.Server
 
 		private IServiceLog serviceLog = null;
 
-		#region -- LogMsg methods ---------------------------------------------------------
+		#region -- LogMsg methods -------------------------------------------------------
 
 		/// <summary>Writes a exception to the event protocol.</summary>
 		/// <param name="e"></param>
@@ -328,7 +328,7 @@ namespace TecWare.DE.Server
 
 		// -- Static --------------------------------------------------------------
 
-		#region -- Service registration ---------------------------------------------------
+		#region -- Service registration -------------------------------------------------
 
 		private static void RegisterService(string name, string commandLine)
 		{
@@ -441,7 +441,10 @@ namespace TecWare.DE.Server
 			// load debugger implementation
 			var simpleDbgAssembly = ResolveAssembly("DESimpleDbg", typeof(DEServer).Assembly);
 			if (simpleDbgAssembly == null)
+			{
+				LogMsg(EventLogEntryType.Warning, "Could not locate DESimpleDbg.exe.");
 				return false;
+			}
 
 			var debuggerProgram = simpleDbgAssembly.GetType("TecWare.DE.Server.Program", true);
 
@@ -453,7 +456,10 @@ namespace TecWare.DE.Server
 			// check debugging
 			var luaEngine = this.GetService<IDELuaEngine>(true);
 			if (!luaEngine.IsDebugAllowed)
+			{
+				LogMsg(EventLogEntryType.Warning, "Debugging is deactivated.");
 				return false;
+			}
 
 			var http = this.GetService<IDEHttpServer>(true);
 			var uri = new Uri(http.DefaultBaseUri, ((IDEConfigItem)luaEngine).Name);

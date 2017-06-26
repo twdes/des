@@ -40,7 +40,7 @@ namespace TecWare.DE.Server
 		/// <param name="controller">Liste</param>
 		/// <param name="startAt">Übergebener Startwert.</param>
 		/// <param name="count">Anzahl der Elemente die zurückgeliefert werden sollen</param>
-		void WriteList(IDEContext r, IDEListController controller, int startAt, int count);
+		void WriteList(IDEWebRequestContext r, IDEListController controller, int startAt, int count);
 	} // interface IDEListService
 
 	#endregion
@@ -891,7 +891,7 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("listget"),
 		Description("Gibt den Inhalt der angegebenen Liste zurück. (optional: desc, template)")
 		]
-		private void HttpListGetAction(IDEContext r, string id, int start = 0, int count = Int32.MaxValue)
+		private void HttpListGetAction(IDEWebRequestContext r, string id, int start = 0, int count = Int32.MaxValue)
 		{
 			// Suche den passenden Controller
 			var controller = FindController(id);
