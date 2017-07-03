@@ -21,6 +21,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;
@@ -75,53 +76,52 @@ namespace TecWare.DE.Server.Http
 	/// <summary></summary>
 	public interface IDEWebSocketProtocol
 	{
-		/// <summary></summary>
+		/// <summary>Run the web-socket code. The current context is still the dispatcher. IDEWebSocketScope is not setted.</summary>
 		/// <param name="webSocket"></param>
-		/// <returns></returns>
-		bool AcceptWebSocket(IDEWebSocketContext webSocket);
+		Task ExecuteWebSocketAsync(IDEWebSocketScope webSocket);
+
 		/// <summary>Basepath for the protocol within the server.</summary>
-		[DEListTypePropertyAttribute("@base")]
+		[DEListTypeProperty("@base")]
 		string BasePath { get; }
 		/// <summary>Name of the protocol.</summary>
-		[DEListTypePropertyAttribute("@protocol")]
+		[DEListTypeProperty("@protocol")]
 		string Protocol { get; }
 		/// <summary></summary>
-		[DEListTypePropertyAttribute("@security")]
+		[DEListTypeProperty("@security")]
 		string SecurityToken { get; }
 	} // interface IDEWebSocketProtocol
 
 	#endregion
 
-	#region -- interface IDEWebContext --------------------------------------------------
+	#region -- interface IDEWebScope ----------------------------------------------------
 
-	public interface IDEWebContext : IDECommonContext
+	/// <summary></summary>
+	public interface IDEWebScope : IDECommonScope
 	{
 		/// <summary>Access to the http server.</summary>
 		IDEHttpServer Http { get; }
-	} // interface IDEWebContext
+	} // interface IDEWebScope
 
 	#endregion
 
-	#region -- interface IDEWebSocketContext --------------------------------------------
+	#region -- interface IDEWebSocketScope ----------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public interface IDEWebSocketContext : IDEWebContext
+	public interface IDEWebSocketScope : IDEWebScope
 	{
 		/// <summary>Access to the websocket.</summary>
 		WebSocket WebSocket { get; }
 
 		/// <summary>The full request path.</summary>
 		string AbsolutePath { get; }
-	} // interface IDEWebSocketContext
+	} // interface IDEWebSocketScope
 
 	#endregion
 
-	#region -- interface IDEContext -----------------------------------------------------
+	#region -- interface IDEWebRequestScope ---------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public interface IDEWebRequestContext : IDEWebContext
+	public interface IDEWebRequestScope : IDEWebScope
 	{
 		/// <summary>Starts the logging.</summary>
 		void LogStart();
@@ -139,18 +139,6 @@ namespace TecWare.DE.Server.Http
 		/// <summary></summary>
 		/// <param name="sp"></param>
 		void ExitSubPath(IServiceProvider sp);
-
-		/// <summary>Check, if the user has the access token.</summary>
-		/// <param name="securityToken">The access token.</param>
-		void DemandToken(string securityToken);
-		/// <summary></summary>
-		/// <param name="securityToken"></param>
-		/// <returns></returns>
-		bool TryDemandToken(string securityToken);
-		/// <summary></summary>
-		/// <param name="securityText"></param>
-		/// <returns></returns>
-		Exception CreateAuthorizationException(string securityText);
 
 		/// <summary>Mime-types they are accepted from the client.</summary>
 		string[] AcceptedTypes { get; }
@@ -208,7 +196,7 @@ namespace TecWare.DE.Server.Http
 		string RelativeSubPath { get; }
 		/// <summary>Name of the current path position.</summary>
 		string RelativeSubName { get; }
-	} // interface IDEContext
+	} // interface IDEWebRequestScope
 
 	#endregion
 
@@ -216,13 +204,13 @@ namespace TecWare.DE.Server.Http
 
 	internal sealed class LuaHttpTable : LuaTable, IDisposable
 	{
-		private IDEWebRequestContext context;
+		private IDEWebRequestScope context;
 		private string contentType;
 		private Stream streamOutput = null;
 		private TextWriter textOutput = null;
 		private Encoding encoding = null;
 
-		public LuaHttpTable(IDEWebRequestContext context, string contentType)
+		public LuaHttpTable(IDEWebRequestScope context, string contentType)
 		{
 			this.context = context;
 			this.contentType = contentType;
@@ -289,7 +277,7 @@ namespace TecWare.DE.Server.Http
 		[LuaMember("ContentType")]
 		public string ContentType { get { return contentType; } set { } }
 		[LuaMember("Context")]
-		public IDEWebRequestContext Context { get { return context; } set { } }
+		public IDEWebRequestScope Context { get { return context; } set { } }
 		[LuaMember("out")]
 		public object Output { get { return (object)streamOutput ?? textOutput; } set { } }
 	} // class LuaHttpTable
@@ -477,7 +465,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="lastModified"></param>
 		/// <returns></returns>
-		public static IDEWebRequestContext SetLastModified(this IDEWebRequestContext context, DateTime lastModified)
+		public static IDEWebRequestScope SetLastModified(this IDEWebRequestScope context, DateTime lastModified)
 		{
 			if (lastModified.Kind != DateTimeKind.Utc)
 				lastModified = lastModified.ToUniversalTime();
@@ -490,7 +478,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="fileName"></param>
 		/// <returns></returns>
-		public static IDEWebRequestContext SetInlineFileName(this IDEWebRequestContext context, string fileName)
+		public static IDEWebRequestScope SetInlineFileName(this IDEWebRequestScope context, string fileName)
 		{
 			context.OutputHeaders["Content-Disposition"] = $"inline; filename = \"{fileName}\"";
 			return context;
@@ -500,7 +488,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="fileName"></param>
 		/// <returns></returns>
-		public static IDEWebRequestContext SetAttachment(this IDEWebRequestContext context, string fileName)
+		public static IDEWebRequestScope SetAttachment(this IDEWebRequestScope context, string fileName)
 		{
 			context.OutputHeaders["Content-Disposition"] = $"attachment; filename = \"{fileName}\"";
 			return context;
@@ -514,7 +502,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="value"></param>
 		/// <param name="contentType"></param>
-		public static void WriteText(this IDEWebRequestContext context, string value, string contentType = MimeTypes.Text.Plain, Encoding encoding = null)
+		public static void WriteText(this IDEWebRequestScope context, string value, string contentType = MimeTypes.Text.Plain, Encoding encoding = null)
 		{
 			if (encoding == null)
 				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
@@ -525,7 +513,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="value"></param>
 		/// <param name="contentType"></param>
-		public static void WriteBytes(this IDEWebRequestContext context, byte[] value, string contentType = MimeTypes.Application.OctetStream)
+		public static void WriteBytes(this IDEWebRequestScope context, byte[] value, string contentType = MimeTypes.Application.OctetStream)
 		{
 			using (var dst = context.GetOutputStream(contentType, value.Length))
 				dst?.Write(value, 0, value.Length);
@@ -535,7 +523,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="stream"></param>
 		/// <param name="contentType"></param>
-		public static void WriteStream(this IDEWebRequestContext context, Stream stream, string contentType = MimeTypes.Application.OctetStream)
+		public static void WriteStream(this IDEWebRequestScope context, Stream stream, string contentType = MimeTypes.Application.OctetStream)
 		{
 			var length = stream.CanSeek ? stream.Length : -1L;
 			using (var dst = context.GetOutputStream(contentType, length))
@@ -553,14 +541,14 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="fileName"></param>
 		/// <param name="contentType"></param>
-		public static void WriteFile(this IDEWebRequestContext context, string fileName, string contentType = null)
+		public static void WriteFile(this IDEWebRequestScope context, string fileName, string contentType = null)
 			=> WriteFile(context, new FileInfo(fileName), contentType);
 
 		/// <summary>Writes the file to the output.</summary>
 		/// <param name="context"></param>
 		/// <param name="fi"></param>
 		/// <param name="contentType"></param>
-		public static void WriteFile(this IDEWebRequestContext context, FileInfo fi, string contentType = null)
+		public static void WriteFile(this IDEWebRequestScope context, FileInfo fi, string contentType = null)
 		{
 			// set last modified
 			SetLastModified(context, fi.LastWriteTimeUtc);
@@ -583,7 +571,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="type"></param>
 		/// <param name="resourceName"></param>
 		/// <param name="contentType"></param>
-		public static void WriteResource(this IDEWebRequestContext context, Type type, string resourceName, string contentType = null)
+		public static void WriteResource(this IDEWebRequestScope context, Type type, string resourceName, string contentType = null)
 		{
 			if (String.IsNullOrEmpty(resourceName))
 				throw new ArgumentNullException("resourceName");
@@ -597,7 +585,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="assembly"></param>
 		/// <param name="resourceName"></param>
 		/// <param name="contentType"></param>
-		public static void WriteResource(this IDEWebRequestContext context, Assembly assembly, string resourceName, string contentType = null)
+		public static void WriteResource(this IDEWebRequestScope context, Assembly assembly, string resourceName, string contentType = null)
 		{
 			// Ermittle den ContentType
 			if (contentType == null)
@@ -614,7 +602,7 @@ namespace TecWare.DE.Server.Http
 				assembly.FullName.Replace(" ", "") + "\\" + resourceName, contentType);
 		} // proc WriteResource
 
-		private static object CreateScript(IDEWebRequestContext context, string cacheId, Func<TextReader> createSource)
+		private static object CreateScript(IDEWebRequestScope context, string cacheId, Func<TextReader> createSource)
 		{
 			var p = cacheId.LastIndexOf('\\');
 			var luaEngine = context.Server.GetService<IDELuaEngine>(true);
@@ -624,7 +612,7 @@ namespace TecWare.DE.Server.Http
 			);
 		} // func CreateScript
 
-		public static void WriteContent(this IDEWebRequestContext context, Func<Stream> createSource, string cacheId, string contentType)
+		public static void WriteContent(this IDEWebRequestScope context, Func<Stream> createSource, string cacheId, string contentType)
 		{
 			if (cacheId == null)
 				throw new ArgumentNullException("cacheId");
@@ -648,8 +636,7 @@ namespace TecWare.DE.Server.Http
 							o = CreateScript(context, cacheId, () => Procs.OpenStreamReader(src, Encoding.Default));
 						else if (isHtml)
 						{
-							bool isPlainText;
-							var content = "otext('text/html');" + ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out isPlainText);
+							var content = "otext('text/html');" + ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out var isPlainText);
 							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader(content));
 						}
 						else if (isText)
@@ -699,7 +686,7 @@ namespace TecWare.DE.Server.Http
 		/// <summary>Writes the text as an html page.</summary>
 		/// <param name="context"></param>
 		/// <param name="value"></param>
-		public static void WriteTextAsHtml(this IDEWebRequestContext context, string value, string title = "page")
+		public static void WriteTextAsHtml(this IDEWebRequestScope context, string value, string title = "page")
 		{
 			WriteText(context,
 				String.Join(Environment.NewLine,
@@ -716,7 +703,7 @@ namespace TecWare.DE.Server.Http
 			);
 		} // proc WriteTextAsHtml
 
-		public static void WriteXml(this IDEWebRequestContext context, XElement value, string contentType = MimeTypes.Text.Xml)
+		public static void WriteXml(this IDEWebRequestScope context, XElement value, string contentType = MimeTypes.Text.Xml)
 		{
 			WriteXml(context,
 				new XDocument(
@@ -725,13 +712,13 @@ namespace TecWare.DE.Server.Http
 				), contentType);
 		} // proc WriteXml
 
-		public static void WriteXml(this IDEWebRequestContext context, XDocument value, string contentType = MimeTypes.Text.Xml)
+		public static void WriteXml(this IDEWebRequestScope context, XDocument value, string contentType = MimeTypes.Text.Xml)
 		{
 			using (var tw = context.GetOutputTextWriter(contentType, context.Http.DefaultEncoding, -1))
 				value.Save(tw);
 		} // proc WriteXml
 
-		public static void WriteObject(this IDEWebRequestContext context, object value, string contentType = null)
+		public static void WriteObject(this IDEWebRequestScope context, object value, string contentType = null)
 		{
 			if (value == null)
 				throw new ArgumentNullException("value");
@@ -755,7 +742,7 @@ namespace TecWare.DE.Server.Http
 
 		#region -- WriteSafeCall ----------------------------------------------------------
 
-		public static void WriteSafeCall(this IDEWebRequestContext r, XElement x, string successMessage = null)
+		public static void WriteSafeCall(this IDEWebRequestScope r, XElement x, string successMessage = null)
 		{
 			if (x == null)
 				x = new XElement("return");
@@ -765,14 +752,14 @@ namespace TecWare.DE.Server.Http
 			WriteXml(r, x);
 		} // proc WriteSafeCall
 
-		public static void WriteSafeCall(this IDEWebRequestContext r, string errorMessage)
+		public static void WriteSafeCall(this IDEWebRequestScope r, string errorMessage)
 		{
 			WriteXml(r,
 				DEConfigItem.CreateDefaultXmlReturn(false, errorMessage)
 			);
 		} // proc WriteSafeCall
 
-		public static void WriteSafeCall(this IDEWebRequestContext r, Exception e)
+		public static void WriteSafeCall(this IDEWebRequestScope r, Exception e)
 		{
 			WriteSafeCall(r, e.Message);
 		} // proc WriteSafeCall

@@ -123,68 +123,59 @@ namespace TecWare.DE.Server
 		private sealed class EventSession : IDisposable
 		{
 			private readonly DEServer server;
-			private readonly IDEWebSocketContext context;
+			private readonly IDEWebSocketScope context;
+			private readonly SynchronizationContext synchronizationContext;
 
 			#region -- Ctor/Dtor ------------------------------------------------------------
 
-			public EventSession(DEServer server, IDEWebSocketContext context)
+			public EventSession(DEServer server, IDEWebSocketScope context)
 			{
 				this.server = server;
 				this.context = context;
+				this.synchronizationContext = SynchronizationContext.Current ?? throw new ArgumentNullException("SynchronizationContext.Current");
 
 				server.AddEventSession(this);
 			} // ctor
 
 			public void Dispose()
 			{
-				// close if still open
-				if (context.WebSocket.State == WebSocketState.Open)
-					Task.Run(() => CloseAsync(CancellationToken.None)).Wait(1000); // give 1s to close
-				
-				// dispose the context
-				context.Dispose();
-
 				// remove session
 				server.RemoveEventSession(this);
 			} // proc Dispose
-
-			public async Task DisposeAsync(CancellationToken cancellationToken)
-			{
-				await CloseAsync(cancellationToken);
-				await Task.Yield(); // switch context (reason is the list locking)
-				Dispose();
-			} // proc DisposeAsync
-
-			public async Task CloseAsync(CancellationToken cancellationToken)
+			
+			public Task CloseAsync(CancellationToken cancellationToken)
 			{
 				if (Socket.State == WebSocketState.Open)
-					await context.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close.", cancellationToken);
+					return context.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Close.", cancellationToken);
+				else
+					return Task.CompletedTask;
 			} // proc CloseAsync
 
 			#endregion
 
-			public async Task NotifyAsync(string path, string eventId, string eventLine, CancellationToken cancellationToken)
+			private void ExecuteNotify(object state)
 			{
-				try
-				{
-					// check if websocket still alive
-					if (Socket.State != WebSocketState.Open)
-					{
-						await DisposeAsync(cancellationToken);
-						return;
-					}
+				var eventLine = (string)state;
 
-					// check if the path is requested
-					if (context.AbsolutePath.Length > 0 && !path.StartsWith(context.AbsolutePath, StringComparison.OrdinalIgnoreCase))
-						return;
+				var segment = new ArraySegment<byte>(context.Http.DefaultEncoding.GetBytes(eventLine));
+				Socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None)
+					.ContinueWith(
+						t => server.Log.Warn("Event Socket notify failed.", t.Exception), 
+						TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously
+					);
+			} // proc ExecuteNotify
 
-					var segment = new ArraySegment<byte>(context.Http.DefaultEncoding.GetBytes(eventLine));
-					await Socket.SendAsync(segment, WebSocketMessageType.Text, true, cancellationToken);
-				}
-				catch (Exception e)
-				{
-					server.Log.Warn("Event Socket notify failed.", e);
-				}
+			public void PostNotify(string path, string eventId, string eventLine, CancellationToken cancellationToken)
+			{
+				// check if websocket still alive
+				if (Socket.State != WebSocketState.Open)
+					return;
+
+				// check if the path is requested
+				if (context.AbsolutePath.Length > 0 && !path.StartsWith(context.AbsolutePath, StringComparison.OrdinalIgnoreCase))
+					return;
+
+				synchronizationContext.Post(ExecuteNotify, eventLine);
 			} // proc NotifyAsync
 
 			public WebSocket Socket => context.WebSocket;
@@ -215,7 +206,9 @@ namespace TecWare.DE.Server
 			while (eventSessions.Count > 0)
 			{
 				var es = eventSessions[eventSessions.Count - 1];
-				closeTasks.Add(es.DisposeAsync(CancellationToken.None));
+				var t = es.CloseAsync(CancellationToken.None);
+				if (!t.IsCompleted)
+					closeTasks.Add(t);
 				eventSessions.Remove(es);
 			}
 			if (closeTasks.Count > 0)
@@ -290,14 +283,25 @@ namespace TecWare.DE.Server
 
 		#region -- WebSocket Events -------------------------------------------------------
 
-		public bool AcceptWebSocket(IDEWebSocketContext webSocket)
+		public async Task ExecuteWebSocketAsync(IDEWebSocketScope webSocket)
 		{
 			if (eventSessionsClosing)
-				return false;
-			else
+				return;
+
+			var eventSession = new EventSession(this, webSocket);
+			try
 			{
-				new EventSession(this, webSocket);
-				return true;
+				var b = new byte[1024];
+				var ws = webSocket.WebSocket;
+				while (ws.State == WebSocketState.Open)
+				{
+					var segment = new ArraySegment<byte>(b);
+					await ws.ReceiveAsync(segment, CancellationToken.None);
+				}
+			}
+			catch (Exception e)
+			{
+				Log.Warn("Event Socket failed.", e);
 			}
 		} // func AcceptWebSocket
 
@@ -305,17 +309,13 @@ namespace TecWare.DE.Server
 		{
 			// prepare line
 			var eventLine = xEvent.ToString(SaveOptions.DisableFormatting);
-
-			var notifyTasks = new List<Task>();
-
+			
 			using (eventSessions.EnterReadLock())
 			{
 				// a call to notify can cause a remove of this session, this will be done in a different thread
 				foreach (var es in eventSessions.List.Cast<EventSession>())
-					notifyTasks.Add(es.NotifyAsync(path, eventId, eventLine, CancellationToken.None));
+					es.PostNotify(path, eventId, eventLine, CancellationToken.None);
 			}
-
-			Task.Run(() => Task.WhenAll(notifyTasks));
 		} // proc FireEventOnSocket
 
 		string IDEWebSocketProtocol.Protocol => "des_event";
@@ -493,7 +493,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		void IDEListService.WriteList(IDEWebRequestContext r, IDEListController controller, int startAt, int count)
+		void IDEListService.WriteList(IDEWebRequestScope r, IDEListController controller, int startAt, int count)
 		{
 			var sendTypeDefinition = String.Compare(r.GetProperty("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
 

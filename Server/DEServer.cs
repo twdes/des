@@ -118,8 +118,8 @@ namespace TecWare.DE.Server
 		private SimpleConfigItemProperty<int> propertyLogCount = null; // Zeigt an wie viel Log-Dateien verwaltet werden
 
 		private volatile int securityGroupsVersion = 0;
-		private Dictionary<string, string[]> securityGroups = new Dictionary<string, string[]>(); // Sicherheitsgruppen
-		private Dictionary<string, IDEUser> users = new Dictionary<string, IDEUser>(StringComparer.OrdinalIgnoreCase); // Nutzer
+		private readonly Dictionary<string, string[]> securityGroups = new Dictionary<string, string[]>(); // Sicherheitsgruppen
+		private readonly Dictionary<string, IDEUser> users = new Dictionary<string, IDEUser>(StringComparer.OrdinalIgnoreCase); // Nutzer
 
 		private ResolveEventHandler resolveEventHandler;
 		private DEConfigurationService configuration;
@@ -486,7 +486,7 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("dumpload", SecurityToken = SecuritySys),
 		Description("Sends the dump to the client.")
 		]
-		private void HttpDumpLoadAction(IDEWebRequestContext r, int id = -1)
+		private void HttpDumpLoadAction(IDEWebRequestScope r, int id = -1)
 		{
 			// get the dump file
 			DumpFileInfo di = null;
@@ -514,16 +514,16 @@ namespace TecWare.DE.Server
 
 		#region -- OnProcessRequest -------------------------------------------------------
 
-		protected override bool OnProcessRequest(IDEWebRequestContext r)
+		protected override async Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
 		{
-			if (String.Compare(r.RelativeSubPath, "favicon.ico", true) == 0)
+			if (String.Compare(r.RelativeSubPath, "favicon.ico", StringComparison.OrdinalIgnoreCase) == 0)
 			{
-				r.WriteResource(typeof(DEServer), "des.ico");
+				await Task.Run(() => r.WriteResource(typeof(DEServer), "des.ico"));
 				return true;
 			}
 			else
-				return base.OnProcessRequest(r);
-		} // proc OnProcessRequest
+				return await base.OnProcessRequestAsync(r);
+		} // proc OnProcessRequestAsync
 
 		#endregion
 
@@ -822,9 +822,9 @@ namespace TecWare.DE.Server
 		{
 			lock (users)
 			{
-				if (users.ContainsKey(user.Name))
-					throw new ArgumentException(String.Format("Nutzerkonflikt. Es gibt schon einen Nutzer '{0}'.", user.Name));
-				users[user.Name] = user;
+				if (users.ContainsKey(user.Identity.Name))
+					throw new ArgumentException(String.Format("User conflict. There is already a user '{0}' registered.", user.Identity.Name));
+				users[user.Identity.Name] = user;
 			}
 		} // proc RegisterUser
 
@@ -832,8 +832,8 @@ namespace TecWare.DE.Server
 		{
 			lock (users)
 			{
-				if (users.TryGetValue(user.Name, out var tmp) && tmp == user)
-					users.Remove(user.Name);
+				if (users.TryGetValue(user.Identity.Name, out var tmp) && tmp == user)
+					users.Remove(user.Identity.Name);
 			}
 		} // proc UnregisterUser
 
@@ -844,62 +844,19 @@ namespace TecWare.DE.Server
 				if (users.TryGetValue(user.Name, out var u))
 					return u.AuthentificateAsync(user);
 				else
-					return null;
+					return Task.FromResult<IDEAuthentificatedUser>(null);
 			}
 		} // func AuthentificateUser
 
-		[LuaMember("SetScope")]
-		public DETransactionContext LuaSetSope(string userName = null)
+		public Task<DECommonScope> CreateCommonScopeAsync(string userName = null)
+			=> CreateCommonScopeAsync(userName != null ? new DESimpleIdentity(userName) : null);
+
+		public async Task<DECommonScope> CreateCommonScopeAsync(IIdentity user = null)
 		{
-			// destroy current scope
-			var current = Threading.GetCurrentScope<DETransactionContext>();
-			if (current != null)
-				current.Dispose();
-
-			// create a new
-			SetUserTransactionContextAsync(userName).AwaitTask();
-
-			return Threading.GetCurrentScope<DETransactionContext>();
-		} // proc LuaSetScope
-
-		[LuaMember("GetScope")]
-		public DETransactionContext LuaGetCurrentScope()
-		{
-			var current = Threading.GetCurrentScope<DETransactionContext>();
-			if (current == null)
-				LuaSetSope();
-			return Threading.GetCurrentScope<DETransactionContext>() ?? throw new ArgumentException("No scope created.");
-		} // func LuaGetCurrentScope
-
-		[LuaMember("EndScope")]
-		public DETransactionContext LuaEndScope(bool commit, bool newScope)
-		{
-			var current = Threading.GetCurrentScope<DETransactionContext>();
-			IIdentity currentUser = null;
-			if (current != null)
-			{
-				if (commit)
-					current.CommitAsync().AwaitTask();
-				else
-					current.RollbackAsync().AwaitTask();
-
-				currentUser = current.User?.Identity;
-			}
-			return newScope ? LuaSetSope(currentUser?.Name) : null;
-		} // func LuaEndScope
-
-		public Task SetUserTransactionContextAsync(string userName = null)
-			=> SetUserTransactionContextAsync(userName != null ? new DEUserNamePrincipal(userName) : null);
-
-		public async Task SetUserTransactionContextAsync(IPrincipal user = null)
-		{
-			using (var currentContext = Threading.SecureCurrentContext())
-			{
-				var newContext = new DETransactionContext(this, user != null);
-				if (user != null)
-					await newContext.AuthentificateUserAsync(user);
-				currentContext.Discard();
-			}
+			var scope = new DECommonScope(this, user != null);
+			if (user != null)
+				await scope.AuthentificateUserAsync(user);
+			return scope;
 		} // proc SetUserTransactionContext
 
 		#endregion
@@ -1102,6 +1059,34 @@ namespace TecWare.DE.Server
 
 		#region -- Lua Runtime ------------------------------------------------------------
 
+		private sealed class DELuaRuntime : LuaGlobalPortable
+		{
+			private readonly DEServer server;
+
+			public DELuaRuntime(Lua lua, DEServer server) 
+				: base(lua)
+			{
+				this.server = server ?? throw new ArgumentNullException(nameof(server));
+			} // ctor
+
+			[LuaMember("format")]
+			private string LuaFormat(string text, params object[] args)
+				=> String.Format(text, args);
+
+			[LuaMember("LogMsgType")]
+			private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
+
+			protected override void OnPrint(string text)
+			{
+				server.Log.Info(text);
+
+				// direct to the attached debugger
+				var dbg = DEScope.GetScopeService<IDEDebugContext>(false);
+				if (dbg != null)
+					dbg.OnPrint(text);
+			} // proc OnPrint
+		} // class DELuaRuntime
+
 		private LuaGlobalPortable luaRuntime = null;
 
 		[LuaMember("safecall")]
@@ -1121,23 +1106,14 @@ namespace TecWare.DE.Server
 			}
 		} // func LuaSafeCall
 
-		[LuaMember("format")]
-		private string LuaFormat(string text, params object[] args)
-			=> String.Format(text, args);
-
 		internal void UpdateLuaRuntime(Lua lua)
-		{
-			this.luaRuntime = new LuaGlobalPortable(lua);
-		} // proc UpdateLuaRuntime
+			=> this.luaRuntime = new DELuaRuntime(lua, this);
 
 		protected override object OnIndex(object key)
 			=> base.OnIndex(key) ?? luaRuntime?.GetValue(key);
 
 		[LuaMember("Basic")]
 		private LuaTable LuaRuntime => luaRuntime;
-
-		[LuaMember("LogMsgType")]
-		private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
 
 		#endregion
 

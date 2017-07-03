@@ -104,7 +104,7 @@ namespace TecWare.DE.Server
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	public class ClientDebugSession : IDisposable
+	public abstract class ClientDebugSession : IDisposable
 	{
 		public event EventHandler CurrentUsePathChanged;
 
@@ -348,6 +348,8 @@ namespace TecWare.DE.Server
 			}
 			else // notify
 			{
+				if (x.Name == "print")
+					OnPrint(x.Value);
 			}
 		} // proc ProcessAnswer
 
@@ -474,6 +476,8 @@ namespace TecWare.DE.Server
 		
 		protected virtual void DebugPrint(string message)
 			=> Debug.Print(message);
+
+		protected abstract void OnPrint(string message);
 
 		public bool IsConnected
 		{

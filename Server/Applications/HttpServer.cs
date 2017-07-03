@@ -43,9 +43,8 @@ namespace TecWare.DE.Server
 {
 	#region -- class DECommonWebContext -------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal abstract class DECommonWebContext : DETransactionContext
+	internal abstract class DECommonWebScope : DECommonScope
 	{
 		private readonly DEHttpServer http;
 		private readonly Lazy<NameValueCollection> queryString;
@@ -56,7 +55,7 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		protected DECommonWebContext(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification)
+		protected DECommonWebScope(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification)
 			: base(http, httpAuthentification)
 		{
 			this.http = http;
@@ -128,9 +127,8 @@ namespace TecWare.DE.Server
 
 	#region -- class DEWebSocketContext -------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal sealed class DEWebSocketContext : DECommonWebContext, IDEWebSocketContext
+	internal sealed class DEWebSocketContext : DECommonWebScope, IDEWebSocketScope
 	{
 		private readonly HttpListenerContext context;
 		private HttpListenerWebSocketContext webSocketContext;
@@ -140,15 +138,23 @@ namespace TecWare.DE.Server
 		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
 			: base(http, context.Request, absolutePath, httpAuthentification)
 		{
-			this.context = context;
+			this.context = context ?? throw new ArgumentNullException(nameof(context));
 		} // ctor
 
 		protected override void Dispose(bool disposing)
 		{
 			try
 			{
-				if (disposing)
-					webSocketContext?.WebSocket?.Dispose();
+				if (disposing && webSocketContext != null)
+				{
+					if (webSocketContext.WebSocket != null)
+					{
+						if (webSocketContext.WebSocket.State == WebSocketState.Open)
+							webSocketContext.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed.", CancellationToken.None).AwaitTask();
+
+						webSocketContext.WebSocket.Dispose();
+					}
+				}
 			}
 			finally
 			{
@@ -167,11 +173,10 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEWebRequestContext ------------------------------------------------
+	#region -- class DEWebRequestScope --------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
-	internal sealed class DEWebRequestContext : DECommonWebContext, IDEWebRequestContext
+	internal sealed class DEWebRequestScope : DECommonWebScope, IDEWebRequestScope
 	{
 		#region -- struct RelativeFrame ---------------------------------------------------
 
@@ -200,7 +205,7 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEWebRequestContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
+		public DEWebRequestScope(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
 			: base(http, context.Request, absolutePath, httpAuthentification)
 		{
 			this.context = context;
@@ -251,10 +256,8 @@ namespace TecWare.DE.Server
 		} // proc LogStart
 
 		public void LogStop()
-		{
-			Procs.FreeAndNil(ref log);
-		} // proc LogStop
-
+			=> Procs.FreeAndNil(ref log);
+		
 		public void Log(Action<LogMessageScopeProxy> action)
 		{
 			if (log != null)
@@ -476,7 +479,7 @@ namespace TecWare.DE.Server
 		public IDEConfigItem CurrentNode => RelativeSubNode as IDEConfigItem;
 
 		#endregion
-	} // class DEWebRequestContext
+	} // class DEWebRequestScope
 
 	#endregion
 
@@ -870,7 +873,7 @@ namespace TecWare.DE.Server
 		public DEHttpServer(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
-			httpThreads = new DEThread(this, "Http-Thread", ExecuteHttpRequestAsyc, "Http");
+			httpThreads = new DEThread(this, "Http-Dispatcher", ExecuteHttpRequestAsyc, "Http");
 
 			ClearHttpCache();
 			httpListener.AuthenticationSchemeSelectorDelegate = GetAuthenticationScheme;
@@ -1285,7 +1288,8 @@ namespace TecWare.DE.Server
 					}
 					if (ctx != null)
 					{
-						await ProcessRequestAsync(ctx);
+						// post message, and wait for more
+						ProcessRequestAsync(ctx).GetAwaiter();
 					}
 				}
 				else
@@ -1293,7 +1297,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc ExecuteHttpRequest
 
-		private async Task ProcessAcceptWebSocket(HttpListenerContext ctx, string absolutePath, AuthenticationSchemes authentificationScheme)
+		private async Task ProcessAcceptWebSocketAsync(HttpListenerContext ctx, string absolutePath, AuthenticationSchemes authentificationScheme)
 		{
 			// search for the websocket endpoint
 			var subProtocol = GetWebSocketProtocol(absolutePath, Procs.ParseMultiValueHeader(ctx.Request.Headers["Sec-WebSocket-Protocol"]).ToArray());
@@ -1305,31 +1309,29 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous);
-
-				// start authentification
-				await context.AuthentificateUserAsync(ctx.User);
-
-				try
+				using (var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
 				{
-					// authentificate the user
-					context.DemandToken(subProtocol.SecurityToken);
+					// start authentification
+					await context.AuthentificateUserAsync(ctx.User?.Identity);
 
-					// accept the protocol to the client
-					await context.AcceptWebSocketAsync(subProtocol.Protocol);
-					// accept the protocol to the server
-					if (!subProtocol.AcceptWebSocket(context)) // socket is not excepted
+					try
 					{
-						await context.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Endpoint is not defined.", CancellationToken.None);
-						context.WebSocket.Dispose();
+						// authentificate the user
+						context.DemandToken(subProtocol.SecurityToken);
+
+						// accept the protocol to the client
+						await context.AcceptWebSocketAsync(subProtocol.Protocol);
+
+						// accept the protocol to the server
+						await subProtocol.ExecuteWebSocketAsync(context);
+					}
+					catch (Exception e)
+					{
+						Log.Except(e);
 					}
 				}
-				catch
-				{
-					throw;
-				}
 			}
-		} // func ProcessAcceptWebSocket
+		} // func ProcessAcceptWebSocketAsync
 
 		private async Task ProcessRequestAsync(HttpListenerContext ctx)
 		{
@@ -1347,7 +1349,7 @@ namespace TecWare.DE.Server
 			{
 				try
 				{
-					await ProcessAcceptWebSocket(ctx, absolutePath, authentificationScheme);
+					await ProcessAcceptWebSocketAsync(ctx, absolutePath, authentificationScheme);
 				}
 				catch (AggregateException e)
 				{
@@ -1360,44 +1362,38 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				using (var context = new DEWebRequestContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
+				using (var context = new DEWebRequestScope(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
 				{
 					try
 					{
 						// authentificate user
-						await context.AuthentificateUserAsync(ctx.User);
+						await context.AuthentificateUserAsync(ctx.User?.Identity);
 
-						// use a background thread, may be rewrite EnterReadLock to Async
-						await Task.Run(() =>
+						// Start logging
+						if (debugMode)
+							context.LogStart();
+						
+						// start to find the endpoint
+						if (context.TryEnterSubPath(Server, String.Empty))
 						{
-							SynchronizationContext.SetSynchronizationContext(context);
-
-							// Start logging
-							if (debugMode)
-								context.LogStart();
-
-							// start to find the endpoint
-							if (context.TryEnterSubPath(Server, String.Empty))
+							try
 							{
-								try
+								// try to map a node
+								if (!await ProcessRequestForConfigItemAsync(context, (DEConfigItem)Server))
 								{
-									// try to map a node
-									if (!ProcessRequestForConfigItem(context, (DEConfigItem)Server))
+									// Search all http worker nodes
+									using (EnterReadLock())
 									{
-										// Search all http worker nodes
-										using (EnterReadLock())
-										{
-											if (!UnsafeProcessRequest(context))
-												throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
-										}
+										if (!await UnsafeProcessRequestAsync(context))
+											throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
 									}
 								}
-								finally
-								{
-									context.ExitSubPath(Server);
-								}
 							}
-						});
+							finally
+							{
+								context.ExitSubPath(Server);
+							}
+						}
 
 						// check the return value
 						if (ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
@@ -1411,7 +1407,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc ProcessRequest
 
-		private void ProcessResponeOnException(HttpListenerContext ctx, Exception e, DEWebRequestContext r)
+		private void ProcessResponeOnException(HttpListenerContext ctx, Exception e, DEWebRequestScope r)
 		{
 			// extract target exception
 			var ex = e;
@@ -1464,21 +1460,23 @@ namespace TecWare.DE.Server
 			return null;
 		} // func GetWebSocketProtocol
 
-		private bool ProcessRequestForConfigItem(IDEWebRequestContext r, DEConfigItem current)
+		private async Task<bool> ProcessRequestForConfigItemAsync(IDEWebRequestScope r, DEConfigItem current)
 		{
 			using (current.EnterReadLock())
 			{
 				// Search zum Nodes
 				foreach (var cur in current.UnsafeChildren.Where(c => r.TryEnterSubPath(c, c.Name)))
+				{
 					try
 					{
-						if (ProcessRequestForConfigItem(r, cur))
+						if (await ProcessRequestForConfigItemAsync(r, cur))
 							return true;
 					}
 					finally
 					{
 						r.ExitSubPath(cur);
 					}
+				}
 
 				// 1. Check for a defined action of this node
 				string actionName;
@@ -1487,16 +1485,16 @@ namespace TecWare.DE.Server
 					if (actionName == "lines" || actionName == "states" || actionName == "events")
 						r.LogStop();
 
-					current.UnsafeInvokeHttpAction(actionName, r);
+					await current.UnsafeInvokeHttpActionAsync(actionName, r);
 					return true;
 				}
 				// 2. process the current node
-				else if (current.UnsafeProcessRequest(r))
+				else if (await current.UnsafeProcessRequestAsync(r))
 					return true;
 				else // 3. check for http worker
 					return false;
 			}
-		} // func ProcessRequestForConfigItem
+		} // func ProcessRequestForConfigItemAsync
 
 		private static void AddPrefix<T>(List<T> prefixes, T add)
 			where T : PrefixDefinition

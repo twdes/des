@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -33,6 +34,30 @@ namespace TecWare.DE.Stuff
 		public static void Stop(this ILogger log, string name) => log?.LogMsg(LogMsgType.Information, ("-- " + name.Trim() + " wird gestoppt ").PadRight(80, '-'));
 		public static void Abort(this ILogger log, string name) => log?.LogMsg(LogMsgType.Warning, ("-- " + name.Trim() + " ist abgebrochen wurden ").PadRight(80, '-'));
 	} // class LogExtra
+
+	#endregion
+
+	#region -- class DisposableScopeThreadSecure ----------------------------------------
+
+	public sealed class DisposableScopeThreadSecure : IDisposable
+	{
+		private readonly Thread enterThread;
+		private readonly Action dispose;
+
+		public DisposableScopeThreadSecure(Action dispose)
+		{
+			this.enterThread = Thread.CurrentThread;
+			this.dispose = dispose;
+		}
+
+		public void Dispose()
+		{
+			if (enterThread != Thread.CurrentThread)
+				throw new InvalidOperationException("Enter and Exit must be in the same thread.");
+			dispose();
+		} // proc Dispose
+
+	} // class DisposableScopeThreadSecure
 
 	#endregion
 

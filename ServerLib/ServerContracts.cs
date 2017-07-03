@@ -15,8 +15,10 @@
 #endregion
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,17 +42,18 @@ namespace TecWare.DE.Server
 
 	#region -- interface IDEUser --------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary>Definiert die Darstellung des Nutzers, der im Dienst registriert wird.</summary>
+	/// <summary>User that is registered in the main server..</summary>
 	public interface IDEUser
 	{
-		/// <summary>Erzeugt einen authentifizierten Nutzer.</summary>
-		/// <param name="identity">Übergibt die originale Identität der Anmeldung mit dessen Hilfe die Security-Tokens geprüft werden können.</param>
-		/// <returns>Context für diesen Nutzer.</returns>
+		/// <summary>Creates a authentificated user.</summary>
+		/// <param name="identity">Incoming identity from the user, to check security.</param>
+		/// <returns>Context of the authentificated user.</returns>
 		Task<IDEAuthentificatedUser> AuthentificateAsync(IIdentity identity);
 
-		/// <summary>Name des Nutzers</summary>
-		string Name { get; }
+		/// <summary>Display name for the user</summary>
+		string DisplayName { get; }
+		/// <summary>Identity of the user.</summary>
+		IIdentity Identity { get; }
 	} // interface IDEUser
 
 	#endregion
@@ -69,11 +72,12 @@ namespace TecWare.DE.Server
 
 	#region -- interface DEServerEvent --------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Special events of the server.</summary>
 	public enum DEServerEvent
 	{
+		/// <summary>Shutdown is initiated.</summary>
 		Shutdown,
+		/// <summary>Reconfiguration phase.</summary>
 		Reconfiguration
 	} // DEServerEvent
 
@@ -115,7 +119,6 @@ namespace TecWare.DE.Server
 
 	#region -- interface IDEServer ------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Gibt Zugriff auf den Service.</summary>
 	public interface IDEServer : IDEConfigItem
 	{
@@ -163,7 +166,7 @@ namespace TecWare.DE.Server
 		string LogPath { get; }
 		/// <summary>Basiskonfigurationsdatei, die geladen wurde.</summary>
 		IDEConfigurationService Configuration { get; }
-		/// <summary></summary>
+		/// <summary>Access to the main message queue.</summary>
 		IDEServerQueue Queue { get; }
 
 		/// <summary>Version der SecurityTokens</summary>
@@ -172,98 +175,198 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDECommonContext -----------------------------------------------
+	#region -- IDEDebugContext ----------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
-	public interface IDECommonContext : IPropertyReadOnlyDictionary, IDisposable
+	public interface IDEDebugContext
 	{
-		/// <summary>Accepted language</summary>
-		CultureInfo CultureInfo { get; }
-
-		/// <summary>Access to the user context.</summary>
-		T GetUser<T>() where T : class;
-
-		/// <summary>Access to the base server.</summary>
-		IDEServer Server { get; }
-	} // interface IDECommonContext
+		void OnPrint(string message);
+	} // interface IDEDebugContext
 
 	#endregion
 
-	#region -- class DETransactionContext -----------------------------------------------
+	#region -- interface IDETransaction -------------------------------------------------
 
-	public class DETransactionContext : DEScopeContext, IDECommonContext
+	public interface IDETransaction
+	{
+		void Commit();
+		void Rollback();
+	} // interface IDETransaction
+
+	#endregion
+
+	#region -- interface IDETransactionAsync --------------------------------------------
+
+	public interface IDETransactionAsync
+	{
+		Task CommitAsync();
+		Task RollbackAsync();
+	} // IDETransactionAsync
+
+	#endregion
+
+	#region -- interface IDECommonScope -------------------------------------------------
+
+	/// <summary>Basic context contract, for an execution thread.</summary>
+	public interface IDECommonScope : IPropertyReadOnlyDictionary, IDEScope
+	{
+		/// <summary>Registers a service factory.</summary>
+		/// <param name="serviceType"></param>
+		/// <param name="factory"></param>
+		void RegisterService(Type serviceType, Func<object> factory);
+		/// <summary>Registers a service.</summary>
+		/// <param name="serviceType"></param>
+		/// <param name="service"></param>
+		void RegisterService(Type serviceType, object service);
+
+		/// <summary>Register a commit action.</summary>
+		/// <param name="action"></param>
+		void RegisterCommitAction(Action action);
+		/// <summary>Register a commit action.</summary>
+		/// <param name="action"></param>
+		void RegisterCommitAction(Func<Task> action);
+		/// <summary>Register a rollback action.</summary>
+		/// <param name="action"></param>
+		void RegisterRollbackAction(Action action);
+		/// <summary>Register a rollback action.</summary>
+		/// <param name="action"></param>
+		void RegisterRollbackAction(Func<Task> action);
+
+		/// <summary>Register an object, that will be disposed with this scope.</summary>
+		/// <param name="obj"></param>
+		void RegisterDispose(IDisposable obj);
+
+		/// <summary>Executes all commit actions.</summary>
+		/// <returns></returns>
+		Task CommitAsync();
+		/// <summary>Executes all rollback actions.</summary>
+		/// <returns></returns>
+		Task RollbackAsync();
+
+		/// <summary>Access to the user context.</summary>
+		/// <typeparam name="T"></typeparam>
+		T GetUser<T>() where T : class;
+		/// <summary>Raw access to the user.</summary>
+		IDEAuthentificatedUser User { get; }
+
+		/// <summary>Check for the given token, if the user can access it.</summary>
+		/// <param name="securityToken">Security token.</param>
+		void DemandToken(string securityToken);
+		/// <summary>Check for the given token, if the user can access it.</summary>
+		/// <param name="securityToken">Security token.</param>
+		/// <returns><c>true</c>, if the token is granted.</returns>
+		bool TryDemandToken(string securityToken);
+
+		/// <summary>Create an authorization exception in the current context.</summary>
+		/// <param name="message">Message of this exception</param>
+		/// <returns></returns>
+		Exception CreateAuthorizationException(string message);
+
+		/// <summary>Language for this context.</summary>
+		CultureInfo CultureInfo { get; }
+		/// <summary>Access to the base server.</summary>
+		IDEServer Server { get; }
+	} // interface IDECommonScope
+
+	#endregion
+
+	#region -- class DECommonScope ------------------------------------------------------
+
+	/// <summary>Scope with transaction model and a user based service provider.</summary>
+	public class DECommonScope : DEScope, IDECommonScope
 	{
 		private readonly List<Func<Task>> commitActions = new List<Func<Task>>();
 		private readonly List<Func<Task>> rollbackActions = new List<Func<Task>>();
 		private readonly List<IDisposable> autoDispose = new List<IDisposable>();
 
+		private readonly Dictionary<Type, Lazy<object>> services = new Dictionary<Type, Lazy<object>>();
+
 		private readonly IServiceProvider sp;
 		private readonly IDEServer server;
 		private readonly bool useAuthentification;
 		private IDEAuthentificatedUser user = null;
+		private bool userOwner;
 
 		private bool? isCommitted = null;
 
 		#region -- Ctor/Dtor ------------------------------------------------------------
 
-		public DETransactionContext(IServiceProvider sp, bool useAuthentification)
-			: base()
+		private DECommonScope(IServiceProvider sp, IDEAuthentificatedUser user, bool useAuthentification)
 		{
 			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
 			this.server = sp.GetService<IDEServer>(true);
+
+			this.user = user;
+			this.userOwner = user == null;
 			this.useAuthentification = useAuthentification;
 		} // ctor
 
-		public override SynchronizationContext CreateCopy()
-			=> this; // reference!
+		public DECommonScope(IServiceProvider sp, IDEAuthentificatedUser user)
+			: this(sp, user, user != null)
+		{
+		} // ctor
+
+		public DECommonScope(IServiceProvider sp, bool useAuthentification)
+			: this(sp, null, useAuthentification)
+		{
+		} // ctor
 
 		protected override void Dispose(bool disposing)
+			=> DisposeAsync().AwaitTask();
+
+		public async Task DisposeAsync()
 		{
 			if (!isCommitted.HasValue)
-				RollbackAsync().AwaitTask();
+				await RollbackAsync();
 
 			// dispose resources
 			foreach (var dispose in autoDispose)
-				dispose.Dispose();
-			user?.Dispose();
+				await Task.Run(new Action(dispose.Dispose));
+			autoDispose.Clear();
 
-			base.Dispose(disposing);
-		} // proc Dispose
+			// dispose services
+			IEnumerable<IDisposable> activeServices;
+			lock (services)
+				activeServices = from c in services.Values where c.IsValueCreated && c.Value is IDisposable select (IDisposable)c;
+			await Task.Run(
+				() =>
+				{
+					foreach (var c in activeServices)
+						c.Dispose();
+				}
+			);
 
-		private async Task RunActionsAsync(IEnumerable<Func<Task>> actions)
-		{
-			foreach (var cur in actions)
-				await cur();
-		} // proc RunActions
+			// clear user
+			if (user != null && userOwner)
+				await Task.Run(new Action(user.Dispose));
 
-		public Task CommitAsync()
-		{
-			isCommitted = true;
-			return RunActionsAsync(commitActions);
-		} // proc Commit
-
-		public Task RollbackAsync()
-		{
-			isCommitted = false;
-			return RunActionsAsync(rollbackActions);
-		} // proc Rollback
+			base.Dispose(true);
+		} // proc DisposeAsync
 
 		#endregion
 
-		#region -- User -------------------------------------------------------------------
+		#region -- User -----------------------------------------------------------------
 
 		/// <summary>Change the current user on the context, to a server user. Is the given user null, the result is also null.</summary>
-		public async Task AuthentificateUserAsync(IPrincipal authentificateUser)
+		public async Task AuthentificateUserAsync(IIdentity authentificateUser)
 		{
 			if (authentificateUser != null)
 			{
-				user = await server.AuthentificateUserAsync(authentificateUser.Identity);
+				if (user != null)
+					throw new InvalidOperationException();
+
+				user = await server.AuthentificateUserAsync(authentificateUser);
 				if (user == null)
-					throw CreateAuthorizationException(String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Identity.Name));
+					throw CreateAuthorizationException(String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Name));
+				userOwner = true;
 			}
 		} // proc AuthentificateUser
 
+		public void SetUser(IDEAuthentificatedUser user)
+			=> this.user = user;
+
+		/// <summary>Get the current user.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
 		public T GetUser<T>()
 			where T : class
 		{
@@ -279,10 +382,10 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Security ---------------------------------------------------------------
+		#region -- Security -------------------------------------------------------------
 
-		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
-		/// <param name="securityToken">Zu prüfender Token.</param>
+		/// <summary>Check for the given token, if the user can access it.</summary>
+		/// <param name="securityToken">Security token.</param>
 		public void DemandToken(string securityToken)
 		{
 			if (!useAuthentification || String.IsNullOrEmpty(securityToken))
@@ -292,9 +395,9 @@ namespace TecWare.DE.Server
 				throw CreateAuthorizationException(String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityToken));
 		} // proc DemandToken
 
-		/// <summary>Darf der Nutzer, den entsprechenden Token verwenden.</summary>
-		/// <param name="securityToken">Zu prüfender Token.</param>
-		/// <returns><c>true</c>, wenn der Token erlaubt ist.</returns>
+		/// <summary>Check for the given token, if the user can access it.</summary>
+		/// <param name="securityToken">Security token.</param>
+		/// <returns><c>true</c>, if the token is granted.</returns>
 		public bool TryDemandToken(string securityToken)
 		{
 			if (!useAuthentification)
@@ -305,8 +408,145 @@ namespace TecWare.DE.Server
 			return User != null && User.IsInRole(securityToken);
 		} // proc TryDemandToken
 
-		public virtual Exception CreateAuthorizationException(string message) // force user, if no user is given
+		/// <summary>Create an authorization exception in the current context.</summary>
+		/// <param name="message">Message of this exception</param>
+		/// <returns></returns>
+		public virtual Exception CreateAuthorizationException(string message)
 			=> new ArgumentException(message);
+
+		#endregion
+
+		#region -- GetService, Register -------------------------------------------------
+
+		public override object GetService(Type serviceType)
+		{
+			// first self test
+			var r = base.GetService(serviceType);
+			if (r != null)
+				return r;
+
+			// second check user service
+			r = user?.GetService(serviceType);
+			if (r != null)
+				return r;
+
+			// check for an registered service
+			lock (services)
+			{
+				if (services.TryGetValue(serviceType, out var srv))
+					r = srv.Value;
+			}
+			if (r != null)
+				return r;
+
+			// third down to config node
+			return sp?.GetService(serviceType);
+		} // func GetService
+
+		public void RegisterService(Type serviceType, Func<object> factory)
+		{
+			lock (services)
+			{
+				if (services.ContainsKey(serviceType))
+					throw new ArgumentException($"There is already a service '{serviceType.Name}'");
+				services.Add(serviceType, new Lazy<object>(factory, true));
+			}
+		} // func RegisterService
+
+		public void RegisterService(Type serviceType, object service)
+			=> RegisterService(serviceType, () => service);
+
+		public void RegisterService<T>(Func<T> factory) where T : class
+			=> RegisterService(typeof(T), factory);
+
+		#endregion
+
+		#region -- Commit, Rollback, Auto Dispose ---------------------------------------
+
+		private async Task RunActionsAsync(IEnumerable<Func<Task>> actions, bool rollback)
+		{
+			var transactions = new List<Func<Task>>();
+
+			// registered commit actions
+			lock (actions)
+				transactions.AddRange(actions);
+
+			// find service commit actions
+			lock (services)
+			{
+				foreach (var cur in services.Values.Where(c => c.IsValueCreated))
+				{
+					switch (cur)
+					{
+						case IDbTransaction trans:
+							transactions.Add(
+								() => Task.Run(() =>
+								  {
+									  if (rollback)
+										  trans.Rollback();
+									  else
+										  trans.Commit();
+								  })
+							);
+							break;
+						case IDETransaction trans:
+							transactions.Add(() => Task.Run(() =>
+							  {
+								  if (rollback)
+									  trans.Rollback();
+								  else
+									  trans.Commit();
+							  })
+							);
+							break;
+						case IDETransactionAsync trans:
+							transactions.Add(rollback ? new Func<Task>(trans.RollbackAsync) : new Func<Task>(trans.CommitAsync));
+							break;
+					}
+				}
+			}
+
+			// execute actions
+			var e = rollback ? Enumerable.Reverse(transactions) : transactions;
+			foreach (var c in e)
+				await c();
+		} // func RunActionsAsync
+
+		public void RegisterCommitAction(Action action)
+			=> RegisterCommitAction(() => Task.Run(action));
+
+		public void RegisterCommitAction(Func<Task> action)
+		{
+			lock (commitActions)
+				commitActions.Add(action);
+		} // func RegisterCommitAction
+
+		public void RegisterRollbackAction(Action action)
+			=> RegisterRollbackAction(() => Task.Run(action));
+
+		public void RegisterRollbackAction(Func<Task> action)
+		{
+			lock (rollbackActions)
+				rollbackActions.Add(action);
+		} // func RegisterRollbackAction
+
+		public void RegisterDispose(IDisposable obj)
+		{
+			lock (autoDispose)
+				autoDispose.Add(obj);
+		} // proc RegisterDispose
+
+		public Task CommitAsync()
+		{
+			isCommitted = true;
+			return RunActionsAsync(commitActions, false);
+		} // proc Commit
+
+		public Task RollbackAsync()
+		{
+			isCommitted = false;
+			return RunActionsAsync(rollbackActions, true);
+		} // proc Rollback
 
 		#endregion
 
@@ -322,6 +562,8 @@ namespace TecWare.DE.Server
 		public IDEAuthentificatedUser User => user;
 		/// <summary>Current culture info</summary>
 		public virtual CultureInfo CultureInfo => CultureInfo.CurrentUICulture;
+		
+		public bool? IsCommited => isCommitted;
 	} // class DETransactionContext
 
 	#endregion

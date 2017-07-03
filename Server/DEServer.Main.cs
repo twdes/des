@@ -448,7 +448,7 @@ namespace TecWare.DE.Server
 
 			var debuggerProgram = simpleDbgAssembly.GetType("TecWare.DE.Server.Program", true);
 
-			var runProgramAsync = debuggerProgram.GetRuntimeMethod("RunDebugProgramAsync", new Type[] { typeof(Uri) })
+			var runProgramAsync = debuggerProgram.GetRuntimeMethod("RunDebugProgramAsync", new Type[] { typeof(Uri), typeof(bool) })
 				?? throw new ArgumentException("RunDebugProgramAsync not found.");
 			var writeMessage = debuggerProgram.GetRuntimeMethod("WriteMessage", new Type[] { typeof(ConsoleColor), typeof(string) })
 				?? throw new ArgumentException("WriteMessage not found.");
@@ -468,7 +468,7 @@ namespace TecWare.DE.Server
 			ServiceLog = new DebugLog(writeMessage);
 
 			// todo: method to get the uri
-			var debuggerTask = (Task)runProgramAsync.Invoke(null, new object[] { uri });
+			var debuggerTask = (Task)runProgramAsync.Invoke(null, new object[] { uri, true });
 			debuggerTask.Wait();
 			return true;
 		} // proc InvokeDebugger

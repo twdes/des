@@ -21,23 +21,25 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Applications
 {
-	#region -- class DEUserNamePrincipal ------------------------------------------------
+	#region -- class DESimpleIdentity ---------------------------------------------------
 
-	internal sealed class DEUserNamePrincipal : IPrincipal, IIdentity
+	internal sealed class DESimpleIdentity : IIdentity
 	{
 		private readonly string userName;
 
-		public DEUserNamePrincipal(string userName)
+		public DESimpleIdentity(string userName)
 			=> this.userName = userName ?? throw new ArgumentNullException(nameof(userName));
 
-		public IIdentity Identity => this;
+		public override int GetHashCode() 
+			=> userName.GetHashCode();
+
+		public override bool Equals(object obj)
+			=> obj is DESimpleIdentity c ? userName.Equals(c.userName) : false;
+
 		public string Name => userName;
 		public string AuthenticationType => "basic";
 		public bool IsAuthenticated => false;
-
-		public bool IsInRole(string role)
-			=> false;
-	} // class DEUserNamePrincipal
+	} // class DESimpleIdentity
 
 	#endregion
 
@@ -90,6 +92,7 @@ namespace TecWare.DE.Server.Applications
 		private int serverSecurityVersion = 0;
 		private string[] securityTokens = null;
 
+		private IIdentity identity = null;
 		private string userName = null;
 
 		#region -- Ctor/Dtor/Configuration ------------------------------------------------
@@ -122,6 +125,8 @@ namespace TecWare.DE.Server.Applications
 			var domain = Config.GetAttribute("domain", String.Empty);
 			if (!String.IsNullOrEmpty(domain))
 				userName = domain + '\\' + userName;
+
+			this.identity = new DESimpleIdentity(userName);
 
 			// register the user again
 			Server.RegisterUser(this);
@@ -197,7 +202,8 @@ namespace TecWare.DE.Server.Applications
 
 		#endregion
 
-		string IDEUser.Name => userName;
+		string IDEUser.DisplayName => userName;
+		IIdentity IDEUser.Identity => identity;
 
 		public override string Icon => "/images/user1.png";
 	} // class DEUser

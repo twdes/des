@@ -491,27 +491,34 @@ namespace TecWare.DE.Server
 		} // class LuaEngineTraceLineDebugger
 
 		#endregion
-
+		
 		#region -- class LuaDebugSession --------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Debug session and scope for the commands.</summary>
-		private sealed class LuaDebugSession : LuaTable, IDisposable
+		private sealed class LuaDebugSession : LuaTable, IDEDebugContext, IDisposable
 		{
-			private readonly LuaEngine engine;
-			private readonly LoggerProxy log;
-			private readonly IDEWebSocketContext context;
+			private readonly LuaEngine engine; // lua engine
+			private readonly LoggerProxy log; // log for the debugging
 
-			private readonly DEThread sessionThread;
+			private readonly IDEWebSocketScope context; // context of the web-socket, will will not set this context (own context management)
+			private DECommonScope currentScope = null;
+
+			private readonly DEThread sessionThread; // deticated background thread for the debug process
+			private readonly TaskCompletionSource<bool> contextFinished; // marks the session as ended (result is always true)
 
 			private DEConfigItem currentItem = null; // current node, that is used as parent
 			
-			public LuaDebugSession(LuaEngine engine, IDEWebSocketContext context)
+			public LuaDebugSession(LuaEngine engine, IDEWebSocketScope context)
 			{
-				this.engine = engine;
+				this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
 				this.log = LoggerProxy.Create(engine.Log, "Debug Session");
-				this.context = context;
+				this.context = context ?? throw new ArgumentNullException(nameof(context));
 
+				// initial context
+				currentScope = new DECommonScope(engine, context.User); // todo: Reset Scope?
+				currentScope.RegisterService(typeof(IDEDebugContext), this);
+
+				contextFinished = new TaskCompletionSource<bool>();
 				sessionThread = new DEThread(engine, "LuaDebug", Execute, "LuaDebug"); // create a new thread for a new context!
 
 				UseNode("/");
@@ -522,11 +529,13 @@ namespace TecWare.DE.Server
 			public void Dispose()
 			{
 				Info("Debug session closed.");
+				
 				// Dispose session
 				sessionThread.Dispose();
+				currentScope?.Dispose();
 
 				// close context
-				context.Dispose();
+				contextFinished.SetResult(true); // mark the context as ended
 			} // proc Dispose
 
 			private async Task Execute()
@@ -534,7 +543,8 @@ namespace TecWare.DE.Server
 				// runs the initialization code
 				var initFunc = engine.DebugEnvironment.GetValue("InitSession", true);
 				if (initFunc != null)
-					Lua.RtInvoke(initFunc, this);
+					using (currentScope.Use())
+						Lua.RtInvoke(initFunc, this);
 
 				// start message loop
 				var recvOffset = 0;
@@ -594,7 +604,8 @@ namespace TecWare.DE.Server
 				}
 				finally
 				{
-					Dispose();
+					if (sessionThread.IsDisposed)
+						Dispose();
 				}
 			} // proc Execute
 
@@ -674,6 +685,20 @@ namespace TecWare.DE.Server
 				await Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, sessionThread.CancellationToken);
 			} // proc SendAnswerAsync
 
+			private void Notify(string type, XObject content)
+			{
+				Debug.Print("[Server] Send Notify: {0} => {1}", type, content.ToString());
+
+				// encode and send
+				var xNotify = new XElement(type, content);
+				var buf = Encoding.UTF8.GetBytes(xNotify.ToString(SaveOptions.None));
+				Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, sessionThread.CancellationToken)
+					.ContinueWith(
+						t => log.Except(t.Exception),
+						TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.RunContinuationsAsynchronously
+					);
+			} // proc otify
+
 			private void Info(string message)
 				=> log.Info(message);
 
@@ -681,6 +706,9 @@ namespace TecWare.DE.Server
 				=> base.OnIndex(key) ?? 
 					engine.DebugEnvironment.GetValue(key, true) ??  
 					currentItem.GetValue(key);
+
+			void IDEDebugContext.OnPrint(string message)
+				=> Notify("print", new XText(message));
 
 			#region -- Execute --------------------------------------------------------------
 
@@ -690,7 +718,9 @@ namespace TecWare.DE.Server
 				var chunk = engine.Lua.CompileChunk(xMessage.Value, "remote.lua", null);
 
 				// run the chunk on the node
-				var r = chunk.Run(this);
+				LuaResult r;
+				using (currentScope?.Use())
+					r = chunk.Run(this);
 
 				// return the result
 				var xAnswer = new XElement("return");
@@ -795,8 +825,39 @@ namespace TecWare.DE.Server
 
 			#endregion
 
+			#region -- Scope Commands ---------------------------------------------------
+
+			[LuaMember("begin")]
+			private void LuaSetScope()
+			{
+				// rollback curent scope
+				if (currentScope != null && !currentScope.IsCommited.HasValue)
+					currentScope.RollbackAsync().AwaitTask();
+
+				// start a new
+				currentScope = new DECommonScope(engine, currentScope.User);
+				currentScope.RegisterService(typeof(IDEDebugContext), this);
+
+				currentScope.UpdateInternal();
+			} // proc LuaSetScope
+
+			[LuaMember("commit")]
+			private void LuaCommitScope()
+			{
+				currentScope.CommitAsync().AwaitTask();
+				LuaSetScope();
+			} // LuaCommitScope
+
+			[LuaMember("rollback")]
+			private void LuaRollbackScope()
+				=> LuaSetScope();
+
+			#endregion
+
 			[LuaMember(nameof(CurrentNode))]
 			public DEConfigItem CurrentNode => currentItem;
+
+			public Task SessionFinished => contextFinished.Task;
 
 			public WebSocket Socket => context.WebSocket;
 		} // class LuaDebugSession
@@ -996,14 +1057,15 @@ namespace TecWare.DE.Server
 
 		#region -- IDEWebSocketProtocol ---------------------------------------------------
 
-		bool IDEWebSocketProtocol.AcceptWebSocket(IDEWebSocketContext webSocket)
+		Task IDEWebSocketProtocol.ExecuteWebSocketAsync(IDEWebSocketScope webSocket)
 		{
 			if (!IsDebugAllowed)
-				return false;
+			{
+				return webSocket.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Debugging is not active.", CancellationToken.None); // close and dispose socket
+			}
 
-			new LuaDebugSession(this, webSocket);
-			return true;
-		}
+			return new LuaDebugSession(this, webSocket).SessionFinished;
+		} // func ExecuteWebSocketAsync
 
 		string IDEWebSocketProtocol.BasePath => String.Empty;
 		string IDEWebSocketProtocol.Protocol => "dedbg";

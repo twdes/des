@@ -18,6 +18,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using TecWare.DE.Stuff;
 using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
@@ -59,7 +60,7 @@ namespace TecWare.DE.Server.Http
 		protected string GetFileContentType(string subPath)
 			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value).FirstOrDefault();
 
-		protected void DemandFile(IDEWebRequestContext r, string subPath)
+		protected void DemandFile(IDEWebRequestScope r, string subPath)
 		{
 			var tokens = Config.Elements(xnSecurityDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value?.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)).FirstOrDefault();
 			if (tokens == null || tokens.Length == 0)
@@ -78,13 +79,13 @@ namespace TecWare.DE.Server.Http
 		/// <summary>Does the specific address.</summary>
 		/// <param name="r">Request context.</param>
 		/// <returns><c>true</c>, if the request is processed.</returns>
-		public abstract bool Request(IDEWebRequestContext r);
+		public abstract Task<bool> RequestAsync(IDEWebRequestScope r);
 
-		protected override bool OnProcessRequest(IDEWebRequestContext r)
+		protected override async Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
 		{
-			if (base.OnProcessRequest(r))
+			if (await base.OnProcessRequestAsync(r))
 				return true;
-			return Request(r);
+			return await RequestAsync(r);
 		} // func OnProcessRequest
 
 		/// <summary>Gibt die Wurzel innerhalb der virtuellen Seite, ab der diese Http-Worker gerufen werden soll.</summary>
@@ -104,8 +105,8 @@ namespace TecWare.DE.Server.Http
 		private static readonly XName xnMimeDef = Configuration.DEConfigurationConstants.MainNamespace + "mimeDef";
 		private string directoryBase;
 
-		public HttpFileWorker(IServiceProvider sp, string sName)
-			: base(sp, sName)
+		public HttpFileWorker(IServiceProvider sp, string name)
+			: base(sp, name)
 		{
 		} // ctor
 
@@ -116,7 +117,7 @@ namespace TecWare.DE.Server.Http
 			directoryBase = Config.GetAttribute("directory", String.Empty);
 		} // proc OnEndReadConfiguration
 
-		public override bool Request(IDEWebRequestContext r)
+		public override async Task<bool> RequestAsync(IDEWebRequestScope r)
 		{
 			// create the full file name
 			var fileName = Path.GetFullPath(Path.Combine(directoryBase, ProcsDE.GetLocalPath(r.RelativeSubPath)));
@@ -134,19 +135,17 @@ namespace TecWare.DE.Server.Http
 				// security
 				DemandFile(r, fileName);
 				// Send the file
-				r.WriteFile(fileName, GetFileContentType(fileName));
+				await Task.Run(() => r.WriteFile(fileName, GetFileContentType(fileName)));
 				return true;
 			}
 			else
 				return false;
 		} // func Request
 
-		private static bool TestFilter(string sFileName, string sFilter)
-		{
-			return sFileName.EndsWith(sFileName, StringComparison.OrdinalIgnoreCase);
-		} // func TestFilter
-
-		public override string Icon { get { return "/images/http.file16.png"; } }
+		private static bool TestFilter(string fileName, string filter)
+			=> fileName.EndsWith(fileName, StringComparison.OrdinalIgnoreCase);
+		
+		public override string Icon => "/images/http.file16.png";
 	} // class HttpFileWorker
 
 	#endregion
@@ -208,7 +207,7 @@ namespace TecWare.DE.Server.Http
 				alternativeRoots = null;
 		} // proc OnBeginReadConfiguration
 
-		public override bool Request(IDEWebRequestContext r)
+		public override async Task<bool> RequestAsync(IDEWebRequestScope r)
 		{
 			if (assembly == null || namespaceRoot == null)
 				return false;
@@ -258,9 +257,12 @@ namespace TecWare.DE.Server.Http
 
 				// security
 				DemandFile(r, r.RelativeSubPath);
+
 				// send the file
-				r.SetLastModified(stamp)
-					.WriteStream(src, GetFileContentType(resourceName) ?? r.Http.GetContentType(Path.GetExtension(resourceName)));
+				await Task.Run(() =>
+					r.SetLastModified(stamp)
+						.WriteStream(src, GetFileContentType(resourceName) ?? r.Http.GetContentType(Path.GetExtension(resourceName)))
+				);
 				return true;
 			}
 			finally
@@ -269,7 +271,7 @@ namespace TecWare.DE.Server.Http
 			}
 		} // func Request
 
-		public override string Icon { get { return "/images/http.res16.png"; } }
+		public override string Icon => "/images/http.res16.png";
 	} // class HttpResourceWorker
 
 	#endregion

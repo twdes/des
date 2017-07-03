@@ -2,7 +2,7 @@
 function DebugEnv.InitSession(session)
 
 	-- create initial context
-	SetScope();
+	--SetScope();
 
 	session.BeginTransaction = function (userName)
 		-- rollback current context

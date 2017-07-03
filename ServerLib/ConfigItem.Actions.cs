@@ -34,7 +34,7 @@ namespace TecWare.DE.Server
 	/// <param name="item"></param>
 	/// <param name="args"></param>
 	/// <returns></returns>
-	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEWebRequestContext context);
+	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEWebRequestScope context);
 
 	#endregion
 
@@ -56,12 +56,12 @@ namespace TecWare.DE.Server
 			this.securityToken = securityToken;
 			this.description = description;
 			this.action = action;
-			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEWebRequestContext));
+			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEWebRequestScope));
 			this.isSafeCall = isNativeCall ? false : isSafeCall;
 			this.methodDescription = methodDescription;
 		} // ctor
 
-		public object Invoke(DEConfigItem item, IDEWebRequestContext context)
+		public object Invoke(DEConfigItem item, IDEWebRequestScope context)
 		{
 			if (action != null)
 				if (isNativeCall)
@@ -352,7 +352,7 @@ namespace TecWare.DE.Server
 		/// <param name="actionName">Name der Aktion</param>
 		/// <param name="context">Parameter, die übergeben werden sollen.</param>
 		/// <returns>Rückgabe</returns>
-		public object InvokeAction(string actionName, IDEWebRequestContext context)
+		public object InvokeAction(string actionName, IDEWebRequestScope context)
 		{
 			// Suche die Action im Cache
 			DEConfigAction a;
@@ -375,7 +375,8 @@ namespace TecWare.DE.Server
 					throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
 
 				context.DemandToken(a.SecurityToken);
-				return a.Invoke(this, context);
+				using (context.Use())
+					return a.Invoke(this, context); // support for async actions is missing -> results in a InvokeAcionAsync
 			}
 			catch (Exception e)
 			{
@@ -468,7 +469,7 @@ namespace TecWare.DE.Server
 		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate @delegate = null, Func<int, object> alternateParameterDescription = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
-			var argCaller = Expression.Parameter(typeof(IDEWebRequestContext), "#arg");
+			var argCaller = Expression.Parameter(typeof(IDEWebRequestScope), "#arg");
 
 			ParameterInfo[] parameterInfo;
 			var parameterOffset = 0;
@@ -552,12 +553,12 @@ namespace TecWare.DE.Server
 				}
 				else if (typeCode == TypeCode.Object && !typeTo.IsValueType) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
-					if (typeTo == typeof(IDEWebRequestContext))
+					if (typeTo == typeof(IDEWebRequestScope))
 					{
 						exprGetParameter = Expression.Condition(
-							Expression.TypeIs(arg, typeof(IDEWebRequestContext)),
-							Expression.Convert(arg, typeof(IDEWebRequestContext)),
-							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEWebRequestContext))
+							Expression.TypeIs(arg, typeof(IDEWebRequestScope)),
+							Expression.Convert(arg, typeof(IDEWebRequestScope)),
+							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEWebRequestScope))
 						);
 					}
 					else if (typeTo.IsAssignableFrom(GetType()))

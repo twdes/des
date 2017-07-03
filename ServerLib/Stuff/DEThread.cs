@@ -14,11 +14,11 @@
 //
 #endregion
 using System;
-using System.Threading;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using TecWare.DE.Stuff;
-using System.Runtime.CompilerServices;
 
 namespace TecWare.DE.Server
 {
@@ -56,81 +56,220 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEScopeContext -----------------------------------------------------
+	#region -- interface IDEScope  ------------------------------------------------------
 
-	/// <summary>Context that holds information for the execution thread.</summary>
-	public class DEScopeContext : SynchronizationContext, IDEThreadSource, IDisposable
+	public interface IDEScope : IServiceProvider, IDisposable
 	{
-		private readonly DEScopeContext parentScope;
-		private readonly SynchronizationContext parentThreadContext;
+		/// <summary>Use this scope as SynchronizationContext</summary>
+		/// <returns></returns>
+		IDisposable Use();
 
-		protected DEScopeContext()
+		/// <summary>Executes the Action within this scope.</summary>
+		/// <param name="action"></param>
+		void ExecuteWith(Action action);
+		/// <summary>Executes the Function within this scope.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="func"></param>
+		/// <returns></returns>
+		T ExecuteWith<T>(Func<T> func);
+		
+		/// <summary></summary>
+		bool IsCurrentScope { get; }
+	} // interface IDEScope
+
+
+	#endregion
+
+	#region -- class DEScope ------------------------------------------------------------
+
+	/// <summary>That is hold within an synchronization context. Store for global states of an execution thread.</summary>
+	public class DEScope : IServiceProvider, IDisposable
+	{
+		#region -- class DEScopeContext -------------------------------------------------
+
+		/// <summary>Special thread context, that holds a currently running transaction.</summary>
+		private sealed class DEScopeContext : SynchronizationContext, IDEThreadSource
 		{
-			if (Current is DEScopeContext t)
-			{
-				this.parentScope = t;
-				this.parentThreadContext = t.parentThreadContext;
-			}
-			else
-			{
-				this.parentScope = null;
-				this.parentThreadContext = Current;
-			}
+			private readonly DEScope scope;
+			private readonly DEScopeContext parentScopeContext;
+			private readonly SynchronizationContext parentContext;
 
-			// change current context
-			SetSynchronizationContext(this);
+			internal DEScopeContext(DEScope scope, SynchronizationContext currentContext)
+			{
+				this.scope = scope;
+				this.parentScopeContext = currentContext as DEScopeContext;
+				this.parentContext = parentScopeContext == null ? currentContext : parentScopeContext.parentContext;
+			} // ctor
+
+			public override int GetHashCode()
+				=> scope.GetHashCode();
+
+			public override bool Equals(object obj)
+				=> Object.ReferenceEquals(this, obj) || (obj is DEScopeContext t ? t.scope == scope : false);
+
+			public override SynchronizationContext CreateCopy()
+				=> new DEScopeContext(scope, parentContext);
+
+			private void ExecuteWithContext(object state)
+			{
+				var tuple = (Tuple<SendOrPostCallback, object>)state;
+				ExecuteWith(tuple.Item1, tuple.Item2);
+			} // proc PostWithContext
+
+			public IDisposable Use()
+			{
+				var oldContext = Current;
+				if (oldContext == this)
+					return null;
+				else
+				{
+					SetSynchronizationContext(this);
+					return new DisposableScope(() => SetSynchronizationContext(oldContext));
+				}
+			} // func Use
+
+			public void ExecuteWith(SendOrPostCallback callback, object state)
+			{
+				using (Use())
+					callback(state);
+			} // proc ExecuteWith
+
+			public void ExecuteWith(Action action)
+			{
+				using (Use())
+					action();
+			} // proc ExecuteWith
+
+			public T ExecuteWith<T>(Func<T> func)
+			{
+				using (Use())
+					return func();
+			} // proc ExecuteWith
+
+			public override void Post(SendOrPostCallback d, object state)
+			{
+				var t = new Tuple<SendOrPostCallback, object>(d, state);
+				if (parentContext != null)
+					parentContext.Post(ExecuteWithContext, t);
+				else
+					ThreadPool.QueueUserWorkItem(ExecuteWithContext, t);
+			} // proc Post
+
+			public override void Send(SendOrPostCallback d, object state)
+			{
+				var t = new Tuple<SendOrPostCallback, object>(d, state);
+				if (parentContext != null)
+					parentContext.Send(ExecuteWithContext, t);
+				else
+					ExecuteWithContext(new Tuple<SendOrPostCallback, object>(d, state));
+			} // proc Send
+
+			public DEScope Scope => scope;
+			public DEThreadBase Thread => (parentContext as IDEThreadSource)?.Thread;
+
+			internal DEScopeContext ParentScopeContext => parentScopeContext;
+			internal SynchronizationContext ParentSynchronizationContext => parentContext;
+		} // class DEScopeContext
+
+		#endregion
+
+		private bool isDisposed = false;
+
+		#region -- Ctor/Dtor ------------------------------------------------------------
+
+		public DEScope()
+		{
 		} // ctor
 
 		public void Dispose()
-		{
-			Dispose(true);
-		} // proc parentContext
+			=> Dispose(true);
 
 		protected virtual void Dispose(bool disposing)
 		{
-			// restore context
-			if (Current == this)
-				SetSynchronizationContext(parentScope ?? parentThreadContext);
+			if (isDisposed)
+				throw new ObjectDisposedException(nameof(DEScope));
+
+			isDisposed = true;
 		} // proc Dispose
 
-		public override SynchronizationContext CreateCopy()
-			=> this;
+		#endregion
 
-		private void ExecuteWithContext(object state)
-		{
-			var tuple = (Tuple<SendOrPostCallback, object>)state;
-			var oldContext = Current;
-			SetSynchronizationContext(this);
-			try
-			{
-				tuple.Item1(tuple.Item2);
-			}
-			finally
-			{
-				SetSynchronizationContext(oldContext);
-			}
-		} // proc PostWithContext
+		#region -- IServiceProvider -----------------------------------------------------
 
-		public override void Post(SendOrPostCallback d, object state)
+		public virtual object GetService(Type serviceType)
+			=> serviceType.IsAssignableFrom(GetType()) ? this : null;
+
+		#endregion
+
+		#region -- Use, ExecuteWith -----------------------------------------------------
+
+		public IDisposable Use()
+			=> IsCurrentScope
+				? null
+				: new DEScopeContext(this, SynchronizationContext.Current).Use();
+
+		internal void UpdateInternal()
 		{
-			var t = new Tuple<SendOrPostCallback, object>(d, state);
-			if (parentThreadContext != null)
-				parentThreadContext.Post(ExecuteWithContext, t);
+			if (!(SynchronizationContext.Current is DEScopeContext))
+				throw new InvalidOperationException();
+
+			SynchronizationContext.SetSynchronizationContext(new DEScopeContext(this, SynchronizationContext.Current));
+		} // proc UpdateInternal
+
+		public void ExecuteWith(Action action)
+		{
+			using (Use())
+				action();
+		} // func ExecuteWith
+
+		public T ExecuteWith<T>(Func<T> func)
+		{
+			using (Use())
+				return func();
+		} // func ExecuteWith
+
+		#endregion
+
+		public bool IsDisposed => isDisposed;
+		public bool IsCurrentScope => SynchronizationContext.Current is DEScopeContext t ? t.Scope == this : false;
+
+		// -- Static --------------------------------------------------------------------
+
+		/// <summary>Returns the current active scope.</summary>
+		/// <param name="throwException"></param>
+		/// <returns></returns>
+		public static DEScope GetScope(bool throwException = false)
+		{
+			if (SynchronizationContext.Current is DEScopeContext t)
+				return t.Scope;
+			else if (throwException)
+				throw new ArgumentNullException(nameof(GetScope), "No current scope set.");
 			else
-				ThreadPool.QueueUserWorkItem(ExecuteWithContext, t);
-		} // proc Post
+				return null;
+		} // func GetScope
 
-		public override void Send(SendOrPostCallback d, object state)
+		/// <summary>Returns a global service of the current scope or a parent scope (service model).</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="throwException"></param>
+		/// <returns></returns>
+		public static T GetScopeService<T>(bool throwException = false)
+			where T : class
 		{
-			var t = new Tuple<SendOrPostCallback, object>(d, state);
-			if (parentThreadContext != null)
-				parentThreadContext.Send(ExecuteWithContext, t);
-			else
-				ExecuteWithContext(new Tuple<SendOrPostCallback, object>(d, state));
-		} // proc Send
+			var currentScope = SynchronizationContext.Current as DEScopeContext;
+			var r = (T)null;
+			while (currentScope != null)
+			{
+				if (!currentScope.Scope.IsDisposed)
+					r = currentScope.Scope.GetService<T>(false);
+				currentScope = currentScope.ParentScopeContext;
+			}
 
-		public DEThreadBase Thread => (parentThreadContext as IDEThreadSource)?.Thread;
-	} // class DEScopeContext
+			if (r == null && throwException)
+				throw new ArgumentException($"Service {typeof(T).Name} is not implemented by the current scope.");
+
+			return r;
+		} // func GetScopeService
+	} // class DEScope
 
 	#endregion
 
@@ -264,7 +403,10 @@ namespace TecWare.DE.Server
 		protected abstract bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait);
 
 		protected void ResetMessageLoopUnsafe()
-			=> tasksFilled.Reset();
+		{
+			if (!IsDisposed)
+				tasksFilled.Reset();
+		} // proc ResetMessageLoopUnsafe
 
 		protected void PulseMessageLoop()
 		{
@@ -295,7 +437,8 @@ namespace TecWare.DE.Server
 				}
 
 				// wait for event
-				tasksFilled.Wait();
+				if (!cancellationToken.IsCancellationRequested)
+					tasksFilled.Wait();
 			}
 		} // proc ProcessMessageLoop
 
@@ -587,47 +730,14 @@ namespace TecWare.DE.Server
 	} // class DEThread
 
 	#endregion
-
-	#region -- class ThreadContextSecurity ----------------------------------------------
-
-	public sealed class ThreadContextSecurity : IDisposable
-	{
-		private readonly SynchronizationContext synchronizationContext;
-		private bool rollbackContext = true;
-
-		public ThreadContextSecurity()
-		{
-			this.synchronizationContext = SynchronizationContext.Current;
-		} // ctor
-
-		public void Dispose()
-		{
-			if (rollbackContext)
-				SynchronizationContext.SetSynchronizationContext(synchronizationContext);
-		} // proc Dispose
-
-		public void Discard()
-			=> rollbackContext = false;
-	} // class ThreadContextSecurity
-
-	#endregion
-
+	
 	#region -- class Threading ----------------------------------------------------------
 
 	public static class Threading
 	{
-		/// <summary>Retrieve current context.</summary>
-		/// <typeparam name="T"></typeparam>
-		/// <returns></returns>
-		public static T GetCurrentScope<T>() where T : DEScopeContext
-			=> SynchronizationContext.Current is T t ? t : null;
-
-		public static ThreadContextSecurity SecureCurrentContext()
-			=> new ThreadContextSecurity();
-
 		public static void AwaitTask(this Task task)
 		{
-			if (SynchronizationContext.Current is IDEThreadSource c)
+			if (SynchronizationContext.Current is IDEThreadSource c && c.Thread != null)
 			{
 				var awaiter = task.GetAwaiter();
 				if (awaiter.IsCompleted)
@@ -640,7 +750,7 @@ namespace TecWare.DE.Server
 
 		public static T AwaitTask<T>(this Task<T> task)
 		{
-			if (SynchronizationContext.Current is IDEThreadSource c)
+			if (SynchronizationContext.Current is IDEThreadSource c && c.Thread != null)
 			{
 				var awaiter = task.GetAwaiter();
 				c.Thread.ProcessMessageLoop(awaiter);

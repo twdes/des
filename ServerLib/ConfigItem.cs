@@ -586,25 +586,25 @@ namespace TecWare.DE.Server
 		#endregion
 
 		#region -- Locking ----------------------------------------------------------------
-
+		
 		public IDisposable EnterReadLock(bool upgradeable = false)
 		{
 			if (upgradeable)
 			{
 				lockConfig.EnterUpgradeableReadLock();
-				return new DisposableScope(new Action(lockConfig.ExitUpgradeableReadLock));
+				return new DisposableScopeThreadSecure(lockConfig.ExitUpgradeableReadLock);
 			}
 			else
 			{
 				lockConfig.EnterReadLock();
-				return new DisposableScope(new Action(lockConfig.ExitReadLock));
+				return new DisposableScopeThreadSecure(lockConfig.ExitReadLock);
 			}
 		} // func EnterReadLock
 
 		private IDisposable EnterWriteLock()
 		{
 			lockConfig.EnterWriteLock();
-			return new DisposableScope(lockConfig.ExitWriteLock);
+			return new DisposableScopeThreadSecure(lockConfig.ExitWriteLock);
 		} // func EnterWriteLock
 
 		#endregion
@@ -1005,11 +1005,12 @@ namespace TecWare.DE.Server
 
 		#region -- Process Request/Action -------------------------------------------------
 
-		internal void UnsafeInvokeHttpAction(string sAction, IDEWebRequestContext r)
+		internal async Task UnsafeInvokeHttpActionAsync(string action, IDEWebRequestScope r)
 		{
-			var returnValue = InvokeAction(sAction, r);
+			// execute the exceion within the thread pool
+			var returnValue = await Task.Run(() => InvokeAction(action, r));
 
-			// Erzeuge die Rückgabe
+			// check the return value
 			if (returnValue == DBNull.Value) // NativeCall
 				return;
 			else if (r.IsOutputStarted)
@@ -1023,44 +1024,42 @@ namespace TecWare.DE.Server
 			{
 				returnValue = CreateDefaultXmlReturn(true, null);
 			}
-			else if (returnValue is XElement)
+			else if (returnValue is XElement x)
 			{
-				var x = (XElement)returnValue;
 				if (x.Attribute("status") == null)
 					SetStatusAttributes(x, true);
 			}
-			else if (returnValue is LuaResult)
+			else if (returnValue is LuaResult result)
 			{
-				var result = (LuaResult)returnValue;
-				var x = CreateDefaultXmlReturn(true, result[1] as string);
+				var xResult = CreateDefaultXmlReturn(true, result[1] as string);
 
 				if (result[0] is LuaTable)
-					Procs.ToXml((LuaTable)result[0], x);
+					Procs.ToXml((LuaTable)result[0], xResult);
 				else if (result[0] != null)
-					x.Add(result[0]);
+					xResult.Add(result[0]);
 
-				returnValue = x;
+				returnValue = xResult;
 			}
-			else if (returnValue is LuaTable)
+			else if (returnValue is LuaTable t)
 			{
-				var x = CreateDefaultXmlReturn(true, null);
-				Procs.ToXml((LuaTable)returnValue, x);
-				returnValue = x;
+				var xResult = CreateDefaultXmlReturn(true, null);
+				Procs.ToXml(t, xResult);
+				returnValue = xResult;
 			}
 
-			// Schreibe die Rückgabe
-			r.WriteObject(returnValue);
+			// write return value in thread pool
+			await Task.Run(() => r.WriteObject(returnValue));
 
-			// Gib die Rückgabe frei
-			if (returnValue is IDisposable)
-				((IDisposable)returnValue).Dispose();
+			// check for disposal
+			if (returnValue is IDisposable d)
+				d.Dispose();
 		} // proc UnsafeInvokeHttpAction
 
 		/// <summary></summary>
 		/// <param name="r"></param>
 		/// <param name="sLocalPath"></param>
 		/// <returns></returns>
-		internal bool UnsafeProcessRequest(IDEWebRequestContext r)
+		internal async Task<bool> UnsafeProcessRequestAsync(IDEWebRequestScope r)
 		{
 			foreach (var w in from c in this.UnsafeChildren
 												let cHttp = c as HttpWorker
@@ -1075,7 +1074,7 @@ namespace TecWare.DE.Server
 					{
 						try
 						{
-							if (w.Request(r))
+							if (await w.RequestAsync(r))
 								return true; // Alles I/O
 						}
 						finally
@@ -1085,16 +1084,14 @@ namespace TecWare.DE.Server
 					}
 				}
 			}
-			return OnProcessRequest(r);
+			return await OnProcessRequestAsync(r);
 		} // func UnsafeProcessRequest
 
 		/// <summary>Wird aufgerufen, wenn eine Http-Anfrage am Knoten verarbeitet werden soll.</summary>
 		/// <param name="r">Http-Response</param>
 		/// <returns><c>true</c>, wenn die Anfrage beantwortet wurde.</returns>
-		protected virtual bool OnProcessRequest(IDEWebRequestContext r)
-		{
-			return false;
-		} // func OnProcessRequest
+		protected virtual Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
+			=> Task.FromResult(false);
 
 		public static XElement SetStatusAttributes(XElement x, bool state, string text = null)
 		{

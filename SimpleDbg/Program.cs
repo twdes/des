@@ -70,12 +70,12 @@ namespace TecWare.DE.Server
 	{
 		private readonly DebugView view;
 				
-		public ConsoleDebugSession(DebugView view, Uri serverUri) 
+		public ConsoleDebugSession(DebugView view, Uri serverUri, bool inProcess) 
 			: base(serverUri)
 		{
 			this.view = view;
 
-			this.DefaultTimeout = 10000;
+			this.DefaultTimeout = inProcess ? 0 : 10000;
 		} // ctor
 
 		private ICredentials currentCredentials = CredentialCache.DefaultCredentials;
@@ -109,6 +109,9 @@ namespace TecWare.DE.Server
 				return false;
 			}
 		} // proc OnConnectionFailure
+
+		protected override void OnPrint(string message)
+			=> view.WriteLine(message);
 
 		protected override void OnCommunicationException(Exception e)
 			=> view.WriteError(e, "Communication exception.");
@@ -173,14 +176,14 @@ namespace TecWare.DE.Server
 			if (arguments.Wait > 0)
 				await Task.Delay(arguments.Wait);
 
-			await RunDebugProgramAsync(new Uri(arguments.Uri));
+			await RunDebugProgramAsync(new Uri(arguments.Uri), false);
 		} // proc RunDebugProgram
 
-		public static async Task RunDebugProgramAsync(Uri uri)
+		public static async Task RunDebugProgramAsync(Uri uri, bool inProcess)
 		{
 			// connection
 			view.IsConnected = false;
-			session = new ConsoleDebugSession(view, uri);
+			session = new ConsoleDebugSession(view, uri, inProcess);
 
 			// should be post in the thread context
 			Task.Run(() => session.RunProtocolAsync()).ContinueWith(
@@ -294,7 +297,7 @@ namespace TecWare.DE.Server
 				Console.Write("User: ");
 				userName = Console.ReadLine();
 				if (String.IsNullOrEmpty(userName))
-					return null;
+					return CredentialCache.DefaultCredentials;
 
 				Console.Write("Password: ");
 				while (true)
