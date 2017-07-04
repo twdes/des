@@ -467,7 +467,7 @@ namespace TecWare.DE.Server
 			// switch logging
 			ServiceLog = new DebugLog(writeMessage);
 
-			// todo: method to get the uri
+			// invoke the debugger
 			var debuggerTask = (Task)runProgramAsync.Invoke(null, new object[] { uri, true });
 			debuggerTask.Wait();
 			return true;

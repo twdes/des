@@ -340,9 +340,9 @@ namespace TecWare.DE.Server
 					if (w != null)
 					{
 						if (x.Name == "exception")
-							w.Source.TrySetException(new ClientDebugException(x));
+							ThreadPool.QueueUserWorkItem(s => w.Source.SetException(new ClientDebugException(x)), null);
 						else
-							w.Source.TrySetResult(x);
+							ThreadPool.QueueUserWorkItem(s => w.Source.SetResult(x), null);
 					}
 				}
 			}
