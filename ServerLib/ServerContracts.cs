@@ -240,6 +240,18 @@ namespace TecWare.DE.Server
 		/// <param name="obj"></param>
 		void RegisterDispose(IDisposable obj);
 
+		/// <summary></summary>
+		/// <param name="ns"></param>
+		/// <param name="variable"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		bool TryGetGlobal(object ns, object variable, out object value);
+		/// <summary></summary>
+		/// <param name="ns"></param>
+		/// <param name="variable"></param>
+		/// <param name="value"></param>
+		void SetGlobal(object ns, object variable, object value);
+
 		/// <summary>Executes all commit actions.</summary>
 		/// <returns></returns>
 		Task CommitAsync();
@@ -279,11 +291,38 @@ namespace TecWare.DE.Server
 	/// <summary>Scope with transaction model and a user based service provider.</summary>
 	public class DECommonScope : DEScope, IDECommonScope
 	{
+		#region -- struct GlobalKey -----------------------------------------------------
+
+		private struct GlobalKey : IEquatable<GlobalKey>
+		{ 
+			private readonly object ns;
+			private readonly object n;
+
+			public GlobalKey(object ns, object variable)
+			{
+				this.ns = ns ?? throw new ArgumentNullException(nameof(ns));
+				this.n = variable ?? throw new ArgumentNullException(nameof(variable));
+			} // ctor
+
+			public override bool Equals(object obj)
+				=> obj is GlobalKey t ? Equals(t) : false;
+
+			public bool Equals(GlobalKey other)
+				=> (Object.ReferenceEquals(ns, other.ns) || ns.Equals(other.ns))
+					&& (Object.ReferenceEquals(n, other.n) || n.Equals(other.n));
+
+			public override int GetHashCode()
+				=> ns.GetHashCode() ^ n.GetHashCode();
+		} // class GlobalKey
+
+		#endregion
+
 		private readonly List<Func<Task>> commitActions = new List<Func<Task>>();
 		private readonly List<Func<Task>> rollbackActions = new List<Func<Task>>();
 		private readonly List<IDisposable> autoDispose = new List<IDisposable>();
 
 		private readonly Dictionary<Type, Lazy<object>> services = new Dictionary<Type, Lazy<object>>();
+		private readonly Dictionary<GlobalKey, object> globals = new Dictionary<GlobalKey, object>();
 
 		private readonly IServiceProvider sp;
 		private readonly IDEServer server;
@@ -552,6 +591,16 @@ namespace TecWare.DE.Server
 			isCommitted = false;
 			return RunActionsAsync(rollbackActions, true);
 		} // proc Rollback
+
+		#endregion
+
+		#region -- Global Store ---------------------------------------------------------
+
+		public bool TryGetGlobal(object ns, object variable, out object value)
+			=> globals.TryGetValue(new GlobalKey(ns, variable), out value);
+
+		public void SetGlobal(object ns, object variable, object value)
+			=> globals[new GlobalKey(ns, variable)] = value;
 
 		#endregion
 
