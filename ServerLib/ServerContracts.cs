@@ -177,9 +177,14 @@ namespace TecWare.DE.Server
 
 	#region -- IDEDebugContext ----------------------------------------------------------
 
+	/// <summary>This service is registered, if this command was invoked from an debug session.</summary>
 	public interface IDEDebugContext
 	{
-		void OnPrint(string message);
+		/// <summary>End point for the log system to notify log-messages.</summary>
+		/// <param name="type">Qualification of the message.</param>
+		/// <param name="message">Message</param>
+		/// <param name="endOfLine"><c>false</c>, if no new line</param>
+		void OnMessage(LogMsgType type, string message);
 	} // interface IDEDebugContext
 
 	#endregion
@@ -326,7 +331,7 @@ namespace TecWare.DE.Server
 			// dispose services
 			IEnumerable<IDisposable> activeServices;
 			lock (services)
-				activeServices = from c in services.Values where c.IsValueCreated && c.Value is IDisposable select (IDisposable)c;
+				activeServices = from c in services.Values where c.IsValueCreated && c.Value is IDisposable select (IDisposable)c.Value;
 			await Task.Run(
 				() =>
 				{

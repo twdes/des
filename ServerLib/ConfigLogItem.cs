@@ -116,7 +116,7 @@ namespace TecWare.DE.Server
 	/// <summary>Access to a LogFile.</summary>
 	public sealed class DELogFile : IDERangeEnumerable2<DELogLine>, IDisposable
 	{
-		private const string WindowsLineEnding = "\r\n";
+		private const string windowsLineEnding = "\r\n";
 
 		public event EventHandler LinesAdded;
 
@@ -186,7 +186,7 @@ namespace TecWare.DE.Server
 
 		public void Add(DELogLine line)
 		{
-			var lineData = Encoding.Default.GetBytes(line.ToLineData() + WindowsLineEnding);
+			var lineData = Encoding.Default.GetBytes(line.ToLineData() + windowsLineEnding);
 			lock (logFileLock)
 			{
 				if (isDisposed) // check if the log is disposed
@@ -621,15 +621,21 @@ namespace TecWare.DE.Server
 
 		#region -- IDELogConfig Members ---------------------------------------------------
 
-		void ILogger.LogMsg(LogMsgType typ, string text)
+		void ILogger.LogMsg(LogMsgType type, string text)
 		{
 			Debug.Print("[{0}] {1}", Name, text);
 
-			var logLine = new DELogLine(DateTime.Now, typ, text);
-			if (Server.Queue?.IsQueueRunning ?? false)
-				Server.Queue.Factory.StartNew(() => logFile?.Add(logLine));
-			else // Background thread is not in service, synchron add
-				logFile?.Add(logLine);
+			// create lock line
+			if (type != LogMsgType.Debug)
+			{
+				var logLine = new DELogLine(DateTime.Now, type, text);
+				if (Server.Queue?.IsQueueRunning ?? false)
+					Server.Queue.RegisterCommand(() => logFile?.Add(logLine));
+				else // Background thread is not in service, synchron add
+					logFile?.Add(logLine);
+			}
+
+			DEScope.GetScopeService<IDEDebugContext>(false)?.OnMessage(type, text);
 		} // proc ILogger.LogMsg
 
 		ILogMessageScope ILogger2.CreateScope(LogMsgType typ, bool autoFlush)

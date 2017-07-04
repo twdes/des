@@ -208,14 +208,6 @@ namespace TecWare.DE.Server
 				? null
 				: new DEScopeContext(this, SynchronizationContext.Current).Use();
 
-		internal void UpdateInternal()
-		{
-			if (!(SynchronizationContext.Current is DEScopeContext))
-				throw new InvalidOperationException();
-
-			SynchronizationContext.SetSynchronizationContext(new DEScopeContext(this, SynchronizationContext.Current));
-		} // proc UpdateInternal
-
 		public void ExecuteWith(Action action)
 		{
 			using (Use())

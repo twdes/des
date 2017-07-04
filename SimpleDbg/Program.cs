@@ -110,8 +110,29 @@ namespace TecWare.DE.Server
 			}
 		} // proc OnConnectionFailure
 
-		protected override void OnPrint(string message)
-			=> view.WriteLine(message);
+		protected override void OnMessage(char type, string message)
+		{
+			IDisposable SetColorByType()
+			{
+				switch (type)
+				{
+					case 'E':
+						return view.SetColor(ConsoleColor.DarkRed);
+					case 'W':
+						return view.SetColor(ConsoleColor.DarkYellow);
+					case 'I':
+						return view.SetColor(ConsoleColor.White);
+					default:
+						return view.SetColor(ConsoleColor.Gray);
+				}
+			} // func SetColorByType
+
+			using (view.LockScreen())
+			using (SetColorByType())
+			{
+				view.WriteLine(message);
+			}
+		} // proc OnMessage
 
 		protected override void OnCommunicationException(Exception e)
 			=> view.WriteError(e, "Communication exception.");
@@ -152,6 +173,7 @@ namespace TecWare.DE.Server
 					{
 						Task.Factory.StartNew(RunDebugProgram(options).Wait).Wait();
 					}
+					catch (TaskCanceledException) { }
 					catch (Exception e)
 					{
 						view.WriteError(e, "Input loop failed. Application is aborted.");
@@ -193,6 +215,7 @@ namespace TecWare.DE.Server
 					{
 						t.Wait();
 					}
+					catch (TaskCanceledException) { }
 					catch (Exception e)
 					{
 						view.WriteError(e.ToString());
@@ -487,6 +510,27 @@ namespace TecWare.DE.Server
 				session.DefaultTimeout = timeout;
 			view.WriteLine($"Timeout is: {session.DefaultTimeout:N0}ms");
 		} // func SendList
+
+		[InteractiveCommand("begin", HelpText = "Starts a new transaction scope.")]
+		private static async Task BeginSCope()
+		{
+			var userName = await session.SendBeginScopeAsync();
+			view.WriteLine(String.Format("New Scope: {0}", userName));
+		} // proc BeginSCope
+
+		[InteractiveCommand("commit", HelpText = "Commits the current scope and creates a new one.")]
+		private static async Task CommitSCope()
+		{
+			var userName = await session.SendCommitScopeAsync();
+			view.WriteLine(String.Format("Commit Scope of {0}", userName));
+		} // proc CommitSCope
+
+		[InteractiveCommand("rollback", HelpText = "Rollbacks the current scope and creates a new one.")]
+		private static async Task RollbackSCope()
+		{
+			var userName = await session.SendRollbackScopeAsync();
+			view.WriteLine(String.Format("Rollback Scope of {0}", userName));
+		} // proc RollbackSCope
 
 		private static void SetLastRemoteException(Exception e)
 		{

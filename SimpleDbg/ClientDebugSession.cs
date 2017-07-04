@@ -348,8 +348,11 @@ namespace TecWare.DE.Server
 			}
 			else // notify
 			{
-				if (x.Name == "print")
-					OnPrint(x.Value);
+				if (x.Name == "log")
+				{
+					var t = x.Attribute("type")?.Value;
+					OnMessage(String.IsNullOrEmpty(t) ? 'D' : Char.ToUpper(t[0]), x.Value);
+				}
 			}
 		} // proc ProcessAnswer
 
@@ -477,7 +480,7 @@ namespace TecWare.DE.Server
 		protected virtual void DebugPrint(string message)
 			=> Debug.Print(message);
 
-		protected abstract void OnPrint(string message);
+		protected abstract void OnMessage(char type, string message);
 
 		public bool IsConnected
 		{
@@ -630,6 +633,31 @@ namespace TecWare.DE.Server
 
 		public async Task<XElement> SendListAsync(bool recursive, CancellationToken cancellationToken)
 			=> await SendAsync(new XElement("list", new XAttribute("r", recursive)), cancellationToken);
+
+		#endregion
+
+		#region -- Scope ------------------------------------------------------------------
+
+		private string GetScopeUserName(XElement x)
+			=> x.GetAttribute<string>("user", "none");
+
+		public Task<string> SendBeginScopeAsync()
+			=> SendBeginScopeAsync(CancellationToken.None);
+
+		public async Task<string> SendBeginScopeAsync(CancellationToken cancellationToken)
+			=> GetScopeUserName(await SendAsync(new XElement("scopeBegin")));
+
+		public Task<string> SendRollbackScopeAsync()
+			=> SendRollbackScopeAsync(CancellationToken.None);
+
+		public async Task<string> SendRollbackScopeAsync(CancellationToken cancellationToken)
+			=> GetScopeUserName(await SendAsync(new XElement("scopeRollback")));
+
+		public Task<string> SendCommitScopeAsync()
+			=> SendCommitScopeAsync(CancellationToken.None);
+
+		public async Task<string> SendCommitScopeAsync(CancellationToken cancellationToken)
+			=> GetScopeUserName(await SendAsync(new XElement("scopeCommit")));
 
 		#endregion
 

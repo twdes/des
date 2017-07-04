@@ -1077,14 +1077,7 @@ namespace TecWare.DE.Server
 			private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
 
 			protected override void OnPrint(string text)
-			{
-				server.Log.Info(text);
-
-				// direct to the attached debugger
-				var dbg = DEScope.GetScopeService<IDEDebugContext>(false);
-				if (dbg != null)
-					dbg.OnPrint(text);
-			} // proc OnPrint
+				=> server.Log.LogMsg(LogMsgType.Debug, text);
 		} // class DELuaRuntime
 
 		private LuaGlobalPortable luaRuntime = null;
