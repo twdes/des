@@ -1398,6 +1398,10 @@ namespace TecWare.DE.Server
 						// check the return value
 						if (ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
 							throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
+
+						// commit all is fine!
+						if (!context.IsCommited.HasValue)
+							await context.CommitAsync();
 					}
 					catch (Exception e)
 					{
