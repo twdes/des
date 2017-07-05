@@ -28,6 +28,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
+using TecWare.DE.Data;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
@@ -498,6 +499,17 @@ namespace TecWare.DE.Server
 		/// <summary>Debug session and scope for the commands.</summary>
 		private sealed class LuaDebugSession : LuaTable, IDEDebugContext, IDisposable
 		{
+			private sealed class ReferenceEqualImplementation : IEqualityComparer<object>
+			{
+				public new bool Equals(object x, object y)
+					=> Object.ReferenceEquals(x, y);
+				public int GetHashCode(object obj)
+					=> obj.GetHashCode(); // fail
+
+				public static ReferenceEqualImplementation Instance { get; } = new ReferenceEqualImplementation();
+			} // class ReferenceEqualImplementation
+
+
 			private readonly LuaEngine engine; // lua engine
 			private readonly LoggerProxy log; // log for the debugging
 
@@ -592,8 +604,7 @@ namespace TecWare.DE.Server
 				}
 				catch (WebSocketException e)
 				{
-					if (e.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely)
-						log.Except("Debug session closed.", e);
+					log.Except($"Debug session closed ({e.WebSocketErrorCode}).", e);
 				}
 				catch (Exception e)
 				{
@@ -629,17 +640,83 @@ namespace TecWare.DE.Server
 				return x;
 			} // proc CreateException
 
-			private XElement CreateMember(object member, object value, Type type = null)
+			private XElement CreateMember(Stack<object> values, object member, object value, Type type = null)
 			{
-				var x = new XElement("v",
-					member is int ? new XAttribute("i", member) : new XAttribute("n", member.ToString()),
-					new XAttribute("t", LuaType.GetType(type ?? (value != null ? value.GetType() : typeof(object))).AliasOrFullName)
-				);
+				var valueExists = values.Contains(value, ReferenceEqualImplementation.Instance);
+				values.Push(value);
+				try
+				{
+					var displayType = LuaType.GetType(type ?? (value != null ? value.GetType() : typeof(object))).AliasOrFullName;
 
-				if (value != null)
-					x.Add(new XText(Procs.ChangeType<string>(value)));
+					var x = new XElement("v",
+						member is int ? new XAttribute("i", member) : new XAttribute("n", member.ToString()),
+						new XAttribute("t", displayType)
+					);
 
-				return x;
+					if (valueExists)
+					{
+						x.Add(new XAttribute("ct", "recursion"));
+					}
+					else if (value is LuaTable t)
+					{
+						x.Add(new XAttribute("ct", "table"));
+						x.Add(from kv in t select CreateMember(values, kv.Key, kv.Value));
+					}
+					else if (value is IDataRow row)
+					{
+						x.Add(new XAttribute("ct", "row"));
+
+						for (var i = 0; i < row.Columns.Count; i++)
+							x.Add(CreateMember(values, row.Columns[i].Name, row[i], row.Columns[i].DataType));
+					}
+					else if (value is IEnumerable<IDataRow> rows)
+					{
+						x.Add(new XAttribute("ct", "rows"));
+
+						var rowCount = 0;
+						var columnNames = (string[])null;
+						var columns = (IReadOnlyList<IDataColumn>)null;
+						foreach (var r in rows)
+						{
+							if (rowCount >= 10)
+								break;
+
+							if (columns == null)
+							{
+								columns = r.Columns;
+								columnNames = new string[columns.Count];
+
+								// emit columns
+								var xFields = new XElement("f");
+								x.Add(xFields);
+								for (var i = 0; i < columns.Count; i++)
+								{
+									columnNames[i] = "c" + i.ToString();
+
+									xFields.Add(new XElement(columnNames[i],
+										new XAttribute("n", columns[i].Name),
+										new XAttribute("t", LuaType.GetType(columns[i].DataType).AliasOrFullName)
+									));
+								}
+							}
+
+							var xRow = new XElement("r");
+							x.Add(xRow);
+							for (var i = 0; i < columns.Count; i++)
+								xRow.Add(new XElement(columnNames[i], r[i].ChangeType<string>()));
+	
+							rowCount++;
+						}
+					}
+					else if (value != null)
+						x.Add(new XText(Procs.ChangeType<string>(value)));
+
+					return x;
+				}
+				finally
+				{
+					values.Pop();
+				}
 			} // func CreateMember
 
 			private async Task ProcessMessage(XElement x)
@@ -725,7 +802,7 @@ namespace TecWare.DE.Server
 				// return the result
 				var xAnswer = new XElement("return");
 				for (var i = 0; i < r.Count; i++)
-					xAnswer.Add(CreateMember(i, r[i]));
+					xAnswer.Add(CreateMember(new Stack<object>(), i, r[i]));
 
 				return xAnswer;
 			} // func Execute
@@ -739,7 +816,7 @@ namespace TecWare.DE.Server
 				var xAnswer = new XElement("return");
 
 				foreach (var c in currentItem)
-					xAnswer.Add(CreateMember(c.Key, c.Value));
+					xAnswer.Add(CreateMember(new Stack<object>(), c.Key, c.Value));
 
 				return xAnswer;
 			} // func GlobalVars

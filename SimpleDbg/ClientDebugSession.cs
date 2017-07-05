@@ -37,43 +37,48 @@ namespace TecWare.DE.Server
 		private readonly string name;
 		private readonly string typeName;
 		private readonly Type type; // is null if the value is not converted
-		private readonly object value;
+		private readonly object coreValue;
+		private readonly Lazy<object> value;
 
-		internal ClientMemberValue(string name, string typeName, Type type, object value)
+		internal ClientMemberValue(string name, string typeName, Type type, object coreValue)
 		{
 			this.name = name;
 			this.typeName = typeName;
 			this.type = type;
-			this.value = value;
+			this.coreValue = coreValue;
+			this.value = new Lazy<object>(ConvertType);
 		} // ctor
+
+		private object ConvertType()
+		{
+			if (IsValueArray || IsValueList)
+				return coreValue;
+			else if (type == null)
+				return null;
+			
+			try
+			{
+				return Procs.ChangeType(coreValue, type);
+			}
+			catch
+			{
+				return null;
+			}
+		} // func ConvertType
+
 
 		public string Name => name;
 		public string TypeName => typeName;
-		public object Value => value;
 
 		public bool IsConverted => type != null;
 
 		public Type Type => type ?? typeof(string);
 
-		public string ValueAsString
-		{
-			get
-			{
-				try
-				{
-					if (Value == null)
-						return "null";
-					else if (Type == typeof(string))
-						return "'" + Value.ToString() + "'";
-					else
-						return Procs.ChangeType<string>(Value);
-				}
-				catch (Exception)
-				{
-					return Value.ToString();
-				}
-			}
-		} // prop ValueAsString
+		public object Value => value.Value;
+		public string ValueAsString => coreValue == null ? "-NULL-" : (coreValue is string s ? s : "-VALUE-");
+
+		public bool IsValueList => coreValue is ClientMemberValue[][];
+		public bool IsValueArray => coreValue is ClientMemberValue[];
 	} // class ClientMemberValue
 
 	#endregion
@@ -525,26 +530,48 @@ namespace TecWare.DE.Server
 
 			// get type
 			var typeString = x.GetAttribute("t", "object");
+			var contentType = x.GetAttribute("ct", typeString);
 			var type = typeString == "table" ? null : GetType(typeString);
 
 			// check if the value is convertible (only convert core types)
 			object value;
-			if (typeString == "table") // table
+			if (contentType == "table" || contentType == "row") // table, row
 				value = ParseReturn(x, 1).ToArray();
-			else if (type != null)
+			else if (contentType == "rows")
 			{
-				try
+				var xFields = x.Element("f");
+				if (xFields != null)
 				{
-					value = Lua.RtConvertValue(x.Value, type);
+					var j = 0;
+					var columns = ( // elementName, fieldName, typeString, type
+						from xField in xFields.Elements()
+						let n = xField.GetAttribute("n", (j++).ToString())
+						let t = xField.GetAttribute("t", "object")
+						select new Tuple<string, string, string, Type>(xField.Name.LocalName, n, t, GetType(t))
+					).ToArray();
+
+					var rows = new List<ClientMemberValue[]>();
+					foreach (var xRow in x.Elements("r"))
+					{
+						var values = new ClientMemberValue[columns.Length];
+
+						for (var i = 0; i < columns.Length; i++)
+						{
+							var col = columns[i];
+							var xValue = xRow.Element(col.Item1);
+							values[i] = new ClientMemberValue(col.Item2, col.Item3, col.Item4, xValue == null || xValue.IsEmpty ? null : xValue.Value);
+						}
+
+						rows.Add(values);
+					}
+
+					value = rows.ToArray();
 				}
-				catch (Exception)
-				{
-					type = null;
-					value = x.Value;
-				}
+				else
+					value = null;
 			}
 			else
-				value = x.Value;
+				value = x.IsEmpty ? null : x.Value;
 
 			return new ClientMemberValue(member, typeString, type, value);
 		} // func GetMemberValue

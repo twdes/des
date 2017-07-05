@@ -443,6 +443,225 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- WriteReturn ----------------------------------------------------------
+
+		#region -- class TableColumn ----------------------------------------------------
+
+		private sealed class TableColumn
+		{
+			private const string nullValue = "-NULL-";
+			private const string errValue = "-ERR-";
+
+			private readonly string name;
+			private readonly string type;
+			private int width;
+			private readonly Func<ClientMemberValue, string> formatValue;
+
+			public TableColumn(ClientMemberValue mv)
+			{
+				this.name = mv.Name;
+				this.type = mv.TypeName;
+
+				var tc = mv.Type != null ? Type.GetTypeCode(mv.Type) : TypeCode.Object;
+				switch (tc)
+				{
+					case TypeCode.SByte:
+						width = 10;
+						formatValue = Int8Value;
+						break;
+					case TypeCode.Byte:
+						width = 10;
+						formatValue = UInt8Value;
+						break;
+					case TypeCode.Int16:
+						width = 10;
+						formatValue = Int16Value;
+						break;
+					case TypeCode.UInt16:
+						width = 10;
+						formatValue = UInt16Value;
+						break;
+					case TypeCode.Int32:
+						width = 10;
+						formatValue = Int32Value;
+						break;
+					case TypeCode.UInt32:
+						width = 10;
+						formatValue = UInt32Value;
+						break;
+					case TypeCode.Int64:
+						width = 10;
+						formatValue = Int64Value;
+						break;
+					case TypeCode.UInt64:
+						width = 10;
+						formatValue = UInt64Value;
+						break;
+
+					case TypeCode.Boolean:
+						width = 5;
+						formatValue = BooleanValue;
+						break;
+
+					default:
+						width = -1;
+						formatValue = ToStringValue;
+						break;
+				}
+			} // ctor
+
+			public string FormatValue(ClientMemberValue mv)
+				=> formatValue(mv);
+
+			private string ToStringValue(ClientMemberValue mv)
+				=> mv.ValueAsString;
+
+			private string FormatInteger(long? n)
+			{
+				var s = n.HasValue ? n.ToString() : nullValue;
+				return s.Length > width
+					? errValue
+					: s.PadLeft(width);
+			} // func FormatInteger
+
+			private string Int8Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?((sbyte)mv.Value));
+
+			private string UInt8Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?((byte)mv.Value));
+
+			private string Int16Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?((short)mv.Value));
+
+			private string UInt16Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?((ushort)mv.Value));
+
+			private string Int32Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?((int)mv.Value));
+
+			private string UInt32Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?((uint)mv.Value));
+
+			private string Int64Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?((long)mv.Value));
+
+			private string UInt64Value(ClientMemberValue mv)
+				=> FormatInteger(mv.Value == null ? null : new long?(unchecked((long)(ulong)mv.Value)));
+
+			private string BooleanValue(ClientMemberValue mv)
+				=> mv.Value == null ? nullValue : ((bool)mv.Value ? "true" : "false");
+
+			public bool IsVariable => width < 0;
+
+			public string Name => name;
+			public string TypeName => type;
+
+			public int Width { get => width; set => width = value; }
+		} // class TableColumn
+
+		#endregion
+
+		private static void WriteTableMeasureColumns(ClientMemberValue[] sampleRow, out TableColumn[] columns)
+		{
+			var maxWidth = Console.WindowWidth - 1;
+			const int minColWith = 10;
+			var variableColumns = 0;
+			var fixedWidth = 0;
+			var columnsList = new List<TableColumn>(sampleRow.Length);
+
+			for (var i = 0; i < sampleRow.Length; i++)
+			{
+				columnsList.Add(new TableColumn(sampleRow[i]));
+				if (columnsList[i].IsVariable)
+					variableColumns++;
+				else
+					fixedWidth += columnsList[i].Width + 1;
+			}
+
+			// calc variable column with
+			if (variableColumns > 0)
+			{
+				var variableWidth = maxWidth - fixedWidth;
+				if (variableWidth > 0)
+				{
+					var varColumnWidth = (variableWidth / variableColumns) - 1;
+					if (varColumnWidth < minColWith)
+						varColumnWidth = minColWith;
+					foreach (var c in columnsList)
+					{
+						if (c.IsVariable)
+							c.Width = varColumnWidth;
+					}
+				}
+			}
+
+			// clear invisible columns
+			var currentWidth = 0;
+			for (var i = 0; i < columnsList.Count; i++)
+			{
+				var col = columnsList[i];
+				if (currentWidth < maxWidth)
+				{
+					var newCurrentWidth = currentWidth + col.Width + 1;
+					if (newCurrentWidth > maxWidth)
+						col.Width = maxWidth - currentWidth;
+
+					currentWidth = newCurrentWidth;
+				}
+				else
+				{
+					columnsList.RemoveRange(i, columnsList.Count - i);
+					break;
+				}
+			}
+			columns = columnsList.ToArray();
+		} // proc WriteTableMeasureColumns
+
+		private static string TableStringPad(string value, int maxWidth)
+		{
+			if (String.IsNullOrEmpty(value))
+				return new string(' ', maxWidth);
+			else if (value.Length > maxWidth)
+				return value.Substring(0, maxWidth - 3) + "...";
+			else
+				return value.PadRight(maxWidth);
+		} // func TableStringPad
+
+		private static void WriteRow<T>(TableColumn[] columns, T[] values, Func<TableColumn, T,string> getValue)
+		{
+			for (var i = 0; i < columns.Length; i++)
+			{
+				if (i > 0)
+					Console.Write(" ");
+				var col = columns[i];
+				Console.Write(TableStringPad(getValue(col, values[i]), col.Width));
+			}
+			Console.WriteLine();
+		} // proc WriteRow
+
+		private static void WriteTable(IEnumerable<ClientMemberValue[]> list)
+		{
+
+			var columns = (TableColumn[])null;
+			foreach(var r in list)
+			{
+				if (columns == null)
+				{
+					WriteTableMeasureColumns(r, out columns);
+
+					// header
+					WriteRow(columns, columns, (_, c) => c.Name);
+					// type
+					using (view.SetColor(ConsoleColor.DarkGray))
+						WriteRow(columns, columns, (_, c) => c.TypeName);
+					// sep
+					WriteRow(columns, columns, (_, c) => new string('-', c.Width));
+				}
+
+				WriteRow(columns, r, (_, c) => _.FormatValue(c));
+			}
+		} // proc WriteTable
+
 		private static void WriteReturn(string indent, IEnumerable<ClientMemberValue> r)
 		{
 			foreach (var v in r)
@@ -451,8 +670,18 @@ namespace TecWare.DE.Server
 				{
 					Console.Write(indent);
 					Console.Write(v.Name);
-					if (v.Value is IEnumerable<ClientMemberValue>)
-						WriteReturn(indent + "    ", (IEnumerable<ClientMemberValue>)v.Value);
+					if (v.Value is IEnumerable<ClientMemberValue[]> list)
+					{
+						Console.WriteLine();
+						Console.WriteLine();
+						WriteTable(list);
+						Console.WriteLine();
+					}
+					else if (v.Value is IEnumerable<ClientMemberValue> array)
+					{
+						Console.WriteLine();
+						WriteReturn(indent + "    ", array);
+					}
 					else
 					{
 						Console.Write(": ");
@@ -467,6 +696,8 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc WriteReturn
+
+		#endregion
 
 		private static async Task SendCommand(string commandText)
 		{

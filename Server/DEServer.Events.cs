@@ -576,8 +576,7 @@ namespace TecWare.DE.Server
 							}
 							finally
 							{
-								var tmp = enumerator as IDisposable;
-								if (tmp != null)
+								if (enumerator is IDisposable tmp)
 									tmp.Dispose();
 							}
 							break;
