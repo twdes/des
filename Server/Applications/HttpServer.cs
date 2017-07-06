@@ -258,7 +258,7 @@ namespace TecWare.DE.Server
 
 		public void LogStop()
 		{
-			log.AutoFlush(false);
+			log?.AutoFlush(false);
 			Procs.FreeAndNil(ref log);
 		} // proc LogStop
 		
