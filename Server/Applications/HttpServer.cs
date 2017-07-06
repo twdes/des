@@ -30,6 +30,7 @@ using System.Net.WebSockets;
 using System.Reflection;
 using System.Security.Principal;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -1062,8 +1063,15 @@ namespace TecWare.DE.Server
 					{
 						if (first)
 						{
-							defaultBaseUri = new Uri(c, UriKind.Absolute);
-							first = false;
+							var defaultUriString = Regex.Replace(c, @"\:\/\/[\*\+]", "://" + Environment.MachineName);
+							try
+							{
+								defaultBaseUri = new Uri(defaultUriString, UriKind.Absolute);
+								first = false;
+							}
+							catch (UriFormatException)
+							{
+							}
 						}
 						httpListener.Prefixes.Add(c);
 					}

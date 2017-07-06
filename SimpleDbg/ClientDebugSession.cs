@@ -176,7 +176,8 @@ namespace TecWare.DE.Server
 						Task.Run(() => clientSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None)).Wait();
 				}
 
-				sessionDisposeSource.Cancel();
+				if (!sessionDisposeSource.IsCancellationRequested)
+					sessionDisposeSource.Cancel();
 				sessionDisposeSource.Dispose();
 			}
 		} // proc Dispose
