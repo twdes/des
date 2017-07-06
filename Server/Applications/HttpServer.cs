@@ -257,7 +257,10 @@ namespace TecWare.DE.Server
 		} // proc LogStart
 
 		public void LogStop()
-			=> Procs.FreeAndNil(ref log);
+		{
+			log.AutoFlush(false);
+			Procs.FreeAndNil(ref log);
+		} // proc LogStop
 		
 		public void Log(Action<LogMessageScopeProxy> action)
 		{
@@ -1494,8 +1497,12 @@ namespace TecWare.DE.Server
 				string actionName;
 				if (r.RelativeSubPath.Length == 0 && !String.IsNullOrEmpty(actionName = r.GetProperty("action", String.Empty)))
 				{
-					if (actionName == "lines" || actionName == "states" || actionName == "events")
-						r.LogStop();
+					if (actionName == "listget")
+					{
+						var id = r.GetProperty("id", String.Empty);
+						if (id == LogLineListId || id == PropertiesListId || id == ActionsListId || id == AttachedScriptsListId)
+							r.LogStop();
+					}
 
 					await current.UnsafeInvokeHttpActionAsync(actionName, r);
 					return true;

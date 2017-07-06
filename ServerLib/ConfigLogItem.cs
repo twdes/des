@@ -511,7 +511,7 @@ namespace TecWare.DE.Server
 
 			public LogMsgType Typ { get { return frame.Scope.Typ; } }
 
-			public ILogMessageScope AutoFlush() => frame.Scope.AutoFlush();
+			public ILogMessageScope AutoFlush(bool autoFlush) => frame.Scope.AutoFlush(autoFlush);
 			public ILogMessageScope SetType(LogMsgType value, bool force = false) => frame.Scope.SetType(value, force);
 			public IDisposable Indent(string indentation = "  ") => frame.Scope.Indent(indentation);
 			public ILogMessageScope Write(string text) => frame.Scope.Write(text);
