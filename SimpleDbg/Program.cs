@@ -340,7 +340,7 @@ namespace TecWare.DE.Server
 				Console.WriteLine();
 			}
 
-			return new NetworkCredential(userName, sec);
+			return UserCredential.Wrap(new NetworkCredential(userName, sec));
 		} // func GetCredentialsFromUser
 
 		#endregion
@@ -670,14 +670,14 @@ namespace TecWare.DE.Server
 				{
 					Console.Write(indent);
 					Console.Write(v.Name);
-					if (v.Value is IEnumerable<ClientMemberValue[]> list)
+					if (v.IsValueList && v.Value is IEnumerable<ClientMemberValue[]> list)
 					{
 						Console.WriteLine();
 						Console.WriteLine();
 						WriteTable(list);
 						Console.WriteLine();
 					}
-					else if (v.Value is IEnumerable<ClientMemberValue> array)
+					else if (v.IsValueArray && v.Value is IEnumerable<ClientMemberValue> array)
 					{
 						Console.WriteLine();
 						WriteReturn(indent + "    ", array);

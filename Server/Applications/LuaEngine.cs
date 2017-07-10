@@ -640,8 +640,20 @@ namespace TecWare.DE.Server
 				return x;
 			} // proc CreateException
 
-			private XElement CreateMember(Stack<object> values, object member, object value, Type type = null)
+			private XElement CreateMember(Stack<object> values, object member, Func<object> getValue, Type type = null)
 			{
+				object getValueSafe()
+				{
+					try
+					{
+						return getValue();
+					}
+					catch (Exception e)
+					{
+						return $"[{e.GetType().Name}] {e.Message}";
+					}
+				}
+				var value = getValueSafe();
 				var valueExists = values.Contains(value, ReferenceEqualImplementation.Instance);
 				values.Push(value);
 				try
@@ -660,14 +672,15 @@ namespace TecWare.DE.Server
 					else if (value is LuaTable t)
 					{
 						x.Add(new XAttribute("ct", "table"));
-						x.Add(from kv in t select CreateMember(values, kv.Key, kv.Value));
+						foreach (var key in ((IDictionary<object, object>)t).Keys)
+							x.Add(CreateMember(values, key, () => t[key]));
 					}
 					else if (value is IDataRow row)
 					{
 						x.Add(new XAttribute("ct", "row"));
 
 						for (var i = 0; i < row.Columns.Count; i++)
-							x.Add(CreateMember(values, row.Columns[i].Name, row[i], row.Columns[i].DataType));
+							x.Add(CreateMember(values, row.Columns[i].Name, () => row[i], row.Columns[i].DataType));
 					}
 					else if (value is IEnumerable<IDataRow> rows)
 					{
@@ -704,7 +717,7 @@ namespace TecWare.DE.Server
 							x.Add(xRow);
 							for (var i = 0; i < columns.Count; i++)
 								xRow.Add(new XElement(columnNames[i], r[i].ChangeType<string>()));
-	
+
 							rowCount++;
 						}
 					}
@@ -802,7 +815,7 @@ namespace TecWare.DE.Server
 				// return the result
 				var xAnswer = new XElement("return");
 				for (var i = 0; i < r.Count; i++)
-					xAnswer.Add(CreateMember(new Stack<object>(), i, r[i]));
+					xAnswer.Add(CreateMember(new Stack<object>(), i, () => r[i]));
 
 				return xAnswer;
 			} // func Execute
@@ -816,7 +829,7 @@ namespace TecWare.DE.Server
 				var xAnswer = new XElement("return");
 
 				foreach (var c in currentItem)
-					xAnswer.Add(CreateMember(new Stack<object>(), c.Key, c.Value));
+					xAnswer.Add(CreateMember(new Stack<object>(), c.Key, () => c.Value));
 
 				return xAnswer;
 			} // func GlobalVars

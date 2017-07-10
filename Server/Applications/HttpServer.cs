@@ -1325,21 +1325,14 @@ namespace TecWare.DE.Server
 					// start authentification
 					await context.AuthentificateUserAsync(ctx.User?.Identity);
 
-					try
-					{
-						// authentificate the user
-						context.DemandToken(subProtocol.SecurityToken);
+					// authentificate the user
+					context.DemandToken(subProtocol.SecurityToken);
 
-						// accept the protocol to the client
-						await context.AcceptWebSocketAsync(subProtocol.Protocol);
+					// accept the protocol to the client
+					await context.AcceptWebSocketAsync(subProtocol.Protocol);
 
-						// accept the protocol to the server
-						await subProtocol.ExecuteWebSocketAsync(context);
-					}
-					catch (Exception e)
-					{
-						Log.Except(e);
-					}
+					// accept the protocol to the server
+					await subProtocol.ExecuteWebSocketAsync(context);
 				}
 			}
 		} // func ProcessAcceptWebSocketAsync

@@ -24,6 +24,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -208,6 +209,7 @@ namespace TecWare.DE.Server
 				// create the connection
 				var socket = new ClientWebSocket();
 				socket.Options.Credentials = GetCredentials();
+				socket.Options.SetRequestHeader("des-multiple-authentifications", "true");
 				socket.Options.AddSubProtocol("dedbg");
 
 				#region -- connect --
@@ -503,7 +505,8 @@ namespace TecWare.DE.Server
 
 		private Type GetType(string typeString)
 		{
-			if (typeString.IndexOf(",") == -1)
+			var lastIndex = typeString.LastIndexOfAny(new char[] { ']', ',' });
+			if (lastIndex == -1 || typeString[lastIndex] == ']')
 				return LuaType.GetType(typeString);
 			else
 			{
