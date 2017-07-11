@@ -1225,7 +1225,7 @@ namespace TecWare.DE.Server
 		public virtual string SecurityToken { get { return securityToken; } }
 
 		/// <summary>Gibt ein Symbol für den Knoten zurück.</summary>
-		public virtual string Icon { get { return null; } }
+		public virtual string Icon => "/images/config.png";
 
 		/// <summary>Zugriff auf die Konfigurationsdatei.</summary>
 		[LuaMember("Log")]
