@@ -60,6 +60,7 @@ namespace TecWare.DE.Server
 
 			public int Id { get; }
 			public abstract int Boundary { get; }
+			public abstract bool RemoveOnExecute { get; }
 		} // class ActionItem
 
 		#endregion
@@ -88,6 +89,7 @@ namespace TecWare.DE.Server
 
 			public override int Boundary => boundary;
 			public Task Task => task;
+			public override bool RemoveOnExecute => true;
 		} // class TaskItem
 
 		#endregion
@@ -119,6 +121,7 @@ namespace TecWare.DE.Server
 			public SendOrPostCallback Callback => callback;
 			public object State => state;
 			public ManualResetEventSlim WaitHandle => waitHandle;
+			public override bool RemoveOnExecute => true;
 		} // class SendOrPostItem
 
 		#endregion
@@ -178,6 +181,7 @@ namespace TecWare.DE.Server
 			} // ctor
 
 			public override int Boundary => boundary;
+			public override bool RemoveOnExecute => true;
 		} // class ExecuteItem
 
 		#endregion
@@ -196,6 +200,7 @@ namespace TecWare.DE.Server
 
 			public override bool IsDue() => false;
 			public override int Boundary => Int32.MaxValue;
+			public override bool RemoveOnExecute => false;
 
 			public DEServerEvent EventType { get; }
 		} // class EventItem
@@ -238,6 +243,7 @@ namespace TecWare.DE.Server
 			} // proc Execute
 
 			public override int Boundary => nextBoundary;
+			public override bool RemoveOnExecute => false;
 		} // class IdleItem
 
 		#endregion
@@ -403,7 +409,8 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				RemoveAction(item);
+				if (item.RemoveOnExecute)
+					RemoveAction(item);
 				if (item is ActionItem action && !IsActionAlive(action.Action))
 				{
 					goto redo;

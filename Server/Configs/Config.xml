@@ -3,11 +3,14 @@
 	<server logpath="Log">
 		<resolve>..\..\SimpleDbg\bin\Debug</resolve>
 	</server>
-	
+
 	<http realm="Test Server">
 	</http>
-	
+	<cron />
 	<luaengine displayname="LuaEngine" allowDebug="true" script="debugEnv">
 		<script id="debugEnv" filename="InitDebug.lua" />
+		<script id="cron" filename="cron.lua"/>
 	</luaengine>
+
+	<luaCronJob name="testCron" bound="0,1,*" script="cron" />
 </des>
