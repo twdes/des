@@ -28,7 +28,6 @@ namespace TecWare.DE.Server
 {
 	#region -- class DECronEngine -------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	internal sealed class DECronEngine : DEConfigLogItem, IDECronEngine
 	{
@@ -38,12 +37,12 @@ namespace TecWare.DE.Server
 		/// <summary>Currently, running job.</summary>
 		private sealed class CurrentRunningJob
 		{
-			private DECronEngine parent;
-			private ICronJobExecute job;
-			private ICronJobCancellation jobCancel;
+			private readonly DECronEngine parent;
+			private readonly ICronJobExecute job;
+			private readonly ICronJobCancellation jobCancel;
 
-			private Task task;
-			private CancellationTokenSource cancellationTokenSource;
+			private readonly Task task;
+			private readonly CancellationTokenSource cancellationTokenSource;
 
 			public CurrentRunningJob(DECronEngine parent, ICronJobExecute job, CancellationToken cancellationToken)
 			{
@@ -61,7 +60,10 @@ namespace TecWare.DE.Server
 			} // ctor
 
 			private void Execute()
-				=> job.RunJob(cancellationTokenSource.Token);
+			{
+				using (var scope = new DECommonScope(job as IServiceProvider ?? parent, false))
+					job.RunJob(cancellationTokenSource.Token);
+			} // proc Execute
 
 			private void EndExecute(Task t)
 			{
@@ -112,7 +114,6 @@ namespace TecWare.DE.Server
 
 		#region -- class CronItemCacheDescriptor ------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
 		private sealed class CronItemCacheDescriptor : IDEListDescriptor
 		{
@@ -139,8 +140,7 @@ namespace TecWare.DE.Server
 				xml.WriteAttributeProperty("id", c.Job.UniqueName);
 				xml.WriteAttributeProperty("displayname", c.Job.DisplayName);
 				xml.WriteAttributeProperty("bound", c.Job.Bound.ToString());
-				var jobCancel = c.Job as ICronJobCancellation;
-				if (jobCancel != null)
+				if (c.Job is ICronJobCancellation jobCancel)
 				{
 					xml.WriteAttributeProperty("supportsCancellation", jobCancel.IsSupportCancelation);
 					if (jobCancel.RunTimeSlice.HasValue)
@@ -157,11 +157,10 @@ namespace TecWare.DE.Server
 
 		#region -- class CronItemCacheController ------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
 		private sealed class CronItemCacheController : IDEListController
 		{
-			private DECronEngine owner;
+			private readonly DECronEngine owner;
 
 			public CronItemCacheController(DECronEngine owner)
 			{
@@ -189,24 +188,21 @@ namespace TecWare.DE.Server
 
 			public string Id => "tw_cron_items";
 			public string DisplayName => "Cron items";
-			public string SecurityToken => DEConfigItem.SecuritySys;
+			public string SecurityToken => SecuritySys;
 
 			public IEnumerable List => owner.cronItemCache;
 		} // class CronItemCacheController 
 
 		#endregion
 
-		private DEList<CurrentRunningJob> currentJobs;
+		private readonly DEList<CurrentRunningJob> currentJobs;
 
-		private IDEListController cronItemCacheController;
-		private object cronItemCacheLock = new object();
+		private readonly IDEListController cronItemCacheController;
+		private readonly object cronItemCacheLock = new object();
 		private CronCacheItem[] cronItemCache = null;
 
 		private bool isCronIdleActive = false;
-		private Action procCronIdle;
-		private Action procCancelJobs;
-		private Action procRefreshCronServices;
-		
+
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
 		public DECronEngine(IServiceProvider sp, string name)
@@ -214,8 +210,7 @@ namespace TecWare.DE.Server
 		{
 			this.cronItemCacheController = new CronItemCacheController(this);
 			this.currentJobs = new DEList<CurrentRunningJob>(this, "tw_cron_running", "Cron running");
-			
-			this.procCronIdle = CronIdle;
+
 			PublishItem(this.currentJobs);
 
 			// Register Engine
@@ -223,9 +218,9 @@ namespace TecWare.DE.Server
 			sc.AddService(typeof(IDECronEngine), this, false);
 
 			// Register Server events
-			Server.Queue.RegisterEvent(procCancelJobs = CancelJobs, DEServerEvent.Shutdown);
-			Server.Queue.RegisterEvent(procRefreshCronServices = RefreshCronServices, DEServerEvent.Reconfiguration);
-    } // ctor
+			Server.Queue.RegisterEvent(CancelJobs, DEServerEvent.Shutdown);
+			Server.Queue.RegisterEvent(RefreshCronServices, DEServerEvent.Reconfiguration);
+		} // ctor
 
 		protected override void Dispose(bool disposing)
 		{
@@ -236,13 +231,13 @@ namespace TecWare.DE.Server
 					CancelJobs();
 
 					CronIdleActive = false;
-					Server.Queue.CancelCommand(procCancelJobs);
-					Server.Queue.CancelCommand(procRefreshCronServices);
+					Server.Queue.CancelCommand(CancelJobs);
+					Server.Queue.CancelCommand(RefreshCronServices);
 
 					this.GetService<IServiceContainer>(false)?.RemoveService(typeof(IDECronEngine));
 
-					Procs.FreeAndNil(ref currentJobs);
-					Procs.FreeAndNil(ref cronItemCacheController);
+					currentJobs.Dispose();
+					cronItemCacheController.Dispose();
 				}
 			}
 			finally
@@ -257,8 +252,8 @@ namespace TecWare.DE.Server
 
 		private static void CollectCronJobItems(List<ICronJobItem> cronItems, DEConfigItem current)
 		{
-			if (current is ICronJobItem)
-				cronItems.Add((ICronJobItem)current);
+			if (current is ICronJobItem t)
+				cronItems.Add(t);
 			else // No recursion, for nested cron jobs
 			{
 				foreach (var c in current.UnsafeChildren)
@@ -278,7 +273,7 @@ namespace TecWare.DE.Server
 			{
 				if (cronItemCache == null) // first initialization, start idle
 					CronIdleActive = true;
-				
+
 				// Lies die Liste mit den zuletzt gelaufenen Zeiten und errechne den nächsten Start
 				lock (cronItemCacheLock)
 				{
@@ -303,10 +298,8 @@ namespace TecWare.DE.Server
 
 		private void LoadNextRuntime()
 		{
-			string line;
-
 			// read persisted data
-			using (var log = this.Log.GetScope(LogMsgType.Information))
+			using (var log = Log.GetScope(LogMsgType.Information))
 			{
 				try
 				{
@@ -314,6 +307,7 @@ namespace TecWare.DE.Server
 
 					using (var sr = new StreamReader(NextRuntimeFile))
 					{
+						string line;
 						while ((line = sr.ReadLine()) != null)
 						{
 							// # Displayname
@@ -324,7 +318,7 @@ namespace TecWare.DE.Server
 							if (line.Length > 0 && line[0] == '#')
 								continue;
 
-							int iPos = line.IndexOf(' ');
+							var iPos = line.IndexOf(' ');
 							if (iPos == -1)
 								continue;
 
@@ -338,12 +332,12 @@ namespace TecWare.DE.Server
 								if (index >= 0)
 									cronItemCache[index].NextRun = nextStamp;
 								else
-									log.WriteLine("{0}: Nicht mehr gefunden.", uniqueName);
+									log.WriteLine("{0}: Is missing.", uniqueName);
 							}
 							catch (Exception e)
 							{
 								log.SetType(LogMsgType.Warning);
-								log.WriteLine("[{0}] {1} bei Zeile: {2}", e.GetType().Name, e.Message, line);
+								log.WriteLine("[{0}] {1} at line: {2}", e.GetType().Name, e.Message, line);
 							}
 						}
 					}
@@ -362,7 +356,7 @@ namespace TecWare.DE.Server
 			}
 
 			// recalculate times
-			for (int i = 0; i < cronItemCache.Length; i++)
+			for (var i = 0; i < cronItemCache.Length; i++)
 			{
 				if (cronItemCache[i].NextRun.HasValue) // redo outstanding tasks
 					continue;
@@ -372,7 +366,7 @@ namespace TecWare.DE.Server
 					var nextStamp = cronItemCache[i].Job.Bound.GetNext(DateTime.Now);
 					cronItemCache[i].Job.NotifyNextRun(nextStamp);
 					cronItemCache[i].NextRun = nextStamp;
-        }
+				}
 			}
 		} // proc LoadNextRuntime
 
@@ -382,7 +376,7 @@ namespace TecWare.DE.Server
 			{
 				using (var sw = new StreamWriter(NextRuntimeFile))
 				{
-					for (int i = 0; i < cronItemCache.Length; i++)
+					for (var i = 0; i < cronItemCache.Length; i++)
 					{
 						if (cronItemCache[i].NextRun.HasValue)
 						{
@@ -477,11 +471,9 @@ namespace TecWare.DE.Server
 					if (jobException != null)
 					{
 						Log.Except(String.Format("jobfinish: {0}", name), jobException);
-						var node = jobRunning.Job as DEConfigLogItem;
-						if (node != null)
+						if (jobRunning.Job is DEConfigLogItem node)
 						{
-							var aggException = jobException as AggregateException;
-							if (aggException != null)
+							if (jobException is AggregateException aggException)
 							{
 								if (aggException.InnerException != null)
 									node.Log.Except("Execution failed.", aggException.InnerException);
@@ -520,7 +512,8 @@ namespace TecWare.DE.Server
 				if (cur != null)
 				{
 					t = cur.Task;
-					cur.Cancel(); }
+					cur.Cancel();
+				}
 			}
 			try { t.Wait(); }
 			catch { }
@@ -552,10 +545,10 @@ namespace TecWare.DE.Server
 			get { return isCronIdleActive; }
 			set
 			{
-				Server.Queue.CancelCommand(procCronIdle);
+				Server.Queue.CancelCommand(CronIdle);
 				if (value) // activate
 				{
-					Server.Queue.RegisterIdle(procCronIdle);
+					Server.Queue.RegisterIdle(CronIdle);
 					Log.Info("Cron idle registered.");
 					isCronIdleActive = true;
 				}
@@ -568,21 +561,20 @@ namespace TecWare.DE.Server
 			}
 		} // prop CronIdleActive
 
-		public override string Icon { get { return "/images/clock.png"; } }
+		public override string Icon => "/images/clock.png";
 	} // class DECronEngine
 
 	#endregion
 
 	#region -- class LuaCronJobItem -----------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Sime implementation of a lua based cron job.</summary>
 	internal sealed class LuaCronJobItem : CronJobItem
 	{
 		#region -- Ctor/Dtor ----------------------------------------------------------------
 
-		public LuaCronJobItem(IServiceProvider sp, string sName)
-			: base(sp, sName)
+		public LuaCronJobItem(IServiceProvider sp, string name)
+			: base(sp, name)
 		{
 		} // ctor
 
@@ -600,10 +592,8 @@ namespace TecWare.DE.Server
 		} // proc OnRunJob
 
 		private void OnCancel()
-		{
-			CallMember("Cancel");
-		} // proc OnCancel
-
+			=> CallMember("Cancel");
+		
 		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || this.GetMemberValue("Cancel", rawGet: true) != null;
 
 		#endregion
@@ -615,7 +605,6 @@ namespace TecWare.DE.Server
 
 	#region -- class CronJobGroupBatch --------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Run a group of jobs as an batch.</summary>
 	internal sealed class CronJobGroupBatch : CronJobItem
 	{
@@ -639,7 +628,8 @@ namespace TecWare.DE.Server
 					Log.Info("{0}: started...", c.DisplayName);
 					CronEngine.ExecuteJobAsync(c, cancellation);
 					Log.Info("{0}: finished.", c.DisplayName);
-				}, true);
+				}, true
+			);
 		} // proc RunJob
 
 		public override string Icon => "/images/clock_data.png";
@@ -649,7 +639,6 @@ namespace TecWare.DE.Server
 
 	#region -- class CronJobGroupStart --------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Run a group of jobs parallel.</summary>
 	internal sealed class CronJobGroupStart : CronJobItem
 	{
