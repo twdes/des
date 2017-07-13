@@ -1018,7 +1018,7 @@ namespace TecWare.DE.Server
 			else // detail
 			{
 				var firstScript = firstScripts[0];
-				lock (view.LockScreen())
+				using (view.LockScreen())
 				{
 					var parts = new string[7];
 
