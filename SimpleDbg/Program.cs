@@ -502,6 +502,12 @@ namespace TecWare.DE.Server
 				view.WriteLine($"Data Exchange Debugger {assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion}");
 				view.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
 				view.WriteLine();
+				assembly = typeof(Lua).Assembly;
+				var informationalVersionLua = assembly.GetName().Version.ToString();
+				var fileVersionLua = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "0.0.0.0";
+				view.WriteLine($"NeoLua {informationalVersionLua} ({fileVersionLua})");
+				view.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
+				view.WriteLine();
 
 				foreach (var cur in
 					from c in ti.GetRuntimeMethods()

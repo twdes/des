@@ -584,13 +584,14 @@ namespace TecWare.DE.Server
 						{
 							void AddVersionForAssembly(Assembly assembly)
 							{
-								var fileVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
-								help.AddPostOptionsLine($"  {assembly.GetName().Name}: {fileVersion?.InformationalVersion ?? "err"}");
+								var informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? assembly.GetName().Version.ToString();
+								var fileVersion = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "0.0.0.0";
+								help.AddPostOptionsLine($"  {assembly.GetName().Name}: {informationalVersion} ({fileVersion})");
 							}
 							help.AddPostOptionsLine("Assembly version:");
 							AddVersionForAssembly(typeof(DEServer).Assembly);
-							AddVersionForAssembly(typeof(ProcsDE).Assembly);
 							AddVersionForAssembly(typeof(Procs).Assembly);
+							AddVersionForAssembly(typeof(Neo.IronLua.Lua).Assembly);
 						}
 
 						Console.WriteLine(help.ToString());
