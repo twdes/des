@@ -244,7 +244,7 @@ namespace TecWare.DE.Server
 
 			var i = 1;
 			var he = Dns.GetHostEntry(hostName);
-			foreach (IPAddress addr in he.AddressList)
+			foreach (var addr in he.AddressList)
 			{
 				RegisterProperty(new SimpleConfigItemProperty<string>(this, "tw_base_address_" + i.ToString(), "IP " + i.ToString(), NetworkCategory, "IP Adresse unter der der Server ereichbar ist.", null, addr.ToString()));
 				i++;
@@ -252,9 +252,10 @@ namespace TecWare.DE.Server
 
 			Queue.RegisterIdle(() =>
 				{
-					int iTmp = 0;
-					IdleMemoryViewerRefreshValue(false, ref iTmp);
-				}, 3000);
+					var tmp = 0;
+					IdleMemoryViewerRefreshValue(false, ref tmp);
+				}, 3000
+			);
 
 			PublishItem(new DEConfigItemPublicPanel("tw_server_info", "/wpf/ServerInfoControl.xaml") { DisplayName = "Server Informationen" });
 		} // proc InitServerInfo
@@ -595,13 +596,15 @@ namespace TecWare.DE.Server
 			if (!HasLog)
 				LogMsg(EventLogEntryType.Information, "Reread configuration.");
 
-			using (var log = this.LogProxy().GetScope(LogMsgType.Information, true))
+			using (var log = this.LogProxy().GetScope(LogMsgType.Information, autoFlush: true, stopTime: true))
+			{
 				try
 				{
 					var xConfig = configuration.ParseConfiguration();
 
 					// Zerlege die Konfiguration zur Validierung
 					log.WriteLine("BEGIN Load configuration");
+
 					using (log.Indent())
 					{
 						using (var config = new DEConfigLoading(this, log, xConfig, configuration.ConfigurationStamp))
@@ -622,6 +625,7 @@ namespace TecWare.DE.Server
 					if (!HasLog || !Queue.IsQueueRunning) // Schreib die Fehlermeldung ins Windowsprotokoll
 						LogMsg(e);
 				}
+			}
 
 			FireEvent("refresh");
 		} // proc InternalRefreshConfiguration

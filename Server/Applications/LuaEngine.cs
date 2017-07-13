@@ -934,7 +934,7 @@ namespace TecWare.DE.Server
 						var compileStopWatch = Stopwatch.StartNew();
 						try
 						{
-							chunk = engine.Lua.CompileChunk(xMessage.Value, "remote.lua", null);
+							chunk = engine.Lua.CompileChunk(xMessage.Value, "remote.lua", engine.debugOptions);
 						}
 						finally
 						{

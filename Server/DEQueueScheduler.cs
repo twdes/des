@@ -374,8 +374,19 @@ namespace TecWare.DE.Server
 			}
 		} // func IsActionAlive
 
-		private static void ExecuteCallback(object state)
-			=> ((QueueItem)state).Execute();
+		private void ExecuteCallback(object state)
+		{
+			var item = (QueueItem)state;
+			try
+			{
+				item.Execute();
+			}
+			finally
+			{
+				if (!item.RemoveOnExecute)
+					InsertAction(item);
+			}
+		} // proc ExecuteCallback
 
 		protected override bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait)
 		{
@@ -409,8 +420,7 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				if (item.RemoveOnExecute)
-					RemoveAction(item);
+				RemoveAction(item);
 				if (item is ActionItem action && !IsActionAlive(action.Action))
 				{
 					goto redo;
