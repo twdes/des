@@ -42,9 +42,8 @@ namespace TecWare.DE.Server
 	/// <summary>Service for Debugging and running lua scripts.</summary>
 	internal sealed class LuaEngine : DEConfigLogItem, IDEWebSocketProtocol, IDELuaEngine
 	{
-		#region -- class LuaScript --------------------------------------------------------
+		#region -- class LuaScript ------------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Loaded script.</summary>
 		internal abstract class LuaScript : IDisposable
 		{
@@ -56,7 +55,7 @@ namespace TecWare.DE.Server
 			private readonly object chunkLock = new object();
 			private LuaChunk chunk;
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			#region -- Ctor/Dtor --------------------------------------------------------
 
 			protected LuaScript(LuaEngine engine, string scriptId, bool compileWithDebugger)
 			{
@@ -101,7 +100,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Compile --------------------------------------------------------------
+			#region -- Compile ----------------------------------------------------------
 
 			protected virtual void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
 			{
@@ -119,30 +118,20 @@ namespace TecWare.DE.Server
 			public void LogLuaException(Exception e)
 			{
 				// unwind target exceptions
-				if (e is TargetInvocationException)
-				{
-					if (e.InnerException != null)
-					{
-						LogLuaException(e.InnerException);
-						return;
-					}
-				}
+				var ex = e.GetInnerException();
 
 				// log exception
-				var ep = e as LuaParseException;
-				if (ep != null)
+				switch(ex)
 				{
-					Log.Except("{0} ({3} at {1}, {2})", ep.Message, ep.Line, ep.Column, ep.FileName);
-				}
-				else
-				{
-					var er = e as LuaRuntimeException;
-					if (er != null)
-					{
-						Log.Except(er);
-					}
-					else
-						Log.Except("Compile failed.", e);
+					case LuaParseException ep:
+						Log.Except("{0} ({3} at {1}, {2})", ep.Message, ep.Line, ep.Column, ep.FileName);
+						break;
+					case LuaRuntimeException er:
+						Log.Except("{0} at {2}:{1}\n\n{3}", er.Message, er.Line, er.FileName, er.StackTrace);
+						break;
+					default:
+						Log.Except("Compile failed.", ex);
+						break;
 				}
 			} // proc LogLuaException
 
@@ -161,46 +150,116 @@ namespace TecWare.DE.Server
 			public abstract string ScriptBase { get; }
 
 			/// <summary>Is the script debugable.</summary>
-			public bool Debug => compiledWithDebugger;
+			public bool Debug { get => compiledWithDebugger; protected set => compiledWithDebugger = value; }
 
+			/// <summary>Does a chunk exists.</summary>
+			public bool IsCompiled => Chunk != null;
 			/// <summary>Access to the chunk.</summary>
-			public LuaChunk Chunk { get { lock (this) return chunk; } }
+			public LuaChunk Chunk { get { lock (chunkLock) return chunk; } }
 		} // class LuaScript
 
 		#endregion
 
-		#region -- class LuaFileScript ----------------------------------------------------
+		#region -- class LuaFileBasedScript ---------------------------------------------
+
+		/// <summary>Script that is based on file.</summary>
+		private abstract class LuaFileBasedScript : LuaScript
+		{
+			private FileInfo fileSource;		// File source of the script
+			private Encoding encoding;			// Encoding style of the file
+			private DateTime compiledStamp;     // Last time compiled
+
+			public LuaFileBasedScript(LuaEngine engine, string scriptId, FileInfo fileSource, Encoding encoding, bool compileWithDebugger)
+				: base(engine, scriptId, compileWithDebugger)
+			{
+				this.encoding = encoding ?? Encoding.Default;
+
+				SetFileSource(fileSource);
+				SetDebugMode(compileWithDebugger);
+			} // ctor
+
+			protected sealed override void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
+			{
+				// Re-create the script
+				base.Compile(open, args);
+				compiledStamp = DateTime.Now;
+				OnCompiled();
+			} // proc Compile
+			
+			protected virtual void OnCompiled() { }
+
+			private DateTime GetScriptFileStampSecure()
+			{
+				try
+				{
+					fileSource.Refresh();
+					return fileSource.LastWriteTime;
+				}
+				catch (IOException)
+				{
+					return DateTime.MinValue;
+				}
+			} // funcGetScriptFileStamp
+
+			public void SetDebugMode(bool compileWithDebug)
+			{
+				Debug = compileWithDebug;
+				compiledStamp = DateTime.MinValue;
+			} // proc SetDebugMode
+
+			public void SetFileSource(FileInfo fileSource)
+			{
+				if (!fileSource.Exists)
+					throw new ArgumentException($"File '{fileSource.FullName}' not found.", nameof(fileSource));
+				this.fileSource = fileSource;
+				compiledStamp = DateTime.MinValue;
+			} // proc SetFileSource
+
+			/// <summary>FileInfo object of the source code.</summary>
+			public FileInfo FileSource => fileSource;
+			/// <summary>Name of the file</summary>
+			public override string ScriptBase => fileSource.FullName;
+			/// <summary>Encoding of the file.</summary>
+			public Encoding Encoding { get => encoding; set => encoding = value; }
+			/// <summary>Check the script file stamp.</summary>
+			public bool IsOutDated => GetScriptFileStampSecure() > compiledStamp;
+		} // class LuaFileBasedScript
+
+		#endregion
+
+		#region -- class LuaFileScript --------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Script that is based on file.</summary>
-		private sealed class LuaFileScript : LuaScript
+		private sealed class LuaFileScript : LuaFileBasedScript
 		{
-			private FileInfo fileSource;    // File source of the script
-			private Encoding encoding;      // Encoding style of the file
-			private DateTime compiledStamp; // Last time compiled
-
 			public LuaFileScript(LuaEngine engine, string scriptId, FileInfo fileSource, Encoding encoding, bool compileWithDebugger)
-				: base(engine, scriptId, compileWithDebugger)
+				: base(engine, scriptId, fileSource, encoding, compileWithDebugger)
 			{
-				this.fileSource = fileSource;
-				this.encoding = encoding ?? Encoding.Default;
-				this.compiledStamp = DateTime.MinValue;
-
-				// compile an add
 				Compile();
 			} // ctor
 
-			protected override void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
+			public bool? Compile()
 			{
-				// Re-create the script
-				try
+				if (!IsCompiled || IsOutDated)
 				{
-					base.Compile(open, args);
+					try
+					{
+						Compile(() => new StreamReader(FileSource.FullName, Encoding), null);
+						return true;
+					}
+					catch (Exception e)
+					{
+						LogLuaException(e);
+						return false;
+					}
 				}
-				catch (Exception e)
-				{
-					LogLuaException(e);
-				}
+				else
+					return null;
+			} // proc Compile
+			protected override void OnCompiled()
+			{
+				base.OnCompiled();
 
 				// Notify that the script is changed
 				foreach (var c in Engine.GetAttachedGlobals(ScriptId))
@@ -208,35 +267,37 @@ namespace TecWare.DE.Server
 					try { c.OnScriptChanged(); }
 					catch (Exception e) { Log.Except("Attach to failed.", e); }
 				}
-			} // proc Compile
-
-			public void Compile()
-			{
-				Compile(() => new StreamReader(fileSource.FullName, encoding), null);
-			} // proc Compile
-
-			public void SetDebugMode(bool compileWithDebug)
-			{
-				// todo:
-			} // proc SetDebugMode
-
-			/// <summary>Name of the file</summary>
-			public override string ScriptBase => fileSource.FullName;
-			/// <summary>Encoding of the file.</summary>
-			public Encoding Encoding { get { return encoding; } set { encoding = value; } }
+			} // proc OnCompiled
 		} // class LuaFileScript
 
 		#endregion
 
-		#region -- class LuaMemoryScript --------------------------------------------------
+		#region -- class LuaTestScript --------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
+		/// <summary>Script that is based on file.</summary>
+		private sealed class LuaTestScript : LuaFileBasedScript
+		{
+			public LuaTestScript(LuaEngine engine, string scriptId, FileInfo fileSource, Encoding encoding)
+				: base(engine, scriptId, fileSource, encoding, true)
+			{
+			} // ctor
+
+			/// <summary>Recreate always the chunk</summary>
+			public void Compile()
+				=> Compile(() => new StreamReader(FileSource.FullName, Encoding), null);
+		} // class LuaTestScript
+
+		#endregion
+
+		#region -- class LuaMemoryScript ------------------------------------------------
+
 		/// <summary>In memory script, that is not based on a file.</summary>
 		private sealed class LuaMemoryScript : LuaScript, ILuaScript
 		{
 			private readonly string name;
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			#region -- Ctor/Dtor --------------------------------------------------------
 
 			public LuaMemoryScript(LuaEngine engine, Func<TextReader> code, string name, KeyValuePair<string, Type>[] args)
 				: base(engine, Guid.NewGuid().ToString("D"), false)
@@ -275,9 +336,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaAttachedGlobal ------------------------------------------------
+		#region -- class LuaAttachedGlobal ----------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Verbindung zwischen den Skripten</summary>
 		internal sealed class LuaAttachedGlobal : ILuaAttachedScript
 		{
@@ -294,7 +354,7 @@ namespace TecWare.DE.Server
 			private object scriptLock = new object();
 			private LuaScript currentScript = null;
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			#region -- Ctor/Dtor --------------------------------------------------------
 
 			public LuaAttachedGlobal(LuaEngine engine, string scriptId, LuaTable table, bool autoRun)
 			{
@@ -328,7 +388,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Run, ResetScript -----------------------------------------------------
+			#region -- Run, ResetScript -------------------------------------------------
 
 			public void ResetScript()
 			{
@@ -401,26 +461,18 @@ namespace TecWare.DE.Server
 			public string ScriptId => scriptId;
 			public LuaTable LuaTable => table;
 
-			public bool IsCompiled
-			{
-				get
-				{
-					LuaScript s = GetScript(false);
-					return s == null ? false : s.Chunk != null;
-				}
-			} // prop IsCompiled
-
+			public bool IsCompiled => GetScript(false)?.IsCompiled ?? false;
 			public bool NeedToRun => needToRun;
 			public bool AutoRun { get { return autoRun; } set { autoRun = value; } }
 		} // class LuaAttachedGlobal
 
 		#endregion
 
-		#region -- class LuaEngineTraceLineDebugger ---------------------------------------
+		#region -- class LuaEngineTraceLineDebugger -------------------------------------
 
 		private sealed class LuaEngineTraceLineDebugger : LuaTraceLineDebugger
 		{
-			#region -- class LuaTraceLineDebugInfo ------------------------------------------
+			#region -- class LuaTraceLineDebugInfo --------------------------------------
 
 			///////////////////////////////////////////////////////////////////////////////
 			/// <summary></summary>
@@ -493,12 +545,62 @@ namespace TecWare.DE.Server
 		} // class LuaEngineTraceLineDebugger
 
 		#endregion
-		
-		#region -- class LuaDebugSession --------------------------------------------------
+
+		#region -- class LuaTestEnvironment ---------------------------------------------
+
+		private sealed class LuaTestEnvironment : LuaTable
+		{
+			#region -- class LuaTestFunctionSet -----------------------------------------
+
+			private sealed class LuaTestFunctionSet : LuaTable
+			{
+				private readonly LuaTestEnvironment env;
+
+				public LuaTestFunctionSet(LuaTestEnvironment env)
+					=> this.env =env;
+
+				protected override object OnIndex(object key)
+					=> base.OnIndex(key) ?? env.OnIndexInternal(key);
+
+				[LuaMember("UseNode")]
+				private void SetCurrentNode(string path)
+				{
+					if (!path.StartsWith("/"))
+						throw new ArgumentOutOfRangeException(nameof(path), path, "Relative path is not allowed.");
+
+					env.currentItem = ProcsDE.UseNode((DEConfigItem)env.session.Engine.Server, path, 1);
+				} // proc SetCurrentNode
+			} // class LuaTestFunctionSet
+
+			#endregion
+
+			private readonly LuaDebugSession session;
+			private readonly LuaTestFunctionSet functionSet;
+			private DEConfigItem currentItem;
+
+			public LuaTestEnvironment(LuaDebugSession session)
+			{
+				this.session = session;
+				this.functionSet = new LuaTestFunctionSet(this);
+				this.currentItem = (DEConfigItem)session.Engine.Server; // start with the same node
+			} // ctor
+
+			private object OnIndexInternal(object key)
+				=> session.Engine.DebugEnvironment.GetValue(key, true) ?? currentItem.GetValue(key);
+
+			protected override object OnIndex(object key)
+				=> base.OnIndex(key) ?? functionSet.GetValue(key);
+		} // class LuaTestEnvironment
+
+		#endregion
+
+		#region -- class LuaDebugSession ------------------------------------------------
 
 		/// <summary>Debug session and scope for the commands.</summary>
 		private sealed class LuaDebugSession : LuaTable, IDEDebugContext, IDisposable
 		{
+			#region -- class ReferenceEqualImplementation -------------------------------
+
 			private sealed class ReferenceEqualImplementation : IEqualityComparer<object>
 			{
 				public new bool Equals(object x, object y)
@@ -509,7 +611,8 @@ namespace TecWare.DE.Server
 				public static ReferenceEqualImplementation Instance { get; } = new ReferenceEqualImplementation();
 			} // class ReferenceEqualImplementation
 
-
+			#endregion
+			
 			private readonly LuaEngine engine; // lua engine
 			private readonly LoggerProxy log; // log for the debugging
 
@@ -518,7 +621,9 @@ namespace TecWare.DE.Server
 
 			private readonly CancellationToken cancellationToken;
 			private DEConfigItem currentItem = null; // current node, that is used as parent
-			
+
+			#region -- Ctor/Dtor --------------------------------------------------------
+
 			public LuaDebugSession(LuaEngine engine, IDEWebSocketScope context, CancellationToken cancellationToken)
 			{
 				this.engine = engine ?? throw new ArgumentNullException(nameof(engine));
@@ -537,10 +642,14 @@ namespace TecWare.DE.Server
 			public void Dispose()
 			{
 				Info("Debug session closed.");
-				
+
 				// Dispose the execution scope
 				currentScope?.Dispose();
 			} // proc Dispose
+
+			#endregion
+
+			#region -- Execute Protocol -------------------------------------------------
 
 			public async Task ExecuteAsync()
 			{
@@ -611,6 +720,10 @@ namespace TecWare.DE.Server
 					log.Except("Debug session failed.", e);
 				}
 			} // proc Execute
+
+			#endregion
+
+			#region -- CreateException, CreateMember ------------------------------------
 
 			private XElement CreateException(XElement x, Exception e)
 			{
@@ -732,6 +845,10 @@ namespace TecWare.DE.Server
 				}
 			} // func CreateMember
 
+			#endregion
+
+			#region -- ProcessMessage ---------------------------------------------------
+
 			private async Task ProcessMessage(XElement x)
 			{
 				Debug.Print("[Server] Receive Message: {0}", x.GetAttribute("token", 0));
@@ -740,6 +857,10 @@ namespace TecWare.DE.Server
 
 				if (command == "execute")
 					await SendAnswerAsync(x, await ExecuteAsync(x));
+				else if (command == "run")
+					await SendAnswerAsync(x, await RunScriptAsync(x));
+				else if (command == "recompile")
+					await SendAnswerAsync(x, await RecompileAsync(x));
 				else if (command == "use")
 					await SendAnswerAsync(x, UseNode(x));
 				else if (command == "member")
@@ -797,23 +918,50 @@ namespace TecWare.DE.Server
 			void IDEDebugContext.OnMessage(LogMsgType type, string message)
 				=> Notify(new XElement("log", new XAttribute("type", type.ToString()[0]), new XText(message)));
 
-			#region -- Execute --------------------------------------------------------------
+			#endregion
+
+			#region -- Execute ----------------------------------------------------------
 
 			private async Task<XElement> ExecuteAsync(XElement xMessage)
 			{
+				var compileTime = 0L;
+				var runTime = 0L;
 				var r = await Task.Run(
 					() =>
 					{
 						// compile the chunk
-						var chunk = engine.Lua.CompileChunk(xMessage.Value, "remote.lua", null);
+						LuaChunk chunk;
+						var compileStopWatch = Stopwatch.StartNew();
+						try
+						{
+							chunk = engine.Lua.CompileChunk(xMessage.Value, "remote.lua", null);
+						}
+						finally
+						{
+							compileTime = compileStopWatch.ElapsedMilliseconds;
+						}
+
 						// run the chunk on the node
 						using (currentScope?.Use())
-							return chunk.Run(this);
+						{
+							var runStopWatch = Stopwatch.StartNew();
+							try
+							{
+								return chunk.Run(this);
+							}
+							finally
+							{
+								runTime = runStopWatch.ElapsedMilliseconds;
+							}
+						}
 					}
 				);
 
 				// return the result
-				var xAnswer = new XElement("return");
+				var xAnswer = new XElement("return",
+					new XAttribute("runTime", runTime),
+					new XAttribute("compileTime", compileTime)
+				);
 				for (var i = 0; i < r.Count; i++)
 					xAnswer.Add(CreateMember(new Stack<object>(), i, () => r[i]));
 
@@ -822,7 +970,179 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- GlobalVars -----------------------------------------------------------
+			#region -- RunScript --------------------------------------------------------
+
+			private sealed class RunScriptClass
+			{
+				private readonly LuaDebugSession session;
+				private readonly LuaTestScript[] scripts;
+				private readonly Func<string, bool> methodFilter;
+
+				public RunScriptClass(LuaDebugSession session, string scriptId, string methodName)
+				{
+					this.session = session;
+					this.scripts = session.engine.FindScripts<LuaTestScript>(scriptId ?? throw new ArgumentNullException(nameof(scriptId)));
+					this.methodFilter = Procs.GetFilerFunction(methodName, true);
+				} // ctor
+
+				private XElement ExecuteScript(LuaTestScript script)
+				{
+					var compileTime = -1L;
+					var runTime = 0L;
+					var xScriptResult = new XElement("script",
+						new XAttribute("id", script.ScriptId)
+					);
+
+					XElement SetScriptFailed(Exception e)
+					{
+						xScriptResult.SetAttributeValue("success", false);
+						session.Notify(xScriptResult);
+
+						return session.CreateException(xScriptResult, e);
+					} // proc SetScriptFailed
+
+					// check the script, do we need a recompile
+					if (!script.IsCompiled || script.IsOutDated)
+					{
+						var compileStopWatch = Stopwatch.StartNew();
+						try
+						{
+							script.Compile();
+						}
+						catch (Exception e)
+						{
+							return SetScriptFailed(e.GetInnerException());
+						}
+						finally
+						{
+							compileTime = compileStopWatch.ElapsedMilliseconds;
+						}
+					}
+
+					// execute the base script on a fresh environment
+					var luaTestEnvironment = new LuaTestEnvironment(session);
+					var runStopWatch = Stopwatch.StartNew();
+					try
+					{
+						script.Chunk.Run(luaTestEnvironment);
+					}
+					catch (Exception e)
+					{
+						return SetScriptFailed(e.GetInnerException());
+					}
+					finally
+					{
+						runTime = runStopWatch.ElapsedMilliseconds;
+					}
+
+					xScriptResult.Add(
+						new XAttribute("success", true),
+						new XAttribute("compileTime", compileTime),
+						new XAttribute("runTime", runTime)
+					);
+					session.Notify(xScriptResult);
+
+					// run the functions
+					foreach (var functionName in luaTestEnvironment.Members.Keys.Where(methodFilter))
+					{
+						var func = luaTestEnvironment[functionName];
+						if (Lua.RtInvokeable(func))
+						{
+							var testTime = 0L;
+							var testException = (Exception)null;
+							var testStopWatch = Stopwatch.StartNew();
+							try
+							{
+								Lua.RtInvoke(func);
+							}
+							catch (Exception e)
+							{
+								testException = e.GetInnerException();
+							}
+							finally
+							{
+								testTime = testStopWatch.ElapsedMilliseconds;
+							}
+
+							var xTest = new XElement("test",
+								new XAttribute("name", functionName),
+								new XAttribute("time", testTime),
+								new XAttribute("success", testException == null)
+							);
+
+							// send test result, without exception
+							if (testException != null)
+								xTest.Add(new XAttribute("message", testException.Message));
+							session.Notify(xTest);
+
+							// prepare summary
+							if (testException != null)
+							{
+								xTest.Attribute("message").Remove();
+								xTest = session.CreateException(xTest, testException);
+							}
+							xScriptResult.Add(xTest);
+						}
+						else
+							xScriptResult.Add(new XElement("ignore", new XAttribute("name", functionName)));
+					}
+
+					return xScriptResult;
+				} // func ExecuteScript
+				
+				public XElement Execute()
+				{
+					var xReturn = new XElement("return");
+					foreach (var script in scripts)
+					{
+						using (session.currentScope?.Use())
+							xReturn.Add(ExecuteScript(script));
+
+						// rollback scope before the next script
+						session.BeginNewScopeAsync().AwaitTask();
+					}
+					return xReturn;
+				} // proc Execute
+
+				public XElement GetAnswer()
+				{
+					var xAnswer = new XElement("return");
+					return xAnswer;
+				} // func GetAnswer
+			} // class RunScriptClass
+
+			private async Task<XElement> RunScriptAsync(XElement xMessage)
+			{
+				// parse script
+				var scriptId = xMessage.GetAttribute<string>("script", null);
+				var methodName = xMessage.GetAttribute<string>("method", null);
+
+				// collect scripts
+				var runScript = new RunScriptClass(this, scriptId, methodName);
+
+				// execute the scripts
+				return await Task.Run(new Func<XElement>(runScript.Execute));
+			} // func RunScriptAsync
+
+			#endregion
+
+			#region -- Recompile --------------------------------------------------------
+
+			private async Task<XElement> RecompileAsync(XElement xMesage)
+			{
+				var r = await Task.Run(() => engine.Recompile().ToArray());
+				return new XElement("return",
+					from c in r
+					select new XElement("r",
+						new XAttribute("id", c.scriptId),
+						new XAttribute("failed", c.failed)
+					)
+				);
+			} // func RecompileAsync
+
+			#endregion
+
+			#region -- GlobalVars -------------------------------------------------------
 
 			private XElement GetMember(XElement xMessage)
 			{
@@ -836,7 +1156,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- UseNode --------------------------------------------------------------
+			#region -- UseNode ----------------------------------------------------------
 
 			private XElement UseNode(XElement xMessage)
 			{
@@ -844,48 +1164,19 @@ namespace TecWare.DE.Server
 				if (!String.IsNullOrEmpty(p))
 					UseNode(p);
 				return new XElement("return", new XAttribute("node", currentItem.ConfigPath));
-			} // proc UseNode 
+			} // proc UseNode
 
 			private void UseNode(string path)
 			{
-				if (!path.StartsWith("/"))
-					throw new ArgumentException("Invalid path format.");
-
-				UseNode((DEConfigItem)engine.Server, path, 1);
+				if (!path.StartsWith("/")) // relative path
+					currentItem = ProcsDE.UseNode(currentItem, path, 0);
+				else // absolute path
+					currentItem = ProcsDE.UseNode((DEConfigItem)engine.Server, path, 1);
 			} // proc UseItem
-
-			private void UseNode(DEConfigItem current, string path, int offset)
-			{
-				if (offset >= path.Length)
-				{
-					currentItem = current;
-					return;
-				}
-				else
-				{
-					var pos = path.IndexOf('/', offset);
-					if (pos == offset)
-						throw new ArgumentException("Invalid path format.");
-					if (pos == -1)
-						pos = path.Length;
-
-					if (pos - offset == 0) // end
-						this.currentItem = current;
-					else // find node
-					{
-						var currentName = path.Substring(offset, pos - offset);
-						var newCurrent = current.UnsafeFind(currentName);
-						if (newCurrent == null)
-							throw new ArgumentException("Invalid path.");
-
-						UseNode(newCurrent, path, pos + 1);
-					}
-				}
-			} // proc UseNode
 
 			#endregion
 
-			#region -- List -----------------------------------------------------------------
+			#region -- List -------------------------------------------------------------
 
 			private IEnumerable<XElement> GetNodeList(DEConfigItem current, bool recusive)
 			{
@@ -945,17 +1236,22 @@ namespace TecWare.DE.Server
 				return x;
 			} // func CreateScopeReturn
 
-			private async Task<XElement> BeginScopeAsync(XElement xMessage)
+			private async Task BeginNewScopeAsync()
 			{
-				// rollback curent scope
 				if (currentScope != null && !currentScope.IsCommited.HasValue)
 					await currentScope.DisposeAsync();
 
 				currentScope = await CreateCommonScopeAsync(context.User, null);
+			} // func BeginNewScopeAsync
+
+			private async Task<XElement> BeginScopeAsync(XElement xMessage)
+			{
+				// rollback curent scope
+				await BeginNewScopeAsync();
 
 				return CreateScopeReturn(currentScope);
 			} // func BeginScopeAsync
-			
+
 			private async Task<XElement> CommitScopeAsync(XElement xMessage)
 			{
 				await currentScope.CommitAsync();
@@ -969,6 +1265,8 @@ namespace TecWare.DE.Server
 
 			[LuaMember(nameof(CurrentNode))]
 			public DEConfigItem CurrentNode => currentItem;
+
+			public LuaEngine Engine => engine;
 
 			public WebSocket Socket => context.WebSocket;
 		} // class LuaDebugSession
@@ -1040,14 +1338,19 @@ namespace TecWare.DE.Server
 
 			// Lade die Scripte
 			var i = 0;
-			var scriptRemove = (from s in scripts where s is LuaFileScript select (LuaFileScript)s).ToArray();
+			var scriptRemove = (from s in scripts where s is LuaFileBasedScript select (LuaFileBasedScript)s).ToArray();
+
 			var luaScriptDefinition = Server.Configuration[xnLuaScript];
-			foreach (var cur in config.ConfigNew.Elements(xnLuaScript))
+			var luaTestDefinition = Server.Configuration[xnLuaTestScript];
+
+			foreach (var cur in config.ConfigNew.Elements())
 			{
 				try
 				{
-					var configNode = new XConfigNode(luaScriptDefinition, cur);
-					LoadScript(configNode, scriptRemove);
+					if (cur.Name == xnLuaTestScript)
+						LoadScript(false, new XConfigNode(luaTestDefinition, cur), scriptRemove);
+					else if (cur.Name == xnLuaScript)
+						LoadScript(true, new XConfigNode(luaScriptDefinition, cur), scriptRemove);
 				}
 				catch (Exception e)
 				{
@@ -1080,7 +1383,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc 
 
-		private void LoadScript(XConfigNode cur, LuaFileScript[] scriptRemove)
+		private void LoadScript(bool configScript, XConfigNode cur, LuaFileBasedScript[] scriptRemove)
 		{
 			// Id des Scripts
 			var scriptId = cur.GetAttribute<string>("id");
@@ -1092,31 +1395,50 @@ namespace TecWare.DE.Server
 			if (String.IsNullOrEmpty(fileName))
 				throw new ArgumentNullException("@filename", "Filename is empty.");
 
-			// Read parameter
-			var forceDebugMode = cur.GetAttribute<bool>("debug");
+			// Read encoding
 			var encoding = cur.GetAttribute<Encoding>("encoding");
 
+			// search for the script
 			var script = FindScript(scriptId);
-			var fileScript = script as LuaFileScript;
 
-			if (fileScript == null) // script noch nicht vorhanden --> also legen wir es mal an
+			if (configScript) // add normal config script
 			{
-				if (script != null)
-					throw new ArgumentException(String.Format("Script '{0}' already exists.", scriptId));
-				var fi = new FileInfo(fileName);
-				if (!fi.Exists)
-					throw new ArgumentException(String.Format("File '{0}' not found.", fi.FullName));
+				var forceDebugMode = cur.GetAttribute<bool>("debug");
 
-				new LuaFileScript(this, scriptId, fi, encoding, forceDebugMode);
+				if (script != null && script is LuaFileScript fileScript) // script exists, update
+				{
+					fileScript.Encoding = encoding;
+					fileScript.SetFileSource(new FileInfo(fileName));
+					fileScript.SetDebugMode(forceDebugMode);
+
+					scriptRemove[Array.IndexOf(scriptRemove, fileScript)] = null;
+				}
+				else
+				{
+					if (script != null) // there is a script of a different type
+						script.Dispose();
+
+					// add new script
+					new LuaFileScript(this, scriptId, new FileInfo(fileName), encoding, forceDebugMode);
+				}
 			}
-			else
+			else // add debug script
 			{
-				fileScript.Encoding = encoding;
-				fileScript.SetDebugMode(forceDebugMode);
+				if (script != null && script is LuaTestScript testScript) // script exists, update
+				{
+					testScript.Encoding = encoding;
+					testScript.SetFileSource(new FileInfo(fileName));
+					
+					scriptRemove[Array.IndexOf(scriptRemove, testScript)] = null;
+				}
+				else
+				{
+					if (script != null) // there is a script of a different type
+						script.Dispose();
 
-				scriptRemove[Array.IndexOf(scriptRemove, fileScript)] = null;
-
-				fileScript.Log.Info("Refreshed.");
+					// add new script
+					new LuaTestScript(this, scriptId, new FileInfo(fileName), encoding);
+				}
 			}
 		} // LoadScript
 
@@ -1141,6 +1463,21 @@ namespace TecWare.DE.Server
 				scripts.Remove(script);
 		} // proc RemoveScript
 
+		private T[] FindScripts<T>(string filterExpression = null)
+			where T : LuaScript
+		{
+			var filter = Procs.GetFilerFunction(filterExpression);
+			lock(scripts)
+			{
+				return (
+					from c in scripts
+					let s = c as T
+					where s != null && (filter == null || filter(s.ScriptId))
+					select s
+				).ToArray();
+			}
+		} // func FindScript
+
 		private LuaScript FindScript(string scriptId)
 		{
 			lock (scripts)
@@ -1153,9 +1490,11 @@ namespace TecWare.DE.Server
 		private IEnumerable<LuaAttachedGlobal> GetAttachedGlobals(string scriptId)
 		{
 			lock (globals)
-				foreach (LuaAttachedGlobal c in globals)
+			{
+				foreach (var c in globals)
 					if (String.Compare(c.ScriptId, scriptId, true) == 0)
 						yield return c;
+			}
 		} // func GetAttachedGlobals
 
 		private void RemoveAttachedGlobal(LuaAttachedGlobal item)
@@ -1163,6 +1502,16 @@ namespace TecWare.DE.Server
 			lock (globals)
 				globals.Remove(item);
 		} // func RemoveAttachedGlobal
+
+		private IEnumerable<(string scriptId, bool failed)> Recompile()
+		{
+			foreach (var cur in FindScripts<LuaFileScript>(null))
+			{
+				var r = cur.Compile();
+				if (r.HasValue)
+					yield return (cur.ScriptId, !r.Value);
+			}
+		} // proc Recompile
 
 		#endregion
 

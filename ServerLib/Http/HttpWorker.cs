@@ -54,7 +54,7 @@ namespace TecWare.DE.Server.Http
 			var value = x.GetAttribute<string>("filter", null);
 			return value == null || value.Length == 0 || value == "*" 
 				? true
-				: ProcsDE.IsFilterEqual(subPath, value);
+				: Procs.IsFilterEqual(subPath, value);
 		} // func TestFilter
 
 		protected string GetFileContentType(string subPath)

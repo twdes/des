@@ -208,7 +208,7 @@ namespace TecWare.DE.Server
 			else
 			{
 				var o = other as ICronJobItem;
-				return o == null || runAfterJob.FirstOrDefault(c => ProcsDE.IsFilterEqual(o.UniqueName, c)) == null || CanRunParallelTo(o);
+				return o == null || runAfterJob.FirstOrDefault(c => Procs.IsFilterEqual(o.UniqueName, c)) == null || CanRunParallelTo(o);
 			}
 		} // func ICronJobExecute.CanRunParallelTo
 

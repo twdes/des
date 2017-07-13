@@ -21,6 +21,7 @@ using System.Text;
 using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
+using TecWare.DE.Server;
 
 namespace TecWare.DE.Stuff
 {
@@ -152,50 +153,6 @@ namespace TecWare.DE.Stuff
 			return true;
 		} // func CertifacteMatchSubject
 
-		#region -- Filter -----------------------------------------------------------------
-
-		/// <summary>Simple "Star"-Filter rule, for single-strings</summary>
-		/// <param name="value"></param>
-		/// <param name="filterExpression"></param>
-		/// <returns></returns>
-		public static bool IsFilterEqual(string value, string filterExpression)
-		{
-			var p1 = filterExpression.IndexOf('*');
-			var p2 = filterExpression.LastIndexOf('*');
-			if (p1 == p2) // only one start
-			{
-				if (p1 == -1) // compare
-					return String.Compare(value, filterExpression, StringComparison.OrdinalIgnoreCase) == 0;
-				else if (p1 == 0) // => endswith
-					if (value.Length == 1)
-						return true;
-					else
-						return value.EndsWith(filterExpression.Substring(1), StringComparison.OrdinalIgnoreCase);
-				else if (p1 == filterExpression.Length - 1)// => startwith
-					return value.StartsWith(filterExpression.Substring(0, p1), StringComparison.OrdinalIgnoreCase);
-				else
-					return IsFilterEqualEx(value, filterExpression);
-			}
-			else
-			{
-				var p3 = filterExpression.IndexOf('*', p1 + 1);
-				if (p3 == p2) // two stars
-				{
-					if (p1 == 0 && p2 == filterExpression.Length - 1) // => contains
-						return value.IndexOf(filterExpression.Substring(1, p2 - 1), StringComparison.OrdinalIgnoreCase) >= 0;
-					else
-						return IsFilterEqualEx(value, filterExpression);
-				}
-				else
-					return IsFilterEqualEx(value, filterExpression);
-			}
-		} // func IsFilterEqual
-
-		private static bool IsFilterEqualEx(string value, string filterExpression)
-		{
-			throw new NotImplementedException();
-		} // func IsFilterEqualEx
-
 		public static bool PasswordCompare(string testPassword, string passwordHash)
 			=> Passwords.PasswordCompare(testPassword, passwordHash);
 
@@ -204,8 +161,6 @@ namespace TecWare.DE.Stuff
 
 		public static byte[] ParsePasswordHash(string passwordHash)
 			=> Passwords.ParsePasswordHash(passwordHash);
-
-		#endregion
 
 		#region -- RemoveInvalidXmlChars ----------------------------------------------------
 
@@ -243,6 +198,32 @@ namespace TecWare.DE.Stuff
 		} // func RemoveInvalidXmlChars
 
 		#endregion
+
+		public static DEConfigItem UseNode(DEConfigItem current, string path, int offset)
+		{
+			if (offset >= path.Length)
+				return current;
+			else
+			{
+				var pos = path.IndexOf('/', offset);
+				if (pos == offset)
+					throw new FormatException($"Invalid path format (at {offset}).");
+				if (pos == -1)
+					pos = path.Length;
+
+				if (pos - offset == 0) // end
+					return current;
+				else // find node
+				{
+					var currentName = path.Substring(offset, pos - offset);
+					var newCurrent = current.UnsafeFind(currentName);
+					if (newCurrent == null)
+						throw new ArgumentOutOfRangeException(nameof(path), path, $"Path not found (at {offset}).");
+
+					return UseNode(newCurrent, path, pos + 1);
+				}
+			}
+		} // proc UseNode
 
 		/// <summary></summary>
 		/// <param name="value"></param>

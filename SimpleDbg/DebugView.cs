@@ -14,12 +14,12 @@
 //
 #endregion
 using System;
+using System.Linq;
 using System.Threading;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public sealed class DebugView
 	{
@@ -55,6 +55,18 @@ namespace TecWare.DE.Server
 				Console.Out.WriteLine(text);
 		} // proc WriteLine
 
+		public void WriteLine(ConsoleColor[] colors, string[] parts, bool rightAlign = false)
+		{
+			using (LockScreen())
+			{
+				if (rightAlign)
+					MoveRight(parts.Sum(c => c?.Length ?? 0) + 1);
+
+				Write(colors, parts);
+				WriteLine();
+			}
+		} // proc WriteLine
+
 		public void WriteObject(object o)
 		{
 			if (o == null)
@@ -70,20 +82,23 @@ namespace TecWare.DE.Server
 
 			if (!String.IsNullOrEmpty(message))
 			{
-				using (SetColor(ConsoleColor.DarkRed))
+				using (SetColor(ConsoleColor.Red))
 					Console.WriteLine(message);
 			}
 
-			var aggEx = exception as AggregateException;
-			if (aggEx == null)
+			if (exception is AggregateException aggEx)
+			{
+				foreach (var ex in aggEx.InnerExceptions)
+					WriteError(ex);
+			}
+			else
 			{
 				// write exception
 				using (LockScreen())
 				{
-					using (SetColor(ConsoleColor.DarkRed))
+					using (SetColor(ConsoleColor.Red))
 					{
-						var cde = exception as ClientDebugException;
-						if (cde != null)
+						if (exception is ClientDebugException cde)
 							Console.WriteLine($"[R:{cde.ExceptionType}]");
 						else
 							Console.WriteLine($"[{exception.GetType().Name}]");
@@ -95,18 +110,17 @@ namespace TecWare.DE.Server
 				// chain exceptions
 				WriteError(exception.InnerException);
 			}
-			else
-			{
-				foreach (var ex in aggEx.InnerExceptions)
-					WriteError(ex);
-			}
 		} // proc WriteError
 
 		public void WriteError(string text)
 		{
 			using (LockScreen())
-				Console.Error.WriteLine(text);
+			using (SetColor(ConsoleColor.Red))
+				Console.WriteLine(text);
 		} // proc WriteError
+
+		public void WriteError()
+			=> WriteLine();
 
 		public void Write(string text)
 			=> Write(text, ConsoleColor.Gray);
@@ -119,6 +133,20 @@ namespace TecWare.DE.Server
 					Console.Write(text);
 			}
 		} // proc WriteLine
+
+		public void Write(ConsoleColor[] colors, string[] parts)
+		{
+			using (LockScreen())
+			{
+				for (var i = 0; i < parts.Length; i++)
+				{
+					if (parts[i] == null)
+						continue;
+					using (SetColor(colors[i]))
+						Console.Write(parts[i]);
+				}
+			}
+		} // proc Write
 
 		#region -- SetColor ---------------------------------------------------------------
 
@@ -178,6 +206,9 @@ namespace TecWare.DE.Server
 
 		public IDisposable SetCursor(int? left = null, int? top = null, bool? visible = null)
 			=> new ResetCursor(left ?? Console.CursorLeft, top ?? Console.CursorTop, visible ?? Console.CursorVisible);
+
+		public void MoveRight(int right)
+			=> Console.CursorLeft = Console.WindowWidth - right;
 
 		#endregion
 

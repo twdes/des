@@ -14,6 +14,7 @@
 //
 #endregion
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -103,6 +104,162 @@ namespace TecWare.DE.Server
 		public string ExceptionType => exceptionType;
 		public override string StackTrace => remoteStackTrace;
 	} // class ClientDebugException
+
+	#endregion
+
+	#region -- class ClientExecuteResult ------------------------------------------------
+
+	public sealed class ClientExecuteResult : IEnumerable<ClientMemberValue>
+	{
+		private readonly long compileTime;
+		private readonly long runTime;
+		private readonly IEnumerable<ClientMemberValue> result;
+
+		public ClientExecuteResult(long compileTime, long runTime, IEnumerable< ClientMemberValue> result)
+		{
+			this.compileTime = compileTime;
+			this.runTime = runTime;
+			this.result = result ?? throw new ArgumentNullException(nameof(result));
+		} // ctor
+
+		public IEnumerator<ClientMemberValue> GetEnumerator()
+			=> result.GetEnumerator();
+
+		IEnumerator IEnumerable.GetEnumerator()
+			=> result.GetEnumerator();
+
+		public long CompileTime => compileTime;
+		public long RunTime => runTime;
+	} // class ClientExecuteResult
+
+	#endregion
+
+	#region -- class ClientRunScriptResult ----------------------------------------------
+
+	public sealed class ClientRunScriptResult
+	{
+		#region -- class Test -----------------------------------------------------------
+
+		public sealed class Test
+		{
+			private readonly Script script;
+			private readonly string test;
+			private readonly long duration;
+			private readonly bool success;
+			private readonly ClientDebugException exception;
+
+			internal Test(Script script, XElement x, bool withException)
+			{
+				this.script = script;
+
+				this.test = x.GetAttribute("name", "<noname>");
+				this.success = x.GetAttribute("success", true);
+				this.duration = x.GetAttribute("time", -1L);
+
+				this.exception = withException && !success ? new ClientDebugException(x) : null;
+			} // ctor
+
+			public ClientMemberValue[] Format()
+				=> new ClientMemberValue[]
+				{
+					new ClientMemberValue("Script", "string", typeof(string), script?.ScriptId),
+					new ClientMemberValue("Test", "string", typeof(string), test),
+					new ClientMemberValue("Success", "bool", typeof(bool), success),
+					new ClientMemberValue("Duration", "long", typeof(long), duration),
+					new ClientMemberValue("Message", "string", typeof(string), exception?.Message),
+				};
+
+			public Script Script => script;
+
+			public string Name => test;
+			public long Duration => duration;
+			public bool Success => success;
+
+			public ClientDebugException Exception => exception;
+		} // class Test
+
+		#endregion
+
+		#region -- class Script ---------------------------------------------------------
+
+		public sealed class Script
+		{
+			private readonly string scriptId;
+			private readonly bool success;
+			private readonly long compileTime;
+			private readonly long runTime;
+
+			private readonly Lazy<int> passedTests;
+
+			private readonly ClientDebugException exception;
+
+			private readonly Test[] tests;
+
+			internal Script(XElement x, bool withException)
+			{
+				this.scriptId = x.GetAttribute("id", "<noname>");
+				this.success = x.GetAttribute("success", true);
+				this.compileTime = x.GetAttribute("compileTime", -1L);
+				this.runTime = x.GetAttribute("runTime", -1L);
+
+				this.exception = withException && !success ? new ClientDebugException(x) : null;
+
+				tests = (
+					from c in x.Elements("test")
+					select new Test(this, c, withException)
+				).ToArray();
+
+				passedTests = new Lazy<int>(() => tests.Sum(c => c.Success ? 1 : 0));
+			} // ctor
+
+			public ClientMemberValue[] Format()
+				=> new ClientMemberValue[]
+				{
+					new ClientMemberValue("Script", "string", typeof(string), scriptId),
+					new ClientMemberValue("Success", "bool", typeof(bool), success),
+					new ClientMemberValue("Passed", "int", typeof(int), Passed),
+					new ClientMemberValue("Failed", "int", typeof(int), Failed),
+					new ClientMemberValue("Message", "string", typeof(string), exception?.Message),
+				};
+
+			public IEnumerable<Test> Tests => tests;
+
+			public string ScriptId => scriptId;
+			public long CompileTime => compileTime;
+			public long RunTime => runTime;
+			public bool Success => success;
+
+			public int Passed => passedTests.Value;
+			public int Failed => tests.Length - Passed;
+
+			public ClientDebugException Exception => exception;
+		} // class Script
+
+		#endregion
+
+		private readonly Script[] scripts;
+
+		internal ClientRunScriptResult(XElement xReturn)
+		{
+			scripts =
+			(
+				from x in xReturn.Elements("script")
+				select new Script(x, true)
+			).ToArray();
+		} // ctor
+
+		public IEnumerable<Test> AllTests
+		{
+			get
+			{
+				foreach (var s in scripts)
+					foreach (var t in s.Tests)
+						yield return t;
+			}
+		} // prop AllTests
+
+		public IEnumerable<Script> Scripts => scripts;
+	} // class ClientRunScriptResult
 
 	#endregion
 
@@ -230,7 +387,7 @@ namespace TecWare.DE.Server
 				{
 					if (lastNativeErrorCode != e.NativeErrorCode) // connect exception
 					{
-						if (!OnConnectionFailure(e))
+						if (!await OnConnectionFailureAsync(e))
 							lastNativeErrorCode = e.NativeErrorCode;
 					}
 				}
@@ -240,7 +397,7 @@ namespace TecWare.DE.Server
 				catch (Exception e)
 				{
 					lastNativeErrorCode = Int32.MinValue;
-					OnConnectionFailure(e);
+					await OnConnectionFailureAsync(e);
 				}
 				#endregion
 
@@ -361,6 +518,10 @@ namespace TecWare.DE.Server
 					var t = x.Attribute("type")?.Value;
 					OnMessage(String.IsNullOrEmpty(t) ? 'D' : Char.ToUpper(t[0]), x.Value);
 				}
+				else if(x.Name == "script")
+					OnStartScript(new ClientRunScriptResult.Script(x, false), x.GetAttribute("message", String.Empty));
+				else if(x.Name == "test")
+					OnTestResult(new ClientRunScriptResult.Test(null, x, false), x.GetAttribute("message", String.Empty));
 			}
 		} // proc ProcessAnswer
 
@@ -476,11 +637,14 @@ namespace TecWare.DE.Server
 		protected virtual void OnConnectionEstablished()
 			=> DebugPrint("Connection established.");
 
-		protected virtual bool OnConnectionFailure(Exception e)
+		/// <summary></summary>
+		/// <param name="e"></param>
+		/// <returns><c>true</c>, for exception handled.</returns>
+		protected virtual Task<bool> OnConnectionFailureAsync(Exception e)
 		{
 			DebugPrint($"Connection failed: {e}");
-			return false;
-		} // proc OnConnectionFailure
+			return Task.FromResult(false);
+		} // proc OnConnectionFailureAsync
 
 		protected virtual void OnCommunicationException(Exception e)
 			=> DebugPrint($"Connection failed: {e}");
@@ -490,6 +654,12 @@ namespace TecWare.DE.Server
 
 		protected abstract void OnMessage(char type, string message);
 
+		protected virtual void OnStartScript(ClientRunScriptResult.Script script, string message)
+			=> OnMessage('I', $">> Script: {script.ScriptId} | {(script.Success ? "OK" : "Err")} <<");
+		
+		protected virtual void OnTestResult(ClientRunScriptResult.Test test, string message)
+			=> OnMessage('I', $">> Test: {test.Duration} | {(test.Success ? "OK" : message ?? "Err")} <<");
+		
 		public bool IsConnected
 		{
 			get
@@ -501,7 +671,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- GetMemberValue, ParseReturn --------------------------------------------
+		#region -- GetMemberValue, ParseReturn ------------------------------------------
 
 		private Type GetType(string typeString)
 		{
@@ -586,6 +756,33 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- RunScript ------------------------------------------------------------
+
+		public async Task<ClientRunScriptResult> SendRunScriptAsync(string scriptFilter, string methodFilter)
+		{
+			var x = await SendAsync(new XElement("run",
+				new XAttribute("script", scriptFilter ?? "*"),
+				new XAttribute("method", methodFilter ?? "*"))
+			);
+			return new ClientRunScriptResult(x);
+		} // func SendRunScriptAsync
+
+		#endregion
+
+		#region -- Recompile ------------------------------------------------------------
+
+		public async Task<IEnumerable<(string scriptId, bool failed)>> SendRecompileAsync()
+		{
+			var x = await SendAsync(new XElement("recompile"));
+			return
+				from c in x.Elements()
+				let scriptId = x.GetAttribute("id", "error")
+				let failed = x.GetAttribute("failed", false)
+				select (scriptId, failed);
+		} // func SendRecompileAsync
+
+		#endregion
+
 		#region -- Use --------------------------------------------------------------------
 
 		public Task<string> SendUseAsync(string node)
@@ -628,12 +825,12 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Execute ----------------------------------------------------------------
+		#region -- Execute --------------------------------------------------------------
 
-		public Task<IEnumerable<ClientMemberValue>> SendExecuteAsync(string command)
+		public Task<ClientExecuteResult> SendExecuteAsync(string command)
 			=> SendExecuteAsync(command, CancellationToken.None);
 
-		public async Task<IEnumerable<ClientMemberValue>> SendExecuteAsync(string command, CancellationToken cancellationToken)
+		public async Task<ClientExecuteResult> SendExecuteAsync(string command, CancellationToken cancellationToken)
 		{
 			var r = await SendAsync(
 				new XElement("execute",
@@ -642,7 +839,11 @@ namespace TecWare.DE.Server
 				cancellationToken
 			);
 
-			return ParseReturn(r);
+			return new ClientExecuteResult(
+				r.GetAttribute("compileTime", -1L),
+				r.GetAttribute("runTime", -1L),
+				ParseReturn(r)
+			);
 		} // proc SendCommandAsync
 
 		#endregion

@@ -222,6 +222,14 @@ namespace TecWare.DE.Server
 		/// <param name="serviceType"></param>
 		/// <param name="service"></param>
 		void RegisterService(Type serviceType, object service);
+		/// <summary>Registers a service.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="factory"></param>
+		void RegisterService<T>(Func<T> factory) where T : class;
+		/// <summary></summary>
+		/// <param name="serviceType"></param>
+		/// <returns></returns>
+		bool RemoveService(Type serviceType);
 
 		/// <summary>Register a commit action.</summary>
 		/// <param name="action"></param>
@@ -317,11 +325,47 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class ServiceDescriptor ---------------------------------------------
+
+		private sealed class ServiceDescriptor
+		{
+			private readonly Func<object> factory;
+			private object service;
+			
+			public ServiceDescriptor(object service)
+			{
+				this.factory = null;
+				this.service = service;
+			} // ctor
+
+			public ServiceDescriptor(Func<object> factory)
+			{
+				this.factory = factory;
+				this.service = null;
+			} // ctor
+
+			private object GetService()
+			{
+				if (service == null)
+				{
+					lock (factory)
+						service = factory();
+				}
+				return service;
+			} // func GetService
+
+			public object Service => GetService();
+			public bool IsValueCreated => service != null;
+			public bool IsDisposable => service is IDisposable && factory != null;
+		} // class ServiceDescriptor
+
+		#endregion
+
 		private readonly List<Func<Task>> commitActions = new List<Func<Task>>();
 		private readonly List<Func<Task>> rollbackActions = new List<Func<Task>>();
 		private readonly List<IDisposable> autoDispose = new List<IDisposable>();
 
-		private readonly Dictionary<Type, Lazy<object>> services = new Dictionary<Type, Lazy<object>>();
+		private readonly Dictionary<Type, ServiceDescriptor> services = new Dictionary<Type, ServiceDescriptor>();
 		private readonly Dictionary<GlobalKey, object> globals = new Dictionary<GlobalKey, object>();
 
 		private readonly IServiceProvider sp;
@@ -370,7 +414,7 @@ namespace TecWare.DE.Server
 			// dispose services
 			IEnumerable<IDisposable> activeServices;
 			lock (services)
-				activeServices = from c in services.Values where c.IsValueCreated && c.Value is IDisposable select (IDisposable)c.Value;
+				activeServices = from c in services.Values where c.IsDisposable select (IDisposable)c.Service;
 			await Task.Run(
 				() =>
 				{
@@ -478,7 +522,7 @@ namespace TecWare.DE.Server
 			lock (services)
 			{
 				if (services.TryGetValue(serviceType, out var srv))
-					r = srv.Value;
+					r = srv.Service;
 			}
 			if (r != null)
 				return r;
@@ -487,21 +531,27 @@ namespace TecWare.DE.Server
 			return sp?.GetService(serviceType);
 		} // func GetService
 
-		public void RegisterService(Type serviceType, Func<object> factory)
+		private void RegisterService(Type serviceType, ServiceDescriptor descriptor)
 		{
 			lock (services)
 			{
 				if (services.ContainsKey(serviceType))
 					throw new ArgumentException($"There is already a service '{serviceType.Name}'");
-				services.Add(serviceType, new Lazy<object>(factory, true));
+				services.Add(serviceType, descriptor);
 			}
-		} // func RegisterService
+		} // proc RegisterService
+
+		public void RegisterService(Type serviceType, Func<object> factory)
+			=> RegisterService(serviceType, new ServiceDescriptor(factory));
 
 		public void RegisterService(Type serviceType, object service)
-			=> RegisterService(serviceType, () => service);
+			=> RegisterService(serviceType, new ServiceDescriptor(service));
 
 		public void RegisterService<T>(Func<T> factory) where T : class
-			=> RegisterService(typeof(T), factory);
+			=> RegisterService(typeof(T), new ServiceDescriptor(factory));
+
+		public bool RemoveService(Type serviceType)
+			=> services.Remove(serviceType);
 
 		#endregion
 
@@ -520,7 +570,7 @@ namespace TecWare.DE.Server
 			{
 				foreach (var cur in services.Values.Where(c => c.IsValueCreated))
 				{
-					switch (cur)
+					switch (cur.Service)
 					{
 						case IDbTransaction trans:
 							transactions.Add(

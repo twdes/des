@@ -571,6 +571,7 @@ namespace TecWare.DE.Server
 					{
 						// print help
 						var help = CommandLine.Text.HelpText.AutoBuild(r);
+						help.Copyright = typeof(DEServer).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright;
 
 						if (errors.FirstOrDefault(e => e is HelpVerbRequestedError) != null)
 						{
@@ -581,8 +582,15 @@ namespace TecWare.DE.Server
 						}
 						if (errors.FirstOrDefault(e => e is VersionRequestedError) != null)
 						{
-							// todo: add detailed version info
-							help.AddPostOptionsLine("Assembly version: todo");
+							void AddVersionForAssembly(Assembly assembly)
+							{
+								var fileVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+								help.AddPostOptionsLine($"  {assembly.GetName().Name}: {fileVersion?.InformationalVersion ?? "err"}");
+							}
+							help.AddPostOptionsLine("Assembly version:");
+							AddVersionForAssembly(typeof(DEServer).Assembly);
+							AddVersionForAssembly(typeof(ProcsDE).Assembly);
+							AddVersionForAssembly(typeof(Procs).Assembly);
 						}
 
 						Console.WriteLine(help.ToString());
