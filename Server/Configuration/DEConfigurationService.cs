@@ -522,9 +522,13 @@ namespace TecWare.DE.Server.Configuration
 						startInsertAfter = true;
 					else if (childInsertIndex >= 0)
 					{
-						lastChildIndex = Array.FindIndex(childElements, lastChildIndex, c => c.Name == xInsert.Name);
-						if (lastChildIndex > childInsertIndex)
-							return xInsert;
+						var tmp = Array.FindIndex(childElements, lastChildIndex, c => c.Name == xInsert.Name);
+						if (tmp > lastChildIndex)
+						{
+							lastChildIndex = tmp;
+							if (lastChildIndex > childInsertIndex)
+								return xInsert;
+						}
 					}
 				}
 			}

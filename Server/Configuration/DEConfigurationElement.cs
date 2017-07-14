@@ -129,7 +129,10 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func GetSubSequences
 
-		public static XName GetXName(XmlQualifiedName xmlName) => XName.Get(xmlName.Name, xmlName.Namespace);
+		public static XName GetXName(XmlQualifiedName xmlName) 
+			=> xmlName == null || String.IsNullOrEmpty(xmlName.Name)
+				? null
+				: XName.Get(xmlName.Name, xmlName.Namespace);
   } // class DEConfigurationHelper
 
 	#endregion	
