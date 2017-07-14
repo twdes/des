@@ -351,10 +351,8 @@ namespace TecWare.DE.Server.Configuration
 				{
 					if (context.CurrentFrame.IsDeleteNodes)
 						deleteMe = c;
-					else if (c is XElement)
+					else if (c is XElement xCur)
 					{
-						var xCur = (XElement)c;
-
 						// Replace values in attributes
 						foreach (var attr in xCur.Attributes())
 						{
@@ -416,9 +414,8 @@ namespace TecWare.DE.Server.Configuration
 							}
 						}
 					}
-					else if (c is XText)
+					else if (c is XText xText)
 					{
-						XText xText = (XText)c;
 						if (ChangeConfigurationValue(context, xText, xText.Value, out value))
 							xText.Value = value;
 					}
@@ -462,7 +459,7 @@ namespace TecWare.DE.Server.Configuration
 				throw context.CreateConfigException(xPI, "It is not allowed to include to a root element.");
 
 			var xInc = context.LoadFile(xPI, xPI.Data).Root;
-			if (xInc.Name == DEConfigurationConstants.xnInclude)
+			if (xInc.Name == xnInclude)
 			{
 				XNode xLast = xPI;
 
@@ -493,7 +490,7 @@ namespace TecWare.DE.Server.Configuration
 			// parse the loaded document
 			var fileToken = new XFileAnnotation();
 			var newFrame = context.PushFrame(xPI);
-			if (xDoc.Root.Name != DEConfigurationConstants.xnFragment)
+			if (xDoc.Root.Name != xnFragment)
 				throw context.CreateConfigException(xDoc.Root, "<fragment> expected.");
 
 			ParseConfiguration(context, xDoc.Root, fileToken);
@@ -502,6 +499,38 @@ namespace TecWare.DE.Server.Configuration
 			// merge the parsed nodes
 			MergeConfigTree(xPI.Document.Root, xDoc.Root, fileToken);
 		} // proc MergeConfigTree
+
+		private XElement MergeConfigTreeFindInsertBefore(XElement xRoot, XElement xAdd)
+		{
+			var rootElement = this[xRoot.Name];
+			var addElement = rootElement != null ? this[xAdd.Name] : null;
+			var childElements = rootElement?.GetElements().ToArray();
+			var childInsertIndex = childElements != null 
+				? Array.FindIndex(childElements, c => addElement?.IsName(c.Name) ?? c.Name == xAdd.Name)
+				: -1;
+
+			var xLastName = (XName)null;
+			var lastChildIndex = 0;
+			var startInsertAfter = false;
+			foreach (var xInsert in xRoot.Elements())
+			{
+				if (xInsert.Name != xLastName) // new name
+				{
+					if (startInsertAfter)
+						return xInsert;
+					if (xInsert.Name == xAdd.Name)
+						startInsertAfter = true;
+					else if (childInsertIndex >= 0)
+					{
+						lastChildIndex = Array.FindIndex(childElements, lastChildIndex, c => c.Name == xInsert.Name);
+						if (lastChildIndex > childInsertIndex)
+							return xInsert;
+					}
+				}
+			}
+
+			return null;
+		} // func MergeConfigTreeFindInsertBefore
 
 		private void MergeConfigTree(XElement xRoot, XElement xMerge, XFileAnnotation currentFileToken)
 		{
@@ -547,7 +576,13 @@ namespace TecWare.DE.Server.Configuration
 					{
 						Procs.XCopyAnnotations(xCurMerge, xCurMerge);
 						xCurMerge.Remove();
-						xRoot.Add(xCurMerge);
+												
+						// find the xsd insert position
+						var xInsertBefore = xRoot.HasElements ? MergeConfigTreeFindInsertBefore(xRoot, xCurMerge) : null;
+						if (xInsertBefore == null)
+							xRoot.Add(xCurMerge);
+						else
+							xInsertBefore.AddBeforeSelf(xCurMerge);
 					}
 					else // merge node
 						MergeConfigTree(xCurRoot, xCurMerge, currentFileToken);

@@ -113,30 +113,20 @@ namespace TecWare.DE.Server.Configuration
 
 		public static XmlSchemaObjectCollection GetSubSequences(XmlSchemaComplexType complexType)
 		{
-			var items = (XmlSchemaObjectCollection)null;
-			if (complexType != null)
+			if (complexType == null)
+				return null;
+
+			switch (complexType.Particle ?? complexType.ContentTypeParticle)
 			{
-				var particle = complexType.Particle ?? complexType.ContentTypeParticle;
-				if (particle != null)
-				{
-					var seq = particle as XmlSchemaSequence;
-					if (seq != null)
-						items = seq.Items;
-					else
-					{
-						var choice = particle as XmlSchemaChoice;
-						if (choice != null)
-							items = choice.Items;
-						else
-						{
-							var all = particle as XmlSchemaAll;
-							if (all != null)
-								items = all.Items;
-						}
-					}
-				}
+				case XmlSchemaSequence seq:
+					return seq.Items;
+				case XmlSchemaChoice choice:
+					return choice.Items;
+				case XmlSchemaAll all:
+					return all.Items;
+				default:
+					return null;
 			}
-			return items;
 		} // func GetSubSequences
 
 		public static XName GetXName(XmlQualifiedName xmlName) => XName.Get(xmlName.Name, xmlName.Namespace);
@@ -307,24 +297,48 @@ namespace TecWare.DE.Server.Configuration
 			);
 		} // ctor
 
-		public IEnumerable<IDEConfigurationElement> GetElements()
+		private IEnumerable<IDEConfigurationElement> GetElements(XmlSchemaObjectCollection items)
 		{
-			var complexType = Item.ElementSchemaType as XmlSchemaComplexType;
-			if (complexType != null)
+			foreach (var x in items)
 			{
-				var items = GetSubSequences(complexType);
-				if (items != null)
+				switch (x)
 				{
-					foreach (var x in items.OfType<XmlSchemaElement>().Where(c => !(c.ElementSchemaType is XmlSchemaSimpleType)))
-					{
-						if (x.RefName != null && x.Name == null) // resolve reference
-							yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(x.QualifiedName)];
-						else
-							yield return new DEConfigurationElement(sp, x);
-					}
+					case XmlSchemaElement element:
+						if (!(element.ElementSchemaType is XmlSchemaSimpleType))
+						{
+							if (element.RefName != null && element.Name == null) // resolve reference
+								yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
+							else
+								yield return new DEConfigurationElement(sp, element);
+						}
+						break;
+					case XmlSchemaSequence seq:
+						foreach (var c in GetElements(seq.Items))
+							yield return c;
+						break;
+					case XmlSchemaChoice choice:
+						foreach (var c in GetElements(choice.Items))
+							yield return c;
+						break;
+					case XmlSchemaAll all:
+						foreach (var c in GetElements(all.Items))
+							yield return c;
+						break;
 				}
 			}
 		} // func GetElements
+		
+		public IEnumerable<IDEConfigurationElement> GetElements()
+		{
+			if (Item.ElementSchemaType is XmlSchemaComplexType complexType)
+				return GetElements(GetSubSequences(complexType));
+			else
+				return Array.Empty<IDEConfigurationElement>();
+		} // func GetElements
+
+		public bool IsName(XName other)
+			=> other == Name
+				|| other  == GetXName(Item.SubstitutionGroup);
 
 		private bool IsSimpleTextContent(XmlSchemaType type)
 		{
@@ -339,10 +353,9 @@ namespace TecWare.DE.Server.Configuration
 
 		public IEnumerable<IDEConfigurationAttribute> GetAttributes()
 		{
-			var complexType = Item.ElementSchemaType as XmlSchemaComplexType;
-			if (complexType != null)
+			if (Item.ElementSchemaType is XmlSchemaComplexType complexType)
 			{
-				foreach (XmlSchemaAttribute attr in complexType.AttributeUses.Values)
+				foreach (var attr in complexType.AttributeUses.Values.OfType<XmlSchemaAttribute>())
 					yield return new DEConfigurationAttribute(attr);
 
 				var items = GetSubSequences(complexType);

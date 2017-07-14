@@ -88,6 +88,11 @@ namespace TecWare.DE.Server.Configuration
 	/// <summary></summary>
 	public interface IDEConfigurationElement : IDEConfigurationAnnotated
 	{
+		/// <summary>Check the name and/or substition name.</summary>
+		/// <param name="name"></param>
+		/// <returns></returns>
+		bool IsName(XName name);
+
 		/// <summary>Name of the element.</summary>
 		XName Name { get; }
 

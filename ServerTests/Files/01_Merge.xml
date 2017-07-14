@@ -6,4 +6,7 @@
 	<configLogItem name="test2" displayname="test 2" script="script2 script3">
 		<log min="4096" max="8128" />
 	</configLogItem>
+	<configLogItem name="test3">
+		<files name="test" directory="."/>
+	</configLogItem>
 </fragment>
