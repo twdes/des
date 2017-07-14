@@ -352,7 +352,7 @@
 								<xs:documentation>Definiert zu einer Dateiendung den mime-type.</xs:documentation>
 							</xs:annotation>
 							<xs:complexType>
-								<xs:attribute name="ext" type="xs:string" use="required">
+								<xs:attribute name="ext" type="KeyType" use="required">
 									<xs:annotation>
 										<xs:documentation>Endung der Datei (z.B. &quot;.png&quot;).</xs:documentation>
 									</xs:annotation>
