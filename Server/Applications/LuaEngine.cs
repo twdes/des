@@ -21,12 +21,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
-using System.Reflection;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.IronLua;
 using TecWare.DE.Data;
 using TecWare.DE.Server.Configuration;
@@ -121,7 +121,7 @@ namespace TecWare.DE.Server
 				var ex = e.GetInnerException();
 
 				// log exception
-				switch(ex)
+				switch (ex)
 				{
 					case LuaParseException ep:
 						Log.Except("{0} ({3} at {1}, {2})", ep.Message, ep.Line, ep.Column, ep.FileName);
@@ -165,8 +165,8 @@ namespace TecWare.DE.Server
 		/// <summary>Script that is based on file.</summary>
 		private abstract class LuaFileBasedScript : LuaScript
 		{
-			private FileInfo fileSource;		// File source of the script
-			private Encoding encoding;			// Encoding style of the file
+			private FileInfo fileSource;        // File source of the script
+			private Encoding encoding;          // Encoding style of the file
 			private DateTime compiledStamp;     // Last time compiled
 
 			public LuaFileBasedScript(LuaEngine engine, string scriptId, FileInfo fileSource, Encoding encoding, bool compileWithDebugger)
@@ -185,7 +185,7 @@ namespace TecWare.DE.Server
 				compiledStamp = DateTime.Now;
 				OnCompiled();
 			} // proc Compile
-			
+
 			protected virtual void OnCompiled() { }
 
 			private DateTime GetScriptFileStampSecure()
@@ -399,7 +399,7 @@ namespace TecWare.DE.Server
 			public void Run(bool throwExceptions)
 			{
 				lock (scriptLock)
-				using (var m = log.CreateScope(LogMsgType.Information, true, true))
+					using (var m = log.CreateScope(LogMsgType.Information, true, true))
 						try
 						{
 							if (GetScript(throwExceptions) == null)
@@ -557,7 +557,7 @@ namespace TecWare.DE.Server
 				private readonly LuaTestEnvironment env;
 
 				public LuaTestFunctionSet(LuaTestEnvironment env)
-					=> this.env =env;
+					=> this.env = env;
 
 				protected override object OnIndex(object key)
 					=> base.OnIndex(key) ?? env.OnIndexInternal(key);
@@ -570,6 +570,61 @@ namespace TecWare.DE.Server
 
 					env.currentItem = ProcsDE.UseNode((DEConfigItem)env.session.Engine.Server, path, 1);
 				} // proc SetCurrentNode
+
+				[LuaMember("AssertFail")]
+				private void LuaAssertFail(string message)
+				{
+					LuaAssertIsTrue(false, message);
+				}
+
+				[LuaMember("AssertAreEqual")]
+				private void LuaAssertAreEqual(object obj1, object obj2, string message)
+				{
+					if (obj1 == null && obj2 == null)
+						return;
+
+					if (obj1 == null || obj2 == null)
+						LuaAssertIsTrue(false, message + " - One parameter was null.");
+
+					LuaAssertIsTrue(obj1.Equals(obj2), message);
+				}
+
+				[LuaMember("AssertAreNotEqual")]
+				private void LuaAssertAreNotEqual(object obj1, object obj2, string message)
+				{
+					if (obj1 == null && obj2 == null)
+						LuaAssertIsTrue(false, message + " - Both parameters were null.");
+
+					if (obj1 == null || obj2 == null)
+						return;
+
+					LuaAssertIsTrue(!obj1.Equals(obj2), message);
+				}
+
+				[LuaMember("AssertIsNotNull")]
+				private void LuaAssertIsNotNull(object obj, string message)
+				{
+					LuaAssertIsTrue(obj != null, message);
+				}
+
+				[LuaMember("AssertIsNull")]
+				private void LuaAssertIsNull(object obj, string message)
+				{
+					LuaAssertIsTrue(obj == null, message);
+				}
+
+				[LuaMember("AssertIsFalse")]
+				private void LuaAssertIsFalse(bool val, string message)
+				{
+					LuaAssertIsTrue(!val, message);
+				}
+
+				[LuaMember("AssertIsTrue")]
+				private void LuaAssertIsTrue(bool val, string message)
+				{
+					if (!val)
+						throw new AssertFailedException(message);
+				}
 			} // class LuaTestFunctionSet
 
 			#endregion
@@ -612,7 +667,7 @@ namespace TecWare.DE.Server
 			} // class ReferenceEqualImplementation
 
 			#endregion
-			
+
 			private readonly LuaEngine engine; // lua engine
 			private readonly LoggerProxy log; // log for the debugging
 
@@ -633,7 +688,7 @@ namespace TecWare.DE.Server
 				// initial context
 				this.cancellationToken = cancellationToken;
 				currentScope = CreateCommonScopeAsync(context.User, null).AwaitTask();
-				
+
 				UseNode("/");
 
 				Info("Debug session established.");
@@ -911,8 +966,8 @@ namespace TecWare.DE.Server
 				=> log.Info(message);
 
 			protected override object OnIndex(object key)
-				=> base.OnIndex(key) ?? 
-					engine.DebugEnvironment.GetValue(key, true) ??  
+				=> base.OnIndex(key) ??
+					engine.DebugEnvironment.GetValue(key, true) ??
 					currentItem.GetValue(key);
 
 			void IDEDebugContext.OnMessage(LogMsgType type, string message)
@@ -1089,7 +1144,7 @@ namespace TecWare.DE.Server
 
 					return xScriptResult;
 				} // func ExecuteScript
-				
+
 				public XElement Execute()
 				{
 					var xReturn = new XElement("return");
@@ -1428,7 +1483,7 @@ namespace TecWare.DE.Server
 				{
 					testScript.Encoding = encoding;
 					testScript.SetFileSource(new FileInfo(fileName));
-					
+
 					scriptRemove[Array.IndexOf(scriptRemove, testScript)] = null;
 				}
 				else
@@ -1467,7 +1522,7 @@ namespace TecWare.DE.Server
 			where T : LuaScript
 		{
 			var filter = Procs.GetFilerFunction(filterExpression);
-			lock(scripts)
+			lock (scripts)
 			{
 				return (
 					from c in scripts
@@ -1558,7 +1613,7 @@ namespace TecWare.DE.Server
 
 		public ILuaScript CreateScript(Func<TextReader> code, string name, params KeyValuePair<string, Type>[] parameters)
 		   => new LuaMemoryScript(this, code, name, parameters);
-			
+
 		public Lua Lua => lua;
 
 		#endregion
