@@ -1345,6 +1345,16 @@ namespace TecWare.DE.Server
 				view.WriteError(ex);
 				view.WriteError();
 				view.WriteError(ex.StackTrace);
+
+				if (ex is ClientDebugException cde)
+				{
+					foreach (var innerException in cde.InnerExceptions)
+					{
+						view.WriteError();
+						view.WriteError("== Inner Exception ==");
+						WriteLastExceptionCore(innerException);
+					}
+				}
 			}
 		} // WriteLastExceptionCore
 

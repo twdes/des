@@ -1185,7 +1185,12 @@ namespace TecWare.DE.Server
 
 			private async Task<XElement> RecompileAsync(XElement xMesage)
 			{
-				var r = await Task.Run(() => engine.Recompile().ToArray());
+				var r = await Task.Run(() =>
+					{
+						using (CreateDebugScope())
+							return engine.Recompile().ToArray();
+					}
+				);
 				return new XElement("return",
 					from c in r
 					select new XElement("r",
@@ -1262,6 +1267,13 @@ namespace TecWare.DE.Server
 			#endregion
 
 			#region -- Scope Commands ---------------------------------------------------
+
+			private DECommonScope CreateDebugScope()
+			{
+				var scope = new DECommonScope(engine, false);
+				scope.RegisterService(typeof(IDEDebugContext), this);
+				return scope;
+			} // proc CreateDebugScope
 
 			private async Task<DECommonScope> CreateCommonScopeAsync(IDEAuthentificatedUser user, IIdentity userIdentity)
 			{

@@ -55,7 +55,7 @@ namespace TecWare.DE.Server
 		{
 			if (IsValueArray || IsValueList)
 				return coreValue;
-			else if (type == null)
+			else if (type == null || coreValue == null)
 				return null;
 			
 			try
@@ -93,16 +93,24 @@ namespace TecWare.DE.Server
 	{
 		private readonly string remoteStackTrace;
 		private readonly string exceptionType;
+		private readonly ClientDebugException[] innerExceptions;
 
 		public ClientDebugException(XElement x)
 			:base(x.GetAttribute("message", "No message"))
 		{
 			this.exceptionType = x.GetAttribute("type", "Exception");
 			this.remoteStackTrace = x.Element("stackTrace")?.Value;
+
+			this.innerExceptions =
+			(
+				from c in x.Elements("innerException")
+				select new ClientDebugException(c)
+			).ToArray();
 		} // ctor
 
 		public string ExceptionType => exceptionType;
 		public override string StackTrace => remoteStackTrace;
+		public IReadOnlyList<ClientDebugException> InnerExceptions => innerExceptions;
 	} // class ClientDebugException
 
 	#endregion
