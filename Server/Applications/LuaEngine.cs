@@ -26,7 +26,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Neo.IronLua;
 using TecWare.DE.Data;
 using TecWare.DE.Server.Configuration;
@@ -623,7 +622,7 @@ namespace TecWare.DE.Server
 				private void LuaAssertIsTrue(bool val, string message)
 				{
 					if (!val)
-						throw new AssertFailedException(message);
+						throw new Exception(message);
 				}
 			} // class LuaTestFunctionSet
 
