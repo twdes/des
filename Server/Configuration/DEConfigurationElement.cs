@@ -302,31 +302,34 @@ namespace TecWare.DE.Server.Configuration
 
 		private IEnumerable<IDEConfigurationElement> GetElements(XmlSchemaObjectCollection items)
 		{
-			foreach (var x in items)
+			if (items != null)
 			{
-				switch (x)
+				foreach (var x in items)
 				{
-					case XmlSchemaElement element:
-						if (!(element.ElementSchemaType is XmlSchemaSimpleType))
-						{
-							if (element.RefName != null && element.Name == null) // resolve reference
-								yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
-							else
-								yield return new DEConfigurationElement(sp, element);
-						}
-						break;
-					case XmlSchemaSequence seq:
-						foreach (var c in GetElements(seq.Items))
-							yield return c;
-						break;
-					case XmlSchemaChoice choice:
-						foreach (var c in GetElements(choice.Items))
-							yield return c;
-						break;
-					case XmlSchemaAll all:
-						foreach (var c in GetElements(all.Items))
-							yield return c;
-						break;
+					switch (x)
+					{
+						case XmlSchemaElement element:
+							if (!(element.ElementSchemaType is XmlSchemaSimpleType))
+							{
+								if (element.RefName != null && element.Name == null) // resolve reference
+									yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
+								else
+									yield return new DEConfigurationElement(sp, element);
+							}
+							break;
+						case XmlSchemaSequence seq:
+							foreach (var c in GetElements(seq.Items))
+								yield return c;
+							break;
+						case XmlSchemaChoice choice:
+							foreach (var c in GetElements(choice.Items))
+								yield return c;
+							break;
+						case XmlSchemaAll all:
+							foreach (var c in GetElements(all.Items))
+								yield return c;
+							break;
+					}
 				}
 			}
 		} // func GetElements
