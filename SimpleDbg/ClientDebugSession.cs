@@ -783,9 +783,9 @@ namespace TecWare.DE.Server
 		{
 			var x = await SendAsync(new XElement("recompile"));
 			return
-				from c in x.Elements()
-				let scriptId = x.GetAttribute("id", "error")
-				let failed = x.GetAttribute("failed", false)
+				from c in x.Elements("r")
+				let scriptId = c.GetAttribute("id", "error")
+				let failed = c.GetAttribute("failed", false)
 				select (scriptId, failed);
 		} // func SendRecompileAsync
 
