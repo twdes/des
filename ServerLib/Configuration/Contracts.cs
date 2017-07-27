@@ -130,7 +130,7 @@ namespace TecWare.DE.Server.Configuration
 		DateTime ConfigurationStamp { get; }
 
 		/// <summary>Path to all configuration files, of the last successful parse process.</summary>
-		IEnumerable<string> ConfigurationFiles { get; }
+		IReadOnlyDictionary<string, DateTime> ConfigurationFiles { get; }
 
 		/// <summary>Returns the configuration description for the xml-element</summary>
 		/// <param name="element"></param>

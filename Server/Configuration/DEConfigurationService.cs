@@ -59,13 +59,14 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
-		private IServiceProvider sp;
-		private IDEServerResolver resolver;
+		private readonly IServiceProvider sp;
+		private readonly IDEServerResolver resolver;
 
-		private string configurationFile;
-		private DateTime configurationStamp;
+		private readonly string configurationFile;
 		private PropertyDictionary configurationProperties;
-		private List<string> knownConfigurationFiles = new List<string>();
+
+		private DateTime configurationStamp; // max timestamp of the known configuration files
+		private Dictionary<string, DateTime> knownConfigurationFiles = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
 		private XmlNameTable nameTable; // name table
 		private XmlSchemaSet schema; // complete schema
@@ -82,7 +83,7 @@ namespace TecWare.DE.Server.Configuration
 
 			this.configurationFile = configurationFile;
 			this.configurationProperties = configurationProperties;
-      this.configurationStamp = DateTime.MinValue;
+			this.configurationStamp = DateTime.MinValue;
 
 			// create a empty schema
 			nameTable = new NameTable();
@@ -170,7 +171,7 @@ namespace TecWare.DE.Server.Configuration
 		private class ParseContext : LuaPropertiesTable
 		{
 			private string basePath;
-			private List<string> collectedFiles = new List<string>();
+			private Dictionary<string, DateTime> collectedFiles = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
 			private ParseFrame currentFrame = null;
 
@@ -230,8 +231,8 @@ namespace TecWare.DE.Server.Configuration
 					fileName = Path.GetFullPath(Path.Combine(basePath, fileName));
 
 				// collect all loaded files
-				if (!collectedFiles.Contains(fileName, StringComparer.OrdinalIgnoreCase))
-					collectedFiles.Add(fileName);
+				if (!collectedFiles.ContainsKey(fileName))
+					collectedFiles.Add(fileName, File.GetLastWriteTimeUtc(fileName));
 
 				// test for assembly resource
 				var sep = fileName.LastIndexOf(',');
@@ -264,8 +265,9 @@ namespace TecWare.DE.Server.Configuration
 
 			public bool IsDefined(string expr)
 			 => currentFrame.GetMemberValue(expr) != null;
-			
+
 			public ParseFrame CurrentFrame => currentFrame;
+			public Dictionary<string, DateTime> CollectedFiles => collectedFiles;
 		} // class ParseContext
 
 		#endregion
@@ -283,7 +285,7 @@ namespace TecWare.DE.Server.Configuration
 			// prepare arguments for the configuration
 			var fileName = Path.GetFullPath(configurationFile);
 			var context = new ParseContext(configurationProperties, Path.GetDirectoryName(fileName));
-			
+
 			// read main file
 			var doc = context.LoadFile(fileName);
 			var frame = context.PushFrame(doc);
@@ -301,6 +303,10 @@ namespace TecWare.DE.Server.Configuration
 
 				// remove all parse frames
 				RemoveFileAnnotations(doc.Root);
+
+				// update configuration info
+				knownConfigurationFiles = context.CollectedFiles;
+				configurationStamp = knownConfigurationFiles.Max(c => c.Value);
 			}
 			catch (Exception e)
 			{
@@ -505,7 +511,7 @@ namespace TecWare.DE.Server.Configuration
 			var rootElement = this[xRoot.Name];
 			var addElement = rootElement != null ? this[xAdd.Name] : null;
 			var childElements = rootElement?.GetElements().ToArray();
-			var childInsertIndex = childElements != null 
+			var childInsertIndex = childElements != null
 				? Array.FindIndex(childElements, c => addElement?.IsName(c.Name) ?? c.Name == xAdd.Name)
 				: -1;
 
@@ -580,7 +586,7 @@ namespace TecWare.DE.Server.Configuration
 					{
 						Procs.XCopyAnnotations(xCurMerge, xCurMerge);
 						xCurMerge.Remove();
-												
+
 						// find the xsd insert position
 						var xInsertBefore = xRoot.HasElements ? MergeConfigTreeFindInsertBefore(xRoot, xCurMerge) : null;
 						if (xInsertBefore == null)
@@ -604,8 +610,8 @@ namespace TecWare.DE.Server.Configuration
 
 			// find primary key columns
 			var primaryKeys = (from c in elementDefinition.GetAttributes()
-												 where c.IsPrimaryKey
-												 select c).ToArray();
+							   where c.IsPrimaryKey
+							   select c).ToArray();
 
 			foreach (var x in xRootParent.Elements(xSearch.Name))
 			{
@@ -705,7 +711,7 @@ namespace TecWare.DE.Server.Configuration
 				using (var src = assembly.GetManifestResourceStream(schemaAttribute.BaseType, schemaAttribute.ResourceId))
 				{
 					var schemaUri = assembly.FullName + ", " + (schemaAttribute.BaseType == null ? "" : schemaAttribute.BaseType.FullName + ".") + schemaAttribute.ResourceId;
-          try
+					try
 					{
 						{
 							if (src == null)
@@ -733,7 +739,7 @@ namespace TecWare.DE.Server.Configuration
 									if (cur != null && assemblySchemas.Exists(c => String.Compare(c.Schema.Id, cur.Id, StringComparison.OrdinalIgnoreCase) == 0))
 										xmlSchema.Includes.RemoveAt(i);
 								}
-								
+
 
 								// Add the schema
 								assemblySchemas.Add(new SchemaAssemblyDefinition(xmlSchema, assembly));
@@ -760,7 +766,7 @@ namespace TecWare.DE.Server.Configuration
 
 		private IDEConfigurationElement GetConfigurationElement(XName name)
 		{
-			lock(schema)
+			lock (schema)
 			{
 				// search cache
 				IDEConfigurationElement r;
@@ -774,7 +780,7 @@ namespace TecWare.DE.Server.Configuration
 				return elementResolveCache[name] = xmlElement == null ? null : new DEConfigurationElement(sp, xmlElement);
 			}
 		} // func FindConfigurationElement
-		
+
 		private XmlSchemaElement FindConfigElement(List<XmlSchemaElement> stack, System.Collections.ICollection items, XName name)
 		{
 			foreach (XmlSchemaObject c in items)
@@ -822,7 +828,7 @@ namespace TecWare.DE.Server.Configuration
 			}
 			return null;
 		} // func FindConfigElement
-				
+
 		private IDEConfigurationAttribute GetConfigurationAttribute(XObject x)
 		{
 			var element = x.Parent;
@@ -839,7 +845,7 @@ namespace TecWare.DE.Server.Configuration
 				return null;
 
 			// find the element
-			var elementDefinition =  GetConfigurationElement(element.Name);
+			var elementDefinition = GetConfigurationElement(element.Name);
 			if (elementDefinition == null)
 				return null;
 
@@ -857,7 +863,7 @@ namespace TecWare.DE.Server.Configuration
 		/// <summary>TimeStamp for the configuration.</summary>
 		public DateTime ConfigurationStamp => configurationStamp;
 		/// <summary>List of configuration attached files.</summary>
-		public IEnumerable<string> ConfigurationFiles => knownConfigurationFiles;
+		public IReadOnlyDictionary<string, DateTime> ConfigurationFiles => knownConfigurationFiles;
 	} // class DEConfigurationService
 
 	#endregion
