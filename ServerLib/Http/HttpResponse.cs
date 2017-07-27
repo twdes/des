@@ -506,7 +506,7 @@ namespace TecWare.DE.Server.Http
 		{
 			if (encoding == null)
 				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
-			WriteBytes(context, encoding.GetBytes(value), contentType);
+			WriteBytes(context, encoding.GetBytes(value), contentType + ";charset=" + encoding.WebName);
 		} // proc WriteText
 
 		/// <summary>Writes the bytes to the output.</summary>
@@ -626,8 +626,8 @@ namespace TecWare.DE.Server.Http
 			{
 				using (var src = createSource())
 				{
-					var isLua = contentType == MimeTypes.Text.Lua;
-					var isHtml = contentType == MimeTypes.Text.Html;
+					var isLua = contentType.StartsWith(MimeTypes.Text.Lua);
+					var isHtml = contentType.StartsWith(MimeTypes.Text.Html);
 					var cacheItem = isLua || isHtml || (src.CanSeek && src.Length < CacheSize);
 					if (cacheItem)
 					{
