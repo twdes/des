@@ -506,7 +506,9 @@ namespace TecWare.DE.Server.Http
 		{
 			if (encoding == null)
 				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
-			WriteBytes(context, encoding.GetBytes(value), contentType + ";charset=" + encoding.WebName);
+			if (contentType.IndexOf("charset=") == -1)
+				contentType += ";charset=" + encoding.WebName;
+			WriteBytes(context, encoding.GetBytes(value), contentType);
 		} // proc WriteText
 
 		/// <summary>Writes the bytes to the output.</summary>
