@@ -1015,10 +1015,10 @@ namespace TecWare.DE.Server
 				return;
 			else if (r.IsOutputStarted)
 			{
-				if (returnValue == null)
+				if (returnValue == null || returnValue == DBNull.Value || (returnValue is LuaResult lr && lr.Count == 0))
 					return;
 				else
-					throw new ArgumentException("Return value expected.");
+					throw new ArgumentException("No return value expected.");
 			}
 			else if (returnValue == null)
 			{
