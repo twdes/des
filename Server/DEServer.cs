@@ -1073,6 +1073,47 @@ namespace TecWare.DE.Server
 				this.server = server ?? throw new ArgumentNullException(nameof(server));
 			} // ctor
 
+			[LuaMember("await")]
+			private LuaResult LuaAwait(object func)
+			{
+				int GetTaskType()
+				{
+					var t = func.GetType();
+					if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Task<>) && t.GetGenericArguments()[0].IsPublic)
+						return 0;
+					else if (typeof(Task).IsAssignableFrom(t))
+						return 1;
+					else
+						return -1;
+				};
+
+				switch (func)
+				{
+					case null:
+						throw new ArgumentNullException(nameof(func));
+					case Task t:
+						t.AwaitTask();
+						switch (GetTaskType())
+						{
+							case 0:
+								var genericArguments = t.GetType().GetGenericArguments();
+								if (genericArguments[0] == typeof(LuaResult))
+									return ((Task<LuaResult>)t).Result;
+								else
+								{
+									dynamic d = t;
+									return new LuaResult(d.Result);
+								}
+							case 1:
+								return LuaResult.Empty;
+							default:
+								throw new NotSupportedException($"Could not await for task ({func.GetType().Name}).");
+						}
+					default:
+						throw new ArgumentException($"The type '{func.GetType().Name}' is not awaitable.");
+				}
+			} // func LuaAwait
+
 			[LuaMember("format")]
 			private string LuaFormat(string text, params object[] args)
 				=> String.Format(text, args);
