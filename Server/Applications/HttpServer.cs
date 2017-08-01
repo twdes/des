@@ -1097,6 +1097,9 @@ namespace TecWare.DE.Server
 
 			// restart listener, if it was stopped during the configuration process
 			lock (httpListener)
+			{
+				var msg = new StringBuilder();
+
 				try
 				{
 					// no prefixes set, set the default
@@ -1108,12 +1111,21 @@ namespace TecWare.DE.Server
 
 					// Start the listener
 					if (!httpListener.IsListening)
+					{
+						msg.AppendLine("Http-Server start failed.");
+						foreach (var p in httpListener.Prefixes)
+							msg.AppendLine(p);
+						msg.AppendLine();
+
 						httpListener.Start();
+					}
 				}
 				catch (Exception e)
 				{
-					Server.LogMsg(EventLogEntryType.Error, e.GetMessageString());
+					msg.AppendLine(e.GetMessageString());
+					Server.LogMsg(EventLogEntryType.Error, msg.ToString());
 				}
+			}
 		} // proc OnEndReadConfiguration
 
 		#endregion
