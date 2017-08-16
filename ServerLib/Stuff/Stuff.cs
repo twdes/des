@@ -20,7 +20,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Xml;
-using System.Xml.Linq;
 using TecWare.DE.Server;
 
 namespace TecWare.DE.Stuff
@@ -75,15 +74,20 @@ namespace TecWare.DE.Stuff
 				// allowed is "cu", "lm" as shortcut
 				// name default is "My"
 
+				// subject is a comma seperated key=value pair
+				//         select via "subject:" <-- is default
+				//                    "thumbprint:"
+				// for name refere StoreName enumeration
+
 				search = search.Substring(8);
 				var parts = search.Split('/');
 
-				StoreLocation storeLocation = StoreLocation.CurrentUser;
-				StoreName storeName = StoreName.My;
-				var filter = new string[0];
+				var storeLocation = StoreLocation.CurrentUser;
+				var storeName = StoreName.My;
+				var filter = new Predicate<X509Certificate2>(c => true);
 
 				var ofs = 0;
-				if (parts.Length >= 3)
+				if (parts.Length >= 3) // local machine or current user
 				{
 					// first should be user
 					if (String.Compare(parts[0], "lm", StringComparison.OrdinalIgnoreCase) == 0 ||
@@ -91,17 +95,21 @@ namespace TecWare.DE.Stuff
 						storeLocation = StoreLocation.LocalMachine;
 					ofs++;
 				}
-				if (parts.Length >= 2)
+				if (parts.Length >= 2) // check for store name
 				{
 					if (!Enum.TryParse<StoreName>(parts[ofs], true, out storeName))
 						storeName = StoreName.My;
 					ofs++;
 				}
-				if (parts.Length >= 1)
+				if (parts.Length >= 1) // build filter string
 				{
-					filter = parts[ofs].Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
-					for (var i = 0; i < filter.Length; i++)
-						filter[i] = filter[i].Trim();
+					var selectPart = parts[ofs] ?? String.Empty;
+					if (selectPart.StartsWith("thumbprint:", StringComparison.OrdinalIgnoreCase))
+						CreateCertificateMatchThumbprintPredicate(selectPart.Substring(11).Trim(), ref filter);
+					else if (selectPart.StartsWith("subject:", StringComparison.OrdinalIgnoreCase))
+						CreateCertificateMatchSubjectPredicate(selectPart.Substring(8), ref filter);
+					else
+						CreateCertificateMatchSubjectPredicate(selectPart, ref filter);
 				}
 
 				using (var store = new X509Store(storeName, storeLocation))
@@ -111,7 +119,7 @@ namespace TecWare.DE.Stuff
 					{
 						foreach (var c in store.Certificates)
 						{
-							if (filter.Length == 0 || CertifacteMatchSubject(c, filter))
+							if (filter(c))
 								yield return c;
 						}
 					}
@@ -125,11 +133,30 @@ namespace TecWare.DE.Stuff
 				yield return new X509Certificate2(search);
 		} // func FindCertificate
 
+		private static void CreateCertificateMatchThumbprintPredicate(string thumbPrint, ref Predicate<X509Certificate2> predicate)
+		{
+			if (thumbPrint.Length > 0)
+				predicate = c => String.Compare(c.Thumbprint, thumbPrint, StringComparison.OrdinalIgnoreCase) == 0;
+		} // func CreateCertificateMatchThumbprintPredicate
+
+		private static string[] SplitSubject(string subject)
+		{
+			var filter = subject.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+			for (var i = 0; i < filter.Length; i++)
+				filter[i] = filter[i].Trim();
+			return filter;
+		} // func SplitSubject
+
+		private static void CreateCertificateMatchSubjectPredicate(string filterSubject, ref Predicate<X509Certificate2> predicate)
+		{
+			var filterExpr = SplitSubject(filterSubject);
+			if (filterExpr.Length > 0)
+				predicate = c => CertifacteMatchSubject(c, filterExpr);
+		} // proc CreateCertificateMatchSubjectPredicate
+
 		private static bool CertifacteMatchSubject(X509Certificate2 cert, string[] filter)
 		{
-			var splittedSubject = cert.Subject.Split(',');
-			for (var i = 0; i < splittedSubject.Length; i++)
-				splittedSubject[i] = splittedSubject[i].Trim();
+			var splittedSubject = SplitSubject(cert.Subject);
 
 			foreach (var f in filter)
 			{

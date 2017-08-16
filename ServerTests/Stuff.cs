@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
@@ -228,5 +229,32 @@ namespace TecWare.DE.Server
 			Assert.AreEqual(XmlConvert.VerifyXmlChars(ProcsDE.RemoveInvalidXmlChars("String\x001AEmp\x10000ty")), "StringEmp\x10000ty");
 		}
 
+	}
+
+	[TestClass]
+	public class CertFindTest
+	{
+		[TestMethod]
+		public void CertFind01()
+		{
+			var certs = ProcsDE.FindCertificate("store://cu/root/CN=GlobalSign").ToArray();
+			Assert.IsTrue(certs.Count() != 0);
+		}
+
+		[TestMethod]
+		public void CertFind02()
+		{
+			var certs = ProcsDE.FindCertificate("store://cu/root/subject:CN=GlobalSign").ToArray();
+			Assert.IsTrue(certs.Count() != 0);
+		}
+
+		[TestMethod]
+		public void CertFind03()
+		{
+			var certs = ProcsDE.FindCertificate("store://cu/root/thumbprint:75e0abb6138512271c04f85fddde38e4b7242efe").ToArray();
+			//X509KeyUsageExtension a;
+			//a.KeyUsages = X509KeyUsageFlags.
+			Assert.IsTrue(certs.Count() == 1);
+		}
 	}
 }
