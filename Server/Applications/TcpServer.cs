@@ -134,7 +134,7 @@ namespace TecWare.DE.Server
 			private readonly Socket s;
 
 			private readonly Lazy<string> streamInfo;
-			
+
 			private long totalReadedBytes = 0;
 			private long totalWrittenBytes = 0;
 
@@ -404,7 +404,7 @@ namespace TecWare.DE.Server
 			{
 				if (taskCompletion.Task.IsCanceled)
 					throw new TaskCanceledException();
-        else if (e.SocketError == SocketError.Success)
+				else if (e.SocketError == SocketError.Success)
 					taskCompletion.SetResult(CreateConnection(e.ConnectSocket));
 				else
 					throw new SocketException((int)e.SocketError);
