@@ -21,6 +21,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Reflection;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
@@ -820,6 +821,10 @@ namespace TecWare.DE.Server
 						return $"[{e.GetType().Name}] {e.Message}";
 					}
 				}
+
+				bool IsTypedEnumerable(Type valueType)
+					=> valueType.GetInterfaces().Any(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+
 				var value = getValueSafe();
 				var valueExists = values.Contains(value, ReferenceEqualImplementation.Instance);
 				values.Push(value);
@@ -832,7 +837,9 @@ namespace TecWare.DE.Server
 						new XAttribute("t", displayType)
 					);
 
-					if (valueExists)
+					if(value == null)
+					{ }
+					else if (valueExists)
 					{
 						x.Add(new XAttribute("ct", "recursion"));
 					}
@@ -851,44 +858,13 @@ namespace TecWare.DE.Server
 					}
 					else if (value is IEnumerable<IDataRow> rows)
 					{
-						x.Add(new XAttribute("ct", "rows"));
-
-						var rowCount = 0;
-						var columnNames = (string[])null;
-						var columns = (IReadOnlyList<IDataColumn>)null;
-						foreach (var r in rows)
-						{
-							if (rowCount >= 10)
-								break;
-
-							if (columns == null)
-							{
-								columns = r.Columns;
-								columnNames = new string[columns.Count];
-
-								// emit columns
-								var xFields = new XElement("f");
-								x.Add(xFields);
-								for (var i = 0; i < columns.Count; i++)
-								{
-									columnNames[i] = "c" + i.ToString();
-
-									xFields.Add(new XElement(columnNames[i],
-										new XAttribute("n", columns[i].Name),
-										new XAttribute("t", LuaType.GetType(columns[i].DataType).AliasOrFullName)
-									));
-								}
-							}
-
-							var xRow = new XElement("r");
-							x.Add(xRow);
-							for (var i = 0; i < columns.Count; i++)
-								xRow.Add(new XElement(columnNames[i], r[i].ChangeType<string>()));
-
-							rowCount++;
-						}
+						CreateRowEnumerable(rows, x);
 					}
-					else if (value != null)
+					else if (IsTypedEnumerable(value.GetType()))
+					{
+						CreateTypedEnumerable((System.Collections.IEnumerable)value, value.GetType().GetGenericArguments()[0], x);
+					}
+					else 
 						x.Add(new XText(Procs.ChangeType<string>(value)));
 
 					return x;
@@ -898,6 +874,109 @@ namespace TecWare.DE.Server
 					values.Pop();
 				}
 			} // func CreateMember
+			
+			private static void CreateRowEnumerable(IEnumerable<IDataRow> rows, XElement x)
+			{
+				x.Add(new XAttribute("ct", "rows"));
+
+				var rowCount = 0;
+				var columnNames = (string[])null;
+				var columns = (IReadOnlyList<IDataColumn>)null;
+				foreach (var r in rows)
+				{
+					if (rowCount >= 10)
+						break;
+
+					if (columns == null)
+					{
+						columns = r.Columns;
+						columnNames = new string[columns.Count];
+
+						// emit columns
+						var xFields = new XElement("f");
+						x.Add(xFields);
+						for (var i = 0; i < columns.Count; i++)
+						{
+							columnNames[i] = "c" + i.ToString();
+
+							xFields.Add(new XElement(columnNames[i],
+								new XAttribute("n", columns[i].Name),
+								new XAttribute("t", LuaType.GetType(columns[i].DataType).AliasOrFullName)
+							));
+						}
+					}
+
+					var xRow = new XElement("r");
+					x.Add(xRow);
+					for (var i = 0; i < columns.Count; i++)
+					{
+						var v = r[i];
+						if (v != null)
+							xRow.Add(new XElement(columnNames[i], v.ChangeType<string>()));
+					}
+
+					rowCount++;
+				}
+			} // proc CreateRowEnumerable
+
+			private static void CreateTypedEnumerable(System.Collections.IEnumerable values, Type type, XElement x)
+			{
+				// create the column descriptions
+				var columns = new List<Tuple<string, string, Type, Func<object, object>>>();
+				
+				foreach (var m in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.GetField | BindingFlags.GetProperty))
+				{
+					if (m is FieldInfo fi)
+					{
+						columns.Add(new Tuple<string, string, Type, Func<object, object>>(
+							"c" + columns.Count.ToString(),
+							fi.Name,
+							fi.FieldType,
+							fi.GetValue
+						));
+					}
+					else if(m is PropertyInfo pi)
+					{
+						columns.Add(new Tuple<string, string, Type, Func<object, object>>(
+							"c" + columns.Count.ToString(),
+							pi.Name,
+							pi.PropertyType,
+							pi.GetValue
+						));
+					}
+				}
+
+				// emit enum
+				x.Add(new XAttribute("ct", "rows"));
+
+				// emit fields
+				x.Add(new XElement("f",
+					from c in  columns
+					select new XElement(c.Item1,
+						new XAttribute("n", c.Item2),
+						new XAttribute("t", LuaType.GetType(c.Item3).AliasOrFullName)
+					)
+				));
+
+				// enumerate rows
+				var rowCount = 0;
+				foreach (var cur in values)
+				{
+					if (rowCount >= 10)
+						break;
+
+					var xRow = new XElement("r");
+					x.Add(xRow);
+					for (var i = 0; i < columns.Count; i++)
+					{
+						var v = columns[i].Item4(cur);
+						if (v != null)
+							xRow.Add(new XElement(columns[i].Item1, v.ChangeType<string>()));
+					}
+
+					rowCount++;
+				}
+			} // func CreateTypedEnumerable
 
 			#endregion
 
