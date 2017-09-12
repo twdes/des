@@ -822,8 +822,15 @@ namespace TecWare.DE.Server
 					}
 				}
 
-				bool IsTypedEnumerable(Type valueType)
-					=> valueType.GetInterfaces().Any(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+				bool TryGetTypedEnumerable(Type valueType, out Type enumerableType)
+				{
+					enumerableType = valueType.GetInterfaces().FirstOrDefault(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+					if (enumerableType == null)
+						return false;
+
+					enumerableType = enumerableType.GetGenericArguments()[0];
+					return Type.GetTypeCode(enumerableType) == TypeCode.Object;
+				} // func TryGetTypedEnumerable
 
 				var value = getValueSafe();
 				var valueExists = values.Contains(value, ReferenceEqualImplementation.Instance);
@@ -860,9 +867,9 @@ namespace TecWare.DE.Server
 					{
 						CreateRowEnumerable(rows, x);
 					}
-					else if (IsTypedEnumerable(value.GetType()))
+					else if (values.Count == 1 && TryGetTypedEnumerable(value.GetType(), out var enumerableType))
 					{
-						CreateTypedEnumerable((System.Collections.IEnumerable)value, value.GetType().GetGenericArguments()[0], x);
+						CreateTypedEnumerable((System.Collections.IEnumerable)value, enumerableType, x);
 					}
 					else 
 						x.Add(new XText(Procs.ChangeType<string>(value)));
