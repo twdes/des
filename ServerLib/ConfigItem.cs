@@ -1108,7 +1108,7 @@ namespace TecWare.DE.Server
 
 		#region -- Interface for Lua ------------------------------------------------------
 
-		protected void CallTableMethods(string tableName, params object[] args)
+		protected void CallTableMethodsCore(string tableName, bool throwExceptions, object[] args)
 		{
 			var table = GetMemberValue(tableName, false, true) as LuaTable;
 			if (table == null)
@@ -1122,10 +1122,18 @@ namespace TecWare.DE.Server
 				}
 				catch (Exception e)
 				{
+					if (throwExceptions)
+						throw;
 					Log.Except(String.Format("Failed to call {0}.{1}.", tableName, c.Key), e);
 				}
 			}
 		} // proc CallTableMethods
+
+		protected void CallTableMethods(string tableName, params object[] args)
+			=> CallTableMethodsCore(tableName, false, args);
+
+		protected void CallTableMethodsWithExceptions(string tableName, params object[] args)
+			=> CallTableMethodsCore(tableName, true, args);
 
 		protected virtual bool IsMemberTableMethod(string key)
 		{
