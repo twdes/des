@@ -209,11 +209,10 @@ namespace TecWare.DE.Server.Configuration
 
 	#region -- class DEConfigurationElementAttribute ------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	internal class DEConfigurationElementAttribute : DEConfigurationBase<XmlSchemaElement>, IDEConfigurationAttribute
 	{
-		private Lazy<string> typeName;
+		private readonly Lazy<string> typeName;
 
 		internal DEConfigurationElementAttribute(XmlSchemaElement element)
 			: base(element)
@@ -255,12 +254,11 @@ namespace TecWare.DE.Server.Configuration
 
 	#region -- class DEConfigurationElement ---------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	internal class DEConfigurationElement : DEConfigurationBase<XmlSchemaElement>, IDEConfigurationElement
 	{
-		private IServiceProvider sp;
-		private Lazy<Type> getClassType;
+		private readonly IServiceProvider sp;
+		private readonly Lazy<Type> getClassType;
 
 		public DEConfigurationElement(IServiceProvider sp, XmlSchemaElement element)
 			: base(element)
@@ -302,45 +300,42 @@ namespace TecWare.DE.Server.Configuration
 
 		private IEnumerable<IDEConfigurationElement> GetElements(XmlSchemaObjectCollection items)
 		{
-			if (items != null)
+			if (items == null)
+				yield break;
+
+			foreach (var x in items)
 			{
-				foreach (var x in items)
+				switch (x)
 				{
-					switch (x)
-					{
-						case XmlSchemaElement element:
-							if (!(element.ElementSchemaType is XmlSchemaSimpleType))
-							{
-								if (element.RefName != null && element.Name == null) // resolve reference
-									yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
-								else
-									yield return new DEConfigurationElement(sp, element);
-							}
-							break;
-						case XmlSchemaSequence seq:
-							foreach (var c in GetElements(seq.Items))
-								yield return c;
-							break;
-						case XmlSchemaChoice choice:
-							foreach (var c in GetElements(choice.Items))
-								yield return c;
-							break;
-						case XmlSchemaAll all:
-							foreach (var c in GetElements(all.Items))
-								yield return c;
-							break;
-					}
+					case XmlSchemaElement element:
+						if (!(element.ElementSchemaType is XmlSchemaSimpleType))
+						{
+							if (element.RefName != null && element.Name == null) // resolve reference
+								yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
+							else
+								yield return new DEConfigurationElement(sp, element);
+						}
+						break;
+					case XmlSchemaSequence seq:
+						foreach (var c in GetElements(seq.Items))
+							yield return c;
+						break;
+					case XmlSchemaChoice choice:
+						foreach (var c in GetElements(choice.Items))
+							yield return c;
+						break;
+					case XmlSchemaAll all:
+						foreach (var c in GetElements(all.Items))
+							yield return c;
+						break;
 				}
 			}
 		} // func GetElements
-		
+
 		public IEnumerable<IDEConfigurationElement> GetElements()
-		{
-			if (Item.ElementSchemaType is XmlSchemaComplexType complexType)
-				return GetElements(GetSubSequences(complexType));
-			else
-				return Array.Empty<IDEConfigurationElement>();
-		} // func GetElements
+			=> Item.ElementSchemaType is XmlSchemaComplexType complexType
+				? GetElements(GetSubSequences(complexType))
+				: Array.Empty<IDEConfigurationElement>();
 
 		public bool IsName(XName other)
 			=> other == Name
@@ -350,11 +345,10 @@ namespace TecWare.DE.Server.Configuration
 		{
 			if (type is XmlSchemaSimpleType)
 				return true;
-			else
-			{
-				var ct = type as XmlSchemaComplexType;
+			else if (type is XmlSchemaComplexType ct)
 				return ct.ContentType == XmlSchemaContentType.TextOnly;
-			}
+			else
+				return false;
 		} // func IsSimpleTextContent
 
 		public IEnumerable<IDEConfigurationAttribute> GetAttributes()

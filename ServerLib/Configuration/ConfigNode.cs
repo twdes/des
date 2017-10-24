@@ -33,8 +33,20 @@ namespace TecWare.DE.Server.Configuration
 		private readonly IDEConfigurationAttribute[] attributes;
 		private readonly XElement element;
 
+		public XConfigNode(IDEConfigurationService configurationServer, XElement element)
+			: this(configurationServer[element.Name], element)
+		{
+		} // ctor
+
 		public XConfigNode(IDEConfigurationElement elementDefinition, XElement element)
 		{
+			if (elementDefinition == null)
+				throw new ArgumentNullException(nameof(elementDefinition));
+			if (element == null)
+				throw new ArgumentNullException(nameof(element));
+			if (!elementDefinition.IsName(element.Name))
+				throw new ArgumentOutOfRangeException(nameof(element), $"Element '{elementDefinition.Name}' does not match with '{element.Name}'.");
+
 			this.attributes = elementDefinition.GetAttributes().ToArray();
 			this.element = element;
 		} // ctor

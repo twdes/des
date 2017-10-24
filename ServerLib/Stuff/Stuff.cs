@@ -257,6 +257,13 @@ namespace TecWare.DE.Stuff
 		/// <returns></returns>
 		public static object NullIfDBNull(this object value)
 			=> value == DBNull.Value ? null : value;
+
+		/// <summary>Compare to paths</summary>
+		/// <param name="path1"></param>
+		/// <param name="path2"></param>
+		/// <returns></returns>
+		public static bool IsPathEqual(string path1, string path2)
+			=> String.Compare(Path.GetFullPath(path1), Path.GetFullPath(path2), StringComparison.OrdinalIgnoreCase) == 0;
 	} // class ProcsDE
 
 	#endregion
