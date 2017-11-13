@@ -285,7 +285,11 @@ namespace TecWare.DE.Server
 
 			/// <summary>Recreate always the chunk</summary>
 			public void Compile()
-				=> Compile(() => new StreamReader(FileSource.FullName, Encoding), null);
+			{
+				if (FileSource == null)
+					throw new ArgumentNullException(nameof(FileSource), "FileSource is null, please check for compile errors.");
+				Compile(() => new StreamReader(FileSource.FullName, Encoding), null);
+			} // proc Compile
 		} // class LuaTestScript
 
 		#endregion

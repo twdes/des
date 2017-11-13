@@ -148,7 +148,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc Write
 
-		#region -- SetColor ---------------------------------------------------------------
+		#region -- SetColor -----------------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -177,7 +177,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- SetCursor --------------------------------------------------------------
+		#region -- SetCursor ----------------------------------------------------------
 
 		private sealed class ResetCursor : IDisposable
 		{			

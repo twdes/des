@@ -25,14 +25,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
-using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
 	#region -- class ClientMemberValue --------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public sealed class ClientMemberValue
 	{
@@ -279,7 +277,7 @@ namespace TecWare.DE.Server
 	{
 		public event EventHandler CurrentUsePathChanged;
 
-		#region -- class ReturnWait -----------------------------------------------------
+		#region -- class ReturnWait ---------------------------------------------------
 
 		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
@@ -312,7 +310,7 @@ namespace TecWare.DE.Server
 
 		private int defaultTimeout = 0;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		public ClientDebugSession(Uri serverUri)
 		{
@@ -350,7 +348,7 @@ namespace TecWare.DE.Server
 		
 		#endregion
 
-		#region -- Communication --------------------------------------------------------
+		#region -- Communication ------------------------------------------------------
 
 		private readonly object socketLock = new object();
 		private ClientWebSocket clientSocket = null;
@@ -679,7 +677,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- GetMemberValue, ParseReturn ------------------------------------------
+		#region -- GetMemberValue, ParseReturn ----------------------------------------
 
 		private Type GetType(string typeString)
 		{
@@ -764,7 +762,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- RunScript ------------------------------------------------------------
+		#region -- RunScript ----------------------------------------------------------
 
 		public async Task<ClientRunScriptResult> SendRunScriptAsync(string scriptFilter, string methodFilter)
 		{
@@ -777,7 +775,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Recompile ------------------------------------------------------------
+		#region -- Recompile ----------------------------------------------------------
 
 		public async Task<IEnumerable<(string scriptId, bool failed)>> SendRecompileAsync()
 		{
@@ -791,7 +789,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Use --------------------------------------------------------------------
+		#region -- Use ----------------------------------------------------------------
 
 		public Task<string> SendUseAsync(string node)
 			=> SendUseAsync(node, CancellationToken.None);
@@ -833,7 +831,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Execute --------------------------------------------------------------
+		#region -- Execute ------------------------------------------------------------
 
 		public Task<ClientExecuteResult> SendExecuteAsync(string command)
 			=> SendExecuteAsync(command, CancellationToken.None);
@@ -856,7 +854,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- GlobalVars -------------------------------------------------------------
+		#region -- GlobalVars ---------------------------------------------------------
 
 		public Task<IEnumerable<ClientMemberValue>> SendMembersAsync(string memberPath)
 			=> SendMembersAsync(memberPath, CancellationToken.None);
@@ -866,7 +864,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- List -------------------------------------------------------------------
+		#region -- List ---------------------------------------------------------------
 
 		public Task<XElement> SendListAsync(bool recursive)
 			=> SendListAsync(recursive, CancellationToken.None);
@@ -876,7 +874,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Scope ------------------------------------------------------------------
+		#region -- Scope --------------------------------------------------------------
 
 		private string GetScopeUserName(XElement x)
 			=> x.GetAttribute<string>("user", "none");
