@@ -577,58 +577,62 @@ namespace TecWare.DE.Server
 
 				[LuaMember("AssertFail")]
 				private void LuaAssertFail(string message)
-				{
-					LuaAssertIsTrue(false, message);
-				}
+					=> throw CreateAssertException(message);
 
 				[LuaMember("AssertAreEqual")]
-				private void LuaAssertAreEqual(object obj1, object obj2, string message)
+				private void LuaAssertAreEqual(object expected, object actual, string message)
 				{
-					if (obj1 == null && obj2 == null)
-						return;
-
-					if (obj1 == null || obj2 == null)
-						LuaAssertIsTrue(false, message + " - One parameter was null.");
-
-					LuaAssertIsTrue(obj1.Equals(obj2), message);
-				}
+					if(expected == null)
+					{
+						if (actual != null && !actual.Equals(expected))
+							throw CreateAssertException(message);
+					}
+					else if(!expected.Equals(actual))
+						throw CreateAssertException(message);
+				} // proc LuaAssertAreEqual
 
 				[LuaMember("AssertAreNotEqual")]
-				private void LuaAssertAreNotEqual(object obj1, object obj2, string message)
+				private void LuaAssertAreNotEqual(object notExpected, object actual, string message)
 				{
-					if (obj1 == null && obj2 == null)
-						LuaAssertIsTrue(false, message + " - Both parameters were null.");
-
-					if (obj1 == null || obj2 == null)
-						return;
-
-					LuaAssertIsTrue(!obj1.Equals(obj2), message);
-				}
-
+					if (notExpected == null)
+					{
+						if (actual != null && !actual.Equals(notExpected))
+							return;
+						throw CreateAssertException(message);
+					}
+					else if (notExpected.Equals(actual))
+						throw CreateAssertException(message);
+				} // proc LuaAssertAreNotEqual
 				[LuaMember("AssertIsNotNull")]
-				private void LuaAssertIsNotNull(object obj, string message)
+				private void LuaAssertIsNotNull(object value, string message)
 				{
-					LuaAssertIsTrue(obj != null, message);
-				}
+					if (value == null)
+						throw CreateAssertException(message);
+				} // proc LuaAssertIsNotNull
 
 				[LuaMember("AssertIsNull")]
-				private void LuaAssertIsNull(object obj, string message)
+				private void LuaAssertIsNull(object value, string message)
 				{
-					LuaAssertIsTrue(obj == null, message);
-				}
+					if (value != null)
+						throw CreateAssertException(message);
+				} // proc LuaAssertIsNull
 
 				[LuaMember("AssertIsFalse")]
-				private void LuaAssertIsFalse(bool val, string message)
+				private void LuaAssertIsFalse(bool value, string message)
 				{
-					LuaAssertIsTrue(!val, message);
-				}
+					if (value)
+						throw CreateAssertException(message);
+				} // proc LuaAssertIsFalse
 
 				[LuaMember("AssertIsTrue")]
-				private void LuaAssertIsTrue(bool val, string message)
+				private void LuaAssertIsTrue(bool value, string message)
 				{
-					if (!val)
-						throw new Exception(message);
-				}
+					if (!value)
+						throw CreateAssertException(message);
+				} // proc LuaAssertIsTrue
+
+				private Exception CreateAssertException(string message)
+					=> throw new Exception(message ?? "Assert failed.");
 			} // class LuaTestFunctionSet
 
 			#endregion
