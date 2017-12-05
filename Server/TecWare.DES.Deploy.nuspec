@@ -1,0 +1,41 @@
+﻿<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+	<metadata>
+		<id>TecWare.DES.Deploy</id>
+		<version>$version$</version>
+		<title>TecWare.DES.Deploy</title>
+		<authors>TecWare</authors>
+		<owners>TecWare</owners>
+		<projectUrl>https://github.com/twdes/des</projectUrl>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>Deployment package for the data exchange server.</description>
+		<releaseNotes>todo.</releaseNotes>
+		<copyright>$copyright$</copyright>
+	</metadata>
+
+	<files>
+		<file src="bin\Release\CommandLine.dll" target="build" />
+		<file src="bin\Release\DE.Server.dll" target="build" />
+		<file src="bin\Release\DE.Server.pdb" target="build" />
+		<file src="bin\Release\DES.Core.dll" target="build" />
+		<file src="bin\Release\DES.Core.pdb" target="build" />
+		<file src="bin\Release\DEServer.exe" target="build" />
+		<file src="bin\Release\DEServer.exe.config" target="build" />
+		<file src="bin\Release\DEServer.pdb" target="build" />
+		<file src="bin\Release\DESimpleDbg.exe" target="build" />
+		<file src="bin\Release\DESimpleDbg.exe.config" target="build" />
+		<file src="bin\Release\DESimpleDbg.pdb" target="build" />
+		<file src="bin\Release\Microsoft.Dynamic.dll" target="build" />
+		<file src="bin\Release\Microsoft.Scripting.dll" target="build" />
+		<file src="bin\Release\Microsoft.Scripting.AspNet.dll" target="build" />
+		<file src="bin\Release\Microsoft.Scripting.Metadata.dll" target="build" />
+		<file src="bin\Release\Neo.Lua.dll" target="build" />
+		<file src="bin\Release\Neo.Lua.pdb" target="build" />
+		<file src="bin\Release\Neo.Lua.Dbg.dll" target="build" />
+		<file src="bin\Release\Neo.Lua.Dbg.pdb" target="build" />
+		<file src="bin\Release\Neo.Lua.Desktop.dll" target="build" />
+		<file src="bin\Release\Neo.Lua.Desktop.pdb" target="build" />
+		
+		<file src="TecWare.DES.Deploy.targets" target="build" />
+	</files>
+</package>

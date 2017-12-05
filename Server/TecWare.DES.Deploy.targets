@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<ItemGroup>
+		<TecWareDESFile Include="CommandLine.dll" />
+		<TecWareDESFile Include="DE.Server.dll" />
+		<TecWareDESFile Include="DE.Server.pdb" />
+		<TecWareDESFile Include="DES.Core.dll" />
+		<TecWareDESFile Include="DES.Core.pdb" />
+		<TecWareDESFile Include="DEServer.exe" />
+		<TecWareDESFile Include="DEServer.exe.config" />
+		<TecWareDESFile Include="DEServer.pdb" />
+		<TecWareDESFile Include="DESimpleDbg.exe" />
+		<TecWareDESFile Include="DESimpleDbg.exe.config" />
+		<TecWareDESFile Include="DESimpleDbg.pdb" />
+		<TecWareDESFile Include="Microsoft.Dynamic.dll" />
+		<TecWareDESFile Include="Microsoft.Scripting.dll" />
+		<TecWareDESFile Include="Microsoft.Scripting.AspNet.dll" />
+		<TecWareDESFile Include="Microsoft.Scripting.Metadata.dll" />
+		<TecWareDESFile Include="Neo.Lua.dll" />
+		<TecWareDESFile Include="Neo.Lua.pdb" />
+		<TecWareDESFile Include="Neo.Lua.Dbg.dll" />
+		<TecWareDESFile Include="Neo.Lua.Dbg.pdb" />
+		<TecWareDESFile Include="Neo.Lua.Desktop.dll" />
+		<TecWareDESFile Include="Neo.Lua.Desktop.pdb" />
+	</ItemGroup>
+	
+	<ItemGroup>
+		<None Include="@(TecWareDESFile->'$(MSBuildThisFileDirectory)%(Identity)')">
+			<Link>%(FileName)%(Extension)</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+</Project>

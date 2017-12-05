@@ -106,6 +106,8 @@
     <None Include="Configs\Tests.lua" />
     <None Include="des.licenseheader" />
     <None Include="packages.config" />
+    <None Include="TecWare.DES.Deploy.nuspec" />
+    <None Include="TecWare.DES.Deploy.targets" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Common\AssemblyInfoServer.cs">
