@@ -30,14 +30,12 @@ using System.Xml.Schema;
 using Neo.IronLua;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
-using TecWare.DE.Server.Stuff;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- enum DEConfigItemState ---------------------------------------------------
+	#region -- enum DEConfigItemState -------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Status, des Konfigurationseintrages.</summary>
 	public enum DEConfigItemState
 	{
@@ -55,16 +53,19 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEConfigurationException -------------------------------------------
+	#region -- class DEConfigurationException -----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public class DEConfigurationException : Exception
 	{
-		private string sourceUri;
-		private int lineNumber;
-		private int linePosition;
+		private readonly string sourceUri;
+		private readonly int lineNumber;
+		private readonly int linePosition;
 
+		/// <summary></summary>
+		/// <param name="x"></param>
+		/// <param name="message"></param>
+		/// <param name="innerException"></param>
 		public DEConfigurationException(XObject x, string message, Exception innerException = null)
 			: base(message, innerException)
 		{
@@ -83,6 +84,10 @@ namespace TecWare.DE.Server
 			}
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="x"></param>
+		/// <param name="message"></param>
+		/// <param name="innerException"></param>
 		public DEConfigurationException(XmlSchemaObject x, string message, Exception innerException = null)
 			: base(message, innerException)
 		{
@@ -128,9 +133,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEConfigHttpAction -------------------------------------------------
+	#region -- class DEConfigHttpAction -----------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Markiert eine Methode als Action, die von Http-Prozessor verarbeit
 	/// werden kann.</summary>
 	[AttributeUsage(AttributeTargets.Method)]
@@ -153,32 +157,44 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDEConfigItem --------------------------------------------------
+	#region -- interface IDEConfigItem ------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Konfigurationseinträge müssen mindestens diese Eigenschaften besitzen.
 	/// Diese Schnittstelle kann nicht implementiert werden.</summary>
 	public interface IDEConfigItem : IServiceProvider
 	{
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="action"></param>
+		/// <param name="recursive"></param>
+		/// <param name="unsafe"></param>
 		void WalkChildren<T>(Action<T> action, bool recursive = false, bool @unsafe = false) where T : class;
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="predicate"></param>
+		/// <param name="action"></param>
+		/// <param name="recursive"></param>
+		/// <param name="unsafe"></param>
+		/// <returns></returns>
 		bool FirstChildren<T>(Predicate<T> predicate, Action<T> action = null, bool recursive = false, bool @unsafe = false) where T : class;
 
+		/// <summary></summary>
 		string Name { get; }
+		/// <summary></summary>
 		string SecurityToken { get; }
 
+		/// <summary></summary>
 		IDEServer Server { get; }
 	} // interface IDEConfigItem
 
 	#endregion
 
-	#region -- interface IDEConfigLoading -----------------------------------------------
+	#region -- interface IDEConfigLoading ---------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Zugriff auf den Ladetoken der Konfigurationseinstellungen.</summary>
 	public interface IDEConfigLoading : IDisposable
 	{
 		/// <summary>Erzeugt ein neuen Knoten von einem Konfigurationsknoten.</summary>
-		/// <param name="type"></param>
 		/// <param name="config"></param>
 		/// <returns></returns>
 		T RegisterSubItem<T>(XElement config)
@@ -201,49 +217,47 @@ namespace TecWare.DE.Server
 		bool IsConfigurationChanged { get; }
 		/// <summary>Wurde die Konfiguration erfolgreich geladen</summary>
 		bool IsLoadedSuccessful { get; }
-		
+
 		/// <summary>Daten</summary>
 		PropertyDictionary Tags { get; }
-		
+
 		/// <summary>Von wann ist die Konfigurationsdatei</summary>
 		DateTime LastWrite { get; }
 	} // interface IDEConfigLoading
 
 	#endregion
 
-	#region -- class DEConfigItem -------------------------------------------------------
+	#region -- class DEConfigItem -----------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Basis jedes Elementes, welches über die Konfiguration geladen werden 
 	/// kann.</summary>
 	/// <remarks><para>Diese Klasse bildet die Basisklasse für alle Module und Elemente im
 	/// DES. Sie stellt den Zurgiff auf die <see href="config.htm">Konfiguration</see>
 	/// und bietet den Zugriff auf eine Log-Datei.</para>
 	/// <para>Standardmäßig werden die nachfahren dieser Klasse aus der Konfiguration heraus
-	/// erzeugt. Die Konfigurationsdaten, können dann über die zu überschreibende Methode <see cref="RefreshConfiguration"/>
+	/// erzeugt. Die Konfigurationsdaten, können dann über die zu überschreibende Methode <c>RefreshConfiguration</c>
 	/// abgeholt werden. Standardmäßig wird der DisplayName aus der Konfiguration gelesen.</para>
-	// Events:
-	//   register
-	//   unregister
-	//   config
+	/// Events:
+	///   register
+	///   unregister
+	///   config
+	/// </remarks>
 	public partial class DEConfigItem : LuaTable, IDEConfigItem, IComparable<DEConfigItem>, IDisposable
 	{
 		private const string LuaActions = "Actions";              // table für alle Aktionen, die in dem Script enthalten sind.
 		private const string LuaDispose = "Dispose";              // table mit Methoden, die aufgerufen werden, der Knoten zerstört wird.
 		private const string LuaConfiguration = "Configuration";  // table mit Methoden, die aufgerufen werden, wenn sich die Konfiguration geändert hat.
 
-		#region -- class DEConfigLoading --------------------------------------------------
+		#region -- class DEConfigLoading ----------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		internal class DEConfigLoading : IDEConfigLoading, IDisposable
 		{
-			private DEConfigItem item;
-			private LogMessageScopeProxy log;
-			private List<DEConfigLoading> subLoads = new List<DEConfigLoading>();
+			private readonly DEConfigItem item;
+			private readonly LogMessageScopeProxy log;
+			private readonly List<DEConfigLoading> subLoads = new List<DEConfigLoading>();
 
-			private XElement configNew;
-			private XElement configOld;
+			private readonly XElement configNew;
+			private readonly XElement configOld;
 			private bool configurationChanged;
 			private DateTime lastWrite;
 
@@ -252,7 +266,7 @@ namespace TecWare.DE.Server
 			private PropertyDictionary data = null;
 			private LinkedList<Action> endReadConfig = new LinkedList<Action>();
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			internal DEConfigLoading(DEConfigItem item, LogMessageScopeProxy log, XElement configNew, DateTime lastWrite)
 			{
@@ -269,7 +283,7 @@ namespace TecWare.DE.Server
 				using (item.EnterReadLock())
 				{
 					var nodes = configNew.Elements().ToArray();
-					foreach (XElement xmlCur in nodes)
+					foreach (var xmlCur in nodes)
 					{
 						var curItem = item.subItems.Find(c => String.Compare(c.Name, item.GetConfigItemName(xmlCur), true) == 0);
 						if (curItem != null)
@@ -308,10 +322,9 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- BeginReadConfiguration, EndReadConfiguration -------------------------
+			#region -- BeginReadConfiguration, EndReadConfiguration -------------------
 
 			/// <summary>Wird aufgerufen, wenn die Konfiguration gestartet wird.</summary>
-			/// <param name="config">Informationen zur Konfigurationsänderung.</param>
 			/// <returns></returns>
 			internal void BeginReadConfiguration()
 			{
@@ -332,9 +345,9 @@ namespace TecWare.DE.Server
 					}
 
 					// Lösche nicht bearbeitete Knoten
-					for (int i = item.subItems.Count - 1; i >= 0; i--)
+					for (var i = item.subItems.Count - 1; i >= 0; i--)
 					{
-						DEConfigItem curI = item.subItems[i];
+						var curI = item.subItems[i];
 						if (!subLoads.Exists(c => Object.ReferenceEquals(c.item, curI)))
 						{
 							item.UnregisterSubItem(i, curI);
@@ -350,7 +363,6 @@ namespace TecWare.DE.Server
 			} // proc BeginReadConfiguration
 
 			/// <summary>Abschluss der Konfiguration. Starte ggf. die Anwendungsteile.</summary>
-			/// <param name="config"></param>
 			/// <returns></returns>
 			internal Exception EndReadConfiguration()
 			{
@@ -383,7 +395,7 @@ namespace TecWare.DE.Server
 
 			public void DestroySubConfiguration()
 			{
-				for (int i = item.subItems.Count - 1; i >= 0; i--)
+				for (var i = item.subItems.Count - 1; i >= 0; i--)
 					item.UnregisterSubItem(i, item.subItems[i]);
 				subLoads.Clear();
 			} // proc DestroyConfiguration
@@ -402,7 +414,7 @@ namespace TecWare.DE.Server
 					throw new ArgumentNullException("name");
 
 				// Erzeuge den Knoten
-				T newItem = (T)Activator.CreateInstance(typeof(T), item, name);
+				var newItem = (T)Activator.CreateInstance(typeof(T), item, name);
 
 				// Suche einen Knoten mit gleichen Namen innerhalb der Ebene
 				if (subLoads.Exists(c => String.Compare(c.item.Name, name, true) == 0))
@@ -426,13 +438,13 @@ namespace TecWare.DE.Server
 
 			public string GetFullFileName(string fileName = null) => ProcsDE.GetFileName(configNew, fileName);
 
-			public XElement ConfigNew { get { return configNew; } }
-			public XElement ConfigOld { get { return configOld; } }
-			public bool IsConfigurationChanged { get { return configurationChanged; } }
+			public XElement ConfigNew => configNew;
+			public XElement ConfigOld => configOld;
+			public bool IsConfigurationChanged => configurationChanged;
 
 			public Exception LoadException { get { return loadException; } set { loadException = value; } }
-			public bool IsLoadedSuccessful { get { return loadException == null; } }
-			public DateTime LastWrite { get { return lastWrite; } }
+			public bool IsLoadedSuccessful => loadException == null;
+			public DateTime LastWrite => lastWrite;
 
 			public LogMessageScopeProxy Log => log;
 
@@ -454,43 +466,48 @@ namespace TecWare.DE.Server
 		/// <summary>Sicherheitsebene Serveradministrator</summary>
 		public const string SecuritySys = "desSys";
 
+		/// <summary></summary>
 		public const string AttachedScriptsListId = "tw_attached_scripts";
+		/// <summary></summary>
 		public const string ActionsListId = "tw_actions";
+		/// <summary></summary>
 		public const string PropertiesListId = "tw_properties";
+		/// <summary></summary>
 		public const string LogLineListId = "tw_lines";
 
+		/// <summary></summary>
 		public const string ConfigurationCategory = "Konfiguration";
 
-		private IServiceProvider sp = null;       // ServiceProvider mit dem der Eintrag erzeugt wurde
-		private Lazy<IDEServer> server;						// Zugriff aud das Interne Interface des Servers
-		private string name = null;               // Bezeichnung des Elements
-		private string securityToken = null;      // Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um in den Knoten wechseln zu können
+		private readonly IServiceProvider sp = null;            // ServiceProvider mit dem der Eintrag erzeugt wurde
+		private readonly Lazy<IDEServer> server;                // Zugriff aud das Interne Interface des Servers
+		private readonly string name = null;                    // Bezeichnung des Elements
+		private string securityToken = null;                    // Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um in den Knoten wechseln zu können
 
-		private Lazy<LoggerProxy> log;						// Zugriff die eigene oder die LogDatei des Parents
+		private readonly Lazy<LoggerProxy> log;                 // Zugriff die eigene oder die LogDatei des Parents
 
-		private DEList<ILuaAttachedScript> scripts;					// Scripte die auf diesem Knoten ausgeführt werden
-		private ConfigActionDictionary actions;							// Aktions, die an diesem Knoten existieren
-		private DEList<IDEConfigItemProperty> properties;		// Eigenschaften, dieses Knotens
+		private readonly DEList<ILuaAttachedScript> scripts;        // Scripte die auf diesem Knoten ausgeführt werden
+		private readonly ConfigActionDictionary actions;            // Aktions, die an diesem Knoten existieren
+		private readonly DEList<IDEConfigItemProperty> properties;  // Eigenschaften, dieses Knotens
 
-		private ReaderWriterLockSlim lockConfig;		// Lese/Schreibsperre für die Konfiguration
-		private List<DEConfigItem> subItems;				// Konfigurationseinträge unter diesem Knoten
-		private XElement currentConfig = null;			// Zugriff auf den Konfigurationsknoten, darf nur lesend zugegriffen werden, und es dürfen keine Referenzen gespeichert werden
+		private ReaderWriterLockSlim lockConfig;    // Lese/Schreibsperre für die Konfiguration
+		private List<DEConfigItem> subItems;        // Konfigurationseinträge unter diesem Knoten
+		private XElement currentConfig = null;      // Zugriff auf den Konfigurationsknoten, darf nur lesend zugegriffen werden, und es dürfen keine Referenzen gespeichert werden
 		private DEConfigItemState state;            // Aktueller Status des Konfigurationsknotens
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
 		public DEConfigItem(IServiceProvider sp, string name)
 		{
-			if (sp == null)
-				throw new ArgumentNullException("sp");
-
 			this.lockConfig = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 			this.subItems = new List<DEConfigItem>();
 
 			this.server = new Lazy<IDEServer>(() => this.GetService<IDEServer>(true), true);
 			this.log = new Lazy<LoggerProxy>(this.LogProxy, true);
 
-			this.sp = sp;
+			this.sp = sp ?? throw new ArgumentNullException("sp");
 			this.name = name;
 			this.state = DEConfigItemState.Initializing;
 
@@ -503,17 +520,21 @@ namespace TecWare.DE.Server
 			Debug.Print("CREATE [{0}]", name);
 		} // ctor
 
+		/// <summary></summary>
 		~DEConfigItem()
 		{
 			Dispose(false);
 		} // dtor
 
+		/// <summary></summary>
 		public void Dispose()
 		{
 			GC.SuppressFinalize(this);
 			Dispose(true);
 		} // proc Dispose
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected virtual void Dispose(bool disposing)
 		{
 			if (state == DEConfigItemState.Disposed) // wurde schon gelöscht
@@ -553,9 +574,9 @@ namespace TecWare.DE.Server
 				}
 			}
 
-			Procs.FreeAndNil(ref scripts);
-			Procs.FreeAndNil(ref properties);
-			Procs.FreeAndNil(ref actions);
+			scripts?.Dispose();
+			properties?.Dispose();
+			actions?.Dispose();
 
 			Procs.FreeAndNil(ref lockConfig);
 			Debug.Print("END DISPOSE [{0}]", name);
@@ -580,13 +601,19 @@ namespace TecWare.DE.Server
 			catch (Exception e) { Log.Warn(e); }
 		} // proc DisposeLuaValue
 
+		/// <summary></summary>
+		/// <param name="other"></param>
+		/// <returns></returns>
 		public int CompareTo(DEConfigItem other)
 			=> String.Compare(name, other.name, true);
 
 		#endregion
 
-		#region -- Locking ----------------------------------------------------------------
-		
+		#region -- Locking ------------------------------------------------------------
+
+		/// <summary></summary>
+		/// <param name="upgradeable"></param>
+		/// <returns></returns>
 		public IDisposable EnterReadLock(bool upgradeable = false)
 		{
 			if (upgradeable)
@@ -609,15 +636,13 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Configuration ----------------------------------------------------------
+		#region -- Configuration ------------------------------------------------------
 
 		/// <summary>Normalerweise wird der Name der Konfiguration aus der Konfiguration ausgelesen.</summary>
 		/// <param name="element">Konfigurationselement</param>
 		/// <returns>Name des Knotens</returns>
 		protected virtual string GetConfigItemName(XElement element)
-		{
-			return element.GetAttribute("name", String.Empty);
-		} // func GetConfigItemName
+			=> element.GetAttribute("name", String.Empty);
 
 		/// <summary>Ermöglicht es die Konfigurationsdatei, bevor Sie bearbeitet wird zu manipulieren.</summary>
 		/// <param name="config"></param>
@@ -657,6 +682,9 @@ namespace TecWare.DE.Server
 				Server.LoadConfigExtension(config, cur, String.Empty);
 		} // proc OnBeginReadConfiguration
 
+		/// <summary></summary>
+		/// <param name="xn"></param>
+		/// <returns></returns>
 		protected virtual bool IsSubConfigurationElement(XName xn)
 		{
 			if (xn.Namespace == DEConfigurationConstants.MainNamespace)
@@ -728,7 +756,7 @@ namespace TecWare.DE.Server
 					Log.Warn("Script engine is not running, there will be no dynamic parts available.");
 				else
 				{
-					foreach (string cur in load)
+					foreach (var cur in load)
 					{
 						var attachedScript = engine.AttachScript(cur, this, true);
 
@@ -765,6 +793,8 @@ namespace TecWare.DE.Server
 		{
 		} // proc OnNewSubItem
 
+		/// <summary></summary>
+		/// <param name="item"></param>
 		protected virtual void OnDisposeSubItem(DEConfigItem item)
 		{
 		} // proc OnDisposeSubItem
@@ -791,6 +821,12 @@ namespace TecWare.DE.Server
 			}
 		} // proc UnregisterSubItem
 
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="p"></param>
+		/// <param name="recursive"></param>
+		/// <param name="walkUnsafe"></param>
+		/// <returns></returns>
 		public T[] CollectChildren<T>(Predicate<T> p = null, bool recursive = false, bool walkUnsafe = false)
 			where T : class
 		{
@@ -805,13 +841,18 @@ namespace TecWare.DE.Server
 			return children.ToArray();
 		} // func CollectChildren
 
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="action"></param>
+		/// <param name="recursive"></param>
+		/// <param name="walkUnsafe"></param>
 		public void WalkChildren<T>(Action<T> action, bool recursive = false, bool walkUnsafe = false)
 			where T : class
 		{
 			using (walkUnsafe ? null : EnterReadLock())
-				foreach (DEConfigItem cur in subItems)
+				foreach (var cur in subItems)
 				{
-					T r = cur as T;
+					var r = cur as T;
 					if (r != null)
 						action(r);
 
@@ -820,17 +861,23 @@ namespace TecWare.DE.Server
 				}
 		} // func WalkChildren
 
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="predicate"></param>
+		/// <param name="action"></param>
+		/// <param name="recursive"></param>
+		/// <param name="walkUnsafe"></param>
+		/// <returns></returns>
 		public bool FirstChildren<T>(Predicate<T> predicate, Action<T> action = null, bool recursive = false, bool walkUnsafe = false)
 			where T : class
 		{
 			using (walkUnsafe ? null : EnterReadLock())
-				foreach (DEConfigItem cur in subItems)
+				foreach (var cur in subItems)
 				{
-					T r = cur as T;
+					var r = cur as T;
 					if (r != null && predicate(r))
 					{
-						if (action != null)
-							action(r);
+						action?.Invoke(r);
 						return true;
 					}
 
@@ -840,14 +887,15 @@ namespace TecWare.DE.Server
 			return false;
 		} // func FirstChildren
 
+		/// <summary></summary>
+		/// <param name="sName"></param>
+		/// <returns></returns>
 		public DEConfigItem UnsafeFind(string sName)
-		{
-			return subItems.Find(c => String.Compare(c.Name, sName, StringComparison.OrdinalIgnoreCase) == 0);
-		} // func UnsafeFind
+			=> subItems.Find(c => String.Compare(c.Name, sName, StringComparison.OrdinalIgnoreCase) == 0);
 
 		private StringBuilder GetNodeUri(StringBuilder sb)
 		{
-			DEConfigItem parent = sp as DEConfigItem;
+			var parent = sp as DEConfigItem;
 			if (parent == null)
 				sb.Append("/");
 			else
@@ -856,20 +904,27 @@ namespace TecWare.DE.Server
 		} // func GetNodeUri
 
 		/// <summary>mit / getrennnter Pfad</summary>
-		public string ConfigPath { get { return GetNodeUri(new StringBuilder()).ToString(); } }
+		public string ConfigPath => GetNodeUri(new StringBuilder()).ToString();
 
 		/// <summary>Zugriff auf die aktuelle Konfiguration</summary>
-		public XElement Config { get { return currentConfig; } }
+		public XElement Config => currentConfig;
 
 		#endregion
 
-		#region -- Validation Helper ------------------------------------------------------
+		#region -- Validation Helper --------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="x"></param>
+		/// <param name="name"></param>
+		/// <param name="optional"></param>
 		protected static void ValidateDirectory(XElement x, XName name, bool optional = false)
-		{
-			ValidateDirectory(x, "@" + name.LocalName, x?.Attribute(name)?.Value, optional);
-		} // proc ValidateDirectory
+			=> ValidateDirectory(x, "@" + name.LocalName, x?.Attribute(name)?.Value, optional);
 
+		/// <summary></summary>
+		/// <param name="x"></param>
+		/// <param name="name"></param>
+		/// <param name="directoryPath"></param>
+		/// <param name="optional"></param>
 		protected static void ValidateDirectory(XObject x, string name, string directoryPath, bool optional = false)
 		{
 			try
@@ -895,8 +950,11 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- IServiceProvider Member ------------------------------------------------
+		#region -- IServiceProvider Member --------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="serviceType"></param>
+		/// <returns></returns>
 		public virtual object GetService(Type serviceType)
 		{
 			if (serviceType == null)
@@ -912,7 +970,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Http -------------------------------------------------------------------
+		#region -- Http ---------------------------------------------------------------
 
 		private static void BuildAnnotatedAttribute(XElement annotatedConfig, IDEConfigurationAttribute attributeDefinition, string value)
 		{
@@ -986,7 +1044,7 @@ namespace TecWare.DE.Server
 				}
 			}
 			return annotatedElement;
-    } // proc BuildAnnotatedConfigNode
+		} // proc BuildAnnotatedConfigNode
 
 		[
 		DEConfigHttpAction("config", SecurityToken = SecuritySys),
@@ -1003,7 +1061,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Process Request/Action -------------------------------------------------
+		#region -- Process Request/Action ---------------------------------------------
 
 		internal async Task UnsafeInvokeHttpActionAsync(string action, IDEWebRequestScope r)
 		{
@@ -1057,15 +1115,14 @@ namespace TecWare.DE.Server
 
 		/// <summary></summary>
 		/// <param name="r"></param>
-		/// <param name="sLocalPath"></param>
 		/// <returns></returns>
 		internal async Task<bool> UnsafeProcessRequestAsync(IDEWebRequestScope r)
 		{
 			foreach (var w in from c in this.UnsafeChildren
-												let cHttp = c as HttpWorker
-												where cHttp != null && r.RelativeSubPath.StartsWith(cHttp.VirtualRoot, StringComparison.OrdinalIgnoreCase)
-												orderby cHttp.Priority descending
-												select cHttp)
+							  let cHttp = c as HttpWorker
+							  where cHttp != null && r.RelativeSubPath.StartsWith(cHttp.VirtualRoot, StringComparison.OrdinalIgnoreCase)
+							  orderby cHttp.Priority descending
+							  select cHttp)
 			{
 				// Führe den Request aus
 				if (r.TryEnterSubPath(w, w.VirtualRoot))
@@ -1093,6 +1150,11 @@ namespace TecWare.DE.Server
 		protected virtual Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
 			=> Task.FromResult(false);
 
+		/// <summary></summary>
+		/// <param name="x"></param>
+		/// <param name="state"></param>
+		/// <param name="text"></param>
+		/// <returns></returns>
 		public static XElement SetStatusAttributes(XElement x, bool state, string text = null)
 		{
 			x.SetAttributeValue("status", state ? "ok" : "error");
@@ -1101,13 +1163,21 @@ namespace TecWare.DE.Server
 			return x;
 		} // func SetStatusAttributes
 
+		/// <summary></summary>
+		/// <param name="state"></param>
+		/// <param name="text"></param>
+		/// <returns></returns>
 		public static XElement CreateDefaultXmlReturn(bool state, string text = null)
 			=> SetStatusAttributes(new XElement("return"), state, text);
-		
+
 		#endregion
 
-		#region -- Interface for Lua ------------------------------------------------------
+		#region -- Interface for Lua --------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="tableName"></param>
+		/// <param name="throwExceptions"></param>
+		/// <param name="args"></param>
 		protected void CallTableMethodsCore(string tableName, bool throwExceptions, object[] args)
 		{
 			var table = GetMemberValue(tableName, false, true) as LuaTable;
@@ -1129,12 +1199,21 @@ namespace TecWare.DE.Server
 			}
 		} // proc CallTableMethods
 
+		/// <summary></summary>
+		/// <param name="tableName"></param>
+		/// <param name="args"></param>
 		protected void CallTableMethods(string tableName, params object[] args)
 			=> CallTableMethodsCore(tableName, false, args);
 
+		/// <summary></summary>
+		/// <param name="tableName"></param>
+		/// <param name="args"></param>
 		protected void CallTableMethodsWithExceptions(string tableName, params object[] args)
 			=> CallTableMethodsCore(tableName, true, args);
 
+		/// <summary></summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		protected virtual bool IsMemberTableMethod(string key)
 		{
 			switch (key)
@@ -1160,6 +1239,9 @@ namespace TecWare.DE.Server
 				return false;
 		} // func CheckKnownTable
 
+		/// <summary></summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		protected override object OnIndex(object key)
 		{
 			var r = base.OnIndex(key); // ask __metatable
@@ -1215,14 +1297,12 @@ namespace TecWare.DE.Server
 		/// Deswegen sollte bei den <c>values</c> darauf geachtet werden, dass sie überschreibbar gestaltet 
 		/// werden.</remarks>
 		protected void FireEvent(string eventId, string index = null, XElement values = null)
-		{
-			Server.AppendNewEvent(this, eventId, index, values);
-		} // proc FireEvent
+			=> Server.AppendNewEvent(this, eventId, index, values);
 
 		/// <summary>Gibt den internen Namen zurück (muss nicht veröffentlicht werden).</summary>
-		public virtual string Name { get { return name; } }
+		public virtual string Name => name;
 		/// <summary>Anzeigename des Elements für den LogViewer (muss nicht veröffentlicht werden).</summary>
-		public virtual string DisplayName { get { return Config.GetAttribute("displayname", Name); } }
+		public virtual string DisplayName => Config.GetAttribute("displayname", Name);
 		/// <summary>Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um in den Knoten wechseln zu können.</summary>
 		[
 		PropertyName("tw_core_security"),
@@ -1230,7 +1310,7 @@ namespace TecWare.DE.Server
 		Description("Rechte des Knotens."),
 		Category(ConfigurationCategory)
 		]
-		public virtual string SecurityToken { get { return securityToken; } }
+		public virtual string SecurityToken => securityToken;
 
 		/// <summary>Gibt ein Symbol für den Knoten zurück.</summary>
 		public virtual string Icon => "/images/config.png";

@@ -23,9 +23,8 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDEConfigItemProperty ------------------------------------------
+	#region -- interface IDEConfigItemProperty ----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Wird von Eigenschaften, die zum Viewer übermittelt werden sollen
 	/// implementiert.</summary>
 	[DEListTypeProperty("property")]
@@ -34,26 +33,34 @@ namespace TecWare.DE.Server
 		/// <summary>Wird ausgelöst, wenn sich der Wert geändert hat.</summary>
 		event EventHandler ValueChanged;
 
+		/// <summary></summary>
 		[DEListTypeProperty("@name")]
 		string Name { get; }
+		/// <summary></summary>
 		[DEListTypeProperty("@displayname")]
 		string DisplayName { get; }
+		/// <summary></summary>
 		[DEListTypeProperty("@category")]
 		string Category { get; }
+		/// <summary></summary>
 		[DEListTypeProperty("@description")]
 		string Description { get; }
+		/// <summary></summary>
 		[DEListTypeProperty("@format")]
 		string Format { get; }
+		/// <summary></summary>
 		[DEListTypeProperty("@type")]
 		Type Type { get; }
+		/// <summary></summary>
 		[DEListTypeProperty(".")]
 		object Value { get; }
 	} // interface IDEConfigItemProperty
 
 	#endregion
 
-	#region -- interface IDEConfigItemPropertyService -----------------------------------
+	#region -- interface IDEConfigItemPropertyService ---------------------------------
 
+	/// <summary></summary>
 	public interface IDEConfigItemPropertyService
 	{
 		/// <summary>Registriert eine .net Eigenschaft als DEServer Eigenschaft.</summary>
@@ -74,62 +81,74 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class PropertyNameAttribute ----------------------------------------------
+	#region -- class PropertyNameAttribute --------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Markiert Eigschaften des Konfigurationsknotens für den Export.</summary>
 	[AttributeUsage(AttributeTargets.Property)]
 	public class PropertyNameAttribute : Attribute
 	{
-		private string sName;
+		private readonly string name;
 
-		public PropertyNameAttribute(string sName)
+		/// <summary></summary>
+		/// <param name="name"></param>
+		public PropertyNameAttribute(string name)
 		{
-			this.sName = sName;
+			this.name = name;
 		} // ctor
 
-		public string Name { get { return sName; } }
+		/// <summary></summary>
+		public string Name => name;
 	} // class PropertyNameAttribute
 
 	#endregion
 
-	#region -- class FormatAttribute ----------------------------------------------------
+	#region -- class FormatAttribute --------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Formatdefinition für die exportierte Eigenschaft.</summary>
 	[AttributeUsage(AttributeTargets.Property)]
 	public class FormatAttribute : Attribute
 	{
-		private string sFormat;
+		private readonly string format;
 
-		public FormatAttribute(string sFormat)
+		/// <summary></summary>
+		/// <param name="format"></param>
+		public FormatAttribute(string format)
 		{
-			this.sFormat = sFormat;
+			this.format = format;
 		} // ctor
 
-		public string Format { get { return sFormat; } }
+		/// <summary></summary>
+		public string Format => format;
 	} // class FormatAttribute
 
 	#endregion
 
-	#region -- class SimpleConfigItemProperty -------------------------------------------
+	#region -- class SimpleConfigItemProperty -----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public class SimpleConfigItemProperty<T> : IDEConfigItemProperty, IDisposable
 	{
+		/// <summary></summary>
 		public event EventHandler ValueChanged;
 
-		private IDEConfigItemPropertyService service;
+		private readonly IDEConfigItemPropertyService service;
 		private T value;
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
+		/// <param name="displayName"></param>
+		/// <param name="category"></param>
+		/// <param name="description"></param>
+		/// <param name="format"></param>
+		/// <param name="value"></param>
 		public SimpleConfigItemProperty(IServiceProvider sp, string name, string displayName, string category, string description, string format, T value)
 		{
 			this.service = sp.GetService<IDEConfigItemPropertyService>();
 
 			if (String.IsNullOrEmpty(name))
 				throw new ArgumentNullException("name");
-			
+
 			this.Name = name;
 			this.DisplayName = displayName ?? name;
 			this.Category = category ?? "Misc";
@@ -142,18 +161,25 @@ namespace TecWare.DE.Server
 				service.RegisterProperty(this);
 		} // ctor
 
+		/// <summary></summary>
 		public void Dispose()
 		{
 			if (service != null)
 				service.UnregisterProperty(Name);
 		} // proc Dispose
 
+		/// <summary></summary>
 		public string Name { get; }
+		/// <summary></summary>
 		public string DisplayName { get; }
+		/// <summary></summary>
 		public string Category { get; }
+		/// <summary></summary>
 		public string Description { get; }
+		/// <summary></summary>
 		public string Format { get; }
 
+		/// <summary></summary>
 		public T Value
 		{
 			get { return value; }
@@ -173,16 +199,12 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEConfigItem -------------------------------------------------------
+	#region -- class DEConfigItem -----------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
 	public partial class DEConfigItem : IDEConfigItemPropertyService
 	{
-		#region -- class ConfigItemProperty -----------------------------------------------
+		#region -- class ConfigItemProperty -------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class ConfigItemProperty : IDEConfigItemProperty
 		{
 			private event EventHandler ValueChangedEvent;
@@ -199,7 +221,7 @@ namespace TecWare.DE.Server
 
 				Init(configItem,
 					name != null && !String.IsNullOrEmpty(name.Name) ? Name = name.Name : property.ComponentType.Name + "_" + property.Name,
-					format != null ? format.Format : null,
+					format?.Format,
 					property
 				);
 			} // ctor
@@ -223,10 +245,7 @@ namespace TecWare.DE.Server
 			} // proc Init
 
 			private void ValueChangedHandler(object sender, EventArgs e)
-			{
-				if (ValueChangedEvent != null)
-					ValueChangedEvent(this, EventArgs.Empty);
-			} // proc ValueChangedHandler
+				=> ValueChangedEvent?.Invoke(this, EventArgs.Empty);
 
 			public string Name { get; private set; }
 			public string DisplayName => property.DisplayName;
@@ -255,7 +274,7 @@ namespace TecWare.DE.Server
 
 		private EventHandler valueChangedHandler;
 
-		#region -- Verwaltung der Eigenschaften -------------------------------------------
+		#region -- Verwaltung der Eigenschaften ---------------------------------------
 
 		/// <summary>Initialisiert die Eigenschaften, an einem Knoten.</summary>
 		private void InitTypeProperties()
@@ -272,16 +291,33 @@ namespace TecWare.DE.Server
 
 		private int FindPropertyIndex(string name) => properties.FindIndex(p => String.Compare(p.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
 
+		/// <summary></summary>
+		/// <param name="propertyDescriptor"></param>
 		public void RegisterPropertyDescriptor(PropertyDescriptor propertyDescriptor)
 			=> RegisterProperty(new ConfigItemProperty(this, propertyDescriptor));
 
+		/// <summary></summary>
+		/// <param name="name"></param>
+		/// <param name="format"></param>
+		/// <param name="propertyDescriptor"></param>
 		public void RegisterPropertyDescriptor(string name, string format, PropertyDescriptor propertyDescriptor)
 			=> RegisterProperty(new ConfigItemProperty(this, name, format, propertyDescriptor));
 
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="name"></param>
+		/// <param name="displayName"></param>
+		/// <param name="category"></param>
+		/// <param name="description"></param>
+		/// <param name="format"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
 		[LuaMember(nameof(RegisterProperty))]
 		public IDEConfigItemProperty RegisterProperty<T>(string name, string displayName, string category, string description, string format, T value)
 			=> new SimpleConfigItemProperty<T>(this, name, displayName ?? name, category ?? "Misc", description, format, value);
 
+		/// <summary></summary>
+		/// <param name="property"></param>
 		public void RegisterProperty(IDEConfigItemProperty property)
 		{
 			using (properties.EnterWriteLock())
@@ -294,6 +330,8 @@ namespace TecWare.DE.Server
 			}
 		} // proc RegisterProperty
 
+		/// <summary></summary>
+		/// <param name="name"></param>
 		public void UnregisterProperty(string name)
 		{
 			using (properties.EnterWriteLock())
@@ -309,13 +347,17 @@ namespace TecWare.DE.Server
 
 		private void ValueChangedHandler(object sender, EventArgs e)
 		{
-			var property = sender as IDEConfigItemProperty;
-			if (property != null)
+			if (sender is IDEConfigItemProperty property)
 				FireEvent("tw_properties", property.Name, new XElement("value", (string)Lua.RtConvertValue(property.Value, typeof(string))));
 		} // proc ValueChangedHandler
 
 		#endregion
 
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="value"></param>
+		/// <param name="newValue"></param>
+		/// <param name="sPropertyName"></param>
 		protected void SetProperty<T>(ref T value, T newValue, [CallerMemberName] string sPropertyName = null)
 		{
 			if (!EqualityComparer<T>.Default.Equals(value, newValue))

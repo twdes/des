@@ -30,9 +30,8 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- class DELogLine ----------------------------------------------------------
+	#region -- class DELogLine --------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Holds a log line.</summary>
 	public sealed class DELogLine
 	{
@@ -40,10 +39,7 @@ namespace TecWare.DE.Server
 		/// <param name="dataLine"></param>
 		public DELogLine(string dataLine)
 		{
-			LogMsgType typ;
-			DateTime stamp;
-			string text;
-			LogLineParser.Parse(dataLine, out typ, out stamp, out text);
+			LogLineParser.Parse(dataLine, out var typ, out var stamp, out var text);
 
 			this.Stamp = stamp;
 			this.Typ = typ;
@@ -61,9 +57,13 @@ namespace TecWare.DE.Server
 			this.Text = text ?? String.Empty;
 		} // ctor
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public override string ToString()
 			=> ToLineData();
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public string ToLineData()
 		{
 			var sb = new StringBuilder(Text?.Length ?? +64); // reserve space for the string
@@ -110,14 +110,14 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DELogFile ----------------------------------------------------------
+	#region -- class DELogFile --------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Access to a LogFile.</summary>
 	public sealed class DELogFile : IDERangeEnumerable2<DELogLine>, IDisposable
 	{
 		private const string windowsLineEnding = "\r\n";
 
+		/// <summary></summary>
 		public event EventHandler LinesAdded;
 
 		private readonly byte[] logFileBuffer = new byte[0x10000];
@@ -129,8 +129,10 @@ namespace TecWare.DE.Server
 		private int logLineCount = 0;                           // Is the current count of log lines
 		private List<long> linesOffsetCache = new List<long>(); // Offset of line >> 5 (32)
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="fileName"></param>
 		public DELogFile(string fileName)
 		{
 			var fileInfo = new FileInfo(fileName);
@@ -146,7 +148,7 @@ namespace TecWare.DE.Server
 
 			// Open the file
 			logData = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-			using (ManualResetEventSlim started = new ManualResetEventSlim(false))
+			using (var started = new ManualResetEventSlim(false))
 			{
 				// Use different schedule, to fork from the thread queue
 				Task.Factory.StartNew(() => CreateLogLineCache(started), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -154,6 +156,7 @@ namespace TecWare.DE.Server
 			}
 		} // ctor
 
+		/// <summary></summary>
 		public void Dispose()
 		{
 			lock (logFileLock)
@@ -173,8 +176,11 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Add, SetSize -----------------------------------------------------------
+		#region -- Add, SetSize -------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="minSize"></param>
+		/// <param name="maxSize"></param>
 		public void SetSize(uint minSize, uint maxSize)
 		{
 			lock (logFileLock)
@@ -184,6 +190,8 @@ namespace TecWare.DE.Server
 			}
 		} // func SetSize
 
+		/// <summary></summary>
+		/// <param name="line"></param>
 		public void Add(DELogLine line)
 		{
 			var lineData = Encoding.Default.GetBytes(line.ToLineData() + windowsLineEnding);
@@ -320,14 +328,25 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- GetEnumerator ----------------------------------------------------------
+		#region -- GetEnumerator ------------------------------------------------------
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public IEnumerator GetEnumerator()
 			=> GetEnumerator(0, Int32.MaxValue, null);
 
+		/// <summary></summary>
+		/// <param name="start"></param>
+		/// <param name="count"></param>
+		/// <returns></returns>
 		public IEnumerator<DELogLine> GetEnumerator(int start, int count)
 			=> GetEnumerator(start, count, null);
 
+		/// <summary></summary>
+		/// <param name="start"></param>
+		/// <param name="count"></param>
+		/// <param name="selector"></param>
+		/// <returns></returns>
 		public IEnumerator<DELogLine> GetEnumerator(int start, int count, IPropertyReadOnlyDictionary selector)
 		{
 			// create selector
@@ -380,17 +399,16 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEConfigLogItem ----------------------------------------------------
+	#region -- class DEConfigLogItem --------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Configuration node with log line.</summary>
 	public class DEConfigLogItem : DEConfigItem, ILogger, ILogger2
 	{
+		/// <summary></summary>
 		public const string LogCategory = "Log";
 
-		#region -- class LogLineDescriptor ------------------------------------------------
+		#region -- class LogLineDescriptor --------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Beschreibt die Logzeilen</summary>
 		private sealed class LogLineDescriptor : IDEListDescriptor
 		{
@@ -434,12 +452,12 @@ namespace TecWare.DE.Server
 
 			private static readonly LogLineDescriptor logLineDescriptor = new LogLineDescriptor();
 
-			public static LogLineDescriptor Instance { get { return logLineDescriptor; } }
+			public static LogLineDescriptor Instance => logLineDescriptor;
 		} // class LogLineDescriptor
 
 		#endregion
 
-		#region -- class LogLineController ------------------------------------------------
+		#region -- class LogLineController --------------------------------------------
 
 		private sealed class LogLineController : IDEListController
 		{
@@ -461,9 +479,7 @@ namespace TecWare.DE.Server
 			} // func EnterReadLock
 
 			public IDisposable EnterWriteLock()
-			{
-				throw new NotSupportedException();
-			} // proc EnterWriteLock
+				=> throw new NotSupportedException();
 
 			public void OnBeforeList() { }
 
@@ -476,7 +492,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LogMessageScopeHolder --------------------------------------------
+		#region -- class LogMessageScopeHolder ----------------------------------------
 
 		private sealed class LogMessageScopeHolder : ILogMessageScope
 		{
@@ -509,7 +525,7 @@ namespace TecWare.DE.Server
 
 			private object SyncRoot => owner.scopes;
 
-			public LogMsgType Typ { get { return frame.Scope.Typ; } }
+			public LogMsgType Typ => frame.Scope.Typ;
 
 			public ILogMessageScope AutoFlush(bool autoFlush) => frame.Scope.AutoFlush(autoFlush);
 			public ILogMessageScope SetType(LogMsgType value, bool force = false) => frame.Scope.SetType(value, force);
@@ -520,9 +536,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LogMessageScopeFrame --------------------------------------------
+		#region -- class LogMessageScopeFrame -----------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
 		private sealed class LogMessageScopeFrame
 		{
@@ -541,9 +556,12 @@ namespace TecWare.DE.Server
 		private readonly Lazy<string> logFileName;
 
 		private readonly List<LogMessageScopeFrame> scopes = new List<LogMessageScopeFrame>();
-		
-		#region -- Ctor/Dtor --------------------------------------------------------------
 
+		#region -- Ctor/Dtor ----------------------------------------------------------
+
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
 		public DEConfigLogItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
@@ -552,6 +570,8 @@ namespace TecWare.DE.Server
 			RegisterList(LogLineListId, new LogLineController(this), true);
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected override void Dispose(bool disposing)
 		{
 			if (disposing)
@@ -584,6 +604,8 @@ namespace TecWare.DE.Server
 			return sb.ToString();
 		} // func GetFullName
 
+		/// <summary></summary>
+		/// <param name="config"></param>
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnBeginReadConfiguration(config);
@@ -619,7 +641,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- IDELogConfig Members ---------------------------------------------------
+		#region -- IDELogConfig Members -----------------------------------------------
 
 		void ILogger.LogMsg(LogMsgType type, string text)
 		{
@@ -665,6 +687,7 @@ namespace TecWare.DE.Server
 			}
 		} // func ILogger2.GetScope
 
+		/// <summary></summary>
 		public int ConfigLogItemCount
 		{
 			get
@@ -681,8 +704,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Http Schnittstelle -----------------------------------------------------
+		#region -- Http Schnittstelle -------------------------------------------------
 
+		/// <summary></summary>
 		protected virtual void OnLinesAdded()
 		{
 			FireEvent(LogLineListId, null, new XElement("lines", new XAttribute("lineCount", LogLineCount)));
@@ -705,8 +729,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Properties -------------------------------------------------------------
+		#region -- Properties ---------------------------------------------------------
 
+		/// <summary></summary>
 		[
 		PropertyName("tw_log_minsize"),
 		DisplayName("Size (minimum)"),
@@ -715,6 +740,7 @@ namespace TecWare.DE.Server
 		Format("{0:XiB}")
 		]
 		public FileSize LogMinSize => new FileSize(logFile.MinimumSize);
+		/// <summary></summary>
 		[
 		PropertyName("tw_log_maxsize"),
 		DisplayName("Size (maximum)"),
@@ -723,6 +749,7 @@ namespace TecWare.DE.Server
 		Format("{0:XiB}")
 		]
 		public FileSize LogMaxSize => new FileSize(logFile.MaximumSize);
+		/// <summary></summary>
 		[
 		PropertyName("tw_log_size"),
 		DisplayName("Size (current)"),
@@ -731,6 +758,7 @@ namespace TecWare.DE.Server
 		Format("{0:XiB}")
 		]
 		public FileSize LogFileSize => new FileSize(logFile.CurrentSize);
+		/// <summary></summary>
 		[
 		PropertyName("tw_log_filename"),
 		DisplayName("FileName"),
@@ -738,6 +766,7 @@ namespace TecWare.DE.Server
 		Category(LogCategory)
 		]
 		public string LogFileName => logFileName.Value;
+		/// <summary></summary>
 		[
 		PropertyName("tw_log_lines"),
 		DisplayName("Lines"),
@@ -747,6 +776,7 @@ namespace TecWare.DE.Server
 		]
 		public int LogLineCount => logFile.Count;
 
+		/// <summary></summary>
 		public bool HasLog => logFile != null;
 
 		#endregion

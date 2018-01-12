@@ -16,7 +16,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -28,29 +27,34 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- delegate DEConfigActionDelegate ------------------------------------------
+	#region -- delegate DEConfigActionDelegate ----------------------------------------
 
 	/// <summary></summary>
 	/// <param name="item"></param>
-	/// <param name="args"></param>
+	/// <param name="context"></param>
 	/// <returns></returns>
 	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEWebRequestScope context);
 
 	#endregion
 
-	#region -- class DEConfigAction -----------------------------------------------------
+	#region -- class DEConfigAction ---------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public sealed class DEConfigAction
 	{
-		private string securityToken;
-		private string description;
-		private MethodInfo methodDescription;
-		private DEConfigActionDelegate action;
-		private bool isNativeCall;
-		private bool isSafeCall;
+		private readonly string securityToken;
+		private readonly string description;
+		private readonly MethodInfo methodDescription;
+		private readonly DEConfigActionDelegate action;
+		private readonly bool isNativeCall;
+		private readonly bool isSafeCall;
 
+		/// <summary></summary>
+		/// <param name="securityToken"></param>
+		/// <param name="description"></param>
+		/// <param name="action"></param>
+		/// <param name="isSafeCall"></param>
+		/// <param name="methodDescription"></param>
 		public DEConfigAction(string securityToken, string description, DEConfigActionDelegate action, bool isSafeCall, MethodInfo methodDescription)
 		{
 			this.securityToken = securityToken;
@@ -61,9 +65,14 @@ namespace TecWare.DE.Server
 			this.methodDescription = methodDescription;
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="item"></param>
+		/// <param name="context"></param>
+		/// <returns></returns>
 		public object Invoke(DEConfigItem item, IDEWebRequestScope context)
 		{
 			if (action != null)
+			{
 				if (isNativeCall)
 				{
 					action(item, context);
@@ -71,34 +80,37 @@ namespace TecWare.DE.Server
 				}
 				else
 					return action(item, context);
+			}
 			else
 				return null;
 		} // proc Invoke
 
-		public string Description { get { return description; } }
-		public MethodInfo MethodDescription { get { return methodDescription; } }
-		public string SecurityToken { get { return securityToken; } }
-		public bool IsSafeCall { get { return isSafeCall; } }
+		/// <summary></summary>
+		public string Description => description;
+		/// <summary></summary>
+		public MethodInfo MethodDescription => methodDescription;
+		/// <summary></summary>
+		public string SecurityToken => securityToken;
+		/// <summary></summary>
+		public bool IsSafeCall => isSafeCall;
 
-		public bool IsEmpty { get { return action == null; } }
+		/// <summary></summary>
+		public bool IsEmpty => action == null;
 
-		// -- Static --------------------------------------------------------------
+		// -- Static ----------------------------------------------------------
 
-		private static readonly DEConfigAction empty = new DEConfigAction(null, null, null, false, null);
-
-		public static DEConfigAction Empty { get { return empty; } }
+		/// <summary></summary>
+		public static DEConfigAction Empty { get; } = new DEConfigAction(null, null, null, false, null);
 	} // class DEConfigAction
 
 	#endregion
 
-	#region -- class DEConfigItem -------------------------------------------------------
+	#region -- class DEConfigItem -----------------------------------------------------
 
 	public partial class DEConfigItem
 	{
-		#region -- struct ConfigAction ----------------------------------------------------
+		#region -- struct ConfigAction ------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private struct ConfigAction
 		{
 			public string Description;
@@ -108,15 +120,14 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class ConfigDescriptionCache -------------------------------------------
+		#region -- class ConfigDescriptionCache ---------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Sichert die Aktionen die innerhalb einer Klasse gefunden wurden.</summary>
 		private sealed class ConfigDescriptionCache
 		{
-			private ConfigDescriptionCache prev;
-			private ConfigAction[] actions;
-			private PropertyDescriptor[] properties;
+			private readonly ConfigDescriptionCache prev;
+			private readonly ConfigAction[] actions;
+			private readonly PropertyDescriptor[] properties;
 
 			public ConfigDescriptionCache(ConfigDescriptionCache prev, Type type)
 			{
@@ -142,21 +153,21 @@ namespace TecWare.DE.Server
 					).ToArray();
 			} // ctor
 
-			public bool GetConfigAction(string sAction, out ConfigAction action)
+			public bool GetConfigAction(string actionName, out ConfigAction action)
 			{
 				// Suuche die Action
 				if (actions != null)
 				{
-					int iIdx = Array.FindIndex(actions, cur => String.Compare(cur.Attribute.ActionName, sAction, true) == 0);
-					if (iIdx >= 0)
+					var idx = Array.FindIndex(actions, cur => String.Compare(cur.Attribute.ActionName, actionName, true) == 0);
+					if (idx >= 0)
 					{
-						action = actions[iIdx];
+						action = actions[idx];
 						return true;
 					}
 				}
 
 				if (prev != null)
-					return prev.GetConfigAction(sAction, out action);
+					return prev.GetConfigAction(actionName, out action);
 				else
 				{
 					action = new ConfigAction();
@@ -164,11 +175,11 @@ namespace TecWare.DE.Server
 				}
 			} // func GetConfigAction
 
-			public ConfigAction[] Actions { get { return actions; } }
-			public PropertyDescriptor[] Properties { get { return properties; } }
-			public ConfigDescriptionCache Previous { get { return prev; } }
+			public ConfigAction[] Actions => actions;
+			public PropertyDescriptor[] Properties => properties;
+			public ConfigDescriptionCache Previous => prev;
 
-			// -- Static ------------------------------------------------------------
+			// -- Static ------------------------------------------------------
 
 			private static Dictionary<Type, ConfigDescriptionCache> configDescriptors = new Dictionary<Type, ConfigDescriptionCache>();
 
@@ -191,9 +202,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class ConfigActionListDescriptor ---------------------------------------
+		#region -- class ConfigActionListDescriptor -----------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
 		private sealed class ConfigActionListDescriptor : IDEListDescriptor
 		{
@@ -247,20 +257,18 @@ namespace TecWare.DE.Server
 
 			private static readonly ConfigActionListDescriptor configActionListDescriptor = new ConfigActionListDescriptor();
 
-			public static ConfigActionListDescriptor Instance { get { return configActionListDescriptor; } }
+			public static ConfigActionListDescriptor Instance => configActionListDescriptor;
 		} // class ConfigActionListDescriptor 
 
 		#endregion
 
-		#region -- class ConfigActionDictionary -------------------------------------------
+		#region -- class ConfigActionDictionary ---------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class ConfigActionDictionary : DEListControllerBase, IEnumerable<KeyValuePair<string, DEConfigAction>>
 		{
-			private Dictionary<string, DEConfigAction> actions = new Dictionary<string, DEConfigAction>(EqualityComparer<string>.Default);
+			private readonly Dictionary<string, DEConfigAction> actions = new Dictionary<string, DEConfigAction>(EqualityComparer<string>.Default);
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			public ConfigActionDictionary(DEConfigItem configItem)
 				: base(configItem, ConfigActionListDescriptor.Instance, ActionsListId, "Actions")
@@ -269,14 +277,13 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- GetEnumerator --------------------------------------------------------
+			#region -- GetEnumerator --------------------------------------------------
 
 			public IEnumerator<KeyValuePair<string, DEConfigAction>> GetEnumerator()
-			{
-				return actions.GetEnumerator();
-			} // func GetEnumerator
+				=> actions.GetEnumerator();
 
-			System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { return GetEnumerator(); }
+			System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+				=> GetEnumerator();
 
 			#endregion
 
@@ -293,9 +300,7 @@ namespace TecWare.DE.Server
 			} // func Contains
 
 			public override void OnBeforeList()
-			{
-				ConfigItem.CollectActions(); // Sammle alle Aktions
-			} // proc OnBeforeList
+				=> ConfigItem.CollectActions(); // Sammle alle Aktions
 
 			public DEConfigAction this[string sActionId]
 			{
@@ -303,8 +308,7 @@ namespace TecWare.DE.Server
 				{
 					using (EnterReadLock())
 					{
-						DEConfigAction action;
-						return actions.TryGetValue(sActionId, out action) ? action : null;
+						return actions.TryGetValue(sActionId, out var action) ? action : null;
 					}
 				}
 				set
@@ -314,12 +318,12 @@ namespace TecWare.DE.Server
 				}
 			} // prop this
 
-			public override System.Collections.IEnumerable List { get { return this; } }
+			public override System.Collections.IEnumerable List => this;
 		} // class ConfigActionDictionary
 
 		#endregion
 
-		#region -- Actions, Attached Script -----------------------------------------------
+		#region -- Actions, Attached Script -------------------------------------------
 
 		private void AttachedScriptCompiled(object sender, EventArgs e)
 		{
@@ -391,15 +395,13 @@ namespace TecWare.DE.Server
 
 		private DEConfigAction CompileTypeAction(string sAction)
 		{
-			ConfigDescriptionCache cac = ConfigDescriptionCache.Get(GetType());
+			var cac = ConfigDescriptionCache.Get(GetType());
 			if (cac == null)
 				return DEConfigAction.Empty;
 
-			ConfigAction ca;
-			if (cac.GetConfigAction(sAction, out ca))
-				return CompileTypeAction(ref ca);
-			else
-				return DEConfigAction.Empty;
+			return cac.GetConfigAction(sAction, out var ca)
+				? CompileTypeAction(ref ca)
+				: DEConfigAction.Empty;
 		} // func CompileTypeAction
 
 		private void CompileTypeActions(ConfigDescriptionCache cac)
@@ -411,11 +413,13 @@ namespace TecWare.DE.Server
 			CompileTypeActions(cac.Previous);
 
 			if (cac.Actions != null)
-				for (int i = 0; i < cac.Actions.Length; i++)
+			{
+				for (var i = 0; i < cac.Actions.Length; i++)
 				{
 					if (!actions.Contains(cac.Actions[i].Attribute.ActionName))
 						actions[cac.Actions[i].Attribute.ActionName] = CompileTypeAction(ref cac.Actions[i]);
 				}
+			}
 		} // proc CompileTypeActions
 
 		private DEConfigAction CompileTypeAction(ref ConfigAction ca)
@@ -455,6 +459,9 @@ namespace TecWare.DE.Server
 			);
 		} // func CompileLuaAction
 
+		/// <summary></summary>
+		/// <param name="actionName"></param>
+		/// <returns></returns>
 		protected virtual DEConfigAction CompileAction(string actionName)
 		{
 			DEConfigAction action;
@@ -541,9 +548,7 @@ namespace TecWare.DE.Server
 				var propertyDictionary = Expression.Convert(arg, typeof(IPropertyReadOnlyDictionary));
 
 				// generate expressions
-				Expression parameterName;
-				Expression parameterDefault;
-				CreateArgumentExpressionsByInfo(alternateParameterDescription != null ? alternateParameterDescription(i) : null, currentParameter, out parameterName, out parameterDefault);
+				CreateArgumentExpressionsByInfo(alternateParameterDescription != null ? alternateParameterDescription(i) : null, currentParameter, out var parameterName, out var parameterDefault);
 
 				Expression exprGetParameter;
 

@@ -14,30 +14,33 @@
 //
 #endregion
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Configuration
 {
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Configuration node, that read attributes and elements with support from the schema.</summary>
 	public sealed class XConfigNode
 	{
 		private readonly IDEConfigurationAttribute[] attributes;
 		private readonly XElement element;
 
+		/// <summary></summary>
+		/// <param name="configurationServer"></param>
+		/// <param name="element"></param>
 		public XConfigNode(IDEConfigurationService configurationServer, XElement element)
 			: this(configurationServer[element.Name], element)
 		{
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="elementDefinition"></param>
+		/// <param name="element"></param>
 		public XConfigNode(IDEConfigurationElement elementDefinition, XElement element)
 		{
 			if (elementDefinition == null)
@@ -51,9 +54,16 @@ namespace TecWare.DE.Server.Configuration
 			this.element = element;
 		} // ctor
 
+		/// <summary></summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="name"></param>
+		/// <returns></returns>
 		public T GetAttribute<T>(string name)
 			=> Procs.ChangeType<T>(GetAttribute(name));
 
+		/// <summary></summary>
+		/// <param name="name"></param>
+		/// <returns></returns>
 		public object GetAttribute(string name)
 		{
 			var attribute = attributes.FirstOrDefault(c => String.Compare(c.Name.LocalName, name, StringComparison.OrdinalIgnoreCase) == 0);
@@ -106,6 +116,7 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func GetAttribute
 
+		/// <summary></summary>
 		public XElement Element => element;
 	} // class XConfigNode
 }

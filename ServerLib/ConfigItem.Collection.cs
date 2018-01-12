@@ -29,9 +29,8 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDEListService -------------------------------------------------
+	#region -- interface IDEListService -----------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>List-Service für die Darstellung und export der Listen.</summary>
 	public interface IDEListService
 	{
@@ -45,9 +44,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDEListDescriptor ----------------------------------------------
+	#region -- interface IDEListDescriptor --------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Beschreibt eine Liste für den Export zum Client.</summary>
 	public interface IDEListDescriptor
 	{
@@ -58,13 +56,12 @@ namespace TecWare.DE.Server
 		/// <param name="xml"></param>
 		/// <param name="item"></param>
 		void WriteItem(DEListItemWriter xml, object item);
-	} // interface IDEListDescriptor<T>
+	} // interface IDEListDescriptor
 
 	#endregion
-	
-	#region -- class DEListTypeWriter ---------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
+	#region -- class DEListTypeWriter -------------------------------------------------
+
 	/// <summary>Schreibt die definition eines Listentypes</summary>
 	public sealed class DEListTypeWriter
 	{
@@ -77,7 +74,7 @@ namespace TecWare.DE.Server
 
 		private bool inType = false;
 
-		private XmlWriter xml;
+		private readonly XmlWriter xml;
 
 		/// <summary></summary>
 		/// <param name="xml"></param>
@@ -86,23 +83,27 @@ namespace TecWare.DE.Server
 			this.xml = xml;
 		} // ctor
 
-		public void WriteStartType(string sTypeName)
+		/// <summary>Start a new type.</summary>
+		/// <param name="typeName">Name of the type.</param>
+		public void WriteStartType(string typeName)
 		{
 			if (inType)
 				throw new InvalidOperationException("Nested types are not allowed.");
 
-			xml.WriteStartElement(sTypeName);
+			xml.WriteStartElement(typeName);
 			inType = true;
 		} // proc StartType
 
+		/// <summary>End the current type.</summary>
 		public void WriteEndType()
 		{
 			inType = false;
 			xml.WriteEndElement();
 		} // proc WriteEndType
 
-		/// <summary>Beschreibt eine Eigenschaft.</summary>
+		/// <summary>Write the property.</summary>
 		/// <param name="propertyName">Erzeugt ein Element, welches einen Type enthalten kann. Attribute sind nicht erlaubt</param>
+		/// <param name="typeName"></param>
 		public void WriteProperty(string propertyName, string typeName)
 		{
 			if (propertyName == ".")
@@ -119,7 +120,7 @@ namespace TecWare.DE.Server
 			if (String.IsNullOrEmpty(propertyName))
 				throw new ArgumentNullException();
 
-			string sTypeName = LuaType.GetType(type).AliasOrFullName;
+			var sTypeName = LuaType.GetType(type).AliasOrFullName;
 
 			if (propertyName == ".")
 				WriteProperty(PropertyType.Value, String.Empty, sTypeName);
@@ -133,7 +134,7 @@ namespace TecWare.DE.Server
 		{
 			if (!inType)
 				throw new InvalidOperationException("No type defined.");
-			
+
 			CheckXmlName(propertyName);
 
 			switch (type)
@@ -168,25 +169,28 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEListItemWriter ---------------------------------------------------
+	#region -- class DEListItemWriter -------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>List writer implementation.</summary>
 	public sealed class DEListItemWriter
 	{
 		private readonly static char[] isCDateEmitChar = new char[] { '<', '>', '\n', '\t', '/' };
-		private XmlWriter xml;
+		private readonly XmlWriter xml;
 
+		/// <summary></summary>
+		/// <param name="xml"></param>
 		public DEListItemWriter(XmlWriter xml)
 		{
 			this.xml = xml;
 		} // ctor
-		
-		public void WriteStartProperty(string propertyName)
-		{
-			xml.WriteStartElement(propertyName);
-		} // proc WriteStartProperty
 
+		/// <summary>Write property.</summary>
+		/// <param name="propertyName"></param>
+		public void WriteStartProperty(string propertyName)
+			=> xml.WriteStartElement(propertyName);
+
+		/// <summary>Write value.</summary>
+		/// <param name="_value"></param>
 		public void WriteValue(object _value)
 		{
 			var value = _value.ChangeType<string>();
@@ -199,11 +203,13 @@ namespace TecWare.DE.Server
 				xml.WriteValue(ProcsDE.RemoveInvalidXmlChars(value, '?'));
 		} // proc WriteValue
 
+		/// <summary>Write the end of an property.</summary>
 		public void WriteEndProperty()
-		{
-			xml.WriteEndElement();
-		} // proc WriteEndProperty
+			=> xml.WriteEndElement();
 
+		/// <summary>Write a complete property.</summary>
+		/// <param name="propertyName"></param>
+		/// <param name="_value"></param>
 		public void WriteElementProperty(string propertyName, object _value)
 		{
 			WriteStartProperty(propertyName);
@@ -211,6 +217,9 @@ namespace TecWare.DE.Server
 			WriteEndProperty();
 		} // proc WriteElementProperty
 
+		/// <summary>Write a complete attribute.</summary>
+		/// <param name="propertyName"></param>
+		/// <param name="_value"></param>
 		public void WriteAttributeProperty(string propertyName, object _value)
 		{
 			var value = _value.ChangeType<string>();
@@ -221,9 +230,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDEListController ----------------------------------------------
+	#region -- interface IDEListController --------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Verwaltet eine Liste, die Exportiert werden kann.</summary>
 	public interface IDEListController : IDisposable
 	{
@@ -235,7 +243,6 @@ namespace TecWare.DE.Server
 		IDisposable EnterWriteLock();
 
 		/// <summary>Wird ausgeführt, bevor die Liste zum Client gesendet wird.</summary>
-		/// <param name="arguments"></param>
 		void OnBeforeList();
 
 		/// <summary>Bezeichner der Liste</summary>
@@ -246,7 +253,7 @@ namespace TecWare.DE.Server
 		/// <summary>Daten der Liste</summary>
 		IEnumerable List { get; }
 
-		/// <summary></summary>
+		/// <summary>Access token to this list.</summary>
 		string SecurityToken { get; }
 
 		/// <summary>Wie soll die Liste aufgegeben werden.</summary>
@@ -255,9 +262,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEListControllerBase -----------------------------------------------
+	#region -- class DEListControllerBase ---------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Implementiert einen Controller für eine Liste.</summary>
 	public abstract class DEListControllerBase : IDEListController
 	{
@@ -267,8 +273,13 @@ namespace TecWare.DE.Server
 		private readonly string displayName;
 		private readonly IDEListDescriptor descriptor;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ------------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="configItem"></param>
+		/// <param name="descriptor"></param>
+		/// <param name="id"></param>
+		/// <param name="displayName"></param>
 		public DEListControllerBase(DEConfigItem configItem, IDEListDescriptor descriptor, string id, string displayName)
 		{
 			this.configItem = configItem;
@@ -280,17 +291,21 @@ namespace TecWare.DE.Server
 			configItem.RegisterList(id, this);
 		} // ctor
 
+		/// <summary></summary>
 		~DEListControllerBase()
 		{
 			Dispose(false);
 		} // ctor
 
+		/// <summary></summary>
 		public void Dispose()
 		{
 			GC.SuppressFinalize(this);
 			Dispose(true);
 		} // proc Dispose
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected virtual void Dispose(bool disposing)
 		{
 			if (disposing)
@@ -305,8 +320,10 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- EnterReadLock, EnterWriteLock ------------------------------------------
+		#region -- EnterReadLock, EnterWriteLock ----------------------------------------
 
+		/// <summary>Enter read access to this list.</summary>
+		/// <returns></returns>
 		public IDisposable EnterReadLock()
 		{
 			if (listLock.IsWriteLockHeld)
@@ -318,6 +335,8 @@ namespace TecWare.DE.Server
 			}
 		} // func EnterReadLock
 
+		/// <summary>Enter write access to this list.</summary>
+		/// <returns></returns>
 		public IDisposable EnterWriteLock()
 		{
 			listLock.EnterWriteLock();
@@ -326,24 +345,30 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		/// <summary></summary>
 		public virtual void OnBeforeList()
 		{
 		} // proc OnBeforeList
 
+		/// <summary>Id of the list.</summary>
 		public string Id => id;
+		/// <summary>Display name of the list.</summary>
 		public virtual string DisplayName => displayName;
+		/// <summary>Security access to this list.</summary>
 		public virtual string SecurityToken => DEConfigItem.SecuritySys;
+		/// <summary>List access.</summary>
 		public abstract IEnumerable List { get; }
+		/// <summary>List descriptor.</summary>
 		public IDEListDescriptor Descriptor => descriptor;
 
+		/// <summary>List config item assignment.</summary>
 		public DEConfigItem ConfigItem => configItem;
 	} // class DEListControllerBase
 
 	#endregion
 
-	#region -- interface IDERangeEnumerable ---------------------------------------------
+	#region -- interface IDERangeEnumerable -------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Enumerable, welches einen Bereich der Liste abfragen kann.</summary>
 	public interface IDERangeEnumerable<T> : IEnumerable
 	{
@@ -359,18 +384,22 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDERangeEnumerable2 --------------------------------------------
+	#region -- interface IDERangeEnumerable2 ------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Enumerator for pagination.</summary>
 	public interface IDERangeEnumerable2<T> : IDERangeEnumerable<T>
 	{
+		/// <summary></summary>
+		/// <param name="start"></param>
+		/// <param name="count"></param>
+		/// <param name="selector"></param>
+		/// <returns></returns>
 		IEnumerator<T> GetEnumerator(int start, int count, IPropertyReadOnlyDictionary selector);
 	} // interface IDERangeEnumerable2
 
 	#endregion
 
-	#region -- class DEEnumerator<T> ----------------------------------------------------
+	#region -- class DEEnumerator<T> --------------------------------------------------
 
 	internal sealed class DEEnumerator<T> : IEnumerator<T>, IEnumerator, IDisposable
 	{
@@ -398,23 +427,28 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEList<T> ----------------------------------------------------------
+	#region -- class DEList<T> --------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Liste mit speziellen Eigenschaften:
 	/// - Schreibzugriff sperrt liste, multiples Lesen ist möglich.
 	/// - Erzeugt einen Zugriff im Log</summary>
 	public sealed class DEList<T> : DEListControllerBase, IList<T>, IDisposable
 	{
-		private List<T> innerList = new List<T>();
+		private readonly List<T> innerList = new List<T>();
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="configItem"></param>
+		/// <param name="id"></param>
+		/// <param name="displayName"></param>
 		public DEList(DEConfigItem configItem, string id, string displayName)
 			: base(configItem, DEConfigItem.CreateListDescriptorFromType(typeof(T)), id, displayName)
 		{
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected override void Dispose(bool disposing)
 		{
 			try
@@ -422,10 +456,7 @@ namespace TecWare.DE.Server
 				if (disposing)
 				{
 					using (EnterWriteLock())
-					{
 						innerList.Clear();
-						innerList = null;
-					}
 				}
 			}
 			finally
@@ -436,71 +467,101 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Liste ------------------------------------------------------------------
+		#region -- Liste --------------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="item"></param>
 		public void Add(T item)
 		{
 			using (EnterWriteLock())
 				innerList.Add(item);
 		} // proc Add
 
+		/// <summary></summary>
+		/// <param name="items"></param>
 		public void AddRange(IEnumerable<T> items)
 		{
 			using (EnterWriteLock())
 				innerList.AddRange(items);
 		} // proc AddRange
 
+		/// <summary></summary>
+		/// <param name="predicate"></param>
+		/// <returns></returns>
 		public int FindIndex(Predicate<T> predicate)
 		{
 			using (EnterReadLock())
 				return innerList.FindIndex(predicate);
 		} // func IDEList<T>.FindIndex
 
+		/// <summary></summary>
+		/// <param name="item"></param>
+		/// <returns></returns>
 		public bool Remove(T item)
 		{
 			using (EnterWriteLock())
 				return innerList.Remove(item);
 		} // func Remove
 
+		/// <summary></summary>
 		public void Clear()
 		{
 			using (EnterWriteLock())
 				innerList.Clear();
 		} // proc Clear
 
+		/// <summary></summary>
+		/// <param name="item"></param>
+		/// <returns></returns>
 		public bool Contains(T item)
 		{
 			using (EnterReadLock())
 				return innerList.Contains(item);
 		} // func Contains
 
+		/// <summary></summary>
+		/// <param name="array"></param>
+		/// <param name="arrayIndex"></param>
 		public void CopyTo(T[] array, int arrayIndex)
 		{
 			using (EnterReadLock())
 				innerList.CopyTo(array, arrayIndex);
 		} // proc CopyTo
 
+		/// <summary></summary>
+		/// <param name="index"></param>
+		/// <param name="item"></param>
 		public void Insert(int index, T item)
 		{
 			using (EnterWriteLock())
 				innerList.Insert(index, item);
 		} // proc Insert
 
+		/// <summary></summary>
+		/// <param name="index"></param>
 		public void RemoveAt(int index)
 		{
 			using (EnterWriteLock())
 				innerList.RemoveAt(index);
 		} // proc RemoveAt
 
+		/// <summary></summary>
+		/// <param name="item"></param>
+		/// <returns></returns>
 		public int IndexOf(T item)
 		{
 			using (EnterReadLock())
 				return innerList.IndexOf(item);
 		} // func IndexOf
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public IEnumerator<T> GetEnumerator() => new DEEnumerator<T>(this, innerList);
 		IEnumerator IEnumerable.GetEnumerator() => new DEEnumerator<T>(this, innerList);
 
+		/// <summary></summary>
+		/// <param name="index"></param>
+		/// <returns></returns>
 		public T this[int index]
 		{
 			get
@@ -515,6 +576,7 @@ namespace TecWare.DE.Server
 			}
 		} // prop this
 
+		/// <summary></summary>
 		public int Count
 		{
 			get
@@ -524,8 +586,10 @@ namespace TecWare.DE.Server
 			}
 		} // prop Count
 
+		/// <summary></summary>
 		public bool IsReadOnly => false;
 
+		/// <summary></summary>
 		public override IEnumerable List => innerList;
 
 		#endregion
@@ -533,26 +597,37 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEDictionary<TKey, TItem> ------------------------------------------
+	#region -- class DEDictionary<TKey, TItem> ----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Dictionary implementation for safe access.</summary>
 	public sealed class DEDictionary<TKey, TItem> : DEListControllerBase, IDictionary<TKey, TItem>, IDisposable
 	{
-		private IDictionary<TKey, TItem> innerDictionary;
+		private readonly IDictionary<TKey, TItem> innerDictionary;
 
+		/// <summary></summary>
+		/// <param name="configItem"></param>
+		/// <param name="id"></param>
+		/// <param name="displayName"></param>
+		/// <param name="comparer"></param>
 		public DEDictionary(DEConfigItem configItem, string id, string displayName, IEqualityComparer<TKey> comparer = null)
-			:base(configItem, null, id, displayName)
+			: base(configItem, null, id, displayName)
 		{
-			this.innerDictionary = new Dictionary<TKey, TItem>(comparer == null ? EqualityComparer<TKey>.Default : comparer);
+			this.innerDictionary = new Dictionary<TKey, TItem>(comparer ?? EqualityComparer<TKey>.Default);
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="configItem"></param>
+		/// <param name="id"></param>
+		/// <param name="displayName"></param>
+		/// <param name="comparer"></param>
 		public DEDictionary(DEConfigItem configItem, string id, string displayName, IComparer<TKey> comparer)
 			: base(configItem, null, id, displayName)
 		{
 			this.innerDictionary = new SortedDictionary<TKey, TItem>(comparer == null ? Comparer<TKey>.Default : comparer);
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected override void Dispose(bool disposing)
 		{
 			try
@@ -560,10 +635,7 @@ namespace TecWare.DE.Server
 				if (disposing)
 				{
 					using (EnterWriteLock())
-					{
 						innerDictionary.Clear();
-						innerDictionary = null;
-					}
 				}
 			}
 			finally
@@ -572,6 +644,9 @@ namespace TecWare.DE.Server
 			}
 		} // proc Dispose
 
+		/// <summary></summary>
+		/// <param name="key"></param>
+		/// <param name="value"></param>
 		public void Add(TKey key, TItem value)
 		{
 			using (EnterWriteLock())
@@ -584,24 +659,35 @@ namespace TecWare.DE.Server
 				innerDictionary.Add(item.Key, item.Value);
 		} // proc ICollection<KeyValuePair<TKey, TItem>>.Add
 
+		/// <summary></summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		public bool ContainsKey(TKey key)
 		{
 			using (EnterReadLock())
 				return innerDictionary.ContainsKey(key);
 		} // func ContainsKey
 
+		/// <summary></summary>
+		/// <param name="key"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
 		public bool TryGetValue(TKey key, out TItem value)
 		{
 			using (EnterReadLock())
 				return innerDictionary.TryGetValue(key, out value);
 		} // func TryGetValue
 
+		/// <summary></summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		public bool Remove(TKey key)
 		{
 			using (EnterWriteLock())
 				return innerDictionary.Remove(key);
 		} // func Remove
 
+		/// <summary></summary>
 		public void Clear()
 		{
 			using (EnterWriteLock())
@@ -634,6 +720,9 @@ namespace TecWare.DE.Server
 
 		bool ICollection<KeyValuePair<TKey, TItem>>.IsReadOnly { get { return false; } }
 
+		/// <summary></summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		public TItem this[TKey key]
 		{
 			get
@@ -648,6 +737,7 @@ namespace TecWare.DE.Server
 			}
 		} // prop this
 
+		/// <summary></summary>
 		public int Count
 		{
 			get
@@ -657,74 +747,85 @@ namespace TecWare.DE.Server
 			}
 		} // prop Count
 
-		public override IEnumerable List { get { return innerDictionary; } }
+		/// <summary></summary>
+		public override IEnumerable List => innerDictionary;
 	} // class DEDictionary
 
 	#endregion
 
-	#region -- class DEListTypePropertyAttribute ----------------------------------------
+	#region -- class DEListTypePropertyAttribute --------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Markiert eine Eigenschaft für den automatischen Export.</summary>
 	[AttributeUsage(AttributeTargets.Property | AttributeTargets.Class | AttributeTargets.Interface)]
 	public class DEListTypePropertyAttribute : Attribute
 	{
-		private string name;
+		private readonly string name;
 
+		/// <summary></summary>
+		/// <param name="name"></param>
 		public DEListTypePropertyAttribute(string name)
 		{
 			this.name = name;
 		} // ctor
 
+		/// <summary>Name of the property.</summary>
 		public string Name => name;
 	} // class DEListTypePropertyAttribute
 
 	#endregion
 
-	#region -- class DEConfigItemPublicAction -------------------------------------------
+	#region -- class DEConfigItemPublicAction -----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Marks a public action of an configuration note.</summary>
 	public sealed class DEConfigItemPublicAction
 	{
+		/// <summary></summary>
+		/// <param name="actionId"></param>
 		public DEConfigItemPublicAction(string actionId)
 		{
 			this.ActionId = actionId;
 		} // ctor
 
+		/// <summary>Id of the action.</summary>
 		public string ActionId { get; }
+		/// <summary>Display name of the action</summary>
 		public string DisplayName { get; set; }
 	} // class DEConfigItemPublicAction
 
 	#endregion
 
-	#region -- class DEConfigItemPublicPanel --------------------------------------------
+	#region -- class DEConfigItemPublicPanel ------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Public panel</summary>
 	public sealed class DEConfigItemPublicPanel
 	{
+		/// <summary></summary>
+		/// <param name="id"></param>
+		/// <param name="uri"></param>
 		public DEConfigItemPublicPanel(string id, string uri)
 		{
 			this.Id = id;
 			this.Uri = uri;
 		} // ctor
 
+		/// <summary></summary>
 		public string Id { get; }
+		/// <summary></summary>
 		public string DisplayName { get; set; }
+		/// <summary></summary>
 		public string Uri { get; }
 	} // class DEConfigItemPublicPanel
 
 	#endregion
 
-	#region -- class DEConfigItem -------------------------------------------------------
+	#region -- class DEConfigItem -----------------------------------------------------
 
 	public partial class DEConfigItem
 	{
-		private List<IDEListController> controllerList = new List<IDEListController>();
-		private Dictionary<string, object> publishedItems = new Dictionary<string, object>();
+		private readonly List<IDEListController> controllerList = new List<IDEListController>();
+		private readonly Dictionary<string, object> publishedItems = new Dictionary<string, object>();
 
-		#region -- RegisterCollectionController, UnregisterCollectionController -----------
+		#region -- RegisterCollectionController, UnregisterCollectionController -------
 
 		private IDEListController FindController(string sId)
 		{
@@ -733,6 +834,7 @@ namespace TecWare.DE.Server
 		} // func FindController
 
 		/// <summary>Registriert eine Liste an diesem Knoten</summary>
+		/// <param name="id"></param>
 		/// <param name="controller">Liste die dem Controller zugeordnet werden soll.</param>
 		/// <param name="publish">Soll die Liste für den Client sichtbar gestaltet werden.</param>
 		/// <returns></returns>
@@ -743,7 +845,7 @@ namespace TecWare.DE.Server
 			lock (controllerList)
 			{
 				if (controller == null)
-						throw new ArgumentNullException("list", "Keine Liste gefunden.");
+					throw new ArgumentNullException("list", "Keine Liste gefunden.");
 				if (FindController(id) != null)
 					throw new ArgumentException(String.Format("Collection '{0}' ist schon registriert.", id));
 
@@ -758,6 +860,8 @@ namespace TecWare.DE.Server
 			}
 		} // func RegisterList
 
+		/// <summary></summary>
+		/// <param name="item"></param>
 		public void PublishItem(object item)
 		{
 			IDEListController controller;
@@ -808,7 +912,7 @@ namespace TecWare.DE.Server
 				lock (publishedItems)
 				{
 					object item;
-					if(publishedItems.TryGetValue(controller.Id, out item) && item == controller)
+					if (publishedItems.TryGetValue(controller.Id, out item) && item == controller)
 						publishedItems.Remove(controller.Id);
 				}
 			}
@@ -816,37 +920,33 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Controller Http --------------------------------------------------------
+		#region -- Controller Http ----------------------------------------------------
 
 		private XElement GetControllerXmlNode(string sId, object item)
 		{
-			IDEListController configController = item as IDEListController;
-			DEConfigItemPublicAction configAction;
-			DEConfigItemPublicPanel configPanel;
-			if (configController != null)
+			if (item is IDEListController configController)
 			{
-				var indexAccess = configController.List as IList;
-				XElement x = new XElement("list",
+				var x = new XElement("list",
 					new XAttribute("id", configController.Id),
 					Procs.XAttributeCreate("displayname", configController.DisplayName)
 				);
 
-				if (indexAccess != null)
+				if (configController.List is IList indexAccess)
 					x.Add(new XAttribute("count", indexAccess.Count));
 
 				return x;
 			}
-			else if ((configAction = item as DEConfigItemPublicAction) != null)
+			else if (item is DEConfigItemPublicAction configAction)
 			{
-				XElement x = new XElement("action",
+				var x = new XElement("action",
 					new XAttribute("id", configAction.ActionId),
 					Procs.XAttributeCreate("displayname", configAction.DisplayName)
 				);
 				return x;
 			}
-			else if ((configPanel = item as DEConfigItemPublicPanel) != null)
+			else if (item is DEConfigItemPublicPanel configPanel)
 			{
-				XElement x = new XElement("panel",
+				var x = new XElement("panel",
 					new XAttribute("id", configPanel.Id),
 					Procs.XAttributeCreate("displayname", configPanel.DisplayName),
 					new XText(configPanel.Uri)
@@ -864,7 +964,7 @@ namespace TecWare.DE.Server
 		private XElement HttpListAction(bool recursive = true)
 		{
 			// Aktuelle Element anlegen
-			XElement x = new XElement("item",
+			var x = new XElement("item",
 				new XAttribute("name", Name),
 				new XAttribute("displayname", DisplayName),
 				new XAttribute("icon", Config.GetAttribute("icon", Icon))
@@ -907,23 +1007,23 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		// -- Static --------------------------------------------------------------
+		// -- Static ----------------------------------------------------------
 
-		#region -- class DEListDescriptorReflectorImpl ------------------------------------
+		#region -- class DEListDescriptorReflectorImpl --------------------------------
 
 		private sealed class DEListDescriptorReflectorImpl : IDEListDescriptor
 		{
-			private string sTypeName;
-			private List<KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>> properties = new List<KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>>();
+			private readonly string typeName;
+			private readonly List<KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>> properties = new List<KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>>();
 
 			public DEListDescriptorReflectorImpl(Type typeDescripe)
 			{
 				var typeProperty = typeDescripe.GetCustomAttribute<DEListTypePropertyAttribute>(true);
-				this.sTypeName = typeProperty == null ? typeDescripe.Name : typeProperty.Name;
+				this.typeName = typeProperty == null ? typeDescripe.Name : typeProperty.Name;
 
 				// Gibt es eine Methode zur Ausgabe des Items
-				int iAttributeBorder = 0;
-				int iElementBorder = 0;
+				var attributeBorder = 0;
+				var elementBorder = 0;
 				foreach (PropertyDescriptor pi in TypeDescriptor.GetProperties(typeDescripe))
 				{
 					var attr = (DEListTypePropertyAttribute)pi.Attributes[typeof(DEListTypePropertyAttribute)];
@@ -934,20 +1034,20 @@ namespace TecWare.DE.Server
 							properties.Add(cur);
 						else if (attr.Name == "@")
 						{
-							properties.Insert(iAttributeBorder++, cur);
-							iElementBorder++;
+							properties.Insert(attributeBorder++, cur);
+							elementBorder++;
 						}
 						else
-							properties.Insert(iElementBorder++, cur);
+							properties.Insert(elementBorder++, cur);
 					}
 				}
 			} // ctor
 
 			public void WriteType(DEListTypeWriter xml)
 			{
-				xml.WriteStartType(sTypeName);
+				xml.WriteStartType(typeName);
 
-				for (int i = 0; i < properties.Count; i++)
+				for (var i = 0; i < properties.Count; i++)
 					xml.WriteProperty(properties[i].Key.Name, properties[i].Value.PropertyType);
 
 				xml.WriteEndType();
@@ -955,18 +1055,18 @@ namespace TecWare.DE.Server
 
 			public void WriteItem(DEListItemWriter xml, object item)
 			{
-				xml.WriteStartProperty(sTypeName);
-				for (int i = 0; i < properties.Count; i++)
+				xml.WriteStartProperty(typeName);
+				for (var i = 0; i < properties.Count; i++)
 				{
-					string sName = properties[i].Key.Name;
-					object value = properties[i].Value.GetValue(item);
+					var name = properties[i].Key.Name;
+					var value = properties[i].Value.GetValue(item);
 
-					if (sName == ".")
+					if (name == ".")
 						xml.WriteValue(value);
-					else if (sName.StartsWith("@"))
-						xml.WriteAttributeProperty(sName.Substring(1), value);
+					else if (name.StartsWith("@"))
+						xml.WriteAttributeProperty(name.Substring(1), value);
 					else
-						xml.WriteElementProperty(sName, value);
+						xml.WriteElementProperty(name, value);
 				}
 				xml.WriteEndProperty();
 			} // proc WriteItem
@@ -978,23 +1078,23 @@ namespace TecWare.DE.Server
 		/// <param name="tw"></param>
 		/// <returns></returns>
 		public static XmlWriterSettings GetSettings(TextWriter tw)
-		{
-			var settings = new XmlWriterSettings();
-			settings.CloseOutput = true;
-			settings.CheckCharacters = true;
-			settings.Encoding = tw.Encoding;
-			settings.Indent = true;
-			settings.IndentChars = "  ";
-			settings.NewLineChars = Environment.NewLine;
-			settings.NewLineHandling = NewLineHandling.Entitize;
-			settings.NewLineOnAttributes = false;
-			return settings;
-		} // func GetSettings
+			=> new XmlWriterSettings
+			{
+				CloseOutput = true,
+				CheckCharacters = true,
+				Encoding = tw.Encoding,
+				Indent = true,
+				IndentChars = "  ",
+				NewLineChars = Environment.NewLine,
+				NewLineHandling = NewLineHandling.Entitize,
+				NewLineOnAttributes = false
+			};
 
+		/// <summary>Create a list descriptor for the givven type.</summary>
+		/// <param name="itemType"></param>
+		/// <returns></returns>
 		public static IDEListDescriptor CreateListDescriptorFromType(Type itemType)
-		{
-			return new DEListDescriptorReflectorImpl(itemType);
-		} // func CreateListDescriptorFromType
+			=> new DEListDescriptorReflectorImpl(itemType);
 	} // class DEConfigItem
 
 	#endregion
