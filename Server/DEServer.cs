@@ -1061,7 +1061,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Lua Runtime ------------------------------------------------------------
+		#region -- Lua Runtime --------------------------------------------------------
+
+		#region -- class DELuaRuntime -------------------------------------------------
 
 		private sealed class DELuaRuntime : LuaGlobalPortable
 		{
@@ -1121,13 +1123,38 @@ namespace TecWare.DE.Server
 			[LuaMember("LogMsgType")]
 			private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
 
+			[LuaMember("UseNode")]
+			private LuaResult UseNode(string path, object code, DEConfigItem item = null)
+			{
+				// find the node for execution
+				if (String.IsNullOrEmpty(path))
+					item = item ?? server;
+				else if (path[0] == '/')
+					item = ProcsDE.UseNode(server, path, 1);
+				else
+					item = ProcsDE.UseNode(item ?? server, path, 0);
+
+				// execute code on node
+				using (item.EnterReadLock())
+					return new LuaResult(Lua.RtInvoke(
+						code ?? throw new ArgumentNullException(nameof(code)),
+						item
+					));
+			} // func UseNode
+
 			protected override void OnPrint(string text)
 				=> server.Log.LogMsg(LogMsgType.Debug, text);
 		} // class DELuaRuntime
 
+		#endregion
+
 		private LuaGlobalPortable luaRuntime = null;
 
-		[LuaMember("safecall")]
+		/// <summary>Obsolete</summary>
+		/// <param name="target"></param>
+		/// <param name="args"></param>
+		/// <returns></returns>
+		[LuaMember("safecall"), Obsolete("NeoLua do end exception handling.")]
 		private LuaResult LuaSafeCall(object target, params object[] args)
 		{
 			try
@@ -1150,6 +1177,7 @@ namespace TecWare.DE.Server
 		protected override object OnIndex(object key)
 			=> base.OnIndex(key) ?? luaRuntime?.GetValue(key);
 
+		/// <summary>Basic lua runtime methods.</summary>
 		[LuaMember("Basic")]
 		private LuaTable LuaRuntime => luaRuntime;
 
@@ -1158,12 +1186,14 @@ namespace TecWare.DE.Server
 		string IDEServer.LogPath => logPath;
 		IDEConfigurationService IDEServer.Configuration => configuration;
 
+		/// <summary>Get access to the background worker queue.</summary>
 		public IDEServerQueue Queue => queue;
-
+		/// <summary>Icon of the DES.</summary>
 		public override string Icon => "/images/des16.png";
 
 		// -- Static --------------------------------------------------------------
 
+		/// <summary>Current active running instance.</summary>
 		public static DEServer Current { get; private set; }
 	} // class DEServer
 }
