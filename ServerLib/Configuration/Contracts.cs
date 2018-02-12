@@ -19,10 +19,9 @@ using System.Xml.Linq;
 
 namespace TecWare.DE.Server.Configuration
 {
-	#region -- class DEConfigurationSchemaAttribute -------------------------------------
+	#region -- class DEConfigurationSchemaAttribute -----------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Mark a resource as schema extension.</summary>
 	[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
 	public class DEConfigurationSchemaAttribute : Attribute
 	{
@@ -35,16 +34,17 @@ namespace TecWare.DE.Server.Configuration
 			this.ResourceId = resourceId;
 		} // ctor
 
+		/// <summary>Base type for resource loading.</summary>
 		public Type BaseType { get; }
+		/// <summary>Resource Id of the schema.</summary>
 		public string ResourceId { get; }
 	} // class DEConfigurationSchemaAttribute
 
 	#endregion
 
-	#region -- interface IDEConfigurationAnnotated --------------------------------------
+	#region -- interface IDEConfigurationAnnotated ------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Documentation information for the element, attribute, ...</summary>
 	public interface IDEConfigurationAnnotated
 	{
 		/// <summary>Annotated documentation.</summary>
@@ -53,10 +53,9 @@ namespace TecWare.DE.Server.Configuration
 
 	#endregion
 
-	#region -- interface IDEConfigurationAttribute --------------------------------------
+	#region -- interface IDEConfigurationAttribute ------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Attribute description of an configuration element.</summary>
 	public interface IDEConfigurationAttribute : IDEConfigurationAnnotated
 	{
 		/// <summary>Name of the element.</summary>
@@ -82,10 +81,9 @@ namespace TecWare.DE.Server.Configuration
 
 	#endregion
 
-	#region -- interface IDEConfigurationElement ----------------------------------------
+	#region -- interface IDEConfigurationElement --------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Element description of an configuration element.</summary>
 	public interface IDEConfigurationElement : IDEConfigurationAnnotated
 	{
 		/// <summary>Check the name and/or substition name.</summary>
@@ -99,7 +97,7 @@ namespace TecWare.DE.Server.Configuration
 		/// <summary>Enumerates the attributes.</summary>
 		/// <returns></returns>
 		IEnumerable<IDEConfigurationAttribute> GetAttributes();
-		/// <summary></summary>
+		/// <summary>Enumerates the elements.</summary>
 		/// <returns></returns>
 		IEnumerable<IDEConfigurationElement> GetElements();
 
@@ -113,10 +111,9 @@ namespace TecWare.DE.Server.Configuration
 
 	#endregion
 
-	#region -- interface IDEConfigurationService ----------------------------------------
+	#region -- interface IDEConfigurationService --------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Configuration service, to load and validate a configuration description.</summary>
 	public interface IDEConfigurationService
 	{
 		/// <summary>Returns the definition for the current attribute.</summary>
@@ -133,21 +130,22 @@ namespace TecWare.DE.Server.Configuration
 		IReadOnlyDictionary<string, DateTime> ConfigurationFiles { get; }
 
 		/// <summary>Returns the configuration description for the xml-element</summary>
-		/// <param name="element"></param>
+		/// <param name="name"></param>
 		/// <returns></returns>
 		IDEConfigurationElement this[XName name] { get; }
 	} // interface IDEConfigurationService
 
 	#endregion
 
-	#region -- class DEConfigurationConstants -------------------------------------------
+	#region -- class DEConfigurationConstants -----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Configuration constants</summary>
 	public static class DEConfigurationConstants
 	{
+		/// <summary>Namespace for Data Exchange Server configuration elements/attributes.</summary>
 		public static readonly XNamespace MainNamespace = "http://tecware-gmbh.de/dev/des/2014";
 
+#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 		public static readonly XName xnDes = MainNamespace + "des";
 		public static readonly XName xnFragment = MainNamespace + "fragment";
 		public static readonly XName xnInclude = MainNamespace + "include";
@@ -190,6 +188,7 @@ namespace TecWare.DE.Server.Configuration
 
 		public static readonly XName xnLuaConfigItem = MainNamespace + "configItem";
 		public static readonly XName xnLuaConfigLogItem = MainNamespace + "configLogItem";
+#pragma warning restore CS1591 // Missing XML comment for publicly visible type or member
 	} // class DEConfigurationConstants
 
 	#endregion
