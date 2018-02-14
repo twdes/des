@@ -37,5 +37,11 @@
 		<file src="bin\Release\Neo.Lua.Desktop.pdb" target="build" />
 		
 		<file src="TecWare.DES.Deploy.targets" target="build" />
+
+		<file src="Configuration\DESconfigItem.xsd" target="content\Schema\Configuration" />
+		<file src="Configuration\DEScore.xsd" target="content\Schema\Configuration" />
+		<file src="Configuration\DEScron.xsd" target="content\Schema\Configuration" />
+		<file src="Configuration\DESprocess.xsd" target="content\Schema\Configuration" />
+		<file src="DES.xsd" target="content\Schema" />
 	</files>
 </package>

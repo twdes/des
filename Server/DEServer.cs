@@ -1068,12 +1068,16 @@ namespace TecWare.DE.Server
 		private sealed class DELuaRuntime : LuaGlobalPortable
 		{
 			private readonly DEServer server;
+			private Lazy<LuaFilePackage> io = new Lazy<LuaFilePackage>(() => new LuaFilePackage());
 
 			public DELuaRuntime(Lua lua, DEServer server) 
 				: base(lua)
 			{
 				this.server = server ?? throw new ArgumentNullException(nameof(server));
 			} // ctor
+
+			[LuaMember("io")]
+			public dynamic LuaLibraryIO => io.Value;
 
 			[LuaMember("await")]
 			private LuaResult LuaAwait(object func)
