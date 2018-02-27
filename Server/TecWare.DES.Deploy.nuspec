@@ -27,7 +27,6 @@
 		<file src="..\SimpleDbg\bin\Release\DESimpleDbg.pdb" target="build" />
 		<file src="bin\Release\Microsoft.Dynamic.dll" target="build" />
 		<file src="bin\Release\Microsoft.Scripting.dll" target="build" />
-		<file src="bin\Release\Microsoft.Scripting.AspNet.dll" target="build" />
 		<file src="bin\Release\Microsoft.Scripting.Metadata.dll" target="build" />
 		<file src="bin\Release\Neo.Lua.dll" target="build" />
 		<file src="bin\Release\Neo.Lua.pdb" target="build" />

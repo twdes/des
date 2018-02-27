@@ -14,7 +14,6 @@
 		<TecWareDESFile Include="DESimpleDbg.pdb" />
 		<TecWareDESFile Include="Microsoft.Dynamic.dll" />
 		<TecWareDESFile Include="Microsoft.Scripting.dll" />
-		<TecWareDESFile Include="Microsoft.Scripting.AspNet.dll" />
 		<TecWareDESFile Include="Microsoft.Scripting.Metadata.dll" />
 		<TecWareDESFile Include="Neo.Lua.dll" />
 		<TecWareDESFile Include="Neo.Lua.pdb" />
