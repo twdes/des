@@ -197,7 +197,7 @@
 					</xs:simpleContent>
 				</xs:complexType>
 			</xs:element>
-			<xs:element name="load" minOccurs="0" maxOccurs="unbounded" type="xs:string">
+			<xs:element name="load" minOccurs="0" maxOccurs="unbounded" type="KeyType">
 				<xs:annotation>
 					<xs:documentation>Gibt das Assembly an, welches geladen werden soll. Das angegebene Assembly wird nach Schema-Informationen durchsucht.</xs:documentation>
 				</xs:annotation>
@@ -262,7 +262,7 @@
 									<xs:documentation>Translate a http-Listener prefix to a specific configuration path.</xs:documentation>
 								</xs:annotation>
 								<xs:complexType mixed="true">
-									<xs:attribute name="path" type="xs:string" use="optional" default="/">
+									<xs:attribute name="path" type="KeyType" use="optional" default="/">
 										<xs:annotation>
 											<xs:documentation>Configuration path, with is the mapping desitination.</xs:documentation>
 										</xs:annotation>

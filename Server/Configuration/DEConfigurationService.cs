@@ -30,16 +30,12 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server.Configuration
 {
-	#region -- class DEConfigurationService ---------------------------------------------
+	#region -- class DEConfigurationService -------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
 	internal sealed class DEConfigurationService : IDEConfigurationService
 	{
-		#region -- struct SchemaAssemblyDefinition ----------------------------------------
+		#region -- struct SchemaAssemblyDefinition ------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private struct SchemaAssemblyDefinition
 		{
 			public SchemaAssemblyDefinition(XmlSchema schema, Assembly assembly)
@@ -74,7 +70,7 @@ namespace TecWare.DE.Server.Configuration
 
 		private Dictionary<XName, IDEConfigurationElement> elementResolveCache = new Dictionary<XName, IDEConfigurationElement>();
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		public DEConfigurationService(IServiceProvider sp, string configurationFile, PropertyDictionary configurationProperties)
 		{
@@ -95,15 +91,13 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
-		#region -- Parse Configuration ----------------------------------------------------
+		#region -- Parse Configuration ------------------------------------------------
 
-		#region -- class DEConfigurationStackException ------------------------------------
+		#region -- class DEConfigurationStackException --------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private class DEConfigurationStackException : DEConfigurationException
 		{
-			private string stackFrames;
+			private readonly string stackFrames;
 
 			public DEConfigurationStackException(ParseFrame currentFrame, XObject x, string message, Exception innerException = null)
 				: base(x, message, innerException)
@@ -123,14 +117,12 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
-		#region -- class ParseFrame -------------------------------------------------------
+		#region -- class ParseFrame ---------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private class ParseFrame : LuaTable
 		{
-			private LuaTable parentFrame;
-			private XObject source;
+			private readonly LuaTable parentFrame;
+			private readonly XObject source;
 
 			private bool deleteNodes;
 
@@ -143,8 +135,7 @@ namespace TecWare.DE.Server.Configuration
 			public void AppendStackFrame(StringBuilder sbStack)
 			{
 				sbStack.Append(source.BaseUri);
-				var lineInfo = source as IXmlLineInfo;
-				if (lineInfo != null && lineInfo.HasLineInfo())
+				if (source is IXmlLineInfo lineInfo && lineInfo.HasLineInfo())
 				{
 					sbStack.Append(" (");
 					sbStack.Append(lineInfo.LineNumber.ToString());
@@ -159,23 +150,21 @@ namespace TecWare.DE.Server.Configuration
 				=> base.OnIndex(key) ?? parentFrame?.GetValue(key);
 
 			public ParseFrame Parent => parentFrame as ParseFrame;
-			public bool IsDeleteNodes { get { return deleteNodes; } set { deleteNodes = value; } }
+			public bool IsDeleteNodes { get => deleteNodes; set => deleteNodes = value; }
 		} // class ParseFrame
 
 		#endregion
 
-		#region -- class ParseContext -----------------------------------------------------
+		#region -- class ParseContext -------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private class ParseContext : LuaPropertiesTable
 		{
-			private string basePath;
-			private Dictionary<string, DateTime> collectedFiles = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+			private readonly string basePath;
+			private readonly Dictionary<string, DateTime> collectedFiles = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
 			private ParseFrame currentFrame = null;
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			public ParseContext(PropertyDictionary arguments, string basePath)
 				: base(arguments)
@@ -185,13 +174,11 @@ namespace TecWare.DE.Server.Configuration
 
 			#endregion
 
-			#region -- Frames ---------------------------------------------------------------
+			#region -- Frames ---------------------------------------------------------
 
 			public ParseFrame PushFrame(XNode source)
-			{
-				return currentFrame = new ParseFrame(currentFrame == null ? this : (LuaTable)currentFrame, source);
-			} // proc ParseFrame
-
+				=> currentFrame = new ParseFrame(currentFrame == null ? this : (LuaTable)currentFrame, source);
+			
 			public void PopFrame(ParseFrame frame)
 			{
 				if (currentFrame == null || currentFrame != frame)
@@ -201,7 +188,7 @@ namespace TecWare.DE.Server.Configuration
 
 			#endregion
 
-			#region -- LoadFile -------------------------------------------------------------
+			#region -- LoadFile -------------------------------------------------------
 
 			/// <summary></summary>
 			/// <param name="source"></param>
@@ -272,7 +259,7 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
-		#region -- class XFileAnnotation --------------------------------------------------
+		#region -- class XFileAnnotation ----------------------------------------------
 
 		public class XFileAnnotation { }
 
@@ -576,10 +563,9 @@ namespace TecWare.DE.Server.Configuration
 			var xCurNodeMerge = xMerge.FirstNode;
 			while (xCurNodeMerge != null)
 			{
-				var xCurMerge = xCurNodeMerge as XElement;
 				var xNextNode = xCurNodeMerge.NextNode;
 
-				if (xCurMerge != null)
+				if (xCurNodeMerge is XElement xCurMerge)
 				{
 					var xCurRoot = FindConfigTreeElement(xRoot, xCurMerge);
 					if (xCurRoot == null) // node is not present -> include
@@ -608,37 +594,49 @@ namespace TecWare.DE.Server.Configuration
 			if (elementDefinition == null)
 				throw new DEConfigurationException(xSearch, $"Definition for configuration element '{xSearch.Name}' is missing.");
 
-			// find primary key columns
-			var primaryKeys = (from c in elementDefinition.GetAttributes()
-							   where c.IsPrimaryKey
-							   select c).ToArray();
-
-			foreach (var x in xRootParent.Elements(xSearch.Name))
+			if (elementDefinition.TypeName == "KeyType") // compare by values
 			{
-				var r = true;
-
-				for (int i = 0; i < primaryKeys.Length; i++)
+				foreach (var x in xRootParent.Elements(xSearch.Name))
 				{
-					var attr1 = x.Attribute(primaryKeys[i].Name);
-					var attr2 = xSearch.Attribute(primaryKeys[i].Name);
-
-					if (attr1 != null ^ attr2 != null)
-					{
-						r = false;
-						break;
-					}
-					else if (attr1.Value != attr2.Value)
-					{
-						r = false;
-						break;
-					}
+					if (Equals(x.Value, xSearch.Value))
+						return x;
 				}
-
-				if (r)
-					return x;
+				return null;
 			}
+			else // compare by attribute (primary key mode)
+			{
+				// find primary key columns
+				var primaryKeys = (from c in elementDefinition.GetAttributes()
+								   where c.IsPrimaryKey
+								   select c).ToArray();
 
-			return null;
+				if (primaryKeys.Length == 0)
+					return xRootParent.Elements(xSearch.Name).FirstOrDefault();
+				else
+				{
+					foreach (var x in xRootParent.Elements(xSearch.Name))
+					{
+						var r = true;
+
+						for (var i = 0; i < primaryKeys.Length; i++)
+						{
+							var attr1 = x.Attribute(primaryKeys[i].Name);
+							var attr2 = xSearch.Attribute(primaryKeys[i].Name);
+
+							if (!Equals(attr1?.Value, attr2?.Value))
+							{
+								r = false;
+								break;
+							}
+						}
+
+						if (r)
+							return x;
+					}
+
+					return null;
+				}
+			}
 		} // func FindConfigTreeElement
 
 		private static Regex macroReplacement = new Regex("\\$\\(([\\w\\d]+)\\)", RegexOptions.Singleline | RegexOptions.Compiled);
@@ -689,7 +687,7 @@ namespace TecWare.DE.Server.Configuration
 				{
 					// mark value as modified
 					valueModified |= true;
-					return context.CurrentFrame.GetOptionalValue<string>(m.Groups[1].Value, String.Empty, true);
+					return context.CurrentFrame.GetOptionalValue(m.Groups[1].Value, String.Empty, true);
 				}
 			);
 
@@ -698,7 +696,7 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
-		#region -- Update Schema ----------------------------------------------------------
+		#region -- Update Schema ------------------------------------------------------
 
 		public void UpdateSchema(Assembly assembly)
 		{
@@ -735,8 +733,8 @@ namespace TecWare.DE.Server.Configuration
 								// clear includes
 								for (var i = xmlSchema.Includes.Count - 1; i >= 0; i--)
 								{
-									var cur = xmlSchema.Includes[i] as XmlSchemaInclude;
-									if (cur != null && assemblySchemas.Exists(c => String.Compare(c.Schema.Id, cur.Id, StringComparison.OrdinalIgnoreCase) == 0))
+									if (xmlSchema.Includes[i] is XmlSchemaInclude cur
+										&& assemblySchemas.Exists(c => String.Compare(c.Schema.Id, cur.Id, StringComparison.OrdinalIgnoreCase) == 0))
 										xmlSchema.Includes.RemoveAt(i);
 								}
 
@@ -762,15 +760,14 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
-		#region -- Schema description -----------------------------------------------------
+		#region -- Schema description -------------------------------------------------
 
 		private IDEConfigurationElement GetConfigurationElement(XName name)
 		{
 			lock (schema)
 			{
 				// search cache
-				IDEConfigurationElement r;
-				if (elementResolveCache.TryGetValue(name, out r))
+				if (elementResolveCache.TryGetValue(name, out var r))
 					return r;
 
 				var xmlElement = FindConfigElement(new List<XmlSchemaElement>(), schema.GlobalElements.Values, name);
@@ -786,10 +783,9 @@ namespace TecWare.DE.Server.Configuration
 			foreach (XmlSchemaObject c in items)
 			{
 				var t = (XmlSchemaComplexType)null;
-				var e = c as XmlSchemaElement;
 
 				// Ermittle den Typ, des Elementes
-				if (e != null)
+				if (c is XmlSchemaElement e)
 				{
 					// Teste den Namen
 					if (e.QualifiedName.Name == name.LocalName && e.QualifiedName.Namespace == name.NamespaceName)
@@ -808,8 +804,7 @@ namespace TecWare.DE.Server.Configuration
 				if (t != null)
 				{
 					// Durchsuche die Sequencen, Alternativen
-					var groupBase = t.ContentTypeParticle as XmlSchemaGroupBase;
-					if (groupBase != null)
+					if (t.ContentTypeParticle is XmlSchemaGroupBase groupBase)
 					{
 						e = FindConfigElement(stack, groupBase.Items, name);
 						if (e != null)
@@ -818,8 +813,7 @@ namespace TecWare.DE.Server.Configuration
 				}
 
 				// search with in the sequences
-				var seq = c as XmlSchemaSequence;
-				if (seq != null)
+				if (c is XmlSchemaSequence seq)
 				{
 					e = FindConfigElement(stack, seq.Items, name);
 					if (e != null)
@@ -837,10 +831,10 @@ namespace TecWare.DE.Server.Configuration
 
 			// get the name
 			var xName = (XName)null;
-			if (x is XAttribute)
-				xName = ((XAttribute)x).Name;
-			else if (x is XElement)
-				xName = ((XElement)x).Name;
+			if (x is XAttribute a)
+				xName = a.Name;
+			else if (x is XElement e)
+				xName = e.Name;
 			else
 				return null;
 
@@ -854,7 +848,8 @@ namespace TecWare.DE.Server.Configuration
 
 		#endregion
 
-		public IDEConfigurationAttribute GetAttribute(XObject attribute) => GetConfigurationAttribute(attribute);
+		public IDEConfigurationAttribute GetAttribute(XObject attribute) 
+			=> GetConfigurationAttribute(attribute);
 
 		public IDEConfigurationElement this[XName name] => GetConfigurationElement(name);
 
