@@ -16,7 +16,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -25,20 +24,24 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server.Http
 {
-	#region -- class HttpWorker ---------------------------------------------------------
+	#region -- class HttpWorker -------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Verarbeitet eine Http-Anfrage</summary>
 	public abstract class HttpWorker : DEConfigItem
 	{
 		private string virtualBase;
 		private int priority = 100;
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="sName"></param>
 		public HttpWorker(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="config"></param>
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnEndReadConfiguration(config);
@@ -57,9 +60,15 @@ namespace TecWare.DE.Server.Http
 				: Procs.IsFilterEqual(subPath, value);
 		} // func TestFilter
 
+		/// <summary></summary>
+		/// <param name="subPath"></param>
+		/// <returns></returns>
 		protected string GetFileContentType(string subPath)
 			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value).FirstOrDefault();
 
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <param name="subPath"></param>
 		protected void DemandFile(IDEWebRequestScope r, string subPath)
 		{
 			var tokens = Config.Elements(xnSecurityDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value?.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)).FirstOrDefault();
@@ -81,6 +90,9 @@ namespace TecWare.DE.Server.Http
 		/// <returns><c>true</c>, if the request is processed.</returns>
 		public abstract Task<bool> RequestAsync(IDEWebRequestScope r);
 
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
 		protected override async Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
 		{
 			if (await base.OnProcessRequestAsync(r))
@@ -96,20 +108,24 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- class HttpFileWorker -----------------------------------------------------
+	#region -- class HttpFileWorker ---------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Liefert Dateien aus</summary>
 	public class HttpFileWorker : HttpWorker
 	{
 		private static readonly XName xnMimeDef = Configuration.DEConfigurationConstants.MainNamespace + "mimeDef";
 		private string directoryBase;
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
 		public HttpFileWorker(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="config"></param>
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnEndReadConfiguration(config);
@@ -117,6 +133,9 @@ namespace TecWare.DE.Server.Http
 			directoryBase = Config.GetAttribute("directory", String.Empty);
 		} // proc OnEndReadConfiguration
 
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
 		public override async Task<bool> RequestAsync(IDEWebRequestScope r)
 		{
 			// create the full file name
@@ -145,14 +164,14 @@ namespace TecWare.DE.Server.Http
 		private static bool TestFilter(string fileName, string filter)
 			=> fileName.EndsWith(fileName, StringComparison.OrdinalIgnoreCase);
 		
+		/// <summary></summary>
 		public override string Icon => "/images/http.file16.png";
 	} // class HttpFileWorker
 
 	#endregion
 
-	#region -- class HttpResourceWorker -------------------------------------------------
+	#region -- class HttpResourceWorker -----------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Liefert Dateien aus</summary>
 	public class HttpResourceWorker : HttpWorker
 	{
@@ -162,11 +181,16 @@ namespace TecWare.DE.Server.Http
 		private string[] nonePresentAlternativeExtensions = null;
 		private string[] alternativeRoots = null;
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
 		public HttpResourceWorker(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="config"></param>
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnBeginReadConfiguration(config);
@@ -207,6 +231,9 @@ namespace TecWare.DE.Server.Http
 				alternativeRoots = null;
 		} // proc OnBeginReadConfiguration
 
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
 		public override async Task<bool> RequestAsync(IDEWebRequestScope r)
 		{
 			if (assembly == null || namespaceRoot == null)
@@ -271,6 +298,7 @@ namespace TecWare.DE.Server.Http
 			}
 		} // func Request
 
+		/// <summary></summary>
 		public override string Icon => "/images/http.res16.png";
 	} // class HttpResourceWorker
 

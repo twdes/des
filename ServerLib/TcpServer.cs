@@ -21,14 +21,19 @@ using System.Threading.Tasks;
 
 namespace TecWare.DE.Server
 {
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	#region -- interface IListenerTcp -------------------------------------------------
+
+	/// <summary>Interface to the registered listener.</summary>
 	public interface IListenerTcp : IDisposable
 	{
+		/// <summary>Local endpoint where to listen.</summary>
 		IPEndPoint LocalEndPoint { get; }
 	} // interface IListenerTcp
-	
-	///////////////////////////////////////////////////////////////////////////////
+
+	#endregion
+
+	#region -- interface IServerTcp ---------------------------------------------------
+
 	/// <summary>Interface for the tcp-Server interface.</summary>
 	public interface IServerTcp
 	{
@@ -38,9 +43,9 @@ namespace TecWare.DE.Server
 		/// <returns>Registered tcp-Listener</returns>
 		IListenerTcp RegisterListener(IPEndPoint endPoint, Action<Stream> createHandler);
 
-		/// <summary></summary>
+		/// <summary>Create a connection to this endpoint.</summary>
 		/// <param name="endPoint">End point for the connection</param>
-		/// <param name="timeout"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		Task<Stream> CreateConnectionAsync(IPEndPoint endPoint, CancellationToken cancellationToken);
 
@@ -57,4 +62,6 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		string GetStreamInfo(Stream stream);
   } // interface IServerTcp
+
+	#endregion
 }

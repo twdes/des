@@ -103,6 +103,8 @@ namespace TecWare.DE.Server.Configuration
 
 		/// <summary>Class Type</summary>
 		Type ClassType { get; }
+		/// <summary>Type name of the content.</summary>
+		string TypeName { get; }
 		/// <summary>There can be one or more member</summary>
 		int MinOccurs { get; }
 		/// <summary>There can be one or more member</summary>

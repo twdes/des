@@ -22,42 +22,55 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDEThreadSource ------------------------------------------------
+	#region -- interface IDEThreadSource ----------------------------------------------
 
 	/// <summary>Access to the base thread.</summary>
 	public interface IDEThreadSource
 	{
+		/// <summary>Thread of this source.</summary>
 		DEThreadBase Thread { get; }
 	} // interface IDEThreadSource
 
 	#endregion
 
-	#region -- class DEThreadContext ----------------------------------------------------
+	#region -- class DEThreadContext --------------------------------------------------
 
 	/// <summary>Simple synchronization context, that post all tasks/actions back to this thread.</summary>
 	public sealed class DEThreadContext : SynchronizationContext, IDEThreadSource
 	{
 		private readonly DEThreadBase thread;
 
+		/// <summary></summary>
+		/// <param name="thread"></param>
 		public DEThreadContext(DEThreadBase thread)
 			=> this.thread = thread;
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public override SynchronizationContext CreateCopy()
 			=> new DEThreadContext(thread);
 
+		/// <summary></summary>
+		/// <param name="d"></param>
+		/// <param name="state"></param>
 		public override void Post(SendOrPostCallback d, object state)
 			=> thread.Post(d, state);
 
+		/// <summary></summary>
+		/// <param name="d"></param>
+		/// <param name="state"></param>
 		public override void Send(SendOrPostCallback d, object state)
 			=> thread.Send(d, state);
 
+		/// <summary></summary>
 		public DEThreadBase Thread => thread;
 	} // class DEThreadContext
 
 	#endregion
 
-	#region -- interface IDEScope  ------------------------------------------------------
+	#region -- interface IDEScope  ----------------------------------------------------
 
+	/// <summary>Scope contract.</summary>
 	public interface IDEScope : IServiceProvider, IDisposable
 	{
 		/// <summary>Use this scope as SynchronizationContext</summary>
@@ -73,19 +86,19 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		T ExecuteWith<T>(Func<T> func);
 		
-		/// <summary></summary>
+		/// <summary>Is this scope the current active scope.</summary>
 		bool IsCurrentScope { get; }
 	} // interface IDEScope
 
 
 	#endregion
 
-	#region -- class DEScope ------------------------------------------------------------
+	#region -- class DEScope ----------------------------------------------------------
 
 	/// <summary>That is hold within an synchronization context. Store for global states of an execution thread.</summary>
 	public class DEScope : IServiceProvider, IDisposable
 	{
-		#region -- class DEScopeContext -------------------------------------------------
+		#region -- class DEScopeContext -----------------------------------------------
 
 		/// <summary>Special thread context, that holds a currently running transaction.</summary>
 		private sealed class DEScopeContext : SynchronizationContext, IDEThreadSource
@@ -175,15 +188,19 @@ namespace TecWare.DE.Server
 
 		private bool isDisposed = false;
 
-		#region -- Ctor/Dtor ------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
+		/// <summary></summary>
 		public DEScope()
 		{
 		} // ctor
 
+		/// <summary></summary>
 		public void Dispose()
 			=> Dispose(true);
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected virtual void Dispose(bool disposing)
 		{
 			if (isDisposed)
@@ -194,26 +211,37 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- IServiceProvider -----------------------------------------------------
+		#region -- IServiceProvider ---------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="serviceType"></param>
+		/// <returns></returns>
 		public virtual object GetService(Type serviceType)
 			=> serviceType.IsAssignableFrom(GetType()) ? this : null;
 
 		#endregion
 
-		#region -- Use, ExecuteWith -----------------------------------------------------
+		#region -- Use, ExecuteWith ---------------------------------------------------
 
+		/// <summary>Make the this scope to the current active scope, by implementing an synchronization context.</summary>
+		/// <returns></returns>
 		public IDisposable Use()
 			=> IsCurrentScope
 				? null
 				: new DEScopeContext(this, SynchronizationContext.Current).Use();
 
+		/// <summary>Execute the action in this scope.</summary>
+		/// <param name="action"></param>
 		public void ExecuteWith(Action action)
 		{
 			using (Use())
 				action();
 		} // func ExecuteWith
 
+		/// <summary>Execute the function in this scope.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="func"></param>
+		/// <returns></returns>
 		public T ExecuteWith<T>(Func<T> func)
 		{
 			using (Use())
@@ -222,10 +250,12 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		/// <summary></summary>
 		public bool IsDisposed => isDisposed;
+		/// <summary>Is this scope the current active scope.</summary>
 		public bool IsCurrentScope => SynchronizationContext.Current is DEScopeContext t ? t.Scope == this : false;
 
-		// -- Static --------------------------------------------------------------------
+		// -- Static ----------------------------------------------------------
 
 		/// <summary>Returns the current active scope.</summary>
 		/// <param name="throwException"></param>
@@ -265,10 +295,12 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEThreadBase -------------------------------------------------------
+	#region -- class DEThreadBase -----------------------------------------------------
 
+	/// <summary></summary>
 	public abstract class DEThreadBase : IServiceProvider, IDisposable
 	{
+		/// <summary></summary>
 		public const string ThreadCategory = "Thread";
 
 		private readonly Thread thread = null;
@@ -284,8 +316,12 @@ namespace TecWare.DE.Server
 
 		private bool isDisposed = false;
 
-		#region -- Ctor/Dtor ------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
+		/// <param name="categoryName"></param>
 		public DEThreadBase(IServiceProvider sp, string name, string categoryName = ThreadCategory)
 		{
 			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
@@ -332,6 +368,8 @@ namespace TecWare.DE.Server
 			}
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="thread"></param>
 		protected virtual void SetThreadParameter(Thread thread)
 		{
 			thread.SetApartmentState(ApartmentState.STA);
@@ -339,9 +377,12 @@ namespace TecWare.DE.Server
 			thread.Priority = ThreadPriority.Normal;
 		} // proc SetThreadParameter
 
+		/// <summary></summary>
 		public void Dispose()
 			=> Dispose(true);
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected virtual void Dispose(bool disposing)
 		{
 			if (isDisposed)
@@ -367,7 +408,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Message Loop ---------------------------------------------------------
+		#region -- Message Loop -------------------------------------------------------
 
 		private void VerifyThreadAccess()
 		{
@@ -390,22 +431,36 @@ namespace TecWare.DE.Server
 			}
 		} // proc Send
 
+		/// <summary></summary>
+		/// <param name="d"></param>
+		/// <param name="state"></param>
+		/// <param name="waitHandle"></param>
 		protected abstract void EnqueueTask(SendOrPostCallback d, object state, ManualResetEventSlim waitHandle);
 
+		/// <summary></summary>
+		/// <param name="cancellationToken"></param>
+		/// <param name="d"></param>
+		/// <param name="state"></param>
+		/// <param name="wait"></param>
+		/// <returns></returns>
 		protected abstract bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait);
 
+		/// <summary></summary>
 		protected void ResetMessageLoopUnsafe()
 		{
 			if (!IsDisposed)
 				tasksFilled.Reset();
 		} // proc ResetMessageLoopUnsafe
 
+		/// <summary></summary>
 		protected void PulseMessageLoop()
 		{
 			lock (tasksFilled)
 				tasksFilled.Set();
 		} // proc PulseMessageLoop
 
+		/// <summary></summary>
+		/// <param name="cancellationToken"></param>
 		protected void ProcessMessageLoopUnsafe(CancellationToken cancellationToken)
 		{
 			// if cancel, then run the loop, we avoid an TaskCanceledException her
@@ -453,11 +508,12 @@ namespace TecWare.DE.Server
 			ProcessMessageLoopUnsafe(cancellationToken);
 		} // proc ProcessMessageLoop
 
+		/// <summary></summary>
 		protected object MessageLoopSync => tasksFilled;
 
 		#endregion
 
-		#region -- Execute --------------------------------------------------------------
+		#region -- Execute ------------------------------------------------------------
 
 		private void Execute(object obj)
 		{
@@ -541,13 +597,18 @@ namespace TecWare.DE.Server
 			}
 		} // proc Execute
 
+		/// <summary></summary>
 		protected virtual void OnThreadFinished() { }
 
+		/// <summary></summary>
 		protected virtual bool OnHandleException(Exception e)
 			=> false;
 
 		#endregion
 
+		/// <summary></summary>
+		/// <param name="serviceType"></param>
+		/// <returns></returns>
 		public object GetService(Type serviceType)
 			 => sp?.GetService(serviceType);
 
@@ -574,9 +635,10 @@ namespace TecWare.DE.Server
 			}
 		} // prop CurrentContext
 
+		/// <summary></summary>
 		public CancellationToken CancellationToken => threadCancellation.Token;
 
-		// -- Static --------------------------------------------------------------------
+		// -- Static ----------------------------------------------------------
 
 		/// <summary>Notifies changes on the thread list.</summary>
 		public static event EventHandler ThreadListChanged;
@@ -615,6 +677,9 @@ namespace TecWare.DE.Server
 			}
 		} // proc RegisterThread
 
+		/// <summary></summary>
+		/// <param name="thread"></param>
+		/// <returns></returns>
 		public static DEThreadBase FromThread(Thread thread)
 		{
 			lock (runningDEThreads)
@@ -633,26 +698,28 @@ namespace TecWare.DE.Server
 			}
 		} // proc UnregisterThread
 
+		/// <summary></summary>
 		public static DEThreadBase CurrentThread => SynchronizationContext.Current is DEThreadContext t ? t.Thread : null;
 
+		/// <summary></summary>
 		public static int ThreadCount { get { lock (runningDEThreads) return runningDEThreads.Count; } }
+		/// <summary></summary>
 		public static DEThreadBase[] ThreadList { get { lock (runningDEThreads) return runningDEThreads.ToArray(); } }
 	} // class DEContextThread
 
 	#endregion
 
-	#region -- class DEThread -----------------------------------------------------------
+	#region -- class DEThread ---------------------------------------------------------
 
 	/// <summary>Thread to handle thread exceptions.</summary>
 	/// <param name="e">Exception.</param>
 	/// <returns><c>true</c>, if the exception is accepted.</returns>
 	public delegate bool ThreadExceptionDelegate(Exception e);
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Safety thread that runs a delegate in a loop.</summary>
 	public sealed class DEThread : DEThreadBase
 	{
-		#region -- struct CurrentTaskItem -----------------------------------------------
+		#region -- struct CurrentTaskItem ---------------------------------------------
 
 		private struct CurrentTaskItem
 		{
@@ -665,6 +732,11 @@ namespace TecWare.DE.Server
 
 		private readonly Queue<CurrentTaskItem> currentTasks = new Queue<CurrentTaskItem>();
 		
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
+		/// <param name="action"></param>
+		/// <param name="categoryName"></param>
 		public DEThread(IServiceProvider sp, string name, Func<Task> action, string categoryName = ThreadCategory)
 			: base(sp, name, categoryName)
 		{
@@ -677,12 +749,18 @@ namespace TecWare.DE.Server
 			}
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="thread"></param>
 		protected override void SetThreadParameter(Thread thread)
 		{
 			base.SetThreadParameter(thread);
 			thread.IsBackground = true;
 		} // proc SetThreadParameter
 
+		/// <summary></summary>
+		/// <param name="d"></param>
+		/// <param name="state"></param>
+		/// <param name="waitHandle"></param>
 		protected override void EnqueueTask(SendOrPostCallback d, object state, ManualResetEventSlim waitHandle)
 		{
 			lock (MessageLoopSync)
@@ -692,6 +770,12 @@ namespace TecWare.DE.Server
 			}
 		} // proc EnqueueTask
 
+		/// <summary></summary>
+		/// <param name="cancellationToken"></param>
+		/// <param name="d"></param>
+		/// <param name="state"></param>
+		/// <param name="wait"></param>
+		/// <returns></returns>
 		protected override bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait)
 		{
 			lock (MessageLoopSync)
@@ -715,18 +799,25 @@ namespace TecWare.DE.Server
 			}
 		} // proc TryDequeueTask
 
+		/// <summary></summary>
+		/// <param name="e"></param>
+		/// <returns></returns>
 		protected override bool OnHandleException(Exception e) 
 			=> HandleException?.Invoke(e) ?? false;
 	
+		/// <summary></summary>
 		public ThreadExceptionDelegate HandleException { get; set; }
 	} // class DEThread
 
 	#endregion
 	
-	#region -- class Threading ----------------------------------------------------------
+	#region -- class Threading --------------------------------------------------------
 
+	/// <summary>Thread helper.</summary>
 	public static class Threading
 	{
+		/// <summary>Execute the task synchron.</summary>
+		/// <param name="task"></param>
 		public static void AwaitTask(this Task task)
 		{
 			if (SynchronizationContext.Current is IDEThreadSource c && c.Thread != null)
@@ -740,6 +831,10 @@ namespace TecWare.DE.Server
 				task.Wait();
 		} // proc AwaitTask
 
+		/// <summary>Execute the task synchron.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="task"></param>
+		/// <returns></returns>
 		public static T AwaitTask<T>(this Task<T> task)
 		{
 			if (SynchronizationContext.Current is IDEThreadSource c && c.Thread != null)

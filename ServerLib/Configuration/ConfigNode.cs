@@ -102,6 +102,12 @@ namespace TecWare.DE.Server.Configuration
 					return null;
 				return new DirectoryInfo(attributeValue);
 			}
+			else if (attribute.TypeName == "FileSize")
+			{
+				return FileSize.TryParse(attributeValue, out var fileSize)
+					? fileSize
+					: FileSize.Empty;
+			}
 			else
 			{
 				var type = attribute.Type;

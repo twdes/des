@@ -25,6 +25,9 @@ namespace TecWare.DE.Stuff
 	{
 		private static Regex environmentSyntax = new Regex(@"\%(\w+)\%", RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
+		/// <summary>Get the local path of the uri.</summary>
+		/// <param name="path"></param>
+		/// <returns></returns>
 		public static string GetLocalPath(string path)
 		{
 			if (path == null)
@@ -37,6 +40,9 @@ namespace TecWare.DE.Stuff
 			return path;
 		} // func GetLocalPath
 
+		/// <summary>Replace environment variables.</summary>
+		/// <param name="filename"></param>
+		/// <returns></returns>
 		public static string GetEnvironmentPath(string filename)
 		{
 			// resolve environment
@@ -61,8 +67,16 @@ namespace TecWare.DE.Stuff
         });
 		} // func GetEnvironmentPath
 
-		public static string GetDirectoryName(XObject x) => Path.GetDirectoryName(GetLocalPath(x?.BaseUri));
+		/// <summary>Get the directory of the current xml-node.</summary>
+		/// <param name="x"></param>
+		/// <returns></returns>
+		public static string GetDirectoryName(XObject x) 
+			=> Path.GetDirectoryName(GetLocalPath(x?.BaseUri));
 
+		/// <summary>Get filename of the current xml-node.</summary>
+		/// <param name="x"></param>
+		/// <param name="filename"></param>
+		/// <returns></returns>
 		public static string GetFileName(XObject x, string filename)
 		{
 			if (String.IsNullOrEmpty(filename))

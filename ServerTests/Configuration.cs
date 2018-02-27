@@ -16,9 +16,9 @@ namespace TecWare.DE.Server
 		public void ReplaceEnv()
 		{
 			var expected = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), @"..\test.txt");
-      var actual = ProcsDE.GetEnvironmentPath(@"%executedirectory%\..\test.txt");
+			var actual = ProcsDE.GetEnvironmentPath(@"%executedirectory%\..\test.txt");
 			Assert.AreEqual(expected, actual);
-    }
+		}
 
 		[TestMethod]
 		public void LoadAssemblies()
@@ -45,7 +45,7 @@ namespace TecWare.DE.Server
 				Console.WriteLine($"Element: {c.Name.LocalName}");
 
 			var n2 = n.GetElements().FirstOrDefault(c => c.Name == DEConfigurationConstants.MainNamespace + "log");
-      Assert.IsNotNull(n2);
+			Assert.IsNotNull(n2);
 			Assert.IsNull(n2.ClassType);
 			Assert.IsNotNull(n2.Documentation);
 
@@ -53,7 +53,7 @@ namespace TecWare.DE.Server
 			Assert.IsNotNull(a1);
 			Assert.AreEqual(typeof(uint), a1.Type);
 			Assert.AreEqual("3670016", a1.DefaultValue);
-    }
+		}
 
 		[TestMethod]
 		public void MergeConfigurations()
@@ -86,7 +86,7 @@ namespace TecWare.DE.Server
 			Assert.IsNotNull(c2);
 			Assert.AreEqual("test 2", c2.Attribute("displayname")?.Value);
 			Assert.AreEqual("script1 script2 script3", c2.Attribute("script")?.Value);
-      var l2 = c2.Element(DEConfigurationConstants.xnLog);
+			var l2 = c2.Element(DEConfigurationConstants.xnLog);
 			Assert.IsNotNull(l2);
 			Assert.AreEqual("4096", l2.Attribute("min")?.Value);
 			Assert.AreEqual("8128", l2.Attribute("max")?.Value);

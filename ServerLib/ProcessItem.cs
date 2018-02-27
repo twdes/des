@@ -13,29 +13,28 @@
 // specific language governing permissions and limitations under the Licence.
 //
 #endregion
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace TecWare.DE.Server
 {
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	#region -- interface IDEProcessItem -----------------------------------------------
+
+	/// <summary>Process item contract.</summary>
 	public interface IDEProcessItem
 	{
-		/// <summary></summary>
-		/// <returns></returns>
+		/// <summary>Start the process.</summary>
+		/// <returns><c>true</c>, if the process was started successful.</returns>
 		bool StartProcess();
-		/// <summary></summary>
+		/// <summary>Stop the process.</summary>
 		void StopProcess();
-		/// <summary></summary>
-		/// <param name="text"></param>
+		/// <summary>Send a command to this process (InputStream is used).</summary>
+		/// <param name="text">Line to send</param>
 		void SendCommand(string text);
-		/// <summary></summary>
+		/// <summary>Access the process information.</summary>
 		Process Process { get; }
+		/// <summary>Is the current process running.</summary>
 		bool IsProcessRunning { get; }
 	} // interface IDEProcessItem
+
+	#endregion
 }

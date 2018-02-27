@@ -29,9 +29,8 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Http
 {
-	#region -- interface IDEHttpServer --------------------------------------------------
+	#region -- interface IDEHttpServer ------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public interface IDEHttpServer
 	{
@@ -70,9 +69,8 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- interface IDEWebSocketProtocol -------------------------------------------
+	#region -- interface IDEWebSocketProtocol -----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public interface IDEWebSocketProtocol
 	{
@@ -93,7 +91,7 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- interface IDEWebScope ----------------------------------------------------
+	#region -- interface IDEWebScope --------------------------------------------------
 
 	/// <summary></summary>
 	public interface IDEWebScope : IDECommonScope
@@ -104,7 +102,7 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- interface IDEWebSocketScope ----------------------------------------------
+	#region -- interface IDEWebSocketScope --------------------------------------------
 
 	/// <summary></summary>
 	public interface IDEWebSocketScope : IDEWebScope
@@ -118,7 +116,7 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- interface IDEWebRequestScope ---------------------------------------------
+	#region -- interface IDEWebRequestScope -------------------------------------------
 
 	/// <summary></summary>
 	public interface IDEWebRequestScope : IDEWebScope
@@ -170,6 +168,7 @@ namespace TecWare.DE.Server.Http
 		/// <summary></summary>
 		/// <param name="contentType"></param>
 		/// <param name="contentLength"></param>
+		/// <param name="compress"></param>
 		/// <returns></returns>
 		Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null);
 		/// <summary></summary>
@@ -200,7 +199,7 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- class LuaHttpTable -------------------------------------------------------
+	#region -- class LuaHttpTable -----------------------------------------------------
 
 	internal sealed class LuaHttpTable : LuaTable, IDisposable
 	{
@@ -284,24 +283,26 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- class HttpResponseHelper -------------------------------------------------
+	#region -- class HttpResponseHelper -----------------------------------------------
 
+	/// <summary>Helper for response creation.</summary>
 	public static class HttpResponseHelper
 	{
+		/// <summary></summary>
 		public const long CacheSize = 2L << 20;
 
-		#region -- ParseHtml --------------------------------------------------------------
+		#region -- ParseHtml ----------------------------------------------------------
 
 		private static string ParseHtml(TextReader tr, long capacity, out bool isPlainHtml)
 		{
-			char[] readBuffer = new char[4096];
+			var readBuffer = new char[4096];
 
 			var sbLua = new StringBuilder(unchecked((int)capacity));
 			var sbHtml = new StringBuilder();
 			var sbCmd = new StringBuilder();
 			int readed;
-			int state = 0;
-			bool inCommand = false;
+			var state = 0;
+			var inCommand = false;
 
 			isPlainHtml = true;
 
@@ -313,7 +314,7 @@ namespace TecWare.DE.Server.Http
 				// parse the html content for inline lua
 				for (var i = 0; i < readed; i++)
 				{
-					char c = readBuffer[i];
+					var c = readBuffer[i];
 
 					switch (state)
 					{
@@ -459,7 +460,7 @@ namespace TecWare.DE.Server.Http
 
 		#endregion
 
-		#region -- SetLastModified, SetXXXXFileName ---------------------------------------
+		#region -- SetLastModified, SetXXXXFileName -----------------------------------
 
 		/// <summary>Sets the output last modified date</summary>
 		/// <param name="context"></param>
@@ -496,12 +497,13 @@ namespace TecWare.DE.Server.Http
 
 		#endregion
 
-		#region -- WriteText, WriteBytes, WriteStream -------------------------------------
+		#region -- WriteText, WriteBytes, WriteStream ---------------------------------
 
 		/// <summary>Writes the text to the output.</summary>
 		/// <param name="context"></param>
 		/// <param name="value"></param>
 		/// <param name="contentType"></param>
+		/// <param name="encoding"></param>
 		public static void WriteText(this IDEWebRequestScope context, string value, string contentType = MimeTypes.Text.Plain, Encoding encoding = null)
 		{
 			if (encoding == null)
@@ -537,7 +539,7 @@ namespace TecWare.DE.Server.Http
 
 		#endregion
 
-		#region -- WriteFile, WriteResource, WriteContent ---------------------------------
+		#region -- WriteFile, WriteResource, WriteContent -----------------------------
 
 		/// <summary>Writes the file to the output.</summary>
 		/// <param name="context"></param>
@@ -614,6 +616,11 @@ namespace TecWare.DE.Server.Http
 			);
 		} // func CreateScript
 
+		/// <summary></summary>
+		/// <param name="context"></param>
+		/// <param name="createSource"></param>
+		/// <param name="cacheId"></param>
+		/// <param name="contentType"></param>
 		public static void WriteContent(this IDEWebRequestScope context, Func<Stream> createSource, string cacheId, string contentType)
 		{
 			if (cacheId == null)
@@ -663,9 +670,8 @@ namespace TecWare.DE.Server.Http
 			// write the item to the output
 			if (o == null)
 				throw new ArgumentNullException("output", "No valid output.");
-			else if (o is ILuaScript)
+			else if (o is ILuaScript c)
 			{
-				var c = (ILuaScript)o;
 				LuaResult r;
 				using (var g = new LuaHttpTable(context, contentType))
 					r = c.Run(g, true);
@@ -683,11 +689,12 @@ namespace TecWare.DE.Server.Http
 
 		#endregion
 
-		#region -- WriteXXXX --------------------------------------------------------------
+		#region -- WriteXXXX ----------------------------------------------------------
 
 		/// <summary>Writes the text as an html page.</summary>
 		/// <param name="context"></param>
 		/// <param name="value"></param>
+		/// <param name="title"></param>
 		public static void WriteTextAsHtml(this IDEWebRequestScope context, string value, string title = "page")
 		{
 			WriteText(context,
@@ -705,6 +712,10 @@ namespace TecWare.DE.Server.Http
 			);
 		} // proc WriteTextAsHtml
 
+		/// <summary></summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
 		public static void WriteXml(this IDEWebRequestScope context, XElement value, string contentType = MimeTypes.Text.Xml)
 		{
 			WriteXml(context,
@@ -714,66 +725,79 @@ namespace TecWare.DE.Server.Http
 				), contentType);
 		} // proc WriteXml
 
+		/// <summary></summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
 		public static void WriteXml(this IDEWebRequestScope context, XDocument value, string contentType = MimeTypes.Text.Xml)
 		{
 			using (var tw = context.GetOutputTextWriter(contentType, context.Http.DefaultEncoding, -1))
 				value.Save(tw);
 		} // proc WriteXml
 
+		/// <summary></summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
 		public static void WriteObject(this IDEWebRequestScope context, object value, string contentType = null)
 		{
-			if (value == null)
-				throw new ArgumentNullException("value");
-			else if (value is XElement)
-				WriteXml(context, (XElement)value, contentType ?? MimeTypes.Text.Xml);
-			else if (value is XDocument)
-				WriteXml(context, (XDocument)value, contentType ?? MimeTypes.Text.Xml);
-			else if (value is string)
-				WriteText(context, (string)value, contentType ?? MimeTypes.Text.Plain);
-			else if (value is Stream)
-				WriteStream(context, (Stream)value, contentType ?? MimeTypes.Application.OctetStream);
-			else if (value is byte[])
-				WriteBytes(context, (byte[])value, contentType ?? MimeTypes.Application.OctetStream);
-			else if (value is LuaTable)
-				WriteXml(context, new XDocument(Procs.ToXml((LuaTable)value)));
-			else
-				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Can not send return value of type '{0}'.", value.GetType().FullName));
+			switch (value)
+			{
+				case null:
+					throw new ArgumentNullException("value");
+				case XElement e:
+					WriteXml(context, e, contentType ?? MimeTypes.Text.Xml);
+					break;
+				case XDocument d:
+					WriteXml(context, d, contentType ?? MimeTypes.Text.Xml);
+					break;
+				case string s:
+					WriteText(context, s, contentType ?? MimeTypes.Text.Plain);
+					break;
+				case Stream st:
+					WriteStream(context, st, contentType ?? MimeTypes.Application.OctetStream);
+					break;
+				case byte[] b:
+					WriteBytes(context, b, contentType ?? MimeTypes.Application.OctetStream);
+					break;
+				case LuaTable t:
+					WriteXml(context, new XDocument(Procs.ToXml(t)));
+					break;
+				default:
+					throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Can not send return value of type '{0}'.", value.GetType().FullName));
+			}
 		} // proc WriteObject
 
 		#endregion
 
-		#region -- WriteSafeCall ----------------------------------------------------------
+		#region -- WriteSafeCall ------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <param name="x"></param>
+		/// <param name="successMessage"></param>
 		public static void WriteSafeCall(this IDEWebRequestScope r, XElement x, string successMessage = null)
-		{
-			if (x == null)
-				x = new XElement("return");
+			=> WriteXml(r, DEConfigItem.SetStatusAttributes(x ?? new XElement("return"), true, successMessage));
 
-			DEConfigItem.SetStatusAttributes(x, true, successMessage);
-
-			WriteXml(r, x);
-		} // proc WriteSafeCall
-
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <param name="errorMessage"></param>
 		public static void WriteSafeCall(this IDEWebRequestScope r, string errorMessage)
-		{
-			WriteXml(r,
-				DEConfigItem.CreateDefaultXmlReturn(false, errorMessage)
-			);
-		} // proc WriteSafeCall
+			=> WriteXml(r, DEConfigItem.CreateDefaultXmlReturn(false, errorMessage));
 
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <param name="e"></param>
 		public static void WriteSafeCall(this IDEWebRequestScope r, Exception e)
-		{
-			WriteSafeCall(r, e.Message);
-		} // proc WriteSafeCall
+			=> WriteSafeCall(r, e.Message);
 
 		#endregion
 	} // class HttpResponseHelper
 
 	#endregion
 
-	#region -- class HttpResponseException ----------------------------------------------
+	#region -- class HttpResponseException --------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Spezielle Exception die einen Http-Status-Code weitergeben kann.</summary>
 	public class HttpResponseException : Exception
 	{

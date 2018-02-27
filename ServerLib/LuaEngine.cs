@@ -21,23 +21,22 @@ using Neo.IronLua;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDELuaEngine ---------------------------------------------------
+	#region -- interface IDELuaEngine -------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary>Zugriff auf die LuaScript-Engine des DEServers</summary>
+	/// <summary>Script engine of the data exchange server.</summary>
 	public interface IDELuaEngine : IServiceProvider
 	{
-		/// <summary>Verbindet ein Script mit einer Lua-Instanz</summary>
-		/// <param name="scriptId">Id des Scripts</param>
-		/// <param name="table">Table, mit dem das Skript verbunden wird.</param>
-		/// <param name="autoRun">Automatisch ausführen, wenn es geändert wurde</param>
-		/// <returns>Verbindung-Script zu Global</returns>
+		/// <summary>Attach a global script to an environment/configuration item.</summary>
+		/// <param name="scriptId">Id of the global script</param>
+		/// <param name="table">Environment to attach.</param>
+		/// <param name="autoRun">Run the script automaticly after it was changed.</param>
+		/// <returns>Script attachment</returns>
 		ILuaAttachedScript AttachScript(string scriptId, LuaTable table, bool autoRun = false);
-		/// <summary>Erzeugt ein privates Script.</summary>
-		/// <param name="code">Scriptcode</param>
-		/// <param name="name">Name des Scripts</param>
-		/// <param name="parameter">Argumente für das Script</param>
-		/// <returns>Erzeugte Script</returns>
+		/// <summary>Create a private script.</summary>
+		/// <param name="code">Code of the script</param>
+		/// <param name="name">Name of the script.</param>
+		/// <param name="parameter">Script arguments.</param>
+		/// <returns>Created script.</returns>
 		ILuaScript CreateScript(Func<TextReader> code, string name, params KeyValuePair<string, Type>[] parameter);
 
 		/// <summary>Access to the internal Lua-Script-Engine.</summary>
@@ -48,68 +47,69 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface ILuaAttachedScript ---------------------------------------------
+	#region -- interface ILuaAttachedScript -------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary>Verbindung zwischen eine Script-Global und einem Script.</summary>
+	/// <summary>Connection between an defined script and an execution environment.</summary>
 	public interface ILuaAttachedScript : IDisposable
 	{
-		/// <summary>Wird ausgelöst, wenn das Script geändert wird. Cancel kann die den Compilierungsvorgang abbrechen.</summary>
+		/// <summary>Raised, when script was changed. With cancel stop the compile process.</summary>
 		event CancelEventHandler ScriptChanged;
-		/// <summary>Wird ausgelöst, wenn das Script kompiliert und ausgeführt wurde.</summary>
+		/// <summary>Raised, after the script was compiled and executed successful.</summary>
 		event EventHandler ScriptCompiled;
 
-		/// <summary>Führt das Script aus.</summary>
-		/// <param name="throwExceptions"></param>
+		/// <summary>Run the script on the attached environment.</summary>
+		/// <param name="throwExceptions">Throw exceptions.</param>
 		void Run(bool throwExceptions = false);
 
-		/// <summary>Soll das Script automatisch nach einem Reload ausgeführt werden.</summary>
+		/// <summary>Run the script automaticly after it was changed.</summary>
 		bool AutoRun { get; set; }
 
-		/// <summary>Id des verbundenen Scripts.</summary>
+		/// <summary>Id of the script.</summary>
 		string ScriptId { get; }
-		/// <summary>Kann das Script ausgeführt werden.</summary>
+		/// <summary>Is the script ready to run.</summary>
 		bool IsCompiled { get; }
-		/// <summary>Wurde das Script seit dem letzten ausführen neu erstellt.</summary>
+		/// <summary>Is the script changed since the last run..</summary>
 		bool NeedToRun { get; }
 	} // interface ILuaAttachedScript
 
 	#endregion
 
-	#region -- interface ILuaScript -----------------------------------------------------
+	#region -- interface ILuaScript ---------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary>Script, welches nur über einen gewissen Zeitraum existieren soll.</summary>
+	/// <summary>Script that is defined within the service.</summary>
 	public interface ILuaScript : IDisposable
 	{
-		/// <summary>Führt das Script aus.</summary>
-		/// <param name="table"></param>
-		/// <param name="throwExceptions"></param>
-		/// <param name="arguments"></param>
+		/// <summary>Executes the script.</summary>
+		/// <param name="table">Environment to execute on.</param>
+		/// <param name="throwExceptions">Throw exceptions.</param>
+		/// <param name="arguments">Arguments of the script.</param>
 		/// <returns></returns>
 		LuaResult Run(LuaTable table, bool throwExceptions, params object[] arguments);
-		/// <summary>Gibt Zugriff auf den Chunk.</summary>
+		/// <summary>Compiled chunk of the script.</summary>
 		LuaChunk Chunk { get; }
 	} // interface ILuaScript
 
 	#endregion
 
-	#region -- class LuaStackTraceFrame -------------------------------------------------
+	#region -- class LuaStackTraceFrame -----------------------------------------------
 
+	/// <summary>Stack trace item</summary>
 	public sealed class LuaStackTraceItem
 	{
+		/// <summary>Id of the script.</summary>
 		public string ScriptId;
-		public ILuaScript Script;
+		/// <summary>Current code line.</summary>
 		public int Line;
 	} // class TraceStackTraceItem
 
 	#endregion
 
-	#region -- class TraceStackTrace -----------------------------------------------------
+	#region -- class TraceStackTrace --------------------------------------------------
 
+	/// <summary>Stacktrace for the script position.</summary>
 	public sealed class TraceStackTrace
 	{
-		
+
 	} // class TraceStackTrace
 
 	#endregion

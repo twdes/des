@@ -59,13 +59,13 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void TestRead03()
 		{
-			using (var r = new TextDynamicRowEnumerator(new TextCsvReader(new StringReader(sampleSimple03), new TextCsvSettings() { HeaderRow = 0, StartRow = 1 })))
+			using (var r = new TextDataRowEnumerator(new TextCsvReader(new StringReader(sampleSimple03), new TextCsvSettings() { HeaderRow = 0, StartRow = 1 })))
 			{
 				var header = r.MoveToHeader();
 
 				r.UpdateColumns(
-					new TextDynamicColumn() { ColumnName = header[0], DataType = typeof(decimal), FormatProvider = CultureInfo.InvariantCulture },
-					new TextDynamicColumn() { ColumnName = header[1], DataType = typeof(DateTime), FormatProvider = CultureInfo.InvariantCulture }
+					new TextDataRowColumn() { Name = header[0], DataType = typeof(decimal), FormatProvider = CultureInfo.InvariantCulture },
+					new TextDataRowColumn() { Name = header[1], DataType = typeof(DateTime), FormatProvider = CultureInfo.InvariantCulture }
 				);
 
 				while (r.MoveNext())

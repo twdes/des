@@ -25,10 +25,9 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDECronEngine --------------------------------------------------
+	#region -- interface IDECronEngine ------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Access the job engine.</summary>
 	public interface IDECronEngine
 	{
 		/// <summary>Schedules a job to execute.</summary>
@@ -47,9 +46,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface ICronJobExecute ------------------------------------------------
+	#region -- interface ICronJobExecute ----------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Basic interface for a job.</summary>
 	public interface ICronJobExecute
 	{
@@ -65,9 +63,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface ICronJobItem ---------------------------------------------------
+	#region -- interface ICronJobItem -------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Defines a timed job.</summary>
 	public interface ICronJobItem : ICronJobExecute
 	{
@@ -82,9 +79,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface ICronJobCancellation -------------------------------------------
+	#region -- interface ICronJobCancellation -----------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Defines a timed job.</summary>
 	public interface ICronJobCancellation : ICronJobExecute
 	{
@@ -96,25 +92,28 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class CronJobItem --------------------------------------------------------
+	#region -- class CronJobItem ------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Basic implemenation of an cron item.</summary>
 	public abstract class CronJobItem : DEConfigLogItem, ICronJobItem, ICronJobCancellation
 	{
+		/// <summary></summary>
 		public const string JobCategory = "Job";
 
-		private Lazy<IDECronEngine> cronEngine;
+		private readonly Lazy<IDECronEngine> cronEngine;
 		private CronBound cronBound = CronBound.Empty;
 		private string[] runAfterJob = null;
 		private TimeSpan? runTimeSlice = null;
 
-		private SimpleConfigItemProperty<DateTime?> propertyNextRun = null;
-		private SimpleConfigItemProperty<double> propertyLastTime = null;
-		private SimpleConfigItemProperty<string> propertyIsRunning = null;
+		private readonly SimpleConfigItemProperty<DateTime?> propertyNextRun;
+		private readonly SimpleConfigItemProperty<double> propertyLastTime;
+		private readonly SimpleConfigItemProperty<string> propertyIsRunning;
 
-		#region -- Ctor/Dtor/Config -------------------------------------------------------
+		#region -- Ctor/Dtor/Config ---------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="name"></param>
 		public CronJobItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
@@ -127,17 +126,21 @@ namespace TecWare.DE.Server
 			PublishItem(new DEConfigItemPublicAction("jobstart") { DisplayName = "Start" });
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected override void Dispose(bool disposing)
 		{
 			if (disposing)
 			{
-				Procs.FreeAndNil(ref propertyNextRun);
-				Procs.FreeAndNil(ref propertyLastTime);
-				Procs.FreeAndNil(ref propertyIsRunning);
+				propertyNextRun?.Dispose();
+				propertyLastTime?.Dispose();
+				propertyIsRunning?.Dispose();
 			}
 			base.Dispose(disposing);
 		} // proc Dispose
 
+		/// <summary></summary>
+		/// <param name="config"></param>
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnBeginReadConfiguration(config);
@@ -158,7 +161,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Http ------------------------------------------------------------------
+		#region -- Http ---------------------------------------------------------------
 
 		[
 		DEConfigHttpAction("jobstart", SecurityToken = SecuritySys),
@@ -173,14 +176,17 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Job-Verwaltung --------------------------------------------------------
+		#region -- Job-Verwaltung -----------------------------------------------------
 
+		/// <summary></summary>
 		protected void CheckCronEngine()
 		{
 			if (CronEngine == null)
 				throw new ArgumentException("No cron engine to run a job.");
 		} // proc CheckCronEngine
 
+		/// <summary></summary>
+		/// <param name="cancellation"></param>
 		protected abstract void OnRunJob(CancellationToken cancellation);
 
 		void ICronJobExecute.RunJob(CancellationToken cancellation)
@@ -212,6 +218,9 @@ namespace TecWare.DE.Server
 			}
 		} // func ICronJobExecute.CanRunParallelTo
 
+		/// <summary></summary>
+		/// <param name="o"></param>
+		/// <returns></returns>
 		protected virtual bool CanRunParallelTo(ICronJobItem o)
 			=> true;
 
@@ -231,6 +240,7 @@ namespace TecWare.DE.Server
 
 		/// <summary>Execute more than one job.</summary>
 		/// <param name="job"></param>
+		/// <param name="cancellation"></param>
 		protected async Task ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation)
 		{
 			CheckCronEngine();
@@ -247,6 +257,7 @@ namespace TecWare.DE.Server
 		/// <summary>Is cancellation supported. (default: false)</summary>
 		public virtual bool IsSupportCancelation => RunTimeSlice.HasValue;
 
+		/// <summary></summary>
 		public virtual TimeSpan? RunTimeSlice => runTimeSlice;
 		/// <summary></summary>
 		public IDECronEngine CronEngine => cronEngine.Value;

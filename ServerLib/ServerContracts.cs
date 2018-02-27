@@ -20,7 +20,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Security.Principal;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using TecWare.DE.Server.Configuration;
@@ -28,9 +27,8 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDEAuthentificatedUser -----------------------------------------
+	#region -- interface IDEAuthentificatedUser ---------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Authentifizierte Nutzer in dem alle Informationen für die aktuelle 
 	/// Abfrage gespeichert werden können. Zusätzliche Dienste können via
 	/// GetService erfragt werden.</summary>
@@ -40,7 +38,7 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDEUser --------------------------------------------------------
+	#region -- interface IDEUser ------------------------------------------------------
 
 	/// <summary>User that is registered in the main server..</summary>
 	public interface IDEUser
@@ -58,10 +56,9 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDEBaseLog -----------------------------------------------------
+	#region -- interface IDEBaseLog ---------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Base log contract.</summary>
 	public interface IDEBaseLog
 	{
 		/// <summary>Gesamtanzahl der Log-Dateien.</summary>
@@ -70,7 +67,7 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface DEServerEvent --------------------------------------------------
+	#region -- interface DEServerEvent ------------------------------------------------
 
 	/// <summary>Special events of the server.</summary>
 	public enum DEServerEvent
@@ -83,9 +80,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface IDEServerQueue -------------------------------------------------
+	#region -- interface IDEServerQueue -----------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Der Service bietet einen Hintergrund-Thread für die Bearbeitung
 	/// nicht Zeitkritischer aufgaben an.</summary>
 	public interface IDEServerQueue
@@ -117,9 +113,9 @@ namespace TecWare.DE.Server
 	} // interface IDEServerQueue
 	#endregion
 
-	#region -- interface IDEServer ------------------------------------------------------
+	#region -- interface IDEServer ----------------------------------------------------
 
-	/// <summary>Gibt Zugriff auf den Service.</summary>
+	/// <summary>Contract for the main service host..</summary>
 	public interface IDEServer : IDEConfigItem
 	{
 		/// <summary>Schreibt in das Systemlog</summary>
@@ -175,7 +171,7 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- IDEDebugContext ----------------------------------------------------------
+	#region -- IDEDebugContext --------------------------------------------------------
 
 	/// <summary>This service is registered, if this command was invoked from an debug session.</summary>
 	public interface IDEDebugContext
@@ -183,33 +179,38 @@ namespace TecWare.DE.Server
 		/// <summary>End point for the log system to notify log-messages.</summary>
 		/// <param name="type">Qualification of the message.</param>
 		/// <param name="message">Message</param>
-		/// <param name="endOfLine"><c>false</c>, if no new line</param>
 		void OnMessage(LogMsgType type, string message);
 	} // interface IDEDebugContext
 
 	#endregion
 
-	#region -- interface IDETransaction -------------------------------------------------
+	#region -- interface IDETransaction -----------------------------------------------
 
+	/// <summary>Transaction for the current action/command/request.</summary>
 	public interface IDETransaction
 	{
+		/// <summary>Commit all operations.</summary>
 		void Commit();
+		/// <summary>Rollback all operations.</summary>
 		void Rollback();
 	} // interface IDETransaction
 
 	#endregion
 
-	#region -- interface IDETransactionAsync --------------------------------------------
+	#region -- interface IDETransactionAsync ------------------------------------------
 
+	/// <summary>Transaction for the current action/command/request.</summary>
 	public interface IDETransactionAsync
 	{
+		/// <summary>Commit all operations.</summary>
 		Task CommitAsync();
+		/// <summary>Rollback all operations.</summary>
 		Task RollbackAsync();
 	} // IDETransactionAsync
 
 	#endregion
 
-	#region -- interface IDECommonScope -------------------------------------------------
+	#region -- interface IDECommonScope -----------------------------------------------
 
 	/// <summary>Basic context contract, for an execution thread.</summary>
 	public interface IDECommonScope : IPropertyReadOnlyDictionary, IDEScope
@@ -294,12 +295,12 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DECommonScope ------------------------------------------------------
+	#region -- class DECommonScope ----------------------------------------------------
 
 	/// <summary>Scope with transaction model and a user based service provider.</summary>
 	public class DECommonScope : DEScope, IDECommonScope
 	{
-		#region -- struct GlobalKey -----------------------------------------------------
+		#region -- struct GlobalKey ---------------------------------------------------
 
 		private struct GlobalKey : IEquatable<GlobalKey>
 		{ 
@@ -325,7 +326,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class ServiceDescriptor ---------------------------------------------
+		#region -- class ServiceDescriptor --------------------------------------------
 
 		private sealed class ServiceDescriptor
 		{
@@ -376,7 +377,7 @@ namespace TecWare.DE.Server
 
 		private bool? isCommitted = null;
 
-		#region -- Ctor/Dtor ------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		private DECommonScope(IServiceProvider sp, IDEAuthentificatedUser user, bool useAuthentification)
 		{
@@ -388,19 +389,29 @@ namespace TecWare.DE.Server
 			this.useAuthentification = useAuthentification;
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="user"></param>
 		public DECommonScope(IServiceProvider sp, IDEAuthentificatedUser user)
 			: this(sp, user, user != null)
 		{
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="sp"></param>
+		/// <param name="useAuthentification"></param>
 		public DECommonScope(IServiceProvider sp, bool useAuthentification)
 			: this(sp, null, useAuthentification)
 		{
 		} // ctor
 
+		/// <summary></summary>
+		/// <param name="disposing"></param>
 		protected override void Dispose(bool disposing)
 			=> DisposeAsync().AwaitTask();
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public async Task DisposeAsync()
 		{
 			if (!isCommitted.HasValue)
@@ -432,7 +443,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- User -----------------------------------------------------------------
+		#region -- User ---------------------------------------------------------------
 
 		/// <summary>Change the current user on the context, to a server user. Is the given user null, the result is also null.</summary>
 		public async Task AuthentificateUserAsync(IIdentity authentificateUser)
@@ -449,6 +460,8 @@ namespace TecWare.DE.Server
 			}
 		} // proc AuthentificateUser
 
+		/// <summary>Change the current user.</summary>
+		/// <param name="user"></param>
 		public void SetUser(IDEAuthentificatedUser user)
 			=> this.user = user;
 
@@ -470,7 +483,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Security -------------------------------------------------------------
+		#region -- Security -----------------------------------------------------------
 
 		/// <summary>Check for the given token, if the user can access it.</summary>
 		/// <param name="securityToken">Security token.</param>
@@ -504,8 +517,11 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- GetService, Register -------------------------------------------------
+		#region -- GetService, Register -----------------------------------------------
 
+		/// <summary>Get service from the current scope.</summary>
+		/// <param name="serviceType"></param>
+		/// <returns></returns>
 		public override object GetService(Type serviceType)
 		{
 			// first self test
@@ -541,21 +557,32 @@ namespace TecWare.DE.Server
 			}
 		} // proc RegisterService
 
+		/// <summary>Register service in the current scope.</summary>
+		/// <param name="serviceType"></param>
+		/// <param name="factory"></param>
 		public void RegisterService(Type serviceType, Func<object> factory)
 			=> RegisterService(serviceType, new ServiceDescriptor(factory));
 
+		/// <summary>Register service in the current scope.</summary>
+		/// <param name="serviceType"></param>
+		/// <param name="service"></param>
 		public void RegisterService(Type serviceType, object service)
 			=> RegisterService(serviceType, new ServiceDescriptor(service));
 
+		/// <summary>Register service in the current scope.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="factory"></param>
 		public void RegisterService<T>(Func<T> factory) where T : class
 			=> RegisterService(typeof(T), new ServiceDescriptor(factory));
 
+		/// <summary>Register service in the current scope.</summary>
+		/// <param name="serviceType"></param>
 		public bool RemoveService(Type serviceType)
 			=> services.Remove(serviceType);
 
 		#endregion
 
-		#region -- Commit, Rollback, Auto Dispose ---------------------------------------
+		#region -- Commit, Rollback, Auto Dispose -------------------------------------
 
 		private async Task RunActionsAsync(IEnumerable<Func<Task>> actions, bool rollback)
 		{
@@ -606,36 +633,50 @@ namespace TecWare.DE.Server
 				await c();
 		} // func RunActionsAsync
 
+		/// <summary></summary>
+		/// <param name="action"></param>
 		public void RegisterCommitAction(Action action)
 			=> RegisterCommitAction(() => Task.Run(action));
 
+		/// <summary></summary>
+		/// <param name="action"></param>
 		public void RegisterCommitAction(Func<Task> action)
 		{
 			lock (commitActions)
 				commitActions.Add(action);
 		} // func RegisterCommitAction
 
+		/// <summary></summary>
+		/// <param name="action"></param>
 		public void RegisterRollbackAction(Action action)
 			=> RegisterRollbackAction(() => Task.Run(action));
 
+		/// <summary></summary>
+		/// <param name="action"></param>
 		public void RegisterRollbackAction(Func<Task> action)
 		{
 			lock (rollbackActions)
 				rollbackActions.Add(action);
 		} // func RegisterRollbackAction
 
+		/// <summary></summary>
+		/// <param name="obj"></param>
 		public void RegisterDispose(IDisposable obj)
 		{
 			lock (autoDispose)
 				autoDispose.Add(obj);
 		} // proc RegisterDispose
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public Task CommitAsync()
 		{
 			isCommitted = true;
 			return RunActionsAsync(commitActions, false);
 		} // proc Commit
 
+		/// <summary></summary>
+		/// <returns></returns>
 		public Task RollbackAsync()
 		{
 			isCommitted = false;
@@ -644,16 +685,29 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Global Store ---------------------------------------------------------
+		#region -- Global Store -------------------------------------------------------
 
+		/// <summary></summary>
+		/// <param name="ns"></param>
+		/// <param name="variable"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
 		public bool TryGetGlobal(object ns, object variable, out object value)
 			=> globals.TryGetValue(new GlobalKey(ns, variable), out value);
 
+		/// <summary></summary>
+		/// <param name="ns"></param>
+		/// <param name="variable"></param>
+		/// <param name="value"></param>
 		public void SetGlobal(object ns, object variable, object value)
 			=> globals[new GlobalKey(ns, variable)] = value;
 
 		#endregion
 
+		/// <summary></summary>
+		/// <param name="name"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
 		public virtual bool TryGetProperty(string name, out object value)
 		{
 			value = null;
@@ -667,6 +721,7 @@ namespace TecWare.DE.Server
 		/// <summary>Current culture info</summary>
 		public virtual CultureInfo CultureInfo => CultureInfo.CurrentUICulture;
 		
+		/// <summary>Is the scope committed (<c>null</c> if the scope is active)</summary>
 		public bool? IsCommited => isCommitted;
 	} // class DETransactionContext
 
@@ -674,7 +729,6 @@ namespace TecWare.DE.Server
 
 	#region -- DEServerBaseLog ----------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Ermöglicht den Zugriff auf die Basis-Logdatei</summary>
 	public class DEServerBaseLog { }
 

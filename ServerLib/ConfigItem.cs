@@ -714,8 +714,8 @@ namespace TecWare.DE.Server
 			{
 				var engine = this.GetService<IDELuaEngine>(false);
 
-				var load = config.Tags.GetProperty("ScriptLoad", Procs.EmptyStringArray);
-				var remove = config.Tags.GetProperty("ScriptRemove", Procs.EmptyStringArray);
+				var load = config.Tags.GetProperty("ScriptLoad", Array.Empty<string>());
+				var remove = config.Tags.GetProperty("ScriptRemove", Array.Empty<string>());
 
 				// update variables
 				foreach (var xVariable in config.ConfigNew.Elements(DEConfigurationConstants.xnVariable))
