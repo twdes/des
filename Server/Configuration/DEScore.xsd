@@ -44,16 +44,25 @@
 		<xs:list itemType="xs:string" />
 	</xs:simpleType>
 
+	<xs:simpleType name="FileSize">
+		<xs:annotation>
+			<xs:documentation>File size type</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\d+\s*(Byte|KiB|MiB|GiB|TiB|PiB)?" />
+		</xs:restriction>
+	</xs:simpleType>
+
 	<xs:complexType name="LogType">
 		<xs:annotation>
 			<xs:documentation>Defines a log file configuration type.</xs:documentation>
 		</xs:annotation>
-		<xs:attribute name="min" type="xs:unsignedInt" use="optional" default="3670016">
+		<xs:attribute name="min" type="FileSize" use="optional" default="3670016">
 			<xs:annotation>
 				<xs:documentation>Lower bound of the log file (in byte).</xs:documentation>
 			</xs:annotation>
 		</xs:attribute>
-		<xs:attribute name="max" type="xs:unsignedInt" use="optional" default="4194304">
+		<xs:attribute name="max" type="FileSize" use="optional" default="4194304">
 			<xs:annotation>
 				<xs:documentation>Upper bound of the log file (in byte).</xs:documentation>
 			</xs:annotation>

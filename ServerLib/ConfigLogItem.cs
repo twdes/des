@@ -623,9 +623,9 @@ namespace TecWare.DE.Server
 			}
 
 			// Lese die Parameter für die Logdatei
-			var xLog = config.ConfigNew.Element(DEConfigurationConstants.xnLog);
-			if (xLog != null)
-				SetLogSize(xLog.GetAttribute("min", logFile.MinimumSize), xLog.GetAttribute("max", logFile.MaximumSize));
+			var log = new XConfigNode(Server.Configuration, config.ConfigNew.Element(DEConfigurationConstants.xnLog));
+			if (log != null)
+				SetLogSize((uint)log.GetAttribute<FileSize>("min").Value, (uint)log.GetAttribute<FileSize>("max").Value);
 		} // proc OnBeginReadConfiguration
 
 		private void SetLogSize(uint minLogSize, uint maxLogSize)
