@@ -15,12 +15,14 @@
 #endregion
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Schema;
+using Neo.IronLua;
 using TecWare.DE.Stuff;
 using static TecWare.DE.Server.Configuration.DEConfigurationHelper;
 
@@ -30,58 +32,72 @@ namespace TecWare.DE.Server.Configuration
 
 	internal static class DEConfigurationHelper
 	{
-		#region -- GetTypeFromXmlTypeCode ---------------------------------------------
+		#region -- GetTypeFromXmlType -------------------------------------------------
 
-		public static Type GetTypeFromXmlTypeCode(XmlTypeCode typeCode)
+		public static Type GetTypeFromXmlType(string typeName, XmlTypeCode typeCode)
 		{
-			switch (typeCode)
+			switch (typeName)
 			{
-				case XmlTypeCode.Boolean:
-					return typeof(bool);
-
-				case XmlTypeCode.Byte:
-					return typeof(sbyte);
-				case XmlTypeCode.UnsignedByte:
-					return typeof(byte);
-				case XmlTypeCode.Short:
-					return typeof(short);
-				case XmlTypeCode.UnsignedShort:
-					return typeof(ushort);
-				case XmlTypeCode.Int:
-				case XmlTypeCode.Integer:
-				case XmlTypeCode.NegativeInteger:
-				case XmlTypeCode.NonNegativeInteger:
-				case XmlTypeCode.NonPositiveInteger:
-					return typeof(int);
-				case XmlTypeCode.UnsignedInt:
-					return typeof(uint);
-				case XmlTypeCode.Long:
-					return typeof(long);
-				case XmlTypeCode.UnsignedLong:
-					return typeof(ulong);
-
-				case XmlTypeCode.String:
-				case XmlTypeCode.NormalizedString:
-				case XmlTypeCode.Text:
-				case XmlTypeCode.Name:
-					return typeof(string);
-
-				case XmlTypeCode.Decimal:
-					return typeof(decimal);
-				case XmlTypeCode.Float:
-					return typeof(float);
-				case XmlTypeCode.Double:
-					return typeof(double);
-
-				case XmlTypeCode.Date:
-					return typeof(DateTime);
-				case XmlTypeCode.DateTime:
-					return typeof(DateTime);
-
+				case "LuaType":
+					return typeof(LuaType);
+				case "EncodingType":
+					return typeof(Encoding);
+				case "language":
+					return typeof(CultureInfo);
+				case "PathType":
+					return typeof(DirectoryInfo);
+				case "FileSize":
+					return typeof(FileSize);
 				default:
-					return typeof(object);
+					switch (typeCode)
+					{
+						case XmlTypeCode.Boolean:
+							return typeof(bool);
+
+						case XmlTypeCode.Byte:
+							return typeof(sbyte);
+						case XmlTypeCode.UnsignedByte:
+							return typeof(byte);
+						case XmlTypeCode.Short:
+							return typeof(short);
+						case XmlTypeCode.UnsignedShort:
+							return typeof(ushort);
+						case XmlTypeCode.Int:
+						case XmlTypeCode.Integer:
+						case XmlTypeCode.NegativeInteger:
+						case XmlTypeCode.NonNegativeInteger:
+						case XmlTypeCode.NonPositiveInteger:
+							return typeof(int);
+						case XmlTypeCode.UnsignedInt:
+							return typeof(uint);
+						case XmlTypeCode.Long:
+							return typeof(long);
+						case XmlTypeCode.UnsignedLong:
+							return typeof(ulong);
+
+						case XmlTypeCode.String:
+						case XmlTypeCode.NormalizedString:
+						case XmlTypeCode.Text:
+						case XmlTypeCode.Name:
+							return typeof(string);
+
+						case XmlTypeCode.Decimal:
+							return typeof(decimal);
+						case XmlTypeCode.Float:
+							return typeof(float);
+						case XmlTypeCode.Double:
+							return typeof(double);
+
+						case XmlTypeCode.Date:
+							return typeof(DateTime);
+						case XmlTypeCode.DateTime:
+							return typeof(DateTime);
+
+						default:
+							return typeof(object);
+					}
 			}
-		} // func GetTypeFromXmlTypecode
+		} // func GetTypeFromXmlType
 
 		#endregion
 
@@ -201,18 +217,20 @@ namespace TecWare.DE.Server.Configuration
 	internal class DEConfigurationAttribute : DEConfigurationBase<XmlSchemaAttribute>, IDEConfigurationAttribute
 	{
 		private readonly Lazy<string> typeName;
+		private readonly Lazy<Type> type;
 		private readonly Lazy<bool> isPrimaryKey;
 
 		internal DEConfigurationAttribute(XmlSchemaAttribute attribute)
 			: base(attribute)
 		{
 			this.typeName = new Lazy<string>(() => FindTypeNames(Item.AttributeSchemaType).FirstOrDefault() ?? String.Empty);
+			this.type = new Lazy<Type>(() => GetTypeFromXmlType(TypeName, Item.AttributeSchemaType.TypeCode));
 			this.isPrimaryKey = new Lazy<bool>(() => FindTypeNames(Item.AttributeSchemaType).Contains("KeyType"));
 		} // ctor
 
 		public XName Name => GetXName(Item.QualifiedName);
 		public string TypeName => typeName.Value;
-		public Type Type => GetTypeFromXmlTypeCode(Item.AttributeSchemaType.TypeCode);
+		public Type Type => type.Value;
 
 		public string DefaultValue => Item.DefaultValue;
 
@@ -232,18 +250,20 @@ namespace TecWare.DE.Server.Configuration
 	internal class DEConfigurationElementAttribute : DEConfigurationBase<XmlSchemaElement>, IDEConfigurationAttribute
 	{
 		private readonly Lazy<string> typeName;
+		private readonly Lazy<Type> type;
 		private readonly Lazy<bool> isPrimaryKey;
 
 		internal DEConfigurationElementAttribute(XmlSchemaElement element)
 			: base(element)
 		{
 			this.typeName = new Lazy<string>(() => FindTypeNames(Item.ElementSchemaType).FirstOrDefault() ?? String.Empty);
+			this.type = new Lazy<Type>(() => GetTypeFromXmlType(TypeName, Item.ElementSchemaType.TypeCode));
 			this.isPrimaryKey = new Lazy<bool>(() => FindTypeNames(Item.ElementSchemaType).Contains("KeyType"));
 		} // ctor
 
 		public XName Name => GetXName(Item.QualifiedName);
 		public string TypeName => typeName.Value;
-		public Type Type => GetTypeFromXmlTypeCode(Item.ElementSchemaType.TypeCode);
+		public Type Type => type.Value;
 
 		public string DefaultValue => Item.DefaultValue;
 
