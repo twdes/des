@@ -1081,7 +1081,7 @@ namespace TecWare.DE.Server
 				}
 			}
 
-			var configNode = new XConfigNode(Server.Configuration[xnHttp], config.ConfigNew);
+			var configNode = XConfigNode.Create(Server.Configuration, config.ConfigNew);
 
 			// set a new realm
 			httpListener.Realm = configNode.GetAttribute<string>("realm");

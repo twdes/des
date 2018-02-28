@@ -1500,17 +1500,14 @@ namespace TecWare.DE.Server
 			var i = 0;
 			var scriptRemove = (from s in scripts where s is LuaFileBasedScript select (LuaFileBasedScript)s).ToArray();
 
-			var luaScriptDefinition = Server.Configuration[xnLuaScript];
-			var luaTestDefinition = Server.Configuration[xnLuaTestScript];
-
-			foreach (var cur in config.ConfigNew.Elements())
+			foreach (var cur in XConfigNode.GetElements(Server.Configuration, config.ConfigNew))
 			{
 				try
 				{
 					if (cur.Name == xnLuaTestScript)
-						LoadScript(false, new XConfigNode(luaTestDefinition, cur), scriptRemove);
+						LoadScript(false, cur, scriptRemove);
 					else if (cur.Name == xnLuaScript)
-						LoadScript(true, new XConfigNode(luaScriptDefinition, cur), scriptRemove);
+						LoadScript(true, cur, scriptRemove);
 				}
 				catch (Exception e)
 				{

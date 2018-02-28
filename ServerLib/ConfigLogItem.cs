@@ -623,7 +623,7 @@ namespace TecWare.DE.Server
 			}
 
 			// Lese die Parameter für die Logdatei
-			var log = new XConfigNode(Server.Configuration, config.ConfigNew.Element(DEConfigurationConstants.xnLog));
+			var log = XConfigNode.GetElement(Server.Configuration, config.ConfigNew, DEConfigurationConstants.xnLog);
 			if (log != null)
 				SetLogSize((uint)log.GetAttribute<FileSize>("min").Value, (uint)log.GetAttribute<FileSize>("max").Value);
 		} // proc OnBeginReadConfiguration

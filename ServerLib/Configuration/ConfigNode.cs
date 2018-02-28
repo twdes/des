@@ -14,6 +14,7 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -27,30 +28,14 @@ namespace TecWare.DE.Server.Configuration
 	/// <summary>Configuration node, that read attributes and elements with support from the schema.</summary>
 	public sealed class XConfigNode
 	{
+		private readonly IDEConfigurationElement configurationElement;
 		private readonly IDEConfigurationAttribute[] attributes;
 		private readonly XElement element;
 
-		/// <summary></summary>
-		/// <param name="configurationServer"></param>
-		/// <param name="element"></param>
-		public XConfigNode(IDEConfigurationService configurationServer, XElement element)
-			: this(configurationServer[element.Name], element)
+		private XConfigNode(IDEConfigurationElement configurationElement, XElement element)
 		{
-		} // ctor
-
-		/// <summary></summary>
-		/// <param name="elementDefinition"></param>
-		/// <param name="element"></param>
-		public XConfigNode(IDEConfigurationElement elementDefinition, XElement element)
-		{
-			if (elementDefinition == null)
-				throw new ArgumentNullException(nameof(elementDefinition));
-			if (element == null)
-				throw new ArgumentNullException(nameof(element));
-			if (!elementDefinition.IsName(element.Name))
-				throw new ArgumentOutOfRangeException(nameof(element), $"Element '{elementDefinition.Name}' does not match with '{element.Name}'.");
-
-			this.attributes = elementDefinition.GetAttributes().ToArray();
+			this.configurationElement = configurationElement;
+			this.attributes = configurationElement.GetAttributes().ToArray();
 			this.element = element;
 		} // ctor
 
@@ -70,7 +55,7 @@ namespace TecWare.DE.Server.Configuration
 			if (attribute == null)
 				throw new ArgumentException(String.Format("@{0} is not defined.", name));
 
-			var attributeValue = element.Attribute(attribute.Name)?.Value ?? attribute.DefaultValue;
+			var attributeValue = element?.Attribute(attribute.Name)?.Value ?? attribute.DefaultValue;
 
 			if (attribute.TypeName == "LuaType")
 			{
@@ -123,6 +108,95 @@ namespace TecWare.DE.Server.Configuration
 		} // func GetAttribute
 
 		/// <summary></summary>
+		public XName Name => element?.Name ?? configurationElement.Name;
+		/// <summary></summary>
 		public XElement Element => element;
+		/// <summary></summary>
+		public IDEConfigurationElement ConfigurationElement => configurationElement;
+
+		// -- Static ----------------------------------------------------------
+
+		private static IDEConfigurationElement GetConfigurationElement(IDEConfigurationService configurationService, XName name)
+		{
+			if (configurationService == null)
+				throw new ArgumentNullException(nameof(configurationService));
+
+			var configurationElement = configurationService[name ?? throw new ArgumentNullException(nameof(name))];
+			return configurationElement ?? throw new ArgumentNullException($"Configuration definition not found for element '{name}'.");
+		} // proc CheckConfigurationElement
+
+		/// <summary>Create XConfigNode reader.</summary>
+		/// <param name="configurationElement"></param>
+		/// <param name="element"></param>
+		/// <returns></returns>
+		public static XConfigNode Create(IDEConfigurationElement configurationElement, XElement element)
+		{
+			if (configurationElement == null)
+				throw new ArgumentNullException(nameof(configurationElement), $"Configuration definition not found for element '{element?.Name ?? "<null>"}'.");
+			if (element != null && configurationElement.IsName(element.Name))
+				throw new ArgumentOutOfRangeException(nameof(element), $"Element '{configurationElement.Name}' does not match with '{element.Name}'.");
+
+			return new XConfigNode(configurationElement, element);
+		} // func Create
+
+		/// <summary></summary>
+		/// <param name="configurationService"></param>
+		/// <param name="element"></param>
+		/// <returns></returns>
+		public static XConfigNode Create(IDEConfigurationService configurationService, XElement element)
+		{
+			if (element == null)
+				throw new ArgumentNullException(nameof(element));
+
+			return Create(GetConfigurationElement(configurationService, element.Name), element);
+		} // func Create
+
+		/// <summary></summary>
+		/// <param name="configurationService"></param>
+		/// <param name="baseElement"></param>
+		/// <param name="name"></param>
+		/// <returns></returns>
+		public static XConfigNode GetElement(IDEConfigurationService configurationService, XElement baseElement, XName name)
+			=> new XConfigNode(
+				GetConfigurationElement(configurationService, name),
+				baseElement?.Element(name)
+			);
+
+		/// <summary></summary>
+		/// <param name="configurationService"></param>
+		/// <param name="baseElement"></param>
+		/// <returns></returns>
+		public static IEnumerable<XConfigNode> GetElements(IDEConfigurationService configurationService, XElement baseElement)
+		{
+			IDEConfigurationElement lastConfigurationElement = null;
+			foreach (var cur in baseElement.Elements())
+			{
+				if (lastConfigurationElement == null
+					|| !lastConfigurationElement.IsName(cur.Name))
+				{
+					var tmp = configurationService[cur.Name];
+					if (tmp == null)
+						break;
+					lastConfigurationElement = tmp;
+				}
+
+				yield return new XConfigNode(lastConfigurationElement, cur);
+			}
+		} // func GetElements
+
+		/// <summary></summary>
+		/// <param name="configurationService"></param>
+		/// <param name="baseElement"></param>
+		/// <param name="name"></param>
+		/// <returns></returns>
+		public static IEnumerable<XConfigNode> GetElements(IDEConfigurationService configurationService, XElement baseElement, XName name)
+		{
+			var configurationElement = GetConfigurationElement(configurationService, name);
+			if (baseElement != null)
+			{
+				foreach (var cur in baseElement.Elements(name))
+					yield return new XConfigNode(configurationElement, cur);
+			}
+		} // func GetElements
 	} // class XConfigNode
 }
