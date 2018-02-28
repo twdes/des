@@ -133,7 +133,7 @@ namespace TecWare.DE.Server.Configuration
 		{
 			if (configurationElement == null)
 				throw new ArgumentNullException(nameof(configurationElement), $"Configuration definition not found for element '{element?.Name ?? "<null>"}'.");
-			if (element != null && configurationElement.IsName(element.Name))
+			if (element != null && !configurationElement.IsName(element.Name))
 				throw new ArgumentOutOfRangeException(nameof(element), $"Element '{configurationElement.Name}' does not match with '{element.Name}'.");
 
 			return new XConfigNode(configurationElement, element);
