@@ -230,19 +230,20 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void RegEx01()
 		{
-			 var names = new Tuple<bool, string>[]
-				{
+			var names = new Tuple<bool, string>[]
+			   {
 					new Tuple<bool, string>(false, ""),
 					new Tuple<bool, string>(true, "ABZ#WICHTIG.TXT#201501011405580045.state"),
-          new Tuple<bool, string>(true, "ABZ#& ()&.-#201512041207500008.state"),
+					new Tuple<bool, string>(true, "ABZ#& ()&.-#201512041207500008.state"),
 					new Tuple<bool, string>(true, "A#WA DDD#201512041200270002.state"),
+					new Tuple<bool, string>(true, "A 2#600_KB Test.txt#201512041200270002.state"),
 					new Tuple<bool, string>(false, "A##201512041200270002.state")
-				};
+			   };
 
 			foreach (var t in names)
 			{
 				var m = Regex.Match(t.Item2, DirectoryFileServiceItem.fileSelectorRegEx);
-				Assert.AreEqual(t.Item1, m.Success, String.Format("{0}",t));
+				Assert.AreEqual(t.Item1, m.Success, String.Format("{0}", t));
 				if (m.Success)
 				{
 					Assert.AreEqual(4, m.Groups.Count);
