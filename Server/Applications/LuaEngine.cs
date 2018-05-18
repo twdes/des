@@ -816,20 +816,20 @@ namespace TecWare.DE.Server
 				return x;
 			} // proc CreateException
 
+			private static object GetValueSafe(Func<object> getValue)
+			{
+				try
+				{
+					return getValue();
+				}
+				catch (Exception e)
+				{
+					return $"[{e.GetType().Name}] {e.Message}";
+				}
+			} // func GetValueSafe
+
 			private XElement CreateMember(Stack<object> values, object member, Func<object> getValue, Type type = null)
 			{
-				object getValueSafe()
-				{
-					try
-					{
-						return getValue();
-					}
-					catch (Exception e)
-					{
-						return $"[{e.GetType().Name}] {e.Message}";
-					}
-				}
-
 				bool TryGetTypedEnumerable(Type valueType, out Type enumerableType)
 				{
 					enumerableType = valueType.GetInterfaces().FirstOrDefault(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>));
@@ -840,7 +840,7 @@ namespace TecWare.DE.Server
 					return Type.GetTypeCode(enumerableType) == TypeCode.Object;
 				} // func TryGetTypedEnumerable
 
-				var value = getValueSafe();
+				var value = GetValueSafe(getValue);
 				var valueExists = values.Contains(value, ReferenceEqualImplementation.Instance);
 				values.Push(value);
 				try
@@ -984,7 +984,7 @@ namespace TecWare.DE.Server
 					x.Add(xRow);
 					for (var i = 0; i < columns.Count; i++)
 					{
-						var v = columns[i].Item4(cur);
+						var v = GetValueSafe(() => columns[i].Item4(cur));
 						if (v != null)
 							xRow.Add(new XElement(columns[i].Item1, v.ChangeType<string>()));
 					}
@@ -1072,11 +1072,12 @@ namespace TecWare.DE.Server
 
 			private async Task<XElement> ExecuteAsync(XElement xMessage)
 			{
-				var compileTime = 0L;
-				var runTime = 0L;
-				var r = await Task.Run(
+				return await Task.Run(
 					() =>
 					{
+						var compileTime = 0L;
+						var runTime = 0L;
+
 						// compile the chunk
 						LuaChunk chunk;
 						var compileStopWatch = Stopwatch.StartNew();
@@ -1089,31 +1090,33 @@ namespace TecWare.DE.Server
 							compileTime = compileStopWatch.ElapsedMilliseconds;
 						}
 
-						// run the chunk on the node
 						using (currentScope?.Use())
 						{
+							LuaResult r;
+
+							// run the chunk on the node
 							var runStopWatch = Stopwatch.StartNew();
 							try
 							{
-								return chunk.Run(this);
+								r = chunk.Run(this);
 							}
 							finally
 							{
 								runTime = runStopWatch.ElapsedMilliseconds;
 							}
+
+							// return the result
+							var xAnswer = new XElement("return",
+								new XAttribute("runTime", runTime),
+								new XAttribute("compileTime", compileTime)
+							);
+							for (var i = 0; i < r.Count; i++)
+								xAnswer.Add(CreateMember(new Stack<object>(), i, () => r[i]));
+
+							return xAnswer;
 						}
 					}
 				);
-
-				// return the result
-				var xAnswer = new XElement("return",
-					new XAttribute("runTime", runTime),
-					new XAttribute("compileTime", compileTime)
-				);
-				for (var i = 0; i < r.Count; i++)
-					xAnswer.Add(CreateMember(new Stack<object>(), i, () => r[i]));
-
-				return xAnswer;
 			} // func Execute
 
 			#endregion
