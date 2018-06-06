@@ -474,11 +474,10 @@ namespace TecWare.DE.Server
 			if (user == null)
 				throw CreateAuthorizationException("Authorization expected.");
 
-			var r = user as T;
-			if (r == null)
-				throw new NotImplementedException(String.Format("User class does not implement '{0}.", typeof(T).FullName));
+			if (user is T r)
+				return r;
 
-			return r;
+			throw new NotImplementedException(String.Format("User class does not implement '{0}.", typeof(T).FullName));
 		} // func GetUser
 
 		#endregion

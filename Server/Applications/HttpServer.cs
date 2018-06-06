@@ -855,7 +855,6 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private Encoding encoding = Encoding.UTF8;                // Encoding für die Textdaten von Datenströmen
 		private HttpListener httpListener = new HttpListener();   // Zugriff auf den HttpListener
 		private DEThread httpThreads = null;                    // Threads, die die Request behandeln
 		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
@@ -865,14 +864,13 @@ namespace TecWare.DE.Server
 		private List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
 
 		private bool debugMode = false;                           // Sollen detailiert die Request-Protokolliert werden
-		private CultureInfo defaultCultureInfo;
 
 		private HttpCacheItem[] cacheItems = new HttpCacheItem[256];
 		private CacheItemListController cacheItemController;
 
 		private DEList<IDEWebSocketProtocol> webSocketProtocols;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		public DEHttpServer(IServiceProvider sp, string sName)
 			: base(sp, sName)
@@ -880,13 +878,20 @@ namespace TecWare.DE.Server
 			httpThreads = new DEThread(this, "Http-Dispatcher", ExecuteHttpRequestAsyc, "Http");
 
 			ClearHttpCache();
+
+			//httpListener.TimeoutManager.EntityBody = new TimeSpan(0, 2, 0, 0, 0);
+			//httpListener.TimeoutManager.DrainEntityBody = new TimeSpan(0, 2, 0, 0, 0);
+			//httpListener.TimeoutManager.RequestQueue = new TimeSpan(0, 2, 0, 0, 0);
+			//httpListener.TimeoutManager.HeaderWait = new TimeSpan(0, 2, 0, 0, 0);
+			//httpListener.TimeoutManager.IdleConnection = new TimeSpan(0, 2, 0, 0, 0);
+
 			httpListener.AuthenticationSchemeSelectorDelegate = GetAuthenticationScheme;
 
 			// Promote service
 			var sc = sp.GetService<IServiceContainer>(true);
 			sc.AddService(typeof(IDEHttpServer), this);
 
-			defaultCultureInfo = CultureInfo.CurrentCulture;
+			DefaultCultureInfo = CultureInfo.CurrentCulture;
 
 			// create protocols
 			this.webSocketProtocols = new DEList<IDEWebSocketProtocol>(this, "tw_websockets", "WebSockets");
@@ -907,6 +912,7 @@ namespace TecWare.DE.Server
 				sc.RemoveService(typeof(IDEHttpServer));
 
 				lock (httpListener)
+				{
 					try
 					{
 						httpListener.Stop();
@@ -915,6 +921,7 @@ namespace TecWare.DE.Server
 					{
 						Server.LogMsg(e);
 					}
+				}
 
 				Procs.FreeAndNil(ref webSocketProtocols);
 				Procs.FreeAndNil(ref cacheItemController);
@@ -927,7 +934,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Configuration ----------------------------------------------------------
+		#region -- Configuration ------------------------------------------------------
 
 		protected override void ValidateConfig(XElement config)
 		{
@@ -938,10 +945,10 @@ namespace TecWare.DE.Server
 				var currentAssembly = typeof(DEHttpServer).Assembly;
 				var baseLocation = Path.GetDirectoryName(currentAssembly.Location);
 				var alternativePaths = new string[]
-					{
-						Path.GetFullPath(Path.Combine(baseLocation, @"..\..\Resources\Http")),
-						Path.GetFullPath(Path.Combine(baseLocation, @"..\..\..\ServerWebUI"))
-					};
+				{
+					Path.GetFullPath(Path.Combine(baseLocation, @"..\..\Resources\Http")),
+					Path.GetFullPath(Path.Combine(baseLocation, @"..\..\..\ServerWebUI"))
+				};
 
 				var xFiles = new XElement(xnResources,
 					new XAttribute("name", "des"),
@@ -1086,9 +1093,9 @@ namespace TecWare.DE.Server
 			// set a new realm
 			httpListener.Realm = configNode.GetAttribute<string>("realm");
 			// read the default encoding
-			encoding = configNode.GetAttribute<Encoding>("encoding");
+			DefaultEncoding = configNode.GetAttribute<Encoding>("encoding");
 			// set the default user language
-			defaultCultureInfo = configNode.GetAttribute<CultureInfo>("defaultUserLanguage");
+			DefaultCultureInfo = configNode.GetAttribute<CultureInfo>("defaultUserLanguage");
 		} // proc OnBeginReadConfiguration
 
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
@@ -1130,7 +1137,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Web Sockets ------------------------------------------------------------
+		#region -- Web Sockets --------------------------------------------------------
 
 		public void RegisterWebSocketProtocol(IDEWebSocketProtocol protocol)
 		{
@@ -1146,7 +1153,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Http Schnittstelle -----------------------------------------------------
+		#region -- Http Schnittstelle -------------------------------------------------
 
 		[
 		DEConfigHttpAction("debugOn", SecurityToken = SecuritySys, IsSafeCall = true),
@@ -1170,30 +1177,28 @@ namespace TecWare.DE.Server
 
 		[
 		DEConfigHttpAction("clearCache", SecurityToken = SecuritySys, IsSafeCall = true),
-		Description("Löscht den aktuellen Cache")
+		Description("Clear current cached information.")
 		]
 		private void HttpClearCacheAction()
-		=> ClearHttpCache();
+			=> ClearHttpCache();
 
 		#endregion
 
-		#region -- MimeInfo ---------------------------------------------------------------
+		#region -- MimeInfo -----------------------------------------------------------
 
 		public string GetContentType(string extension)
 		{
-			string contentType;
 			lock (mimeInfo)
 			{
-				if (mimeInfo.TryGetValue(extension, out contentType))
-					return contentType;
-				else
-					throw new ArgumentException(String.Format("No contentType defined for '{0}'.", extension), "extension");
+				return mimeInfo.TryGetValue(extension, out var contentType)
+					? contentType
+					: throw new ArgumentException(String.Format("No contentType defined for '{0}'.", extension), "extension");
 			}
 		} // func GetContentType
 
 		#endregion
 
-		#region -- Web Cache --------------------------------------------------------------
+		#region -- Web Cache ----------------------------------------------------------
 
 		public object GetWebCache(string cacheId)
 		{
@@ -1223,7 +1228,7 @@ namespace TecWare.DE.Server
 				var minHitIndex = -1;
 
 				// Scan den Cache
-				for (int i = 0; i < cacheItems.Length; i++)
+				for (var i = 0; i < cacheItems.Length; i++)
 				{
 					if (cacheItems[i].IsEmpty)
 					{
@@ -1262,7 +1267,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- ProcessRequest ---------------------------------------------------------
+		#region -- ProcessRequest -----------------------------------------------------
 
 		private AuthenticationSchemes GetAuthenticationScheme(HttpListenerRequest r)
 		{
@@ -1547,9 +1552,9 @@ namespace TecWare.DE.Server
 		private static string FilterChar(string sMessage)
 		{
 			var sb = new StringBuilder();
-			for (int i = 0; i < sMessage.Length; i++)
+			for (var i = 0; i < sMessage.Length; i++)
 			{
-				char c = sMessage[i];
+				var c = sMessage[i];
 				if (c == '\n')
 					sb.Append("<br/>");
 				else if (c > (char)0x1F || c == '\t')
@@ -1562,22 +1567,21 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		public override string Icon { get { return "/images/http16.png"; } }
+		public override string Icon => "/images/http16.png";
 
-		/// <summary>Default encoding for requests.</summary>
-		public Encoding DefaultEncoding { get { return encoding; } }
-
+		/// <summary>Default encoding for text requests.</summary>
+		public Encoding DefaultEncoding { get; private set; } = Encoding.UTF8;
 		[
 		PropertyName("tw_http_debugmode"),
 		DisplayName("Protokollierung"),
 		Category("Http"),
 		Description("Turn on/off the protocol requests."),
 		]
-		public bool IsDebug { get { return debugMode; } private set { SetProperty(ref debugMode, value); } }
+		public bool IsDebug { get => debugMode;  private set => SetProperty(ref debugMode, value); }
 
+		/// <summary>Default base uri for e.g. debug requests.</summary>
 		public Uri DefaultBaseUri => defaultBaseUri;
-
 		/// <summary>Default culture</summary>
-		public CultureInfo DefaultCultureInfo => defaultCultureInfo;
+		public CultureInfo DefaultCultureInfo { get; private set; }
 	} // class DEHttpServer
 }
