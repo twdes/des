@@ -68,6 +68,7 @@
     <Compile Include="CsvTest.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="LuaEx.cs" />
+    <Compile Include="MimeTypeTests.cs" />
     <Compile Include="Oftp.cs" />
     <Compile Include="Stuff.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

@@ -635,7 +635,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Configuration Process --------------------------------------------------
+		#region -- Configuration Process ----------------------------------------------
 
 		protected override string GetConfigItemName(XElement element)
 		{
@@ -675,7 +675,7 @@ namespace TecWare.DE.Server
 			var server = config.ConfigNew.Element(xnServer);
 			if (server != null)
 			{
-				foreach (XElement cur in server.Elements())
+				foreach (var cur in server.Elements())
 					if (cur.Name == xnServerSecurityGroup)
 					{
 						var name = cur.GetAttribute("name", String.Empty).ToLower();
@@ -696,7 +696,7 @@ namespace TecWare.DE.Server
 			}
 			securityGroupsVersion++;
 
-			// Den Start verzögern
+			// do wait before continue
 			if (server != null && config.ConfigOld == null)
 			{
 				// Dienstabhängigkeiten
@@ -708,26 +708,25 @@ namespace TecWare.DE.Server
 				if (waitTimeout > 0)
 				{
 					LogMsg(EventLogEntryType.Information, String.Format("Wait {0}ms...", waitTimeout));
-					//serviceLog.RequestAdditionalTime(iWait);
 					Thread.Sleep(waitTimeout);
 					LogMsg(EventLogEntryType.Information, "Continue load configure...");
 				}
 			}
 
-			// Initialisiere die Log-Datei
+			// initialize log system
 			var newLogPath = server.GetAttribute("logpath", String.Empty);
 			if (logPath == null)
 			{
 				if (String.IsNullOrEmpty(newLogPath))
 					LogMsg(EventLogEntryType.Error, "server/@logpath wurde nicht nicht angegeben.");
 
-				// Lege das Verzeichnis an
+				// create log directory
 				this.logPath = newLogPath;
 				var di = new DirectoryInfo(logPath);
 				if (!di.Exists)
 					di.Create();
 
-				// Erzeuge Statie
+				// create states
 				propertyLogCount = new SimpleConfigItemProperty<int>(this, "tw_base_logcount", "Logs", ServerCategory, "Anzahl der Log-Dateien.", "{0:N0}", 0);
 			}
 			else if (String.Compare(newLogPath, logPath, true) != 0)
@@ -793,7 +792,7 @@ namespace TecWare.DE.Server
 			if (server == null)
 				return;
 
-			foreach (XElement resolve in server.Elements(xnServerResolve))
+			foreach (var resolve in server.Elements(xnServerResolve))
 				RemoveAssemblyPath(resolve.Value);
 		} // proc RemoveResolve
 
@@ -820,7 +819,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- User Dictionary --------------------------------------------------------
+		#region -- User Dictionary ----------------------------------------------------
 
 		public void RegisterUser(IDEUser user)
 		{
@@ -922,7 +921,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- IServiceProvider Member ------------------------------------------------
+		#region -- IServiceProvider Member --------------------------------------------
 
 		public override object GetService(Type serviceType)
 		{
@@ -936,7 +935,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- IDEServerResolver members ----------------------------------------------
+		#region -- IDEServerResolver members ------------------------------------------
 
 		private readonly List<string> searchPaths = new List<string>();
 		private readonly string[] assemblyExtensions = new string[] { ".dll", ".exe" };
@@ -1047,11 +1046,11 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- IDEBaseLog members -----------------------------------------------------
+		#region -- IDEBaseLog members -------------------------------------------------
 
 		int IDEBaseLog.TotalLogCount
 		{
-			get { return propertyLogCount?.Value ?? 0; }
+			get => propertyLogCount?.Value ?? 0;
 			set
 			{
 				if (propertyLogCount != null)

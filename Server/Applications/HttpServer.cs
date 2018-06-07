@@ -491,28 +491,22 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	internal class DEHttpServer : DEConfigLogItem, IDEHttpServer
 	{
-		#region -- struct HttpCacheItem ---------------------------------------------------
+		#region -- struct HttpCacheItem -----------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private struct HttpCacheItem
 		{
-			private int cacheHit;
-			private string cacheId;
-			private object data;
-
-			public void Set(string _cacheId, object _data)
+			public void Set(string cacheId, object data)
 			{
-				cacheHit = 0;
-				cacheId = _cacheId;
-				data = _data;
+				HitCount = 0;
+				CacheId = cacheId;
+				Data = data;
 			} // proc Set
 
 			public bool Hit(string _cacheId)
 			{
-				if (cacheHit >= 0 && String.Compare(cacheId, _cacheId, true) == 0)
+				if (HitCount >= 0 && String.Compare(CacheId, _cacheId, true) == 0)
 				{
-					cacheHit++;
+					HitCount++;
 					return true;
 				}
 				else
@@ -521,24 +515,23 @@ namespace TecWare.DE.Server
 
 			public void Clear()
 			{
-				cacheHit = -1;
-				cacheId = null;
-				data = null;
+				HitCount = -1;
+				CacheId = null;
+				Data = null;
 			} // proc Clear
 
-			public bool IsEmpty => cacheHit < 0;
+			public bool IsEmpty => HitCount < 0;
 
-			public string CacheId => cacheId;
-			public int HitCount => cacheHit;
-			public object Data => data;
+			public string CacheId { get; private set; }
+			public int HitCount { get; private set; }
+
+			public object Data { get; private set; }
 		} // struct HttpCacheItem
 
 		#endregion
 
-		#region -- class CacheItemListDescriptor ------------------------------------------
+		#region -- class CacheItemListDescriptor --------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class CacheItemListDescriptor : IDEListDescriptor
 		{
 			public void WriteType(DEListTypeWriter xml)
@@ -559,19 +552,19 @@ namespace TecWare.DE.Server
 				xml.WriteAttributeProperty("hit", item.HitCount);
 
 				var d = item.Data;
-				if (d is string)
+				if (d is string s)
 				{
 					xml.WriteAttributeProperty("type", "text");
-					xml.WriteAttributeProperty("length", ((String)d).Length);
+					xml.WriteAttributeProperty("length", s.Length);
 				}
-				else if (d is byte[])
+				else if (d is byte[] b)
 				{
 					xml.WriteAttributeProperty("type", "blob");
-					xml.WriteAttributeProperty("length", ((byte[])d).Length);
+					xml.WriteAttributeProperty("length", b.Length);
 				}
-				else if (d is ILuaScript)
+				else if (d is ILuaScript script)
 				{
-					var c = ((ILuaScript)d).Chunk;
+					var c = script.Chunk;
 					xml.WriteAttributeProperty("type", $"script[{c.ChunkName},{(c.HasDebugInfo ? "D" : "R")}]");
 					xml.WriteAttributeProperty("length", c.Size);
 				}
@@ -586,10 +579,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class CacheItemListController ------------------------------------------
+		#region -- class CacheItemListController --------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class CacheItemListController : IDEListController
 		{
 			private DEHttpServer item;
@@ -626,11 +617,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class PrefixDefinition -------------------------------------------------
+		#region -- class PrefixDefinition ---------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		private class PrefixDefinition
+		private abstract class PrefixDefinition
 		{
 			private readonly string protocol;
 			private readonly string hostname;
@@ -683,7 +672,7 @@ namespace TecWare.DE.Server
 						startAt = pos + 1;
 						pos = uri.IndexOf('/', startAt);
 
-						if (!int.TryParse(uri.Substring(startAt, pos - startAt), out this.port))
+						if (!Int32.TryParse(uri.Substring(startAt, pos - startAt), out this.port))
 							throw new DEConfigurationException(x, "Could not parse port.");
 					}
 					else
@@ -748,10 +737,8 @@ namespace TecWare.DE.Server
 			/// <summary>Length of the prefix</summary>
 			public virtual int PrefixLength => protocol == null ? 0 : relativeUriPath.Length;
 
-			#region -- class PrefixLengthComparerImpl ---------------------------------------
+			#region -- class PrefixLengthComparerImpl ---------------------------------
 
-			///////////////////////////////////////////////////////////////////////////////
-			/// <summary></summary>
 			private sealed class PrefixLengthComparerImpl : IComparer<PrefixDefinition>
 			{
 				public int Compare(PrefixDefinition x, PrefixDefinition y)
@@ -765,10 +752,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class PrefixPathTranslation --------------------------------------------
+		#region -- class PrefixPathTranslation ----------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class PrefixPathTranslation : PrefixDefinition
 		{
 			private readonly string redirectPath;
@@ -786,10 +771,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class PrefixAuthentificationScheme -------------------------------------
+		#region -- class PrefixAuthentificationScheme ---------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class PrefixAuthentificationScheme : PrefixDefinition
 		{
 			private readonly AuthenticationSchemes scheme;
@@ -834,17 +817,15 @@ namespace TecWare.DE.Server
 				=> fileName == null ? base.ToString() : base.ToString() + fileName;
 
 			protected override void SetFileName(string fileName)
-			{
-				this.fileName = fileName;
-			} // proc SetFileName
-
+				=> this.fileName = fileName;
+			
 			public override bool MatchPrefix(Uri url, bool ignorePrefix)
 			{
 				var r = base.MatchPrefix(url, ignorePrefix);
 				if (r && fileName != null)
 				{
-					r = url.AbsolutePath.Length == PrefixLength &&
-						url.AbsolutePath.Substring(PrefixPath.Length) == fileName;
+					r = url.AbsolutePath.Length == PrefixLength 
+						&& url.AbsolutePath.Substring(PrefixPath.Length) == fileName;
 				}
 				return r;
 			} // func MatchPrefix
@@ -859,7 +840,6 @@ namespace TecWare.DE.Server
 		private DEThread httpThreads = null;                    // Threads, die die Request behandeln
 		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
 
-		private Dictionary<string, string> mimeInfo = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // Hält die Mime-Informationen
 		private List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
 		private List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
 
@@ -994,22 +974,6 @@ namespace TecWare.DE.Server
 			// clear prefixes, authentification schemes and mine infos
 			prefixPathTranslations.Clear();
 			prefixAuthentificationSchemes.Clear();
-			mimeInfo.Clear();
-
-			// set standard mime informations
-			mimeInfo[".js"] = MimeTypes.Text.JavaScript;
-			mimeInfo[".html"] = MimeTypes.Text.Html;
-			mimeInfo[".css"] = MimeTypes.Text.Css;
-			mimeInfo[".lua"] = MimeTypes.Text.Plain; // do not execute lua files
-			mimeInfo[".png"] = MimeTypes.Image.Png;
-			mimeInfo[".jpg"] = MimeTypes.Image.Jpeg;
-			mimeInfo[".jpeg"] = MimeTypes.Image.Jpeg;
-			mimeInfo[".gif"] = MimeTypes.Image.Gif;
-			mimeInfo[".ico"] = MimeTypes.Image.Icon;
-			mimeInfo[".xaml"] = MimeTypes.Application.Xaml;
-
-			mimeInfo[".map"] = MimeTypes.Text.Json;
-			mimeInfo[".ts"] = MimeTypes.Text.Plain;
 
 			foreach (var x in config.ConfigNew.Elements())
 			{
@@ -1022,10 +986,11 @@ namespace TecWare.DE.Server
 					else if (x.Name == xnHttpMime) // Lade die Mime-Informationen
 					{
 						var name = x.GetAttribute("ext", String.Empty);
+						var isPackedContent = x.GetAttribute("packed", false);
 						var value = x.GetAttribute("mime", String.Empty);
 
 						if (!String.IsNullOrEmpty(name) && !String.IsNullOrEmpty(value) && name[0] == '.')
-							mimeInfo[name] = value;
+							MimeTypeMapping.Update(value, isPackedContent, false, name);
 						else
 							Log.LogMsg(LogMsgType.Warning, "http/mime has a invalid format (ext={0};mime={1}).", name, value);
 					}
@@ -1187,14 +1152,9 @@ namespace TecWare.DE.Server
 		#region -- MimeInfo -----------------------------------------------------------
 
 		public string GetContentType(string extension)
-		{
-			lock (mimeInfo)
-			{
-				return mimeInfo.TryGetValue(extension, out var contentType)
-					? contentType
-					: throw new ArgumentException(String.Format("No contentType defined for '{0}'.", extension), "extension");
-			}
-		} // func GetContentType
+			=> MimeTypeMapping.TryGetMimeTypeFromExtension(extension, out var mimeType)
+				? mimeType
+				: throw new ArgumentException(String.Format("No contentType defined for '{0}'.", extension), "extension");
 
 		#endregion
 
