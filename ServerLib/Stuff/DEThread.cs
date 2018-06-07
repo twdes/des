@@ -816,16 +816,30 @@ namespace TecWare.DE.Server
 	/// <summary>Thread helper.</summary>
 	public static class Threading
 	{
+		private static bool TryGetMessageLoop(out DEThreadBase thread)
+		{
+			if (SynchronizationContext.Current is IDEThreadSource c && c.Thread != null)
+			{
+				thread = c.Thread;
+				return true;
+			}
+			else
+			{
+				thread = null;
+				return false;
+			}
+		} // func TryGetMessageLoop
+
 		/// <summary>Execute the task synchron.</summary>
 		/// <param name="task"></param>
 		public static void AwaitTask(this Task task)
 		{
-			if (SynchronizationContext.Current is IDEThreadSource c && c.Thread != null)
+			if (TryGetMessageLoop(out var thread))
 			{
 				var awaiter = task.GetAwaiter();
 				if (awaiter.IsCompleted)
 					return;
-				c.Thread.ProcessMessageLoop(awaiter);
+				thread.ProcessMessageLoop(awaiter);
 			}
 			else
 				task.Wait();
@@ -837,15 +851,22 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public static T AwaitTask<T>(this Task<T> task)
 		{
-			if (SynchronizationContext.Current is IDEThreadSource c && c.Thread != null)
+			if (TryGetMessageLoop(out var thread))
 			{
 				var awaiter = task.GetAwaiter();
-				c.Thread.ProcessMessageLoop(awaiter);
+				thread.ProcessMessageLoop(awaiter);
 				return awaiter.GetResult();
 			}
 			else
 				return task.Result;
 		} // func AwaitTask
+
+		/// <summary></summary>
+		public static void EnforceMessageLoopThread()
+		{
+			if (!TryGetMessageLoop(out var tmp))
+				throw new InvalidOperationException("DEThread context needed.");
+		} // proc EnforceMessageLoopThread
 	} // class Threading
 
 	#endregion
