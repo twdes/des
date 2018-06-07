@@ -21,43 +21,40 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Applications
 {
-	#region -- class DESimpleIdentity ---------------------------------------------------
+	#region -- class DESimpleIdentity -------------------------------------------------
 
 	internal sealed class DESimpleIdentity : IIdentity
 	{
-		private readonly string userName;
-
 		public DESimpleIdentity(string userName)
-			=> this.userName = userName ?? throw new ArgumentNullException(nameof(userName));
+			=> Name = userName ?? throw new ArgumentNullException(nameof(userName));
 
 		public override int GetHashCode() 
-			=> userName.GetHashCode();
+			=> Name.GetHashCode();
 
 		public override bool Equals(object obj)
-			=> obj is DESimpleIdentity c ? userName.Equals(c.userName) : false;
+			=> obj is DESimpleIdentity c ? Name.Equals(c.Name) : false;
 
-		public string Name => userName;
+		public string Name { get; }
+
 		public string AuthenticationType => "basic";
 		public bool IsAuthenticated => false;
 	} // class DESimpleIdentity
 
 	#endregion
 
-	#region -- class DEUser -------------------------------------------------------------
+	#region -- class DEUser -----------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Generic user implementation</summary>
 	internal sealed class DEUser : DEConfigItem, IDEUser
 	{
-		#region -- class UserContext ------------------------------------------------------
+		#region -- class UserContext --------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary></summary>
-		private class UserContext : IDEAuthentificatedUser
+		private sealed class UserContext : IDEAuthentificatedUser
 		{
 			private readonly object userLock = new object();
 			private DEUser user;
-			private IIdentity identity;
+			private readonly IIdentity identity;
 
 			public UserContext(DEUser user, IIdentity identity)
 			{
@@ -76,10 +73,9 @@ namespace TecWare.DE.Server.Applications
 			{
 				lock (userLock)
 				{
-					if (serviceType == typeof(WindowsImpersonationContext) && identity is WindowsIdentity)
-						return ((WindowsIdentity)identity).Impersonate();
-					else
-						return null;
+					return serviceType == typeof(WindowsImpersonationContext) && identity is WindowsIdentity windowsIdentity
+						? windowsIdentity.Impersonate()
+						: null;
 				}
 			} // func GetService
 
@@ -95,7 +91,7 @@ namespace TecWare.DE.Server.Applications
 		private IIdentity identity = null;
 		private string userName = null;
 
-		#region -- Ctor/Dtor/Configuration ------------------------------------------------
+		#region -- Ctor/Dtor/Configuration --------------------------------------------
 
 		public DEUser(IServiceProvider sp, string name)
 			: base(sp, name)
@@ -126,7 +122,7 @@ namespace TecWare.DE.Server.Applications
 			if (!String.IsNullOrEmpty(domain))
 				userName = domain + '\\' + userName;
 
-			this.identity = new DESimpleIdentity(userName);
+			identity = new DESimpleIdentity(userName);
 
 			// register the user again
 			Server.RegisterUser(this);
@@ -136,20 +132,22 @@ namespace TecWare.DE.Server.Applications
 
 		#endregion
 
-		#region -- Security ---------------------------------------------------------------
+		#region -- Security -----------------------------------------------------------
 
 		public Task<IDEAuthentificatedUser> AuthentificateAsync(IIdentity identity)
 		{
-			if (identity is WindowsIdentity)
-				if (identity.IsAuthenticated)
-					return Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity));
-				else
-					return null;
-			else if (identity is HttpListenerBasicIdentity)
-				if (TestPassword(((HttpListenerBasicIdentity)identity).Password))
-					return Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity));
-				else
-					return null;
+			if (identity is WindowsIdentity windowsIdentity)
+			{
+				return windowsIdentity.IsAuthenticated
+					? Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity))
+					: null;
+			}
+			else if (identity is HttpListenerBasicIdentity basicIdentity)
+			{
+				return TestPassword(basicIdentity.Password)
+					? Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity))
+					: null;
+			}
 			else
 				return null;
 		} // func AuthentificateAsync
@@ -158,7 +156,7 @@ namespace TecWare.DE.Server.Applications
 		{
 			RefreshSecurityTokens();
 
-			// Ist der Token enthalten
+			// Is the token in list
 			lock (securityTokensLock)
 				return Array.BinarySearch(securityTokens, securityToken.ToLower()) >= 0;
 		} // func DemandToken
@@ -167,14 +165,14 @@ namespace TecWare.DE.Server.Applications
 		{
 			lock (securityTokensLock)
 			{
-				// Erzeuge die Tokens
+				// Create the new token list
 				var currentServerSecurityVersion = Server.SecurityGroupsVersion;
 				if (securityTokens == null || serverSecurityVersion != currentServerSecurityVersion)
 				{
-					// Erzeuge die Tokens
+					// Resolve token groups to the list
 					securityTokens = Server.BuildSecurityTokens(Config.GetAttribute("groups", String.Empty));
 
-					// Setze die Version
+					// Set the new security version
 					serverSecurityVersion = currentServerSecurityVersion;
 				}
 			}
@@ -186,18 +184,20 @@ namespace TecWare.DE.Server.Applications
 			if (password != null)
 				return password == testPassword;
 			else
+			{
 				try
 				{
-					var l = ProcsDE.PasswordCompare(testPassword, Config.GetAttribute("passwordHash", null));
-					if (!l)
+					var tmp = ProcsDE.PasswordCompare(testPassword, Config.GetAttribute("passwordHash", null));
+					if (!tmp)
 						Log.LogMsg(LogMsgType.Warning, String.Format("Autentification failed ({0}).", "Password"));
-					return l;
+					return tmp;
 				}
 				catch (Exception e)
 				{
 					Log.LogMsg(LogMsgType.Error, "Autentification failed ({0}).", e.Message);
 					return false;
 				}
+			}
 		} // func TestPassword
 
 		#endregion
