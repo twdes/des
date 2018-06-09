@@ -244,9 +244,11 @@ namespace TecWare.DE.Server
 	/// </remarks>
 	public partial class DEConfigItem : LuaTable, IDEConfigItem, IComparable<DEConfigItem>, IDisposable
 	{
-		private const string LuaActions = "Actions";              // table für alle Aktionen, die in dem Script enthalten sind.
-		private const string LuaDispose = "Dispose";              // table mit Methoden, die aufgerufen werden, der Knoten zerstört wird.
-		private const string LuaConfiguration = "Configuration";  // table mit Methoden, die aufgerufen werden, wenn sich die Konfiguration geändert hat.
+#pragma warning disable IDE1006 // Naming Styles
+		private const string LuaActions = "Actions";              // table for all actions, they are defined by a script.
+		private const string LuaDispose = "Dispose";              // table for all dispose methods, they get called, if the node gets destroyed.
+		private const string LuaConfiguration = "Configuration";  // table for all configuration methods, they get called, when the configuration is reloaded.
+#pragma warning restore IDE1006 // Naming Styles
 
 		#region -- class DEConfigLoading ----------------------------------------------
 
@@ -872,6 +874,7 @@ namespace TecWare.DE.Server
 			where T : class
 		{
 			using (walkUnsafe ? null : EnterReadLock())
+			{
 				foreach (var cur in subItems)
 				{
 					var r = cur as T;
@@ -884,6 +887,7 @@ namespace TecWare.DE.Server
 					if (recursive && cur.FirstChildren<T>(predicate, action, true))
 						return true;
 				}
+			}
 			return false;
 		} // func FirstChildren
 
@@ -995,7 +999,7 @@ namespace TecWare.DE.Server
 			annotatedConfig.Add(property);
 		} // proc BuildAnnotatedAttribute
 
-		private XElement BuildAnnotatedConfigNode(XName name, XElement config)
+		private XElement BuildAnnotatedConfigNode(XName name, XElement config, bool viewAll)
 		{
 			var annotatedElement = new XElement("element");
 			var elementDefinition = Server.Configuration[name];
@@ -1029,16 +1033,16 @@ namespace TecWare.DE.Server
 				// add elements
 				foreach (var c in elementDefinition.GetElements())
 				{
-					if (c.ClassType == null)
+					if (c.ClassType == null && (viewAll || c.IsBrowsable))
 					{
 						if (c.MaxOccurs == 1)
 						{
-							annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, config?.Element(c.Name)));
+							annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, config?.Element(c.Name), viewAll));
 						}
 						else if (config != null)
 						{
 							foreach (var x in config.Elements(c.Name))
-								annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, x));
+								annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, x, viewAll));
 						}
 					}
 				}
@@ -1050,13 +1054,13 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("config", SecurityToken = SecuritySys),
 		Description("Gibt die Einstellungen der aktuellen Knotens zurück.")
 		]
-		private XElement HttpConfigAction(bool raw = false)
+		private XElement HttpConfigAction(bool raw = false, bool all = false)
 		{
 			var config = Config;
 			if (raw || config == null)
 				return config;
 			else
-				return BuildAnnotatedConfigNode(config.Name, config);
+				return BuildAnnotatedConfigNode(config.Name, config, all);
 		} // func HttpConfigAction
 
 		#endregion

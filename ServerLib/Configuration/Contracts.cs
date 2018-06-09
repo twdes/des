@@ -93,6 +93,8 @@ namespace TecWare.DE.Server.Configuration
 
 		/// <summary>Name of the element.</summary>
 		XName Name { get; }
+		/// <summary>Is this element visible in the configuration view.</summary>
+		bool IsBrowsable { get; }
 
 		/// <summary>Enumerates the attributes.</summary>
 		/// <returns></returns>

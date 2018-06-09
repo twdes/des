@@ -285,6 +285,7 @@ namespace TecWare.DE.Server.Configuration
 		private readonly IServiceProvider sp;
 		private readonly Lazy<string> typeName;
 		private readonly Lazy<Type> getClassType;
+		private readonly Lazy<bool> getBrowsable;
 
 		public DEConfigurationElement(IServiceProvider sp, XmlSchemaElement element)
 			: base(element)
@@ -321,6 +322,18 @@ namespace TecWare.DE.Server.Configuration
 						}
 					}
 					return classType;
+				}
+			);
+			getBrowsable = new Lazy<bool>(() =>
+				{
+					var appInfo = element.Annotation?.Items.OfType<XmlSchemaAppInfo>().FirstOrDefault();
+					if (appInfo != null)
+					{
+						var browsableElement = appInfo.Markup.OfType<XmlElement>().Where(x => x.LocalName == "browsable").FirstOrDefault();
+						return browsableElement.InnerText.ChangeType<bool>();
+					}
+					else
+						return true;
 				}
 			);
 		} // ctor
@@ -395,6 +408,7 @@ namespace TecWare.DE.Server.Configuration
 		} // func GetAttributes
 
 		public XName Name => GetXName(Item.QualifiedName);
+		public bool IsBrowsable => getBrowsable.Value;
 
 		public string TypeName => typeName.Value;
 		public Type ClassType => getClassType.Value;
