@@ -54,7 +54,7 @@ namespace TecWare.DE.Server
 
 		private readonly Lazy<CultureInfo> clientCultureInfo;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		protected DECommonWebScope(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification)
 			: base(http, httpAuthentification)

@@ -362,9 +362,9 @@
 										<xs:documentation>Mime-Type zu der Endung (z.B. &quot;image/png&quot;).</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
-								<xs:attribute name="packed" type="xs:boolean" use="optional">
+								<xs:attribute name="packed" type="xs:boolean" use="optional" default="false">
 									<xs:annotation>
-										<xs:documentation>Is the content of this mime type, packed by data format definition.</xs:documentation>
+										<xs:documentation>Is the content of this mime type, packed by data format definition (default: false).</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 							</xs:complexType>
