@@ -18,7 +18,7 @@ namespace TecWare.DE.Server
 		{
 			using (var lua = new Lua())
 			{
-				var f = lua.CreateLambda<Func<LuaTable>>("test.lua", "return { ['test  a'] = 12, hallo = 'Welt', 1, 4, sub = { sub = 'test', guid = clr.System.Guid.NewGuid() }, subarray = { 1, 2, 3, 4, 5 } }");
+				var f = lua.CreateLambda<Func<LuaTable>>("test.lua", "return { ['test  a'] = 12, IsActive = false, hallo = 'Welt', 1, 4, sub = { sub = 'test', guid = clr.System.Guid.NewGuid() }, subarray = { 1, 2, 3, 4, 5 } }");
 				var t = f();
 
 				var x = t.ToXml();

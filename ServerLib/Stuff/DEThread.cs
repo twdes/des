@@ -840,9 +840,12 @@ namespace TecWare.DE.Server
 				if (awaiter.IsCompleted)
 					return;
 				thread.ProcessMessageLoop(awaiter);
+
+				if (!awaiter.IsCompleted)
+					throw new OperationCanceledException();
 			}
-			else
-				task.Wait();
+
+			task.Wait();
 		} // proc AwaitTask
 
 		/// <summary>Execute the task synchron.</summary>
@@ -855,10 +858,11 @@ namespace TecWare.DE.Server
 			{
 				var awaiter = task.GetAwaiter();
 				thread.ProcessMessageLoop(awaiter);
-				return awaiter.GetResult();
+				if (!awaiter.IsCompleted)
+					throw new OperationCanceledException();
 			}
-			else
-				return task.Result;
+
+			return task.Result;
 		} // func AwaitTask
 
 		/// <summary></summary>
