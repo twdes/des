@@ -1070,7 +1070,9 @@ namespace TecWare.DE.Server
 		internal async Task UnsafeInvokeHttpActionAsync(string action, IDEWebRequestScope r)
 		{
 			// execute the exceion within the thread pool
-			var returnValue = await Task.Run(() => InvokeAction(action, r));
+			var (err, returnValue) =  await Task.Run(() => InvokeAction(action, r));
+			if (!err)
+				await r.RollbackAsync();
 
 			// check the return value
 			if (returnValue == DBNull.Value) // NativeCall

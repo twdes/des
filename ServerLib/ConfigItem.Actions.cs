@@ -356,7 +356,7 @@ namespace TecWare.DE.Server
 		/// <param name="actionName">Name der Aktion</param>
 		/// <param name="context">Parameter, die übergeben werden sollen.</param>
 		/// <returns>Rückgabe</returns>
-		public object InvokeAction(string actionName, IDEWebRequestScope context)
+		public (bool, object) InvokeAction(string actionName, IDEWebRequestScope context)
 		{
 			// Suche die Action im Cache
 			DEConfigAction a;
@@ -380,16 +380,16 @@ namespace TecWare.DE.Server
 
 				context.DemandToken(a.SecurityToken);
 				using (context.Use())
-					return a.Invoke(this, context); // support for async actions is missing -> results in a InvokeAcionAsync
+					return (true, a.Invoke(this, context)); // support for async actions is missing -> results in a InvokeAcionAsync
 			}
 			catch (Exception e)
 			{
 				if (!a.IsSafeCall || context.IsOutputStarted || (e is HttpResponseException)) // Antwort kann nicht mehr gesendet werden
 					throw;
 
-				// Meldung protokollieren
+				// Write protocol
 				Log.LogMsg(LogMsgType.Error, e.GetMessageString());
-				return CreateDefaultXmlReturn(false, e.Message);
+				return (false, CreateDefaultXmlReturn(false, e.Message));
 			}
 		} // func InvokeAction
 
@@ -446,8 +446,7 @@ namespace TecWare.DE.Server
 			if (sAction == null || ca == null)
 				return DEConfigAction.Empty;
 
-			var dlg = ca["Method"] as Delegate;
-			if (dlg == null)
+			if (!(ca["Method"] is Delegate dlg))
 				return DEConfigAction.Empty;
 
 			return new DEConfigAction(
