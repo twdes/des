@@ -221,14 +221,21 @@ namespace TecWare.DE.Server
 
 		protected override void Dispose(bool disposing)
 		{
-			if (disposing)
+			try
 			{
-				// close objects
-				Procs.FreeAndNil(ref log);
+				if (disposing)
+				{
+					// close objects
+					Procs.FreeAndNil(ref log);
 
-				// close the context
-				try { context.Response.Close(); }
-				catch { }
+					// close the context
+					try { context.Response.Close(); }
+					catch { }
+				}
+			}
+			finally
+			{
+				base.Dispose(disposing);
 			}
 		} // proc Dispose
 
