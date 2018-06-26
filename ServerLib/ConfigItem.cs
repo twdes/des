@@ -232,7 +232,7 @@ namespace TecWare.DE.Server
 	/// <summary>Basis jedes Elementes, welches über die Konfiguration geladen werden 
 	/// kann.</summary>
 	/// <remarks><para>Diese Klasse bildet die Basisklasse für alle Module und Elemente im
-	/// DES. Sie stellt den Zurgiff auf die <see href="config.htm">Konfiguration</see>
+	/// DES. Sie stellt den Zurgiff auf die <see href="xref:des.configuration">Konfiguration</see>
 	/// und bietet den Zugriff auf eine Log-Datei.</para>
 	/// <para>Standardmäßig werden die nachfahren dieser Klasse aus der Konfiguration heraus
 	/// erzeugt. Die Konfigurationsdaten, können dann über die zu überschreibende Methode <c>RefreshConfiguration</c>

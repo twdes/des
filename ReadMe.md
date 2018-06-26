@@ -1,3 +1,8 @@
+---
+uid: des.readme
+title: DES Readme
+---
+
 DEServer
 ========
 
