@@ -497,7 +497,26 @@ namespace TecWare.DE.Server.Http
 
 		#endregion
 
+		#region -- Accept Type --------------------------------------------------------
+
+		/// <summary>Test if the type is accepted.</summary>
+		/// <param name="r"></param>
+		/// <param name="contentType"></param>
+		/// <returns></returns>
+		public static bool AcceptType(this IDEWebRequestScope r, string contentType)
+			=> Array.FindIndex(r.AcceptedTypes, c => c.StartsWith(contentType)) >= 0;
+
+		#endregion
+
 		#region -- WriteText, WriteBytes, WriteStream ---------------------------------
+
+		private static void PrepareWriteText(IDEWebRequestScope context, ref string contentType, ref Encoding encoding)
+		{
+			if (encoding == null)
+				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
+			if (contentType.IndexOf("charset=") == -1)
+				contentType += ";charset=" + encoding.WebName;
+		} // proc PrepareWriteText
 
 		/// <summary>Writes the text to the output.</summary>
 		/// <param name="context"></param>
@@ -506,11 +525,19 @@ namespace TecWare.DE.Server.Http
 		/// <param name="encoding"></param>
 		public static void WriteText(this IDEWebRequestScope context, string value, string contentType = MimeTypes.Text.Plain, Encoding encoding = null)
 		{
-			if (encoding == null)
-				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
-			if (contentType.IndexOf("charset=") == -1)
-				contentType += ";charset=" + encoding.WebName;
+			PrepareWriteText(context, ref contentType, ref encoding);
 			WriteBytes(context, encoding.GetBytes(value), contentType);
+		} // proc WriteText
+
+		/// <summary>Writes the text to the output.</summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
+		/// <param name="encoding"></param>
+		public static Task WriteTextAsync(this IDEWebRequestScope context, string value, string contentType = MimeTypes.Text.Plain, Encoding encoding = null)
+		{
+			PrepareWriteText(context, ref contentType, ref encoding);
+			return WriteBytesAsync(context, encoding.GetBytes(value), contentType);
 		} // proc WriteText
 
 		/// <summary>Writes the bytes to the output.</summary>
@@ -518,10 +545,18 @@ namespace TecWare.DE.Server.Http
 		/// <param name="value"></param>
 		/// <param name="contentType"></param>
 		public static void WriteBytes(this IDEWebRequestScope context, byte[] value, string contentType = MimeTypes.Application.OctetStream)
-		{
-			using (var dst = context.GetOutputStream(contentType, value.Length))
-				dst?.Write(value, 0, value.Length);
-		} // proc WriteText
+			=> WriteStream(context, new MemoryStream(value, false), contentType);
+
+		/// <summary>Write bytes in the output stream</summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
+		/// <returns></returns>
+		public static Task WriteBytesAsync(this IDEWebRequestScope context, byte[] value, string contentType = MimeTypes.Application.OctetStream)
+			=> WriteStreamAsync(context, new MemoryStream(value, false), contentType);
+
+		private static long GetStreamLength(Stream src)
+			=> src.CanSeek ? src.Length : -1L;
 
 		/// <summary>Writes the stream to the output.</summary>
 		/// <param name="context"></param>
@@ -529,11 +564,23 @@ namespace TecWare.DE.Server.Http
 		/// <param name="contentType"></param>
 		public static void WriteStream(this IDEWebRequestScope context, Stream stream, string contentType = MimeTypes.Application.OctetStream)
 		{
-			var length = stream.CanSeek ? stream.Length : -1L;
-			using (var dst = context.GetOutputStream(contentType, length))
+			using (var dst = context.GetOutputStream(contentType, GetStreamLength(stream)))
 			{
 				if (dst != null)
 					stream.CopyTo(dst);
+			}
+		} // proc WriteStream
+
+		/// <summary>Writes the stream to the output.</summary>
+		/// <param name="context"></param>
+		/// <param name="stream"></param>
+		/// <param name="contentType"></param>
+		public static async Task WriteStreamAsync(this IDEWebRequestScope context, Stream stream, string contentType = MimeTypes.Application.OctetStream)
+		{
+			using (var dst = context.GetOutputStream(contentType, GetStreamLength(stream)))
+			{
+				if (dst != null)
+					await stream.CopyToAsync(dst);
 			}
 		} // proc WriteStream
 
@@ -712,6 +759,9 @@ namespace TecWare.DE.Server.Http
 			);
 		} // proc WriteTextAsHtml
 
+		private static TextWriter PrepareWriteXml(IDEWebRequestScope context, XDocument value, string contentType)
+			=> context.GetOutputTextWriter(contentType, context.Http.DefaultEncoding, -1);
+		
 		/// <summary></summary>
 		/// <param name="context"></param>
 		/// <param name="value"></param>
@@ -729,11 +779,57 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="value"></param>
 		/// <param name="contentType"></param>
+		public static Task WriteXmlAsync(this IDEWebRequestScope context, XElement value, string contentType = MimeTypes.Text.Xml)
+		{
+			return WriteXmlAsync(context,
+				new XDocument(
+					new XDeclaration("1.0", context.Http.DefaultEncoding.WebName, "yes"),
+					value
+				), contentType);
+		} // proc WriteXml
+
+		/// <summary></summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
 		public static void WriteXml(this IDEWebRequestScope context, XDocument value, string contentType = MimeTypes.Text.Xml)
 		{
-			using (var tw = context.GetOutputTextWriter(contentType, context.Http.DefaultEncoding, -1))
+			using (var tw = PrepareWriteXml(context, value, contentType))
 				value.Save(tw);
 		} // proc WriteXml
+
+		/// <summary>Write Xml to output</summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
+		public static async Task WriteXmlAsync(this IDEWebRequestScope context, XDocument value, string contentType = MimeTypes.Text.Xml)
+		{
+			using (var tw = PrepareWriteXml(context, value, contentType))
+				await Task.Run(() => value.Save(tw));
+		} // proc WriteXml
+
+		/// <summary>Write Lua-Table to output.</summary>
+		/// <param name="context"></param>
+		/// <param name="table"></param>
+		public static void WriteLuaTable(this IDEWebRequestScope context, LuaTable table)
+		{
+			if (context.AcceptType(MimeTypes.Text.Lson)) // test if lson is givven
+				WriteText(context, table.ToLson(false), MimeTypes.Text.Lson);
+			else
+				WriteXml(context, new XDocument(Procs.ToXml(table)));
+		} // WriteLuaTable
+
+		/// <summary>Write Lua-Table to output</summary>
+		/// <param name="context"></param>
+		/// <param name="table"></param>
+		/// <returns></returns>
+		public static Task WriteLuaTableAsync(this IDEWebRequestScope context, LuaTable table)
+		{
+			if (context.AcceptType(MimeTypes.Text.Lson)) // test if lson is givven
+				return WriteTextAsync(context, table.ToLson(false), MimeTypes.Text.Lson);
+			else
+				return WriteXmlAsync(context, new XDocument(Procs.ToXml(table)));
+		} // func WriteLuaTableAsync
 
 		/// <summary></summary>
 		/// <param name="context"></param>
@@ -744,7 +840,7 @@ namespace TecWare.DE.Server.Http
 			switch (value)
 			{
 				case null:
-					throw new ArgumentNullException("value");
+					throw new ArgumentNullException(nameof(value));
 				case XElement e:
 					WriteXml(context, e, contentType ?? MimeTypes.Text.Xml);
 					break;
@@ -761,12 +857,42 @@ namespace TecWare.DE.Server.Http
 					WriteBytes(context, b, contentType ?? MimeTypes.Application.OctetStream);
 					break;
 				case LuaTable t:
-					WriteXml(context, new XDocument(Procs.ToXml(t)));
+					WriteLuaTable(context, t);
 					break;
 				default:
-					throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Can not send return value of type '{0}'.", value.GetType().FullName));
+					throw ThrowUnknownObjectType(value);
 			}
 		} // proc WriteObject
+
+		/// <summary></summary>
+		/// <param name="context"></param>
+		/// <param name="value"></param>
+		/// <param name="contentType"></param>
+		public static Task WriteObjectAsync(this IDEWebRequestScope context, object value, string contentType = null)
+		{
+			switch (value)
+			{
+				case null:
+					throw new ArgumentNullException(nameof(value));
+				case XElement e:
+					return WriteXmlAsync(context, e, contentType ?? MimeTypes.Text.Xml);
+				case XDocument d:
+					return WriteXmlAsync(context, d, contentType ?? MimeTypes.Text.Xml);
+				case string s:
+					return WriteTextAsync(context, s, contentType ?? MimeTypes.Text.Plain);
+				case Stream st:
+					return WriteStreamAsync(context, st, contentType ?? MimeTypes.Application.OctetStream);
+				case byte[] b:
+					return WriteBytesAsync(context, b, contentType ?? MimeTypes.Application.OctetStream);
+				case LuaTable t:
+					return WriteLuaTableAsync(context, t);
+				default:
+					throw ThrowUnknownObjectType(value);
+			}
+		} // proc WriteObject
+		
+		private static HttpResponseException ThrowUnknownObjectType(object value)
+			=> new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Can not send return value of type '{0}'.", value.GetType().FullName));
 
 		#endregion
 
