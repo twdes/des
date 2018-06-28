@@ -692,8 +692,8 @@ namespace TecWare.DE.Server.Http
 							o = CreateScript(context, cacheId, () => Procs.OpenStreamReader(src, Encoding.Default));
 						else if (isHtml)
 						{
-							var content = "otext('text/html');" + ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out var isPlainText);
-							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader(content));
+							var content = ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out var isPlainText);
+							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader("otext('text/html');" + content));
 						}
 						else if (isText)
 						{
