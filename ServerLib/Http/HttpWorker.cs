@@ -147,7 +147,15 @@ namespace TecWare.DE.Server.Http
 
 			// is the filename a directory, add index.html
 			if (Directory.Exists(fileName))
-				fileName = Path.Combine(fileName, "Index.html");
+			{
+				if (!String.IsNullOrEmpty(r.RelativeSubPath) && r.RelativeSubPath[r.RelativeSubPath.Length - 1] != '/')
+				{
+					r.Redirect("/" + VirtualRoot + r.RelativeSubPath + "/");
+					return true;
+				}
+				else
+					fileName = Path.Combine(fileName, "Index.html");
+			}
 
 			if (File.Exists(fileName))
 			{

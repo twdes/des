@@ -369,7 +369,10 @@ namespace TecWare.DE.Server
 		{
 			CheckOutputSended();
 			isOutputSended = true;
-			context.Response.Redirect(url);
+
+			context.Response.Headers[HttpResponseHeader.Location] = url;
+			context.Response.StatusCode = 301;
+			context.Response.StatusDescription = "Redirect";
 		} // proc Redirect
 
 		public bool IsHeadRequest => context.Request.HttpMethod == HttpMethod.Head.Method;
@@ -1384,7 +1387,7 @@ namespace TecWare.DE.Server
 						}
 
 						// check the return value
-						if (ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
+						if (!context.IsOutputStarted && ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
 							throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
 
 						// commit all is fine!
