@@ -1,6 +1,7 @@
 - uid: des.readme
 - uid: des.installation
 - uid: des.configuration
+- uid: des.troubleshooting
 - name: Filesysteme
 - name: Debug
 - name: Database Schema
