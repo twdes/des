@@ -50,7 +50,7 @@ namespace TecWare.DE.Server
 				else
 					r = unchecked(Boundary - other.Boundary);
 
-				return r == 0 ? other.Id - Id : r;
+				return r == 0 ? Id - other.Id : r;
 			} // func CompareTo
 
 			public abstract void Execute();
