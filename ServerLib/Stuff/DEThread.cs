@@ -737,17 +737,25 @@ namespace TecWare.DE.Server
 		/// <param name="name"></param>
 		/// <param name="action"></param>
 		/// <param name="categoryName"></param>
-		public DEThread(IServiceProvider sp, string name, Func<Task> action, string categoryName = ThreadCategory)
+		public DEThread(IServiceProvider sp, string name, Func<DEThread, Task> action, string categoryName = ThreadCategory)
 			: base(sp, name, categoryName)
 		{
 			if (action != null)
 			{
 				EnqueueTask(
-				  s => ((Func<Task>)s).Invoke().GetAwaiter().OnCompleted(Dispose),
+				  s => InvokeTask(((Func<DEThread, Task>)s).Invoke(this)),
 				  action,
 				  null);
 			}
 		} // ctor
+
+		private void InvokeTask(Task task)
+		{
+			task.ContinueWith(
+				t => Log.Except(t.Exception),
+				TaskContinuationOptions.OnlyOnFaulted
+			).GetAwaiter().OnCompleted(Dispose);
+		} // proc InvokeTask
 
 		/// <summary></summary>
 		/// <param name="thread"></param>

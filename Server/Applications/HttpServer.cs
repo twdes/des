@@ -846,8 +846,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private HttpListener httpListener = new HttpListener();   // Zugriff auf den HttpListener
-		private DEThread httpThreads = null;                    // Threads, die die Request behandeln
+		private readonly HttpListener httpListener = new HttpListener();   // Zugriff auf den HttpListener
+		private readonly DEThread httpThreads;                    // Threads, die die Request behandeln
 		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
 
 		private List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
@@ -915,8 +915,9 @@ namespace TecWare.DE.Server
 
 				Procs.FreeAndNil(ref webSocketProtocols);
 				Procs.FreeAndNil(ref cacheItemController);
-				Procs.FreeAndNil(ref httpThreads);
-				try { Procs.FreeAndNil(ref httpListener); }
+				if (!httpThreads.IsDisposed)
+					httpThreads.Dispose();
+				try { httpListener.Close(); }
 				catch { }
 			}
 			base.Dispose(disposing);
@@ -1268,9 +1269,9 @@ namespace TecWare.DE.Server
 			}
 		} // func GetAuthenticationScheme
 
-		private async Task ExecuteHttpRequestAsyc()
+		private async Task ExecuteHttpRequestAsyc(DEThread thread)
 		{
-			while (httpThreads.IsRunning)
+			while (thread.IsRunning)
 			{
 				if (IsHttpListenerRunning)
 				{

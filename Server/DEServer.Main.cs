@@ -501,7 +501,7 @@ namespace TecWare.DE.Server
 
 			try
 			{
-				var parser = new CommandLine.Parser(s =>
+				var parser = new Parser(s =>
 				{
 					s.CaseSensitive = false;
 					s.IgnoreUnknownArguments = false;
