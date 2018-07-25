@@ -76,7 +76,12 @@
 			<xs:extension base="HttpWorkerType">
 				<xs:attribute name="directory" type="PathType" use="required">
 					<xs:annotation>
-						<xs:documentation>Verzeichnis, welches unter der Uri verfügbar sein soll.</xs:documentation>
+						<xs:documentation>Directory access.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+				<xs:attribute name="allowListing" type="xs:boolean" use="optional" default="false">
+					<xs:annotation>
+						<xs:documentation>Allow listing of containing files.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
 			</xs:extension>

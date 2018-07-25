@@ -14,11 +14,14 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Neo.IronLua;
+using TecWare.DE.Server.Configuration;
 using TecWare.DE.Stuff;
 using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
@@ -113,8 +116,9 @@ namespace TecWare.DE.Server.Http
 	/// <summary>Liefert Dateien aus</summary>
 	public class HttpFileWorker : HttpWorker
 	{
-		private static readonly XName xnMimeDef = Configuration.DEConfigurationConstants.MainNamespace + "mimeDef";
+		private static readonly XName xnMimeDef = MainNamespace + "mimeDef";
 		private string directoryBase;
+		private bool allowListing = false;
 
 		/// <summary></summary>
 		/// <param name="sp"></param>
@@ -130,8 +134,19 @@ namespace TecWare.DE.Server.Http
 		{
 			base.OnEndReadConfiguration(config);
 
-			directoryBase = Config.GetAttribute("directory", String.Empty);
+			var cfg = XConfigNode.Create(Server.Configuration, config.ConfigNew);
+
+			directoryBase = cfg.GetAttribute<string>("directory");
+			allowListing = cfg.GetAttribute<bool>("allowListing");
 		} // proc OnEndReadConfiguration
+
+		[LuaMember]
+		private IEnumerable<FileInfo> ListFiles()
+			=> new DirectoryInfo(directoryBase).EnumerateFiles("*", SearchOption.TopDirectoryOnly);
+
+		[LuaMember]
+		private string GetListName()
+			=> Name;
 
 		/// <summary></summary>
 		/// <param name="r"></param>
@@ -139,6 +154,7 @@ namespace TecWare.DE.Server.Http
 		public override async Task<bool> RequestAsync(IDEWebRequestScope r)
 		{
 			// create the full file name
+			var useIndex = false;
 			var fileName = Path.GetFullPath(Path.Combine(directoryBase, ProcsDE.GetLocalPath(r.RelativeSubPath)));
 
 			// Check for a directory escape
@@ -148,13 +164,16 @@ namespace TecWare.DE.Server.Http
 			// is the filename a directory, add index.html
 			if (Directory.Exists(fileName))
 			{
-				if (!String.IsNullOrEmpty(r.RelativeSubPath) && r.RelativeSubPath[r.RelativeSubPath.Length - 1] != '/')
+				if (!String.IsNullOrEmpty(r.AbsolutePath) && r.AbsolutePath[r.AbsolutePath.Length - 1] != '/')
 				{
-					r.Redirect("/" + VirtualRoot + r.RelativeSubPath + "/");
+					r.Redirect(r.AbsolutePath + '/');
 					return true;
 				}
 				else
+				{
 					fileName = Path.Combine(fileName, "Index.html");
+					useIndex = true;
+				}
 			}
 
 			if (File.Exists(fileName))
@@ -165,12 +184,14 @@ namespace TecWare.DE.Server.Http
 				await Task.Run(() => r.WriteFile(fileName, GetFileContentType(fileName)));
 				return true;
 			}
+			else if (useIndex && allowListing) // write index table
+			{
+				await Task.Run(() => r.WriteResource(typeof(HttpWorker), "Resources.Listing.html", "text/html"));
+				return true;
+			}
 			else
 				return false;
 		} // func Request
-
-		private static bool TestFilter(string fileName, string filter)
-			=> fileName.EndsWith(fileName, StringComparison.OrdinalIgnoreCase);
 		
 		/// <summary></summary>
 		public override string Icon => "/images/http.file16.png";

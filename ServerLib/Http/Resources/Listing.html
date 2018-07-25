@@ -1,0 +1,28 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>Index of <% print(GetListName()); %></title>
+</head>
+<body>
+    <h1>Index of <% print(GetListName()); %></h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Size</th>
+                <th>Last Modified</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% foreach fi in ListFiles() do %>
+            <tr>
+                <td><a href="<% print(fi.Name); %>"><% print(fi.Name); %></a></td>
+                <td><% print(fi.Length); %></td>
+                <td><% print(fi.LastWriteTime); %></td>
+            </tr>
+            <% end; %>
+        </tbody>
+    </table>
+</body>
+</html>

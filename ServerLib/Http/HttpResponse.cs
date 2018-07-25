@@ -195,6 +195,8 @@ namespace TecWare.DE.Server.Http
 		string RelativeSubPath { get; }
 		/// <summary>Name of the current path position.</summary>
 		string RelativeSubName { get; }
+		/// <summary>Get the full request path.</summary>
+		string AbsolutePath { get; }
 	} // interface IDEWebRequestScope
 
 	#endregion
