@@ -84,7 +84,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- TryGetProperty -------------------------------------------------------
+		#region -- TryGetProperty -----------------------------------------------------
 
 		private bool TryGetNameValueKeyIgnoreCase(NameValueCollection list, string name, out object value)
 		{

@@ -201,17 +201,20 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- class LuaHttpTable -----------------------------------------------------
+	#region -- class LuaHtmlTable -----------------------------------------------------
 
-	internal sealed class LuaHttpTable : LuaTable, IDisposable
+	internal sealed class LuaHtmlTable : LuaTable, IDisposable
 	{
-		private IDEWebRequestScope context;
-		private string contentType;
+		private readonly IDEWebRequestScope context;
+
+		private string contentType; // content type to emit
+
+		// output streams
 		private Stream streamOutput = null;
 		private TextWriter textOutput = null;
 		private Encoding encoding = null;
 
-		public LuaHttpTable(IDEWebRequestScope context, string contentType)
+		public LuaHtmlTable(IDEWebRequestScope context, string contentType)
 		{
 			this.context = context;
 			this.contentType = contentType;
@@ -223,21 +226,39 @@ namespace TecWare.DE.Server.Http
 			Procs.FreeAndNil(ref textOutput);
 		} // proc Dispose
 
+		private string ConvertForHtml(object value)
+			=> ConvertForHtml(value, null);
+
+		private string ConvertForHtml(object value, string fmt)
+		{
+			if (value is string s)
+				return s;
+			else if (!String.IsNullOrEmpty(fmt)
+				&& value is IFormattable formattable)
+				return formattable.ToString(fmt, context.CultureInfo);
+			else
+				return Convert.ToString(value, context.CultureInfo);
+		} // func ConvertForHtml
+
+		[LuaMember("printValue")]
+		private void LuaPrintValue(object value, string fmt = null)
+			=> LuaPrintText(ConvertForHtml(value, fmt));
+
 		[LuaMember("print")]
 		private void LuaPrint(params object[] values)
 		{
-			string text;
 			if (values == null || values.Length == 0)
 				return;
 
-			if (values.Length == 1)
-				if (values[0] is string)
-					text = (string)values[0];
-				else
-					text = Procs.ChangeType<string>(values[0]);
-			else
-				text = String.Join(" ", values.Select(c => Procs.ChangeType<string>(c)));
+			var text = values.Length == 1
+				? ConvertForHtml(values[0])
+				: String.Join(" ", values.Select(ConvertForHtml));
 
+			LuaPrintText(text);
+		} // proc OnPrint
+
+		private void LuaPrintText(string text)
+		{
 			if (textOutput != null)
 				textOutput.WriteLine(text);
 			else if (streamOutput != null)
@@ -247,12 +268,17 @@ namespace TecWare.DE.Server.Http
 			}
 			else
 				throw new ArgumentException("out is not open.");
-		} // proc OnPrint
+		} // proc LuaPrintText
+
+		private void CheckOutputOpened()
+		{
+			if (textOutput != null || streamOutput != null)
+				throw new ArgumentException("out is already open.");
+		} // func CheckOutputOpened
 
 		private void PrepareOutput()
 		{
-			if (textOutput != null || streamOutput != null)
-				throw new ArgumentException("out is open.");
+			CheckOutputOpened();
 
 			if (encoding == null)
 				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
@@ -273,15 +299,32 @@ namespace TecWare.DE.Server.Http
 		} // proc OpenBinary
 
 		protected override object OnIndex(object key)
-			=> base.OnIndex(key) ?? (context.CurrentNode as LuaTable)?.GetValue(key);
+		{
+			var r = base.OnIndex(key);
+			if (r != null)
+				return r;
+
+			if (key is string memberName && context.TryGetProperty(memberName, out var tmp))
+				return tmp;
+
+			return context.CurrentNode is LuaTable t ? t.GetValue(key) : null;
+		} // func OnIndex
 
 		[LuaMember("ContentType")]
-		public string ContentType { get { return contentType; } set { } }
+		public string ContentType
+		{
+			get => contentType; set
+			{
+				CheckOutputOpened();
+				contentType = value;
+			}
+		} // prop ContentType
+
 		[LuaMember("Context")]
-		public IDEWebRequestScope Context { get { return context; } set { } }
+		public IDEWebRequestScope Context { get => context; set { } }
 		[LuaMember("out")]
-		public object Output { get { return (object)streamOutput ?? textOutput; } set { } }
-	} // class LuaHttpTable
+		public object Output { get => (object)streamOutput ?? textOutput; set { } }
+	} // class LuaHtmlTable
 
 	#endregion
 
@@ -295,18 +338,23 @@ namespace TecWare.DE.Server.Http
 
 		#region -- ParseHtml ----------------------------------------------------------
 
-		private static string ParseHtml(TextReader tr, long capacity, out bool isPlainHtml)
+		internal static string ParseHtml(TextReader tr, long capacity, out bool isPlainHtml, out bool openOutput)
 		{
 			var readBuffer = new char[4096];
 
-			var sbLua = new StringBuilder(unchecked((int)capacity));
-			var sbHtml = new StringBuilder();
-			var sbCmd = new StringBuilder();
+			var luaCode = new StringBuilder(unchecked((int)capacity));
+			var htmlBuffer = new StringBuilder();
+			var luaCmd = new StringBuilder();
+			var fmtBuffer = new StringBuilder();
 			int readed;
 			var state = 0;
-			var inCommand = false;
+			var isFirst = true;
+			var inCommand = 0;  // 0
+								// 1 lua code
+								// 2 lua var
 
 			isPlainHtml = true;
+			openOutput = true;
 
 			do
 			{
@@ -326,8 +374,13 @@ namespace TecWare.DE.Server.Http
 							{
 								state = 1;
 							}
-							else
-								sbHtml.Append(c);
+							else if (!isFirst)
+								htmlBuffer.Append(c);
+							else if (!Char.IsWhiteSpace(c))
+							{
+								isFirst = false;
+								htmlBuffer.Append(c);
+							}
 							break;
 
 						case 1: // check type of bracket
@@ -337,7 +390,7 @@ namespace TecWare.DE.Server.Http
 								state = 20;
 							else
 							{
-								sbHtml.Append('<');
+								htmlBuffer.Append('<');
 								state = 0;
 								goto case 0;
 							}
@@ -349,7 +402,7 @@ namespace TecWare.DE.Server.Http
 								state = 11;
 							else
 							{
-								sbHtml.Append("<!");
+								htmlBuffer.Append("<!");
 								state = 0;
 								goto case 0;
 							}
@@ -359,7 +412,7 @@ namespace TecWare.DE.Server.Http
 								state = 12;
 							else
 							{
-								sbHtml.Append("<!-");
+								htmlBuffer.Append("<!-");
 								state = 0;
 								goto case 0;
 							}
@@ -383,15 +436,28 @@ namespace TecWare.DE.Server.Http
 						#endregion
 						#region -- 20 - Command --
 						case 20:
-							inCommand = true;
-							sbCmd.Length = 0;
-							state = 21;
-							break;
+							if (c == '=') // variable syntax
+							{
+								inCommand = 2;
+								state = 21;
+								break;
+							}
+							else
+							{
+								inCommand = 1;
+								luaCmd.Length = 0;
+								state = 21;
+								goto case 21;
+							}
 						case 21:
 							if (c == '%')
 								state = 22;
+							else if (inCommand == 2 && c == ':')
+								state = 23;
+							else if (inCommand == 3)
+								fmtBuffer.Append(c);
 							else
-								sbCmd.Append(c);
+								luaCmd.Append(c);
 							break;
 						case 22:
 							if (c == '>')
@@ -399,19 +465,54 @@ namespace TecWare.DE.Server.Http
 								state = 0;
 
 								isPlainHtml = false;
-								inCommand = false;
-								GenerateHtmlBlock(sbLua, sbHtml);
-								sbLua.Append(sbCmd).AppendLine(); // append the script
+								if (isFirst)
+									openOutput = false;
 
-								sbCmd.Length = 0;
+								GenerateHtmlBlock(luaCode, htmlBuffer);
+								if (inCommand == 1)
+									luaCode.Append(luaCmd).AppendLine(); // append the script
+								else if (inCommand == 2)
+								{
+									luaCode.Append("printValue(")
+										.Append(luaCmd)
+										.AppendLine(");");
+								}
+								else if (inCommand == 3)
+								{
+									luaCode.Append("printValue(")
+										.Append(luaCmd)
+										.Append(", \"")
+										.Append(fmtBuffer.ToString())
+										.Append('"')
+										.AppendLine(");");
+								}
+								else
+									throw new ArgumentException();
+
+								inCommand = 0;
+								fmtBuffer.Length = 0;
+								luaCmd.Length = 0;
 							}
 							else
 							{
 								state = 21;
-								sbCmd.Append('%');
+								luaCmd.Append('%');
 								goto case 21;
 							}
 							break;
+						case 23:
+							if (c == ':')
+							{
+								inCommand = 3;
+								state = 21;
+								break;
+							}
+							else
+							{
+								luaCmd.Append(':');
+								state = 21;
+								goto case 21;
+							}
 						#endregion
 						default:
 							throw new InvalidOperationException();
@@ -420,44 +521,52 @@ namespace TecWare.DE.Server.Http
 			} while (readed > 0);
 
 			// Prüfe einen offnen Commandblock
-			if (inCommand)
+			if (inCommand != 0)
 				throw new ArgumentException("Unexpected eof.");
 
-			if (sbHtml.Length > 0)
+			if (htmlBuffer.Length > 0)
 			{
 				if (isPlainHtml)
-					sbLua.Append(sbHtml);
+					luaCode.Append(htmlBuffer);
 				else
-					GenerateHtmlBlock(sbLua, sbHtml);
+					GenerateHtmlBlock(luaCode, htmlBuffer);
 			}
 
-			return sbLua.ToString();
+			return luaCode.ToString();
 		} // proc Parse
 
-		private static void GenerateHtmlBlock(StringBuilder sbLua, StringBuilder sbHtml)
+		private static void GenerateHtmlBlock(StringBuilder lua, StringBuilder html)
 		{
-			if (sbHtml.Length > 0)
+			if (html.Length > 0)
 			{
-				sbLua.Append("print(\"");
+				lua.Append("print(\"");
 
-				for (int i = 0; i < sbHtml.Length; i++)
+				for (var i = 0; i < html.Length; i++)
 				{
-					char c = sbHtml[i];
-					if (c == '\r')
-						sbLua.Append("\\r");
-					else if (c == '\n')
-						sbLua.Append("\\n");
-					else if (c == '\t')
-						sbLua.Append("\\t");
-					else if (c == '"')
-						sbLua.Append("\\\"");
-					else
-						sbLua.Append(c);
+					var c = html[i];
+					switch (c)
+					{
+						case '\r':
+							lua.Append("\\r");
+							break;
+						case '\n':
+							lua.Append("\\n");
+							break;
+						case '\t':
+							lua.Append("\\t");
+							break;
+						case '"':
+							lua.Append("\\\"");
+							break;
+						default:
+							lua.Append(c);
+							break;
+					}
 				}
 
-				sbLua.AppendLine("\");");
+				lua.AppendLine("\");");
 			}
-			sbHtml.Length = 0;
+			html.Length = 0;
 		} // proc GenerateHtmlBlock
 
 		#endregion
@@ -694,8 +803,8 @@ namespace TecWare.DE.Server.Http
 							o = CreateScript(context, cacheId, () => Procs.OpenStreamReader(src, Encoding.Default));
 						else if (isHtml)
 						{
-							var content = ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out var isPlainText);
-							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader("otext('text/html');" + content));
+							var content = ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out var isPlainText, out var openOutput);
+							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader(openOutput ? "otext('text/html');" + content : content));
 						}
 						else if (isText)
 						{
@@ -722,7 +831,7 @@ namespace TecWare.DE.Server.Http
 			else if (o is ILuaScript c)
 			{
 				LuaResult r;
-				using (var g = new LuaHttpTable(context, contentType))
+				using (var g = new LuaHtmlTable(context, contentType))
 					r = c.Run(g, true);
 
 				if (!context.IsOutputStarted && r.Count > 0)
