@@ -11,9 +11,9 @@ title: Installation
 
 [!include[DES Filesysteme](~/des/articles/usersmanual/des.installation.filesysteme.md)]
 
-## III. Zertifikat
+## III. Netzwerkzugriff konfigurieren
 
-[!include[DES Certificates](~/des/articles/usersmanual/des.installation.certificates.md)]
+[!include[DES Certificates](~/des/articles/usersmanual/des.installation.ports.md)]
 
 ## IV. DE-Server als Dienst einrichten
 
