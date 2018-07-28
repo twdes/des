@@ -6,9 +6,9 @@
 
    [!include[DES Filesysteme](~/des/articles/usersmanual/des.installation.filesystemeforppsn.md)]
 
-   ### c. Zertifikat
+   ### c. Netzwerkzugriff konfigurieren
 
-   [!include[DES Certificates](~/des/articles/usersmanual/des.installation.certificates.md)]
+   [!include[DES Certificates](~/des/articles/usersmanual/des.installation.ports.md)]
 
    ### d. DE-Server als Dienst einrichten
 
