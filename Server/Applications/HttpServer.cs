@@ -375,6 +375,15 @@ namespace TecWare.DE.Server
 			context.Response.StatusDescription = "Redirect";
 		} // proc Redirect
 
+		public void SetStatus(HttpStatusCode statusCode, string statusDescription)
+		{
+			CheckOutputSended();
+			isOutputSended = true;
+
+			context.Response.StatusCode = (int)statusCode;
+			context.Response.StatusDescription = statusDescription ?? statusCode.ToString();
+		} // proc SetStatus
+
 		public bool IsHeadRequest => context.Request.HttpMethod == HttpMethod.Head.Method;
 		public CookieCollection OutputCookies => context.Response.Cookies;
 		public WebHeaderCollection OutputHeaders => context.Response.Headers;

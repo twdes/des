@@ -18,6 +18,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
@@ -180,6 +181,10 @@ namespace TecWare.DE.Server.Http
 		/// <summary>Sends a redirect.</summary>
 		/// <param name="url"></param>
 		void Redirect(string url);
+		/// <summary>Set status code, and closes the output.</summary>
+		/// <param name="statusCode"></param>
+		/// <param name="statusDescription"></param>
+		void SetStatus(HttpStatusCode statusCode, string statusDescription);
 		/// <summary>Is there a call of GetOutputStream, GetOutputTextWriter or Redirect.</summary>
 		bool IsOutputStarted { get; }
 
@@ -786,6 +791,13 @@ namespace TecWare.DE.Server.Http
 			if (contentType == null)
 				throw new ArgumentNullException("contentType");
 
+			// check for head request
+			if (context.InputMethod == HttpMethod.Head.Method)
+			{
+				context.SetStatus(HttpStatusCode.OK, "Ok");
+				return;
+			}
+
 			var http = context.Server as IDEHttpServer;
 			var o = http?.GetWebCache(cacheId);
 			// create the item
@@ -826,23 +838,30 @@ namespace TecWare.DE.Server.Http
 			}
 
 			// write the item to the output
-			if (o == null)
-				throw new ArgumentNullException("output", "No valid output.");
-			else if (o is ILuaScript c)
+			switch (o)
 			{
-				LuaResult r;
-				using (var g = new LuaHtmlTable(context, contentType))
-					r = c.Run(g, true);
+				case null:
+					throw new ArgumentNullException("output", "No valid output.");
 
-				if (!context.IsOutputStarted && r.Count > 0)
-					WriteObject(context, r[0], r.GetValueOrDefault(1, MimeTypes.Text.Html));
+				case ILuaScript c:
+					{
+						LuaResult r;
+						using (var g = new LuaHtmlTable(context, contentType))
+							r = c.Run(g, true);
+
+						if (!context.IsOutputStarted && r.Count > 0)
+							WriteObject(context, r[0], r.GetValueOrDefault(1, MimeTypes.Text.Html));
+					}
+					break;
+				case byte[] b:
+					WriteBytes(context, b, contentType);
+					break;
+				case string s:
+					WriteText(context, s, contentType, context.Http.DefaultEncoding);
+					break;
+				default:
+					throw new ArgumentException($"Invalid cache item. Type '{o.GetType()}' is not supported.");
 			}
-			else if (o is byte[])
-				WriteBytes(context, (byte[])o, contentType);
-			else if (o is string)
-				WriteText(context, (string)o, contentType, context.Http.DefaultEncoding);
-			else
-				throw new ArgumentException($"Invalid cache item. Type '{o.GetType()}' is not supported.");
 		} // func GetContent
 
 		#endregion
