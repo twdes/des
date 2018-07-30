@@ -290,17 +290,17 @@ namespace TecWare.DE.Server.Http
 		} // proc PrepareOutput
 
 		[LuaMember("otext")]
-		public void OpenText(string sContentType, Encoding encoding = null)
+		public void OpenText(string contentType = null, Encoding encoding = null)
 		{
 			PrepareOutput();
-			textOutput = context.GetOutputTextWriter(contentType, encoding);
+			textOutput = context.GetOutputTextWriter(contentType ?? this.contentType, encoding);
 		} // proc OpenText
 
 		[LuaMember("obinary")]
-		private void OpenBinary(string sContentType, Encoding encoding = null)
+		private void OpenBinary(string contentType = null, Encoding encoding = null)
 		{
 			PrepareOutput();
-			streamOutput = context.GetOutputStream(contentType);
+			streamOutput = context.GetOutputStream(contentType ?? this.contentType);
 		} // proc OpenBinary
 
 		protected override object OnIndex(object key)
@@ -318,7 +318,8 @@ namespace TecWare.DE.Server.Http
 		[LuaMember("ContentType")]
 		public string ContentType
 		{
-			get => contentType; set
+			get => contentType;
+			set
 			{
 				CheckOutputOpened();
 				contentType = value;
