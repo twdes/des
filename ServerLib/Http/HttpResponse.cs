@@ -265,7 +265,7 @@ namespace TecWare.DE.Server.Http
 		private void LuaPrintText(string text)
 		{
 			if (textOutput != null)
-				textOutput.WriteLine(text);
+				textOutput.Write(text);
 			else if (streamOutput != null)
 			{
 				var b = encoding.GetBytes(text);
