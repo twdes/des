@@ -104,6 +104,7 @@
     </EmbeddedResource>
     <None Include="Configs\Cron.lua" />
     <None Include="Configs\Tests.lua" />
+    <None Include="Configs\test\me.lua" />
     <None Include="des.licenseheader" />
     <None Include="packages.config" />
     <None Include="TecWare.DES.Deploy.nuspec" />

@@ -197,3 +197,4 @@ FakesAssemblies/
 /Common/TecWare GmbH.snk
 /Server/Configs/Log/Main
 /Common/AssemblyInfoServer.cs
+/Server/Configs/test/me.lua

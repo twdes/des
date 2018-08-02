@@ -5,6 +5,7 @@
 	</server>
 
 	<http realm="Test Server">
+		<prefix>http://+:8080/</prefix>
 	</http>
 	<cron />
 	<luaengine displayname="LuaEngine" allowDebug="true" script="debugEnv">
@@ -14,4 +15,7 @@
 	</luaengine>
 
 	<luaCronJob name="testCron" bound="0,1,*" script="cron" />
+	<files name="test" directory="test" script="cron">
+		<mimeDef filter="*.lua">text/x-lua</mimeDef>
+	</files>
 </des>

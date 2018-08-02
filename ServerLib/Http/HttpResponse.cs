@@ -770,15 +770,17 @@ namespace TecWare.DE.Server.Http
 				assembly.FullName.Replace(" ", "") + "\\" + resourceName, contentType);
 		} // proc WriteResource
 
-		private static object CreateScript(IDEWebRequestScope context, string cacheId, Func<TextReader> createSource)
+		private static object CreateScript(IDEWebRequestScope context, Func<TextReader> createSource, string sciptBase)
 		{
-			var p = cacheId.LastIndexOf('\\');
 			var luaEngine = context.Server.GetService<IDELuaEngine>(true);
 			return luaEngine.CreateScript(
 				createSource,
-				p >= 0 ? cacheId.Substring(p + 1) : "content.lua"
+				sciptBase
 			);
 		} // func CreateScript
+
+		private static string GetFileNameFromSource(Stream src)
+			=> src is FileStream fs ? fs.Name : null;
 
 		/// <summary></summary>
 		/// <param name="context"></param>
@@ -813,11 +815,11 @@ namespace TecWare.DE.Server.Http
 					{
 						var isText = contentType.StartsWith("text/");
 						if (isLua)
-							o = CreateScript(context, cacheId, () => Procs.OpenStreamReader(src, Encoding.Default));
+							o = CreateScript(context, () => Procs.OpenStreamReader(src, Encoding.Default), GetFileNameFromSource(src));
 						else if (isHtml)
 						{
 							var content = ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out var isPlainText, out var openOutput);
-							o = isPlainText ? content : CreateScript(context, cacheId, () => new StringReader(openOutput ? "otext('text/html');" + content : content));
+							o = isPlainText ? content : CreateScript(context, () => new StringReader(openOutput ? "otext('text/html');" + content : content), GetFileNameFromSource(src));
 						}
 						else if (isText)
 						{

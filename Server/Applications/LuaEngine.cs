@@ -111,7 +111,7 @@ namespace TecWare.DE.Server
 
 					// recompile the script
 					using (var tr = open())
-						chunk = Lua.CompileChunk(tr, scriptId, compiledWithDebugger ? engine.debugOptions : null, args);
+						chunk = Lua.CompileChunk(tr, ScriptBase ?? scriptId, compiledWithDebugger ? engine.debugOptions : null, args);
 				}
 			} // proc Compile
 
@@ -160,7 +160,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaFileBasedScript ---------------------------------------------
+		#region -- class LuaFileBasedScript -------------------------------------------
 
 		/// <summary>Script that is based on file.</summary>
 		private abstract class LuaFileBasedScript : LuaScript
@@ -217,7 +217,7 @@ namespace TecWare.DE.Server
 
 			/// <summary>FileInfo object of the source code.</summary>
 			public FileInfo FileSource => fileSource;
-			/// <summary>Name of the file</summary>
+			/// <summary>Full path to the script file</summary>
 			public override string ScriptBase => fileSource.FullName;
 			/// <summary>Encoding of the file.</summary>
 			public Encoding Encoding { get => encoding; set => encoding = value; }
@@ -227,9 +227,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaFileScript --------------------------------------------------
+		#region -- class LuaFileScript ------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Script that is based on file.</summary>
 		private sealed class LuaFileScript : LuaFileBasedScript
 		{
@@ -272,9 +271,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaTestScript --------------------------------------------------
+		#region -- class LuaTestScript ------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Script that is based on file.</summary>
 		private sealed class LuaTestScript : LuaFileBasedScript
 		{
@@ -299,14 +297,14 @@ namespace TecWare.DE.Server
 		/// <summary>In memory script, that is not based on a file.</summary>
 		private sealed class LuaMemoryScript : LuaScript, ILuaScript
 		{
-			private readonly string name;
+			private readonly string scriptBase;
 
 			#region -- Ctor/Dtor --------------------------------------------------------
 
-			public LuaMemoryScript(LuaEngine engine, Func<TextReader> code, string name, KeyValuePair<string, Type>[] args)
-				: base(engine, Guid.NewGuid().ToString("D"), false)
+			public LuaMemoryScript(LuaEngine engine, Func<TextReader> code, string scriptBase, KeyValuePair<string, Type>[] args)
+				: base (engine, Guid.NewGuid().ToString("D"), true)
 			{
-				this.name = name;
+				this.scriptBase = scriptBase;
 
 				try
 				{
@@ -320,8 +318,22 @@ namespace TecWare.DE.Server
 
 			#endregion
 
+			private string ChangeDirectory()
+			{
+				if (ScriptBase != null)
+				{
+					var currentDirectory = Path.GetDirectoryName(ScriptBase);
+					var oldDirectory = Environment.CurrentDirectory;
+					Environment.CurrentDirectory = currentDirectory;
+					return oldDirectory;
+				}
+				else
+					return null;
+			} // func ChangeDirectory
+
 			public LuaResult Run(LuaTable table, bool throwExceptions, params object[] args)
 			{
+				var oldDirectory = ChangeDirectory();
 				try
 				{
 					return Chunk.Run(table, args);
@@ -333,9 +345,14 @@ namespace TecWare.DE.Server
 						throw;
 					return LuaResult.Empty;
 				}
+				finally
+				{
+					if (oldDirectory != null)
+						Environment.CurrentDirectory = oldDirectory;
+				}
 			} // func Run
 
-			public override string ScriptBase => name;
+			public override string ScriptBase => scriptBase;
 		} // class LuaMemoryScript
 
 		#endregion
@@ -1716,8 +1733,8 @@ namespace TecWare.DE.Server
 			}
 		} // func AttachScript
 
-		public ILuaScript CreateScript(Func<TextReader> code, string name, params KeyValuePair<string, Type>[] parameters)
-		   => new LuaMemoryScript(this, code, name, parameters);
+		public ILuaScript CreateScript(Func<TextReader> code, string sciptBase, params KeyValuePair<string, Type>[] parameters)
+		   => new LuaMemoryScript(this, code, sciptBase, parameters);
 
 		public Lua Lua => lua;
 
