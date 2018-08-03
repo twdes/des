@@ -15,7 +15,7 @@
 	</luaengine>
 
 	<luaCronJob name="testCron" bound="0,1,*" script="cron" />
-	<files name="test" directory="test" script="cron">
+	<files name="test" displayname="max" directory="test" script="cron">
 		<mimeDef filter="*.lua">text/x-lua</mimeDef>
 	</files>
 </des>

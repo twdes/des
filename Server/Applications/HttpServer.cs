@@ -248,7 +248,7 @@ namespace TecWare.DE.Server
 			if (log != null)
 				return; // Log schon gestartet
 
-			log = ((DEHttpServer)Http).LogProxy().GetScope(LogMsgType.Information, true, true);
+			log = ((DEHttpServer)Http).LogProxy().CreateScope(LogMsgType.Information, true, true);
 			log.WriteLine("{0}: {1}", InputMethod, context.Request.Url);
 			log.WriteLine();
 			log.WriteLine("UrlReferrer: {0}", context.Request.UrlReferrer);
