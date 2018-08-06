@@ -303,7 +303,18 @@ namespace TecWare.DE.Server.Configuration
 			}
 
 			// check the schema
-			doc.Validate(schema, ValidationEvent, false);
+			try
+			{
+				doc.Validate(schema, ValidationEvent, false);
+			}
+			catch
+			{
+				// write configuration
+				try { doc.Save(Path.Combine(Path.GetTempPath(), "des.xml")); }
+				catch { }
+
+				throw;
+			}
 
 			return doc.Root;
 		} // func ParseConfiguration
@@ -321,7 +332,7 @@ namespace TecWare.DE.Server.Configuration
 		{
 			if (e.Severity == XmlSeverityType.Warning)
 				sp.LogProxy().LogMsg(LogMsgType.Warning, "Validation: {0}\n{1} ({2:N0},{3:N0})", e.Message, e.Exception.SourceUri, e.Exception.LineNumber, e.Exception.LinePosition);
-			else
+			else // rethrow exception
 				throw e.Exception;
 		} // proc ValidationEvent
 
