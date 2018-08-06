@@ -328,7 +328,7 @@ namespace TecWare.DE.Server
 
 			// set default value
 			if (!compress.HasValue)
-				compress = contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
+				compress = !MimeTypeMapping.GetIsCompressedContent(contentType);
 
 			// set the content type 
 			context.Response.ContentType = contentType;
