@@ -62,7 +62,7 @@
 						<xs:documentation>Virtuelle Url unter der die Dateien eingeordnet werden sollen.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
-				<xs:attribute name="priority" type="xs:int" use="optional">
+				<xs:attribute name="priority" type="xs:int" use="optional" default="100">
 					<xs:annotation>
 						<xs:documentation>Bestimmt Reihenfolge der Aufrufe</xs:documentation>
 					</xs:annotation>
@@ -82,6 +82,11 @@
 				<xs:attribute name="allowListing" type="xs:boolean" use="optional" default="false">
 					<xs:annotation>
 						<xs:documentation>Allow listing of containing files.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
+				<xs:attribute name="encoding" type="EncodingType" use="optional" default="utf-8">
+					<xs:annotation>
+						<xs:documentation>Default encoding to open text files.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
 			</xs:extension>

@@ -709,14 +709,16 @@ namespace TecWare.DE.Server.Http
 		/// <param name="context"></param>
 		/// <param name="fileName"></param>
 		/// <param name="contentType"></param>
-		public static void WriteFile(this IDEWebRequestScope context, string fileName, string contentType = null)
+		/// <param name="defaultReadEncoding"></param>
+		public static void WriteFile(this IDEWebRequestScope context, string fileName, string contentType = null, Encoding defaultReadEncoding = null)
 			=> WriteFile(context, new FileInfo(fileName), contentType);
 
 		/// <summary>Writes the file to the output.</summary>
 		/// <param name="context"></param>
 		/// <param name="fi"></param>
 		/// <param name="contentType"></param>
-		public static void WriteFile(this IDEWebRequestScope context, FileInfo fi, string contentType = null)
+		/// <param name="defaultReadEncoding"></param>
+		public static void WriteFile(this IDEWebRequestScope context, FileInfo fi, string contentType = null, Encoding defaultReadEncoding = null)
 		{
 			// set last modified
 			SetLastModified(context, fi.LastWriteTimeUtc);
@@ -731,7 +733,8 @@ namespace TecWare.DE.Server.Http
 			WriteContent(context,
 				() => new FileStream(fi.FullName, FileMode.Open, FileAccess.Read),
 				fi.DirectoryName + "\\[" + fi.Length + "," + fi.LastWriteTimeUtc.ToString("R") + "]\\" + fi.Name,
-				contentType);
+				contentType,
+				defaultReadEncoding);
 		} // func WriteFile
 
 		/// <summary></summary>
@@ -787,7 +790,8 @@ namespace TecWare.DE.Server.Http
 		/// <param name="createSource"></param>
 		/// <param name="cacheId"></param>
 		/// <param name="contentType"></param>
-		public static void WriteContent(this IDEWebRequestScope context, Func<Stream> createSource, string cacheId, string contentType)
+		/// <param name="defaultReadEncoding">Encoding to read text files, default is utf-8.</param>
+		public static void WriteContent(this IDEWebRequestScope context, Func<Stream> createSource, string cacheId, string contentType, Encoding defaultReadEncoding = null)
 		{
 			if (cacheId == null)
 				throw new ArgumentNullException("cacheId");
@@ -803,6 +807,7 @@ namespace TecWare.DE.Server.Http
 
 			var http = context.Server as IDEHttpServer;
 			var o = http?.GetWebCache(cacheId);
+
 			// create the item
 			if (o == null)
 			{
@@ -815,15 +820,15 @@ namespace TecWare.DE.Server.Http
 					{
 						var isText = contentType.StartsWith("text/");
 						if (isLua)
-							o = CreateScript(context, () => Procs.OpenStreamReader(src, Encoding.Default), GetFileNameFromSource(src));
+							o = CreateScript(context, () => new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true), GetFileNameFromSource(src));
 						else if (isHtml)
 						{
-							var content = ParseHtml(Procs.OpenStreamReader(src, Encoding.Default), src.CanSeek ? src.Length : 1024, out var isPlainText, out var openOutput);
+							var content = ParseHtml(new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true), src.CanSeek ? src.Length : 1024, out var isPlainText, out var openOutput);
 							o = isPlainText ? content : CreateScript(context, () => new StringReader(openOutput ? "otext('text/html');" + content : content), GetFileNameFromSource(src));
 						}
 						else if (isText)
 						{
-							using (var tr = Procs.OpenStreamReader(src, Encoding.Default))
+							using (var tr = new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true))
 								o = tr.ReadToEnd();
 						}
 						else
@@ -849,6 +854,7 @@ namespace TecWare.DE.Server.Http
 				case ILuaScript c:
 					{
 						LuaResult r;
+						using (context.Use())
 						using (var g = new LuaHtmlTable(context, contentType))
 							r = c.Run(g, true);
 

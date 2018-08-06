@@ -506,7 +506,6 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	internal class DEHttpServer : DEConfigLogItem, IDEHttpServer
 	{

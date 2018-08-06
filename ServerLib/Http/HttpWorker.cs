@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
@@ -49,10 +50,12 @@ namespace TecWare.DE.Server.Http
 		{
 			base.OnEndReadConfiguration(config);
 
-			virtualBase = Config.GetAttribute("base", String.Empty);
+			var cfg = XConfigNode.Create(Server.Configuration, Config);
+
+			virtualBase = cfg.GetAttribute<string>("base");
 			if (virtualBase.StartsWith("/"))
 				virtualBase = virtualBase.Substring(1);
-			priority = Config.GetAttribute("priority", priority);
+			priority = cfg.GetAttribute<int>("priority");
 		} // proc OnEndReadConfiguration
 
 		private bool TestFilter(XElement x, string subPath)
@@ -119,6 +122,7 @@ namespace TecWare.DE.Server.Http
 		private static readonly XName xnMimeDef = MainNamespace + "mimeDef";
 		private string directoryBase;
 		private bool allowListing = false;
+		private Encoding defaultReadEncoding = Encoding.UTF8;
 
 		/// <summary></summary>
 		/// <param name="sp"></param>
@@ -138,6 +142,7 @@ namespace TecWare.DE.Server.Http
 
 			directoryBase = cfg.GetAttribute<string>("directory");
 			allowListing = cfg.GetAttribute<bool>("allowListing");
+			defaultReadEncoding = cfg.GetAttribute<Encoding>("encoding");
 		} // proc OnEndReadConfiguration
 
 		[LuaMember]
@@ -181,7 +186,7 @@ namespace TecWare.DE.Server.Http
 				// security
 				DemandFile(r, fileName);
 				// Send the file
-				await Task.Run(() => r.WriteFile(fileName, GetFileContentType(fileName)));
+				await Task.Run(() => r.WriteFile(fileName, GetFileContentType(fileName), defaultReadEncoding));
 				return true;
 			}
 			else if (useIndex && allowListing) // write index table
