@@ -52,7 +52,7 @@ namespace TecWare.DE.Server.Http
 
 			var cfg = XConfigNode.Create(Server.Configuration, Config);
 
-			virtualBase = cfg.GetAttribute<string>("base");
+			virtualBase = cfg.GetAttribute<string>("base") ?? String.Empty;
 			if (virtualBase.StartsWith("/"))
 				virtualBase = virtualBase.Substring(1);
 			priority = cfg.GetAttribute<int>("priority");
