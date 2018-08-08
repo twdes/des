@@ -69,10 +69,9 @@ namespace TecWare.DE.Server
 				try
 				{
 					var userLanguages = request.UserLanguages;
-					if (userLanguages == null || userLanguages.Length == 0)
-						return http.DefaultCultureInfo;
-					else
-						return System.Globalization.CultureInfo.GetCultureInfo(userLanguages[0]);
+					return userLanguages == null || userLanguages.Length == 0
+						? http.DefaultCultureInfo
+						: CultureInfo.GetCultureInfo(userLanguages[0]);
 				}
 				catch
 				{
@@ -365,14 +364,37 @@ namespace TecWare.DE.Server
 			return outputStream == null ? null : new StreamWriter(outputStream);
 		} // func GetOutputTextWriter
 
-		public void Redirect(string url)
+		public void Redirect(string url, string statusDescription = null)
 		{
+			if (String.IsNullOrEmpty(url))
+				throw new ArgumentNullException(nameof(url));
+
 			CheckOutputSended();
 			isOutputSended = true;
 
-			context.Response.Headers[HttpResponseHeader.Location] = url;
+			Uri uri;
+			bool externRedirect;
+			if (url[0] == '/') // absulute uri
+			{
+				uri = new Uri(new Uri(context.Request.Url.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped), UriKind.Absolute), url);
+				externRedirect = false;
+			}
+			else if(url.StartsWith("http://")
+				|| url.StartsWith("https://")) // relative redirect
+			{
+				uri = new Uri(url, UriKind.Absolute);
+				externRedirect = true;
+			}
+			else
+			{
+				uri = new Uri(context.Request.Url, url);
+				externRedirect = false;
+			}
+
+			context.Response.Headers[HttpResponseHeader.Location] = 
+				externRedirect ? uri.ToString() : uri.GetComponents(UriComponents.PathAndQuery, UriFormat.UriEscaped);
 			context.Response.StatusCode = 301;
-			context.Response.StatusDescription = "Redirect";
+			context.Response.StatusDescription = Procs.FilterHttpStatusDescription(statusDescription) ?? "Redirect";
 		} // proc Redirect
 
 		public void SetStatus(HttpStatusCode statusCode, string statusDescription)
@@ -1442,7 +1464,7 @@ namespace TecWare.DE.Server
 			}
 
 			ctx.Response.StatusCode = httpEx != null ? (int)httpEx.Code : (int)HttpStatusCode.InternalServerError;
-			ctx.Response.StatusDescription = FilterChar(ex.Message);
+			ctx.Response.StatusDescription = Procs.FilterHttpStatusDescription(ex.Message);
 			ctx.Response.Close();
 		} // proc ProcessResponeOnException
 
@@ -1527,21 +1549,7 @@ namespace TecWare.DE.Server
 			lock (prefixes)
 				return prefixes.Find(c => c.MatchPrefix(url, ignoreProtocol));
 		} // func FindPrefix
-
-		private static string FilterChar(string sMessage)
-		{
-			var sb = new StringBuilder();
-			for (var i = 0; i < sMessage.Length; i++)
-			{
-				var c = sMessage[i];
-				if (c == '\n')
-					sb.Append("<br/>");
-				else if (c > (char)0x1F || c == '\t')
-					sb.Append(c);
-			}
-			return sb.ToString();
-		} // func FilterChar
-
+				
 		private bool IsHttpListenerRunning { get { lock (httpListener) return httpListener.IsListening; } }
 
 		#endregion
