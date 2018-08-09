@@ -180,7 +180,8 @@ namespace TecWare.DE.Server.Http
 		TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength = -1);
 		/// <summary>Sends a redirect.</summary>
 		/// <param name="url"></param>
-		void Redirect(string url);
+		/// <param name="statusDescription"></param>
+		void Redirect(string url, string statusDescription = null);
 		/// <summary>Set status code, and closes the output.</summary>
 		/// <param name="statusCode"></param>
 		/// <param name="statusDescription"></param>
