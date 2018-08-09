@@ -1,3 +1,8 @@
+---
+uid: des.configuration.ports
+title: DE-Server Netzwerkkonfiguration
+---
+
 #### Entsprechend ob der DE-Server verschlüsselt oder offen betrieben werden soll, die Anweisungen <i>HTTPS</i> oder <i>HTTP</i> befolgen
 
 ##### <i>HTTPS</i> Verschlüsselter Zugriff
