@@ -7,7 +7,7 @@ title: DE-Server Beispielprogrammierung
 
 ### Einführung
 
-Der DE-Server unterstützt neben der Auslieferung von statischen Inhalten auch die dynamische Erzeugung mittels eingebettetem Lua-Programmcode. Lua-Scripte können dabei, ähnlich PHP, direkt in HTML eingebtettet werden (Siehe [Einbetten von Lua-Code](<xref:des.firststeps.programming#eingebetteter_code>)). Ebenfalls können Lua-Dateien selbst als Ressource für dynamische Web-Services dienen (Siehe [Luaq-Dateien](<xref:des.firststeps.programming#lua_dateien>))
+Der DE-Server unterstützt neben der Auslieferung von statischen Inhalten auch die dynamische Erzeugung mittels eingebettetem Lua-Programmcode. Lua-Scripte können dabei, ähnlich PHP, direkt in HTML eingebtettet werden (Siehe [Einbetten von Lua-Code](<xref:des.firststeps.programming#eingebetteter-code>)). Ebenfalls können Lua-Dateien selbst als Ressource für dynamische Web-Services dienen (Siehe [Lua-Dateien](<xref:des.firststeps.programming#lua-dateien>))
 
 > [!WARNING]
 > Heutige Browser rufen Webseiten teilweise mehrfach auf (aufgrund von Prefetch und anderen Techniken). Dabei ist sicherzustellen, das die gewünschten Funktionen problemlos doppelt ausgeführt werden können (zum Beispiel, wenn der Ressourcenverbrauch einer Datenbankabfrage vernachlässigbar ist). Ansonsten ist dies durch ein Transaktionsmodell sicherzustellen.
