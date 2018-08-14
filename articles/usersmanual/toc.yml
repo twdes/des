@@ -1,7 +1,13 @@
 - uid: des.readme
-- uid: des.installation
-- uid: des.configuration
+- name: Installation
+  items:
+  - uid: des.installation
+  - uid: des.configuration
+- name: Erste Schritte
+  items:
+  - uid: des.firststeps.configuration
+  - uid: des.firststeps.programming
 - uid: des.troubleshooting
-- name: Filesysteme
+- uid: des.filestructure
 - name: Debug
 - name: Database Schema

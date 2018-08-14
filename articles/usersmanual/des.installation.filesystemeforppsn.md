@@ -34,12 +34,16 @@
    ```bash
    #Binärdateien kopieren
    Copy-Item -Path C:\Projects\PPSnOS\ppsn\PPSnModCfg\bin\Debug\* -toSession (New-PSSession -ComputerName [DES-IP] -Credential [Hostbenutzer]) -Destination C:\DEServer\Bin\ -recurse -force
+
    #ppsn_server.xml aus ppsn.xml erstellen und entsprechend anpassen
    Copy-Item -Path C:\Projects\PPSnOS\ppsn\PPSnModCfg\bin\Debug\cfg\* -toSession (New-PSSession -ComputerName [DES-IP] -Credential [Hostbenutzer]) -Destination C:\DEServer\Cfg\ -recurse -force
+
    # Speedata Setup kopieren
    Copy-Item -Path C:\Projects\PPSnOS\ppsn\PPSnReport\system\update.ps1 -toSession (New-PSSession -ComputerName [DES-IP] -Credential [Hostbenutzer]) -Destination C:\DEServer\Speedata\ -recurse -force
+
    # Datenbankschema kopieren
    Copy-Item -Path "C:\Projects\PPSnOS\ppsn\Extern\ppsncfg\PPSnMaster\bin\Debug\PPSnMaster.publish.sql" -toSession (New-PSSession -ComputerName [DES-IP] -Credential [Hostbenutzer]) -Destination C:\DEServer\Temp\
+   
    # Client Kopieren
    Copy-Item -Path C:\Projects\PPSnOS\ppsn\PPSnDesktop\bin\Debug\* -toSession (New-PSSession -ComputerName [DES-IP] -Credential [Hostbenutzer]) -Destination C:\DEServer\Client\ -recurse -force
    ```
