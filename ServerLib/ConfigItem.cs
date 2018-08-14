@@ -28,6 +28,7 @@ using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Schema;
 using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
@@ -1086,7 +1087,7 @@ namespace TecWare.DE.Server
 			}
 			else if (returnValue == null)
 			{
-				returnValue = CreateDefaultXmlReturn(true, null);
+				returnValue = CreateDefaultReturn(r, true);
 			}
 			else if (returnValue is XElement x)
 			{
@@ -1095,20 +1096,27 @@ namespace TecWare.DE.Server
 			}
 			else if (returnValue is LuaResult result)
 			{
-				var xResult = CreateDefaultXmlReturn(true, result[1] as string);
-
-				if (result[0] is LuaTable)
-					Procs.ToXml((LuaTable)result[0], xResult);
-				else if (result[0] != null)
-					xResult.Add(result[0]);
-
-				returnValue = xResult;
+				switch (result[0])
+				{
+					case LuaTable t:
+						if (t.GetMemberValue("status", rawGet: true) == null)
+							SetStatusMembers(t, true, result[1] as string);
+						returnValue = t;
+						break;
+					case XElement x0:
+						if (x0.Attribute("status") == null)
+							SetStatusAttributes(x0, true, result[1] as string);
+						returnValue = x0;
+						break;
+					case null:
+					default:
+						returnValue = CreateDefaultReturn(r, true);
+						break;
+				}
 			}
 			else if (returnValue is LuaTable t)
 			{
-				var xResult = CreateDefaultXmlReturn(true, null);
-				Procs.ToXml(t, xResult);
-				returnValue = xResult;
+				SetStatusMembers(t, true);
 			}
 
 			// write return value in thread pool
@@ -1170,11 +1178,34 @@ namespace TecWare.DE.Server
 		} // func SetStatusAttributes
 
 		/// <summary></summary>
+		/// <param name="t"></param>
 		/// <param name="state"></param>
 		/// <param name="text"></param>
 		/// <returns></returns>
-		public static XElement CreateDefaultXmlReturn(bool state, string text = null)
-			=> SetStatusAttributes(new XElement("return"), state, text);
+		public static LuaTable SetStatusMembers(LuaTable t, bool state, string text = null)
+		{
+			t.SetMemberValue("status", state ? "ok" : "error");
+			if (text != null)
+				t.SetMemberValue("text", text);
+			return t;
+		} // proc SetStatusMembers
+
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <param name="state"></param>
+		/// <param name="text"></param>
+		/// <returns></returns>
+		public static object CreateDefaultReturn(IDEWebRequestScope r, bool state, string text = null)
+		{
+			if (r.AcceptType(MimeTypes.Text.Lson))
+				return SetStatusMembers(new LuaTable(), state, text);
+			else if (r.AcceptType(MimeTypes.Text.Xml)
+				|| r.AcceptType(MimeTypes.Application.Xaml)
+				|| r.AcceptType(MimeTypes.Text.Html))
+				return SetStatusAttributes(new XElement("return"), state, text);
+			else
+				return null;
+		} // func CreateDefaultReturn
 
 		#endregion
 

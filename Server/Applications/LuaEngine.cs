@@ -36,9 +36,8 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server
 {
-	#region -- class LuaEngine ----------------------------------------------------------
+	#region -- class LuaEngine --------------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Service for Debugging and running lua scripts.</summary>
 	internal sealed class LuaEngine : DEConfigLogItem, IDEWebSocketProtocol, IDELuaEngine
 	{
@@ -489,14 +488,12 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaEngineTraceLineDebugger -------------------------------------
+		#region -- class LuaEngineTraceLineDebugger -----------------------------------
 
 		private sealed class LuaEngineTraceLineDebugger : LuaTraceLineDebugger
 		{
-			#region -- class LuaTraceLineDebugInfo --------------------------------------
+			#region -- class LuaTraceLineDebugInfo ------------------------------------
 
-			///////////////////////////////////////////////////////////////////////////////
-			/// <summary></summary>
 			private sealed class LuaTraceLineDebugInfo : ILuaDebugInfo
 			{
 				private readonly string chunkName;
@@ -674,17 +671,18 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaDebugSession ------------------------------------------------
+		#region -- class LuaDebugSession ----------------------------------------------
 
 		/// <summary>Debug session and scope for the commands.</summary>
 		private sealed class LuaDebugSession : LuaTable, IDEDebugContext, IDisposable
 		{
-			#region -- class ReferenceEqualImplementation -------------------------------
+			#region -- class ReferenceEqualImplementation -----------------------------
 
 			private sealed class ReferenceEqualImplementation : IEqualityComparer<object>
 			{
 				public new bool Equals(object x, object y)
-					=> Object.ReferenceEquals(x, y);
+					=> ReferenceEquals(x, y);
+
 				public int GetHashCode(object obj)
 					=> obj.GetHashCode(); // fail
 
@@ -702,7 +700,7 @@ namespace TecWare.DE.Server
 			private readonly CancellationToken cancellationToken;
 			private DEConfigItem currentItem = null; // current node, that is used as parent
 
-			#region -- Ctor/Dtor --------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			public LuaDebugSession(LuaEngine engine, IDEWebSocketScope context, CancellationToken cancellationToken)
 			{
@@ -729,7 +727,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Execute Protocol -------------------------------------------------
+			#region -- Execute Protocol -----------------------------------------------
 
 			public async Task ExecuteAsync()
 			{
@@ -803,7 +801,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- CreateException, CreateMember ------------------------------------
+			#region -- CreateException, CreateMember ----------------------------------
 
 			private XElement CreateException(XElement x, Exception e)
 			{
@@ -1012,7 +1010,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- ProcessMessage ---------------------------------------------------
+			#region -- ProcessMessage -------------------------------------------------
 
 			private async Task ProcessMessage(XElement x)
 			{
@@ -1085,7 +1083,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Execute ----------------------------------------------------------
+			#region -- Execute --------------------------------------------------------
 
 			private async Task<XElement> ExecuteAsync(XElement xMessage)
 			{
@@ -1138,7 +1136,9 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- RunScript --------------------------------------------------------
+			#region -- RunScript ------------------------------------------------------
+
+			#region -- class RunScriptClass -------------------------------------------
 
 			private sealed class RunScriptClass
 			{
@@ -1279,6 +1279,8 @@ namespace TecWare.DE.Server
 				} // func GetAnswer
 			} // class RunScriptClass
 
+			#endregion
+
 			private async Task<XElement> RunScriptAsync(XElement xMessage)
 			{
 				// parse script
@@ -1294,7 +1296,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Recompile --------------------------------------------------------
+			#region -- Recompile ------------------------------------------------------
 
 			private async Task<XElement> RecompileAsync(XElement xMesage)
 			{
@@ -1315,7 +1317,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- GlobalVars -------------------------------------------------------
+			#region -- GlobalVars -----------------------------------------------------
 
 			private XElement GetMember(XElement xMessage)
 			{
@@ -1329,7 +1331,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- UseNode ----------------------------------------------------------
+			#region -- UseNode --------------------------------------------------------
 
 			private XElement UseNode(XElement xMessage)
 			{
@@ -1349,7 +1351,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- List -------------------------------------------------------------
+			#region -- List -----------------------------------------------------------
 
 			private IEnumerable<XElement> GetNodeList(DEConfigItem current, bool recusive)
 			{
@@ -1379,7 +1381,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Scope Commands ---------------------------------------------------
+			#region -- Scope Commands -------------------------------------------------
 
 			private DECommonScope CreateDebugScope()
 			{

@@ -1049,7 +1049,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="r"></param>
 		/// <param name="errorMessage"></param>
 		public static void WriteSafeCall(this IDEWebRequestScope r, string errorMessage)
-			=> WriteXml(r, DEConfigItem.CreateDefaultXmlReturn(false, errorMessage));
+			=> WriteObject(r, DEConfigItem.CreateDefaultReturn(r, false, errorMessage));
 
 		/// <summary></summary>
 		/// <param name="r"></param>

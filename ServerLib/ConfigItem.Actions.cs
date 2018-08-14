@@ -389,7 +389,7 @@ namespace TecWare.DE.Server
 
 				// Write protocol
 				Log.LogMsg(LogMsgType.Error, e.GetMessageString());
-				return (false, CreateDefaultXmlReturn(false, e.Message));
+				return (false, CreateDefaultReturn(context, false, e.Message));
 			}
 		} // func InvokeAction
 
