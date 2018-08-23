@@ -1116,7 +1116,8 @@ namespace TecWare.DE.Server
 			}
 			else if (returnValue is LuaTable t)
 			{
-				SetStatusMembers(t, true);
+				if (t.GetMemberValue("status", rawGet: true) == null)
+					SetStatusMembers(t, true);
 			}
 
 			// write return value in thread pool
