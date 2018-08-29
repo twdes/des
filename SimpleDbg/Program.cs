@@ -719,6 +719,14 @@ namespace TecWare.DE.Server
 							c.Width = varColumnWidth;
 					}
 				}
+				else
+				{
+					foreach (var c in columnsList)
+					{
+						if (c.IsVariable)
+							c.Width = 10;
+					}
+				}
 			}
 
 			// clear invisible columns
@@ -748,7 +756,12 @@ namespace TecWare.DE.Server
 			if (String.IsNullOrEmpty(value))
 				return new string(' ', maxWidth);
 			else if (value.Length > maxWidth)
-				return value.Substring(0, maxWidth - 3) + "...";
+			{
+				if (maxWidth < 10)
+					return value.Substring(0, maxWidth);
+				else
+					return value.Substring(0, maxWidth - 3) + "...";
+			}
 			else
 				return value.PadRight(maxWidth);
 		} // func TableStringPad
