@@ -622,7 +622,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="contentType"></param>
 		/// <returns></returns>
 		public static bool AcceptType(this IDEWebRequestScope r, string contentType)
-			=> Array.FindIndex(r.AcceptedTypes, c => c.StartsWith(contentType)) >= 0;
+			=> r.AcceptedTypes == null || r.AcceptedTypes.Length == 0 ? true : Array.FindIndex(r.AcceptedTypes, c => c.StartsWith(contentType)) >= 0;
 
 		#endregion
 
