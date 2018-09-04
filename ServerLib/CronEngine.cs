@@ -37,11 +37,17 @@ namespace TecWare.DE.Server
 		/// <summary></summary>
 		/// <param name="job"></param>
 		void CancelJob(ICronJobExecute job);
+
 		/// <summary>Executes a job.</summary>
 		/// <param name="job">Job, to execute.</param>
 		/// <param name="cancellation">Cancellation token.</param>
 		/// <returns></returns>
 		Task ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation);
+
+		/// <summary>Update Timestamp for an job.</summary>
+		/// <param name="job"></param>
+		/// <param name="next"></param>
+		void UpdateNextRuntime(ICronJobItem job, DateTime? next);
 	} // interface IDECronEngine
 
 	#endregion
@@ -57,6 +63,7 @@ namespace TecWare.DE.Server
 		/// <param name="other"></param>
 		/// <returns></returns>
 		bool CanRunParallelTo(ICronJobExecute other);
+
 		/// <summary>Displayname of the job.</summary>
 		string DisplayName { get; }
 	} // interface ICronJobExecute
@@ -71,6 +78,7 @@ namespace TecWare.DE.Server
 		/// <summary>Notifies about the next time border.</summary>
 		/// <param name="dt">Scheduled time.</param>
 		void NotifyNextRun(DateTime dt);
+		
 		/// <summary>Time borders for the schedule of the job.</summary>
 		CronBound Bound { get; }
 		/// <summary>Unique name of the job, e.g. ConfigPath, Guid</summary>
@@ -213,8 +221,7 @@ namespace TecWare.DE.Server
 				return true;
 			else
 			{
-				var o = other as ICronJobItem;
-				return o == null || runAfterJob.FirstOrDefault(c => Procs.IsFilterEqual(o.UniqueName, c)) == null || CanRunParallelTo(o);
+				return !(other is ICronJobItem o) || runAfterJob.FirstOrDefault(c => Procs.IsFilterEqual(o.UniqueName, c)) == null || CanRunParallelTo(o);
 			}
 		} // func ICronJobExecute.CanRunParallelTo
 

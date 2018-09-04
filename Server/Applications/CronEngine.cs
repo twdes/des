@@ -31,9 +31,8 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	internal sealed class DECronEngine : DEConfigLogItem, IDECronEngine
 	{
-		#region -- class CurrentRunningJob ------------------------------------------------
+		#region -- class CurrentRunningJob --------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
 		/// <summary>Currently, running job.</summary>
 		private sealed class CurrentRunningJob
 		{
@@ -46,8 +45,8 @@ namespace TecWare.DE.Server
 
 			public CurrentRunningJob(DECronEngine parent, ICronJobExecute job, CancellationToken cancellationToken)
 			{
-				this.parent = parent;
-				this.job = job;
+				this.parent = parent ?? throw new ArgumentNullException(nameof(parent));
+				this.job = job ?? throw new ArgumentNullException(nameof(job));
 				this.jobCancel = job as ICronJobCancellation;
 
 				this.cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -100,10 +99,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- struct CronCacheItem ---------------------------------------------------
+		#region -- struct CronCacheItem -----------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private struct CronCacheItem
 		{
 			public ICronJobItem Job;
@@ -112,9 +109,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class CronItemCacheDescriptor ------------------------------------------
+		#region -- class CronItemCacheDescriptor --------------------------------------
 
-		/// <summary></summary>
 		private sealed class CronItemCacheDescriptor : IDEListDescriptor
 		{
 			private CronItemCacheDescriptor()
@@ -155,16 +151,15 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class CronItemCacheController ------------------------------------------
+		#region -- class CronItemCacheController --------------------------------------
 
-		/// <summary></summary>
 		private sealed class CronItemCacheController : IDEListController
 		{
 			private readonly DECronEngine owner;
 
 			public CronItemCacheController(DECronEngine owner)
 			{
-				this.owner = owner;
+				this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
 				owner.RegisterList(Id, this, true);
 			} // ctor
 
@@ -203,7 +198,7 @@ namespace TecWare.DE.Server
 
 		private bool isCronIdleActive = false;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		public DECronEngine(IServiceProvider sp, string name)
 			: base(sp, name)
@@ -248,7 +243,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Configuration ----------------------------------------------------------
+		#region -- Configuration ------------------------------------------------------
 
 		private static void CollectCronJobItems(List<ICronJobItem> cronItems, DEConfigItem current)
 		{
@@ -294,7 +289,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Last Run Time ----------------------------------------------------------
+		#region -- Last Run Time ------------------------------------------------------
 
 		private void LoadNextRuntime()
 		{
@@ -387,6 +382,33 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc SaveNextRuntime
+
+		private void UpdateNextRuntime(ICronJobItem job, DateTime next, bool save)
+		{
+			if (cronItemCache == null)
+				return;
+
+			var index = Array.FindIndex(cronItemCache, c => c.Job == job);
+			if (index >= 0)
+			{
+				cronItemCache[index].NextRun = next;
+				job.NotifyNextRun(next);
+				if (save)
+					SaveNextRuntime();
+			}
+		} // func UpdateNextRuntime
+
+		void IDECronEngine.UpdateNextRuntime(ICronJobItem job, DateTime? next)
+		{
+			if (job == null)
+				throw new ArgumentNullException(nameof(job));
+
+			var n = next ?? (job.Bound.IsEmpty ? DateTime.Now.AddHours(1) : job.Bound.GetNext(DateTime.Now));
+			if (n < DateTime.Now)
+				throw new ArgumentOutOfRangeException(nameof(next), n, "Timestamp must not be in the past.");
+
+			UpdateNextRuntime(job, n, true);
+		} // proc UpdateNextRuntime
 
 		private string NextRuntimeFile => Path.ChangeExtension(this.LogFileName, "next");
 
@@ -488,17 +510,8 @@ namespace TecWare.DE.Server
 						Log.Info("jobfinish: {0}", name);
 
 					// calculate next runtime
-					if (jobBound != null && !jobBound.Bound.IsEmpty && cronItemCache != null)
-					{
-						var index = Array.FindIndex(cronItemCache, c => c.Job == jobBound);
-						if (index >= 0)
-						{
-							var next = jobBound.Bound.GetNext(DateTime.Now);
-							cronItemCache[index].NextRun = next;
-							jobBound.NotifyNextRun(next);
-							SaveNextRuntime();
-						}
-					}
+					if (jobBound != null && !jobBound.Bound.IsEmpty)
+						UpdateNextRuntime(jobBound, jobBound.Bound.GetNext(DateTime.Now), true);
 				}
 			}
 		} // proc FinishJob
