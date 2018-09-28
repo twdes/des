@@ -67,10 +67,10 @@ namespace TecWare.DE.Server.Http
 		} // func TestFilter
 
 		/// <summary></summary>
-		/// <param name="subPath"></param>
+		/// <param name="fileName"></param>
 		/// <returns></returns>
-		protected string GetFileContentType(string subPath)
-			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, subPath)).Select(x => x.Value).FirstOrDefault();
+		protected string GetFileContentType(string fileName)
+			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, fileName)).Select(x => x.Value).FirstOrDefault();
 
 		/// <summary></summary>
 		/// <param name="r"></param>
