@@ -523,31 +523,7 @@ namespace TecWare.DE.Server
 			} // ctor
 
 			protected override void OnExceptionUnwind(LuaTraceLineExceptionEventArgs e)
-			{
-				var luaFrames = new List<LuaStackFrame>();
-				var offsetForRecalc = 0;
-				LuaExceptionData currentData = null;
-
-				// get default exception data
-				if (e.Exception.Data[LuaRuntimeException.ExceptionDataKey] is LuaExceptionData)
-				{
-					currentData = LuaExceptionData.GetData(e.Exception);
-					offsetForRecalc = currentData.Count;
-					luaFrames.AddRange(currentData);
-				}
-				else
-					currentData = LuaExceptionData.GetData(e.Exception, resolveStackTrace: false);
-
-				// re-trace the stack frame
-				var trace = new StackTrace(e.Exception, true);
-				for (var i = offsetForRecalc; i < trace.FrameCount - 1; i++)
-					luaFrames.Add(LuaExceptionData.GetStackFrame(trace.GetFrame(i)));
-
-				// add trace point
-				luaFrames.Add(new LuaStackFrame(trace.GetFrame(trace.FrameCount - 1), new LuaTraceLineDebugInfo(e, engine.FindScript(e.SourceName))));
-
-				currentData.UpdateStackTrace(luaFrames.ToArray());
-			} // proc OnExceptionUnwind
+				=> LuaExceptionData.UnwindException(e.Exception, () => new LuaTraceLineDebugInfo(e, engine.FindScript(e.SourceName)));
 
 			protected override void OnFrameEnter(LuaTraceLineEventArgs e)
 			{
