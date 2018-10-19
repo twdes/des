@@ -158,18 +158,6 @@ namespace TecWare.DE.Stuff
 			}
 		} // func EncodeWindowsPassword
 
-		/// <summary>Decode a password from a string.</summary>
-		/// <param name="passwordValue">Password value.</param>
-		/// <returns></returns>
-		/// <remarks>
-		/// If the password starts with 
-		/// - win0x:[windows protected hex-bytes] 
-		/// - win64:[base64 windows protected byte array]
-		/// - plain:[plaintext]
-		/// Nothing, it is a plain text password.
-		/// 
-		/// Windows Protected password can be encode with powershell ConvertFrom-SecureString without the key argument.
-		/// </remarks>
 		public static SecureString DecodePassword(string passwordValue)
 		{
 			if (String.IsNullOrEmpty(passwordValue))
@@ -197,10 +185,6 @@ namespace TecWare.DE.Stuff
 				return passwordValue.CreateSecureString();
 		} // func DecodePassword
 
-		/// <summary>Encode a password for decode password.</summary>
-		/// <param name="password"></param>
-		/// <param name="passwordType"></param>
-		/// <returns></returns>
 		public static string EncodePassword(SecureString password, string passwordType)
 		{
 			if (passwordType == null)

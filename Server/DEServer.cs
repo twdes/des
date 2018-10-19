@@ -1067,16 +1067,12 @@ namespace TecWare.DE.Server
 		private sealed class DELuaRuntime : LuaGlobal
 		{
 			private readonly DEServer server;
-			private Lazy<LuaFilePackage> io = new Lazy<LuaFilePackage>(() => new LuaFilePackage());
 
 			public DELuaRuntime(Lua lua, DEServer server) 
 				: base(lua)
 			{
 				this.server = server ?? throw new ArgumentNullException(nameof(server));
 			} // ctor
-
-			[LuaMember("io")]
-			public dynamic LuaLibraryIO => io.Value;
 
 			[LuaMember("await")]
 			private LuaResult LuaAwait(object func)
@@ -1119,6 +1115,14 @@ namespace TecWare.DE.Server
 				}
 			} // func LuaAwait
 
+			[LuaMember]
+			public string EncodePassword(string password, string passwordType)
+				=> Passwords.EncodePassword(password.CreateSecureString(), passwordType);
+
+			[LuaMember]
+			public string DecodePassword(string passwordValue)
+				=> Passwords.DecodePassword(passwordValue).AsPlainText();
+
 			[LuaMember("format")]
 			private string LuaFormat(string text, params object[] args)
 				=> String.Format(text, args);
@@ -1144,14 +1148,6 @@ namespace TecWare.DE.Server
 						item
 					));
 			} // func UseNode
-
-			[LuaMember]
-			public string EncodePassword(string password, string passwordType)
-				=> Passwords.EncodePassword(password.CreateSecureString(), passwordType);
-
-			[LuaMember]
-			public string DecodePassword(string passwordValue)
-				=> Passwords.DecodePassword(passwordValue).AsPlainText();
 
 			protected override void OnPrint(string text)
 				=> server.Log.LogMsg(LogMsgType.Debug, text);

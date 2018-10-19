@@ -32,8 +32,6 @@
 		<file src="bin\Release\Neo.Lua.pdb" target="build" />
 		<file src="bin\Release\Neo.Lua.Dbg.dll" target="build" />
 		<file src="bin\Release\Neo.Lua.Dbg.pdb" target="build" />
-		<file src="bin\Release\Neo.Lua.Desktop.dll" target="build" />
-		<file src="bin\Release\Neo.Lua.Desktop.pdb" target="build" />
 		
 		<file src="TecWare.DES.Deploy.targets" target="build" />
 

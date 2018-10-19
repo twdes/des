@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
@@ -220,6 +221,28 @@ namespace TecWare.DE.Stuff
 		/// <returns>Password hash.</returns>
 		public static byte[] ParsePasswordHash(string passwordHash)
 			=> Passwords.ParsePasswordHash(passwordHash);
+
+		/// <summary>Decode a password from a string.</summary>
+		/// <param name="passwordValue">Password value.</param>
+		/// <returns></returns>
+		/// <remarks>
+		/// If the password starts with 
+		/// - win0x:[windows protected hex-bytes] 
+		/// - win64:[base64 windows protected byte array]
+		/// - plain:[plaintext]
+		/// Nothing, it is a plain text password.
+		/// 
+		/// Windows Protected password can be encode with powershell ConvertFrom-SecureString without the key argument.
+		/// </remarks>
+		public static SecureString DecodePassword(string passwordValue)
+			=> Passwords.DecodePassword(passwordValue);
+
+		/// <summary>Encode a password for decode password.</summary>
+		/// <param name="password"></param>
+		/// <param name="passwordType"></param>
+		/// <returns></returns>
+		public static string EncodePassword(SecureString password, string passwordType)
+			=> Passwords.EncodePassword(password, passwordType);
 
 		#endregion
 

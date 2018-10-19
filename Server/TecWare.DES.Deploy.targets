@@ -19,8 +19,6 @@
 		<TecWareDESFile Include="Neo.Lua.pdb" />
 		<TecWareDESFile Include="Neo.Lua.Dbg.dll" />
 		<TecWareDESFile Include="Neo.Lua.Dbg.pdb" />
-		<TecWareDESFile Include="Neo.Lua.Desktop.dll" />
-		<TecWareDESFile Include="Neo.Lua.Desktop.pdb" />
 	</ItemGroup>
 	
 	<ItemGroup>
