@@ -53,6 +53,15 @@
 		</xs:restriction>
 	</xs:simpleType>
 
+	<xs:simpleType name="PasswordType">
+		<xs:annotation>
+			<xs:documentation>Password type</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\w{5}\:.*" />
+		</xs:restriction>
+	</xs:simpleType>
+
 	<xs:complexType name="LogType">
 		<xs:annotation>
 			<xs:documentation>Defines a log file configuration type.</xs:documentation>

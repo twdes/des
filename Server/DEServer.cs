@@ -1064,7 +1064,7 @@ namespace TecWare.DE.Server
 
 		#region -- class DELuaRuntime -------------------------------------------------
 
-		private sealed class DELuaRuntime : LuaGlobalPortable
+		private sealed class DELuaRuntime : LuaGlobal
 		{
 			private readonly DEServer server;
 			private Lazy<LuaFilePackage> io = new Lazy<LuaFilePackage>(() => new LuaFilePackage());
@@ -1145,13 +1145,21 @@ namespace TecWare.DE.Server
 					));
 			} // func UseNode
 
+			[LuaMember]
+			public string EncodePassword(string password, string passwordType)
+				=> Passwords.EncodePassword(password.CreateSecureString(), passwordType);
+
+			[LuaMember]
+			public string DecodePassword(string passwordValue)
+				=> Passwords.DecodePassword(passwordValue).AsPlainText();
+
 			protected override void OnPrint(string text)
 				=> server.Log.LogMsg(LogMsgType.Debug, text);
 		} // class DELuaRuntime
 
 		#endregion
 
-		private LuaGlobalPortable luaRuntime = null;
+		private LuaGlobal luaRuntime = null;
 
 		/// <summary>Obsolete</summary>
 		/// <param name="target"></param>

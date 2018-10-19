@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security;
 using System.Text;
 using System.Xml.Linq;
 using Neo.IronLua;
@@ -89,6 +90,19 @@ namespace TecWare.DE.Server.Configuration
 				value = String.IsNullOrEmpty(attributeValue)
 						? null
 						: new DirectoryInfo(attributeValue);
+				return true;
+			}
+			else if (type == typeof(SecureString))
+			{
+				try
+				{
+					value = Passwords.DecodePassword(attributeValue);
+				}
+				catch
+				{
+					value = null;
+					return false;
+				}
 				return true;
 			}
 			else if (type == typeof(FileSize))

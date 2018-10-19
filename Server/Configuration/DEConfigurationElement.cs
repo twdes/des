@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -48,6 +49,8 @@ namespace TecWare.DE.Server.Configuration
 					return typeof(DirectoryInfo);
 				case "FileSize":
 					return typeof(FileSize);
+				case "PasswordType":
+					return typeof(SecureString);
 				default:
 					switch (typeCode)
 					{
@@ -152,7 +155,7 @@ namespace TecWare.DE.Server.Configuration
 	internal class DEConfigurationBase<T> : IDEConfigurationAnnotated
 		where T : XmlSchemaAnnotated
 	{
-		private T item;
+		private readonly T item;
 		private Lazy<string> getDocumentation;
 
 		public DEConfigurationBase(T item)
