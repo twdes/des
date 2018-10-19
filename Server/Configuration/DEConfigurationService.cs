@@ -650,7 +650,7 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func FindConfigTreeElement
 
-		private static Regex macroReplacement = new Regex("\\$\\(([\\w\\d]+)\\)", RegexOptions.Singleline | RegexOptions.Compiled);
+		private static Regex macroReplacement = new Regex("\\$\\(([\\w\\d\\-_]+)\\)", RegexOptions.Singleline | RegexOptions.Compiled);
 
 		private bool ChangeConfigurationValue(ParseContext context, XObject x, string currentValue, out string newValue)
 		{
