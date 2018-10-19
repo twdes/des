@@ -26,38 +26,6 @@ namespace TecWare.DE.Stuff
 
 	internal static class Passwords
 	{
-		public static SecureString CreateSecureString(this string password)
-			=> CreateSecureString(password, 0, password.Length);
-
-		public unsafe static SecureString CreateSecureString(this string password, int offset, int length)
-		{
-			if (String.IsNullOrEmpty(password))
-				throw new ArgumentNullException(nameof(password));
-
-			fixed (char* c = password)
-				return new SecureString(c + offset, length);
-		} // func CereateSecureString
-
-		public static string AsPlainText(this SecureString ss)
-		{
-			if (ss == null)
-				return null;
-			else if (ss.Length == 0)
-				return String.Empty;
-			else
-			{
-				var pwdPtr = Marshal.SecureStringToGlobalAllocUnicode(ss);
-				try
-				{
-					return Marshal.PtrToStringUni(pwdPtr);
-				}
-				finally
-				{
-					Marshal.ZeroFreeGlobalAllocUnicode(pwdPtr);
-				}
-			}
-		} // func AsPlainText
-
 		#region -- Encode/Decode Password ---------------------------------------------
 
 		[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]

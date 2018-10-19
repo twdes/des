@@ -15,7 +15,9 @@
 #endregion
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -243,6 +245,52 @@ namespace TecWare.DE.Stuff
 		/// <returns></returns>
 		public static string EncodePassword(SecureString password, string passwordType)
 			=> Passwords.EncodePassword(password, passwordType);
+
+		/// <summary>Create a secure string from a string.</summary>
+		/// <param name="password"></param>
+		/// <returns></returns>
+		[EditorBrowsable(EditorBrowsableState.Advanced)]
+		public static SecureString CreateSecureString(this string password)
+			=> CreateSecureString(password, 0, password.Length);
+
+		/// <summary>Create a secure string from a string.</summary>
+		/// <param name="password"></param>
+		/// <param name="offset"></param>
+		/// <param name="length"></param>
+		/// <returns></returns>
+		[EditorBrowsable(EditorBrowsableState.Advanced)]
+		public unsafe static SecureString CreateSecureString(this string password, int offset, int length)
+		{
+			if (String.IsNullOrEmpty(password))
+				throw new ArgumentNullException(nameof(password));
+
+			fixed (char* c = password)
+				return new SecureString(c + offset, length);
+		} // func CereateSecureString
+
+		/// <summary>Extract password a string.</summary>
+		/// <param name="ss"></param>
+		/// <returns></returns>
+		[EditorBrowsable(EditorBrowsableState.Advanced)]
+		public static string AsPlainText(this SecureString ss)
+		{
+			if (ss == null)
+				return null;
+			else if (ss.Length == 0)
+				return String.Empty;
+			else
+			{
+				var pwdPtr = Marshal.SecureStringToGlobalAllocUnicode(ss);
+				try
+				{
+					return Marshal.PtrToStringUni(pwdPtr);
+				}
+				finally
+				{
+					Marshal.ZeroFreeGlobalAllocUnicode(pwdPtr);
+				}
+			}
+		} // func AsPlainText
 
 		#endregion
 
