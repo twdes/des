@@ -28,7 +28,7 @@ namespace TecWare.DE.Stuff
 	{
 		#region -- Encode/Decode Password ---------------------------------------------
 
-		[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+		[StructLayout(LayoutKind.Sequential)]
 		private struct DATA_BLOB
 		{
 			public int DataSize;
@@ -37,11 +37,11 @@ namespace TecWare.DE.Stuff
 
 		[DllImport("Crypt32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 		[return: MarshalAs(UnmanagedType.Bool)]
-		private static extern bool CryptProtectData(ref DATA_BLOB pDataIn, string szDataDescr, ref DATA_BLOB pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
+		private static extern bool CryptProtectData(ref DATA_BLOB pDataIn, string szDataDescr, IntPtr pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
 
 		[DllImport("Crypt32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
 		[return: MarshalAs(UnmanagedType.Bool)]
-		private static extern bool CryptUnprotectData(ref DATA_BLOB pDataIn, string szDataDescr, ref DATA_BLOB pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
+		private static extern bool CryptUnprotectData(ref DATA_BLOB pDataIn, string szDataDescr, IntPtr pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
 
 		[DllImport("Kernel32.dll", EntryPoint = "RtlZeroMemory", SetLastError = false)]
 		private static extern void ZeroMemory(IntPtr dest, IntPtr size);
@@ -51,7 +51,6 @@ namespace TecWare.DE.Stuff
 		private unsafe static SecureString DecodeWindowsPassword(byte[] passwordBytes, bool forLocalMachine)
 		{
 			var dataOut = default(DATA_BLOB);
-			var dataIV = default(DATA_BLOB);
 			var hData = default(GCHandle);
 			try
 			{
@@ -66,7 +65,7 @@ namespace TecWare.DE.Stuff
 				var flags = 1;
 				if (forLocalMachine)
 					flags |= 4;
-				if (!CryptUnprotectData(ref dataIn, String.Empty, ref dataIV, IntPtr.Zero, IntPtr.Zero, flags, ref dataOut))
+				if (!CryptUnprotectData(ref dataIn, null, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, flags, ref dataOut))
 					throw new Win32Exception();
 
 				// unpack data
@@ -91,7 +90,6 @@ namespace TecWare.DE.Stuff
 		private static byte[] EncodeWindowsPassword(IntPtr passwordPtr, int passwordSize, bool forLocalMachine)
 		{
 			var dataOut = default(DATA_BLOB);
-			var dataIV = default(DATA_BLOB);
 			try
 			{
 				var dataIn = new DATA_BLOB()
@@ -104,7 +102,7 @@ namespace TecWare.DE.Stuff
 				var flags = 1;
 				if (forLocalMachine)
 					flags |= 4;
-				if (!CryptProtectData(ref dataIn, String.Empty, ref dataIV, IntPtr.Zero, IntPtr.Zero, flags, ref dataOut))
+				if (!CryptProtectData(ref dataIn, null, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, flags, ref dataOut))
 					throw new Win32Exception();
 
 				// unpack data
