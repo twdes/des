@@ -138,18 +138,22 @@ namespace TecWare.DE.Server.Applications
 		{
 			if (identity is WindowsIdentity windowsIdentity)
 			{
-				return windowsIdentity.IsAuthenticated
-					? Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity))
-					: null;
+				return Task.FromResult<IDEAuthentificatedUser>(
+					windowsIdentity.IsAuthenticated
+						? new UserContext(this, identity)
+						: null
+				);
 			}
 			else if (identity is HttpListenerBasicIdentity basicIdentity)
 			{
-				return TestPassword(basicIdentity.Password)
-					? Task.FromResult<IDEAuthentificatedUser>(new UserContext(this, identity))
-					: null;
+				return Task.FromResult<IDEAuthentificatedUser>(
+					TestPassword(basicIdentity.Password)
+						? new UserContext(this, identity)
+						: null
+				);
 			}
 			else
-				return null;
+				return Task.FromResult<IDEAuthentificatedUser>(null);
 		} // func AuthentificateAsync
 
 		private bool DemandToken(string securityToken)
