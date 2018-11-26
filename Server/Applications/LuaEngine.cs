@@ -26,6 +26,7 @@ using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Data;
@@ -779,6 +780,20 @@ namespace TecWare.DE.Server
 
 			#region -- CreateException, CreateMember ----------------------------------
 
+			private string RemoveInvalidXmlChars(string value)
+			{
+				var sb = new StringBuilder(value.Length);
+
+				for(var i=0;i<value.Length;i++)
+				{
+					var c = value[i];
+					if (XmlConvert.IsXmlChar(c))
+						sb.Append(c);
+				}
+
+				return sb.ToString();
+			} // func RemoveInvalidXmlChars
+
 			private XElement CreateException(XElement x, Exception e)
 			{
 				if (e is AggregateException aggE)
@@ -791,14 +806,14 @@ namespace TecWare.DE.Server
 							x.Add(CreateException(new XElement("innerException"), enumerator.Current));
 					}
 					else
-						x.Add(new XAttribute("message", e.Message));
+						x.Add(new XAttribute("message", RemoveInvalidXmlChars(e.Message)));
 				}
 				else
 				{
-					x.Add(new XAttribute("message", e.Message));
+					x.Add(new XAttribute("message", RemoveInvalidXmlChars(e.Message)));
 					x.Add(new XAttribute("type", LuaType.GetType(e.GetType()).AliasOrFullName));
 					var data = LuaExceptionData.GetData(e);
-					x.Add(new XElement("stackTrace", data == null ? e.StackTrace : data.StackTrace));
+					x.Add(new XElement("stackTrace", RemoveInvalidXmlChars(data == null ? e.StackTrace : data.StackTrace)));
 
 					if (e.InnerException != null)
 						x.Add(CreateException(new XElement("innerException"), e.InnerException));
@@ -843,7 +858,7 @@ namespace TecWare.DE.Server
 						new XAttribute("t", displayType)
 					);
 
-					if(value == null)
+					if (value == null)
 					{ }
 					else if (valueExists)
 					{
@@ -870,8 +885,8 @@ namespace TecWare.DE.Server
 					{
 						CreateTypedEnumerable((System.Collections.IEnumerable)value, enumerableType, x);
 					}
-					else 
-						x.Add(new XText(Procs.ChangeType<string>(value)));
+					else
+						x.Add(new XText(RemoveInvalidXmlChars(Procs.ChangeType<string>(value))));
 
 					return x;
 				}
@@ -1019,19 +1034,35 @@ namespace TecWare.DE.Server
 			public async Task SendAnswerAsync(XElement xMessage, XElement xAnswer)
 			{
 				// update token
+				UpdateAnswerToken(xMessage, xAnswer);
+
+				Debug.Print("[Server] Send Message: {0}", xAnswer.GetAttribute("token", 0));
+
+				// encode and send
+				byte[] buf;
+				try
+				{
+					buf = Encoding.UTF8.GetBytes(xAnswer.ToString(SaveOptions.None));
+				}
+				catch (Exception e)
+				{
+					var x = CreateException(new XElement(xAnswer.Name), e);
+					UpdateAnswerToken(xMessage, x);
+					buf = Encoding.UTF8.GetBytes(x.ToString(SaveOptions.None));
+				}
+
+				await Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, cancellationToken);
+			} // proc SendAnswerAsync
+
+			private static void UpdateAnswerToken(XElement xMessage, XElement xAnswer)
+			{
 				if (xMessage != null && xAnswer.Attribute("token") == null)
 				{
 					var token = xMessage.GetAttribute("token", 0);
 					if (token > 0)
 						xAnswer.Add(new XAttribute("token", token));
 				}
-
-				Debug.Print("[Server] Send Message: {0}", xAnswer.GetAttribute("token", 0));
-
-				// encode and send
-				var buf = Encoding.UTF8.GetBytes(xAnswer.ToString(SaveOptions.None));
-				await Socket.SendAsync(new ArraySegment<byte>(buf), WebSocketMessageType.Text, true, cancellationToken);
-			} // proc SendAnswerAsync
+			} // proc UpdateAnswerToken
 
 			private void Notify(XElement xNotify)
 			{
