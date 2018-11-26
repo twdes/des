@@ -685,7 +685,10 @@ namespace TecWare.DE.Server.Http
 			using (var dst = context.GetOutputStream(contentType, GetStreamLength(stream)))
 			{
 				if (dst != null)
+				{
 					stream.CopyTo(dst);
+					stream.Close();
+				}
 			}
 		} // proc WriteStream
 
