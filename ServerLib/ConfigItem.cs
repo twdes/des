@@ -373,6 +373,7 @@ namespace TecWare.DE.Server
 				try
 				{
 					item.currentConfig = configNew;
+					item.configNodeLazy = new Lazy<XConfigNode>(() => XConfigNode.Create(item.Server.Configuration, configNew));
 					log.WriteLine($"BEGIN Aktiviere [{item.Name}]");
 					using (log.Indent())
 					{
@@ -495,6 +496,7 @@ namespace TecWare.DE.Server
 		private ReaderWriterLockSlim lockConfig;    // Lese/Schreibsperre für die Konfiguration
 		private List<DEConfigItem> subItems;        // Konfigurationseinträge unter diesem Knoten
 		private XElement currentConfig = null;      // Zugriff auf den Konfigurationsknoten, darf nur lesend zugegriffen werden, und es dürfen keine Referenzen gespeichert werden
+		private Lazy<XConfigNode> configNodeLazy = null; // return lazy configuration description
 		private DEConfigItemState state;            // Aktueller Status des Konfigurationsknotens
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
@@ -911,6 +913,8 @@ namespace TecWare.DE.Server
 		/// <summary>mit / getrennnter Pfad</summary>
 		public string ConfigPath => GetNodeUri(new StringBuilder()).ToString();
 
+		/// <summary>Return configuration node.</summary>
+		public XConfigNode ConfigNode => configNodeLazy?.Value;
 		/// <summary>Zugriff auf die aktuelle Konfiguration</summary>
 		public XElement Config => currentConfig;
 

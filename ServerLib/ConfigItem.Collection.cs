@@ -864,22 +864,25 @@ namespace TecWare.DE.Server
 		/// <param name="item"></param>
 		public void PublishItem(object item)
 		{
-			IDEListController controller;
-			DEConfigItemPublicAction action;
-			DEConfigItemPublicPanel panel;
-			string sId;
+			string id;
 
-			if ((controller = item as IDEListController) != null)
-				sId = controller.Id;
-			else if ((action = item as DEConfigItemPublicAction) != null)
-				sId = action.ActionId;
-			else if ((panel = item as DEConfigItemPublicPanel) != null)
-				sId = panel.Id;
-			else
-				throw new ArgumentException("item");
+			switch (item)
+			{
+				case IDEListController controller:
+					id = controller.Id;
+					break;
+				case DEConfigItemPublicAction action:
+					id = action.ActionId;
+					break;
+				case DEConfigItemPublicPanel panel:
+					id = panel.Id;
+					break;
+				default:
+					throw new ArgumentException(nameof(item));
+			}
 
 			lock (publishedItems)
-				publishedItems[sId] = item;
+				publishedItems[id] = item;
 		} // proc PublishItem
 
 		[LuaMember("PublishPanel")]
@@ -902,6 +905,10 @@ namespace TecWare.DE.Server
 			PublishItem(configAction);
 		} // proc LuaPublishAction
 
+		/// <summary>Access configuration lua friendly.</summary>
+		[LuaMember("Config")]
+		public LuaTable LuaConfig { get => ConfigNode.ToTable(); set { } }
+
 		/// <summary>Wird durch den List-Controller aufgerufen, wenn er zerstört wird.</summary>
 		/// <param name="controller"></param>
 		public void UnregisterList(IDEListController controller)
@@ -911,8 +918,7 @@ namespace TecWare.DE.Server
 				controllerList.Remove(controller);
 				lock (publishedItems)
 				{
-					object item;
-					if (publishedItems.TryGetValue(controller.Id, out item) && item == controller)
+					if (publishedItems.TryGetValue(controller.Id, out var item) && item == controller)
 						publishedItems.Remove(controller.Id);
 				}
 			}

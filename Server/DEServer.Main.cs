@@ -20,6 +20,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
@@ -448,7 +449,7 @@ namespace TecWare.DE.Server
 
 			var debuggerProgram = simpleDbgAssembly.GetType("TecWare.DE.Server.Program", true);
 
-			var runProgramAsync = debuggerProgram.GetRuntimeMethod("RunDebugProgramAsync", new Type[] { typeof(Uri), typeof(bool) })
+			var runProgramAsync = debuggerProgram.GetRuntimeMethod("RunDebugProgramAsync", new Type[] { typeof(Uri), typeof(ICredentials), typeof(bool) })
 				?? throw new ArgumentException("RunDebugProgramAsync not found.");
 			var writeMessage = debuggerProgram.GetRuntimeMethod("WriteMessage", new Type[] { typeof(ConsoleColor), typeof(string) })
 				?? throw new ArgumentException("WriteMessage not found.");
@@ -468,7 +469,7 @@ namespace TecWare.DE.Server
 			ServiceLog = new DebugLog(writeMessage);
 
 			// invoke the debugger
-			var debuggerTask = (Task)runProgramAsync.Invoke(null, new object[] { uri, true });
+			var debuggerTask = (Task)runProgramAsync.Invoke(null, new object[] { uri, null, true });
 			debuggerTask.Wait();
 			return true;
 		} // proc InvokeDebugger

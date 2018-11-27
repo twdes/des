@@ -41,6 +41,10 @@ namespace TecWare.DE.Server
 	{
 		[Option('o', HelpText = "Uri to the server.", Required = true)]
 		public string Uri { get; set; }
+		[Option('u', "username", HelpText = "Authentification user", Required = false)]
+		public string UserName { get; set; }
+		[Option('p', "password", HelpText = "Authentification user", Required = false)]
+		public string Password { get; set; }
 
 		[Option("wait", HelpText = "Wait time before, the connection will be established (in ms).")]
 		public int Wait { get; set; } = 0;
@@ -74,16 +78,17 @@ namespace TecWare.DE.Server
 		private readonly DebugView view;
 		private readonly Stopwatch startUp;
 
-		public ConsoleDebugSession(DebugView view, Uri serverUri, bool inProcess)
+		private ICredentials currentCredentials;
+
+		public ConsoleDebugSession(DebugView view, Uri serverUri, ICredentials credentials, bool inProcess)
 			: base(serverUri)
 		{
 			this.view = view;
 			this.startUp = Stopwatch.StartNew();
+			this.currentCredentials = credentials ?? CredentialCache.DefaultCredentials;
 
 			this.DefaultTimeout = inProcess ? 0 : 10000;
 		} // ctor
-
-		private ICredentials currentCredentials = CredentialCache.DefaultCredentials;
 
 		protected override ICredentials GetCredentials()
 			=> currentCredentials;
@@ -258,7 +263,7 @@ namespace TecWare.DE.Server
 
 			var r = parser.ParseArguments<SimpleDebugArguments>(args);
 
-			return r.MapResult<SimpleDebugArguments, int>(
+			return r.MapResult(
 				options =>
 				{
 					try
@@ -277,7 +282,7 @@ namespace TecWare.DE.Server
 				},
 				errors =>
 				{
-					var ht = HelpText.AutoBuild<SimpleDebugArguments>(r);
+					var ht = HelpText.AutoBuild(r);
 					Console.WriteLine(ht.ToString());
 
 					return 1;
@@ -290,14 +295,18 @@ namespace TecWare.DE.Server
 			if (arguments.Wait > 0)
 				await Task.Delay(arguments.Wait);
 
-			await RunDebugProgramAsync(new Uri(arguments.Uri), false);
+			await RunDebugProgramAsync(
+				new Uri(arguments.Uri), 
+				arguments.UserName == null ? null : UserCredential.Create(arguments.UserName, arguments.Password), 
+				false
+			);
 		} // proc RunDebugProgram
 
-		public static async Task RunDebugProgramAsync(Uri uri, bool inProcess)
+		public static async Task RunDebugProgramAsync(Uri uri, ICredentials credentials, bool inProcess)
 		{
 			// connection
 			view.IsConnected = false;
-			session = new ConsoleDebugSession(view, uri, inProcess);
+			session = new ConsoleDebugSession(view, uri, credentials, inProcess);
 
 			// should be post in the thread context
 			Task.Run(() => session.RunProtocolAsync()).ContinueWith(
@@ -436,7 +445,7 @@ namespace TecWare.DE.Server
 				Console.WriteLine();
 			}
 
-			return UserCredential.Wrap(new NetworkCredential(userName, sec));
+			return UserCredential.Create(userName, sec);
 		} // func GetCredentialsFromUser
 
 		#endregion

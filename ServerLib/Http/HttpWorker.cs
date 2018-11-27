@@ -50,7 +50,7 @@ namespace TecWare.DE.Server.Http
 		{
 			base.OnEndReadConfiguration(config);
 
-			var cfg = XConfigNode.Create(Server.Configuration, Config);
+			var cfg = ConfigNode;
 
 			virtualBase = cfg.GetAttribute<string>("base") ?? String.Empty;
 			if (virtualBase.StartsWith("/"))
@@ -138,7 +138,7 @@ namespace TecWare.DE.Server.Http
 		{
 			base.OnEndReadConfiguration(config);
 
-			var cfg = XConfigNode.Create(Server.Configuration, config.ConfigNew);
+			var cfg = ConfigNode;
 
 			directoryBase = cfg.GetAttribute<string>("directory");
 			allowListing = cfg.GetAttribute<bool>("allowListing");
