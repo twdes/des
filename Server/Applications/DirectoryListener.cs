@@ -18,23 +18,17 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
-using System.Threading.Tasks;
 using Neo.IronLua;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
 	internal class DirectoryListenerItem : DEConfigLogItem
 	{
-		#region --enum NotifyMethod -------------------------------------------------------
+		#region -- enum NotifyMethod --------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private enum NotifyMethod
 		{
 			None,
@@ -44,10 +38,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class FileNotifyEvent --------------------------------------------------
+		#region -- class FileNotifyEvent ----------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class FileNotifyEvent
 		{
 			private readonly string name;
@@ -141,7 +133,7 @@ namespace TecWare.DE.Server
 			fileSystemWatcher.Filter = Config.GetAttribute("filter", "*.*");
 			fileSystemWatcher.IncludeSubdirectories = Config.GetAttribute("recursive", false);
 
-			notifyMethod = Config.GetAttribute<NotifyMethod>("method", NotifyMethod.None);
+			notifyMethod = Config.GetAttribute("method", NotifyMethod.None);
 
 			switch (notifyMethod)
 			{
@@ -299,10 +291,8 @@ namespace TecWare.DE.Server
 		} // proc RefreshFiles
 
 		private void FileSystemWatcher_Error(object sender, ErrorEventArgs e)
-		{
-			Log.Except("FileSystemWatcher failed.", e.GetException());
-		} // proc FileSystemWatcher_Error
-
+			=> Log.Except("FileSystemWatcher failed.", e.GetException());
+		
 		#endregion
 
 		#region -- Handle File Notify -----------------------------------------------------
@@ -383,9 +373,7 @@ namespace TecWare.DE.Server
 		} // proc NotifyCheckIdle
 
 		private void NotifyFile(FileInfo file)
-		{
-			CallMember("NotifyFile", file);
-		} // proc NotifyFile
+			=> CallMember("NotifyFile", file);
 		
 		#endregion
 	} // class DirectoryListenerItem
