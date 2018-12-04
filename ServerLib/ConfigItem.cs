@@ -510,7 +510,7 @@ namespace TecWare.DE.Server
 			this.subItems = new List<DEConfigItem>();
 
 			this.server = new Lazy<IDEServer>(() => this.GetService<IDEServer>(true), true);
-			this.log = new Lazy<LoggerProxy>(this.LogProxy, true);
+			this.log = new Lazy<LoggerProxy>(() => this.LogProxy(name), true);
 
 			this.sp = sp ?? throw new ArgumentNullException("sp");
 			this.name = name;
