@@ -1,9 +1,17 @@
 /// <reference path="libs/jquery.d.ts" />
-var __extends = (this && this.__extends) || function (d, b) {
-    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-    function __() { this.constructor = d; }
-    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-};
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    }
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 function loadTemplate(template, node) {
     var html = template.html();
     html = html.replace(/\{\{([A-Z0-9]|\/)+\}\}/gim, function (key) {
@@ -54,7 +62,7 @@ function info(message) {
         console.log(message, args);
     }
 } // info
-var DETab = (function () {
+var DETab = /** @class */ (function () {
     function DETab(app, viewId) {
         var _this = this;
         this.app = app;
@@ -109,19 +117,20 @@ var DETab = (function () {
     });
     return DETab;
 }()); // class DETab
-var DELogTab = (function (_super) {
+var DELogTab = /** @class */ (function (_super) {
     __extends(DELogTab, _super);
     function DELogTab(app) {
-        _super.call(this, app, "tabLog");
-        this.onLoading = false;
-        this.currentLines = 0; // current loaded lines
-        this.totalLines = 0; // last updatedtotal lines
-        this.newTotalLines = 0; // per event notified total lines
-        this.fetchLogButton = $('#fetchAllAction');
-        this.fetchLogButton.css("visibility", "collapse");
-        this.fetchLogButton.click((function () {
+        var _this = _super.call(this, app, "tabLog") || this;
+        _this.onLoading = false;
+        _this.currentLines = 0; // current loaded lines
+        _this.totalLines = 0; // last updatedtotal lines
+        _this.newTotalLines = 0; // per event notified total lines
+        _this.fetchLogButton = $('#fetchAllAction');
+        _this.fetchLogButton.css("visibility", "collapse");
+        _this.fetchLogButton.click((function () {
             this.reload2(true);
-        }).bind(this));
+        }).bind(_this));
+        return _this;
     } // ctor
     DELogTab.prototype.unselect = function () {
         _super.prototype.unselect.call(this);
@@ -175,7 +184,7 @@ var DELogTab = (function (_super) {
         }
         this.App.serverGet(this.currentUrl + listGetCommand, (function (data) {
             var innerHtmlElements = new Array();
-            var startAt = Number($('items', data).attr('s'));
+            //var startAt = Number($('items', data).attr('s'))
             this.currentLines = Number($('items', data).attr('c'));
             this.totalLines = Number($('items', data).attr('tc'));
             state.text('Parse ' + this.currentLines.toString() + '...');
@@ -184,7 +193,7 @@ var DELogTab = (function (_super) {
                 var lineType = line.attr('typ');
                 var lineStamp = new Date(Date.parse(line.attr('stamp')));
                 var lineText = line.text().replace(/\</g, '&lt;').replace(/\>/g, '&gt;');
-                if (firstDate == null || firstDate != lineStamp.getDate()) {
+                if (firstDate == null || firstDate != lineStamp.getDate()) { // add seperator
                     innerHtmlElements.push(['<tr><td colspan="2" class="logLineHeader">Datum: ', lineStamp.toLocaleDateString(), '</td></tr>']);
                     firstDate = lineStamp.getDate();
                 }
@@ -206,7 +215,7 @@ var DELogTab = (function (_super) {
         }).bind(this));
     }; // reload
     DELogTab.prototype.appendLines = function () {
-        if (this.onLoading)
+        if (this.onLoading) // do not load lines, durring full load
             return;
         // are there lines to append
         var diff = this.newTotalLines - this.totalLines;
@@ -253,10 +262,10 @@ var DELogTab = (function (_super) {
     }; // updateLine
     return DELogTab;
 }(DETab)); // class DELogTab
-var DEProperties = (function (_super) {
+var DEProperties = /** @class */ (function (_super) {
     __extends(DEProperties, _super);
     function DEProperties(app) {
-        _super.call(this, app, "tabProperties");
+        return _super.call(this, app, "tabProperties") || this;
     } // ctor
     DEProperties.prototype.reload = function (url) {
         var rootElement = this.RootElement;
@@ -297,10 +306,10 @@ var DEProperties = (function (_super) {
     }; // updateProperty
     return DEProperties;
 }(DETab)); // class DEProperties
-var DEConfig = (function (_super) {
+var DEConfig = /** @class */ (function (_super) {
     __extends(DEConfig, _super);
     function DEConfig(app) {
-        _super.call(this, app, "tabConfig");
+        return _super.call(this, app, "tabConfig") || this;
     } // ctor
     DEConfig.prototype.reload = function (url) {
         this.RootElement.empty();
@@ -331,10 +340,10 @@ var DEConfig = (function (_super) {
     }; // loadElement
     return DEConfig;
 }(DETab)); // class DEConfig
-var DEServerInfo = (function (_super) {
+var DEServerInfo = /** @class */ (function (_super) {
     __extends(DEServerInfo, _super);
     function DEServerInfo(app) {
-        _super.call(this, app, "tabInfo");
+        return _super.call(this, app, "tabInfo") || this;
     } // ctor
     DEServerInfo.prototype.reload = function (url) {
         _super.prototype.reload.call(this, url);
@@ -371,7 +380,7 @@ var DEServerInfo = (function (_super) {
     }; // reload
     return DEServerInfo;
 }(DETab)); // class DEServerInfo
-var DEViewer = (function () {
+var DEViewer = /** @class */ (function () {
     function DEViewer() {
         this.onReloading = false;
         this.currentUri = ""; // selected uri
