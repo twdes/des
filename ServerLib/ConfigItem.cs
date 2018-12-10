@@ -467,8 +467,10 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		/// <summary>Sicherheitsebene Serveradministrator</summary>
+		/// <summary>Request needs administrator privileges.</summary>
 		public const string SecuritySys = "desSys";
+		/// <summary>Request needs authentification to an user.</summary>
+		public const string SecurityUser = "desUser";
 
 		/// <summary></summary>
 		public const string AttachedScriptsListId = "tw_attached_scripts";
@@ -1125,7 +1127,8 @@ namespace TecWare.DE.Server
 			}
 
 			// write return value in thread pool
-			await Task.Run(() => r.WriteObject(returnValue));
+			if (returnValue != null)
+				await Task.Run(() => r.WriteObject(returnValue));
 
 			// check for disposal
 			if (returnValue is IDisposable d)
@@ -1206,7 +1209,8 @@ namespace TecWare.DE.Server
 				return SetStatusMembers(new LuaTable(), state, text);
 			else if (r.AcceptType(MimeTypes.Text.Xml)
 				|| r.AcceptType(MimeTypes.Application.Xaml)
-				|| r.AcceptType(MimeTypes.Text.Html))
+				|| r.AcceptType(MimeTypes.Text.Html)
+				|| r.AcceptType("*/*"))
 				return SetStatusAttributes(new XElement("return"), state, text);
 			else
 				return null;
@@ -1331,15 +1335,23 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		/// <summary>Setzt ein neues Ereignis.</summary>
-		/// <param name="eventId">Bezeichnung des Ereignisses.</param>
-		/// <param name="index">Optionaler Index für das Ereignis. Falls mehrere Elemente zu diesem Ereignis zugeordnet werden können.</param>
-		/// <param name="values">Werte die zu dieser Kombination gesetzt werden.</param>
+		/// <summary>Send a event to the client.</summary>
+		/// <param name="eventId">Id of the event.</param>
+		/// <param name="index">Optional index for the event, if more the one element can be attached to the event.</param>
+		/// <param name="values">Additional arguemnts for the event.</param>
 		/// <remarks>Ereignisse werden nicht zwingend sofort gemeldet, sondern können auch gepollt werden.
 		/// Deswegen sollte bei den <c>values</c> darauf geachtet werden, dass sie überschreibbar gestaltet 
 		/// werden.</remarks>
-		protected void FireEvent(string eventId, string index = null, XElement values = null)
-			=> Server.AppendNewEvent(this, eventId, index, values);
+		protected void FireSysEvent(string eventId, string index = null, XElement values = null)
+			=> Server.AppendNewEvent(this, SecuritySys, eventId, index, values);
+
+		/// <summary>Send a event to the client.</summary>
+		/// <param name="securityToken">Security token, who can see this event. <c>null</c>, is filled with the node security token.</param>
+		/// <param name="eventId">Id of the event.</param>
+		/// <param name="index">Optional index for the event, if more the one element can be attached to the event.</param>
+		/// <param name="values">Additional arguemnts for the event.</param>
+		protected void FireEvent(string securityToken, string eventId, string index = null, XElement values = null)
+			=> Server.AppendNewEvent(this, securityToken, eventId, index, values);
 
 		/// <summary>Gibt den internen Namen zurück (muss nicht veröffentlicht werden).</summary>
 		public virtual string Name => name;

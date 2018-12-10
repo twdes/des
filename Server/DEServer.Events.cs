@@ -34,10 +34,8 @@ namespace TecWare.DE.Server
 {
 	internal partial class DEServer : IDEListService, IDEWebSocketProtocol
 	{
-		#region -- class FiredEvent -------------------------------------------------------
+		#region -- class FiredEvent ---------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class FiredEvent
 		{
 			private int lastFired;
@@ -48,43 +46,36 @@ namespace TecWare.DE.Server
 			private readonly string index;
 			private XElement values;
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			public FiredEvent(int revision, string path, string eventId, string index, XElement values)
 			{
 				if (String.IsNullOrEmpty(path))
-					throw new ArgumentNullException("path");
+					throw new ArgumentNullException(nameof(path));
 				if (String.IsNullOrEmpty(eventId))
-					throw new ArgumentNullException("event");
-				if (String.IsNullOrEmpty(index))
-					index = String.Empty;
+					throw new ArgumentNullException(nameof(eventId));
 
 				this.path = path;
 				this.eventId = eventId;
-				this.index = index;
+				this.index = index ?? String.Empty;
 
 				Reset(revision, values);
 			} // ctor
 
 			public override bool Equals(object obj)
-			{
-				FiredEvent other = obj as FiredEvent;
-				if (other != null)
-					return IsEqual(other.Path, other.Event, other.Index);
-				else
-					return base.Equals(obj);
-			} // func Equals
+				=> obj is FiredEvent other
+					? IsEqual(other.Path, other.Event, other.Index)
+					: base.Equals(obj);
 
 			public override int GetHashCode()
-			{
-				return path.GetHashCode() | eventId.GetHashCode() | index.GetHashCode();
-			} // func GetHashCode
+				=> path.GetHashCode() | eventId.GetHashCode() | index.GetHashCode();
 
 			#endregion
 
 			public void Reset(int revision, XElement values)
 			{
-				this.lastFired = Environment.TickCount;
+				lastFired = Environment.TickCount;
+
 				this.revision = revision;
 				this.values = values;
 			} // proc Reset
@@ -92,46 +83,39 @@ namespace TecWare.DE.Server
 			/// <summary>Formuliert das Event.</summary>
 			/// <returns>Xml-Fragment für dieses Event</returns>
 			public XElement GetEvent()
-			{
-				return new XElement("event",
-					new XAttribute("path", path),
-					new XAttribute("event", eventId),
-					String.IsNullOrEmpty(index) ? null : new XAttribute("index", index),
-					values);
-			} // func GetEvent
+			=> FormatEvent(path, eventId, index, values);
 
 			public bool IsEqual(string testPath, string testEvent, string testIndex)
-			{
-				return String.Compare(path, testPath, true) == 0 &&
-						String.Compare(eventId, testEvent, true) == 0 &&
-						String.Compare(index, testIndex, true) == 0;
-			} // func IsEqual
+				=> String.Compare(path, testPath, StringComparison.OrdinalIgnoreCase) == 0
+					&& String.Compare(eventId, testEvent, StringComparison.OrdinalIgnoreCase) == 0
+					&& String.Compare(index, testIndex, StringComparison.OrdinalIgnoreCase) == 0;
 
-			public bool IsActive { get { return Environment.TickCount - lastFired > 300000; } } // 5min
-			public string Path { get { return path; } }
-			public string Event { get { return eventId; } }
-			public string Index { get { return index; } }
-			public int Revision { get { return revision; } }
+			public bool IsActive => Environment.TickCount - lastFired > 300000; // 5min
+			public string Path => path;
+			public string Event => eventId;
+			public string Index => index;
+			public int Revision => revision;
 		} // class FiredEvent
 
 		#endregion
 
-		#region -- class EventSession -----------------------------------------------------
+		#region -- class EventSession -------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class EventSession : IDisposable
 		{
 			private readonly DEServer server;
 			private readonly IDEWebSocketScope context;
 			private readonly SynchronizationContext synchronizationContext;
 
-			#region -- Ctor/Dtor ------------------------------------------------------------
+			private string[] eventFilter = Array.Empty<string>();
+
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			public EventSession(DEServer server, IDEWebSocketScope context)
 			{
-				this.server = server;
-				this.context = context;
+				this.server = server ?? throw new ArgumentNullException(nameof(server));
+				this.context = context ?? throw new ArgumentNullException(nameof(context));
+
 				this.synchronizationContext = SynchronizationContext.Current ?? throw new ArgumentNullException("SynchronizationContext.Current");
 
 				server.AddEventSession(this);
@@ -142,7 +126,7 @@ namespace TecWare.DE.Server
 				// remove session
 				server.RemoveEventSession(this);
 			} // proc Dispose
-			
+
 			public Task CloseAsync(CancellationToken cancellationToken)
 			{
 				if (Socket.State == WebSocketState.Open)
@@ -153,30 +137,78 @@ namespace TecWare.DE.Server
 
 			#endregion
 
+			#region -- PostNotify -----------------------------------------------------
+
 			private void ExecuteNotify(object state)
 			{
 				var eventLine = (string)state;
 
-				var segment = new ArraySegment<byte>(context.Http.DefaultEncoding.GetBytes(eventLine));
-				Socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None)
+				SendEventLineAsync(eventLine)
 					.ContinueWith(
-						t => server.Log.Warn("Event Socket notify failed.", t.Exception), 
+						t => server.Log.Warn("Event Socket notify failed.", t.Exception),
 						TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously
 					);
 			} // proc ExecuteNotify
 
-			public void PostNotify(string path, string eventId, string eventLine, CancellationToken cancellationToken)
+			private Task SendEventLineAsync(string eventLine)
+			{
+				var segment = new ArraySegment<byte>(context.Http.DefaultEncoding.GetBytes(eventLine));
+				return Socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+			} // proc SendEventLineAsync
+
+			public void TryPostNotify(string path, string securityToken, string eventId, string eventLine, CancellationToken cancellationToken)
 			{
 				// check if websocket still alive
 				if (Socket.State != WebSocketState.Open)
 					return;
 
+				// check if is eventId filtered
+				if (eventFilter.Length > 0 && !eventFilter.Contains(eventId))
+					return;
+
 				// check if the path is requested
-				if (context.AbsolutePath.Length > 0 && !path.StartsWith(context.AbsolutePath, StringComparison.OrdinalIgnoreCase))
+				if ((context.AbsolutePath.Length > 0 && !path.StartsWith(context.AbsolutePath, StringComparison.OrdinalIgnoreCase))
+					|| !context.TryDemandToken(securityToken))
 					return;
 
 				synchronizationContext.Post(ExecuteNotify, eventLine);
-			} // proc NotifyAsync
+			} // proc TryNotifyAsync
+
+			#endregion
+
+			public async Task ExecuteCommandAsync(string commandLine)
+			{
+				var pos = commandLine.IndexOf(' ');
+				var firstPart = pos >= 0 ? commandLine.Substring(0, pos) : commandLine;
+				// parse command line
+				switch (firstPart)
+				{
+					case "/setFilter":
+						if (pos == -1)
+							eventFilter = Array.Empty<string>(); // clear filter
+						else
+							SetEventFilter(commandLine.Substring(pos + 1));
+						goto case "/getFilter";
+					case "/getFilter":
+						await SendEventLineAsync(FormatEventLine(FormatEvent(null, "eventFilter", null, new XElement("f", String.Join(";", eventFilter)))));
+						break;
+					case "/ping": // ping event
+						await SendEventLineAsync(FormatEventLine(FormatEvent(null, "pong", null, null))); // write empty event
+						break;
+					default:
+						throw new ArgumentOutOfRangeException(nameof(commandLine), firstPart, "Unknown command.");
+				}
+			} // proc ExecuteCommandAsync
+
+			public void SetEventFilter(string newEventFilter)
+			{
+				eventFilter = newEventFilter == null
+					? Array.Empty<string>()
+					: (from c in newEventFilter.Split(new char[] { ';', ',' })
+					   let c1 = c.Trim()
+					   where c1.Length > 0
+					   select c1).ToArray();
+			} // proc SetEventFilter
 
 			public WebSocket Socket => context.WebSocket;
 		} // class EventSession
@@ -217,7 +249,7 @@ namespace TecWare.DE.Server
 
 		#region -- Events -----------------------------------------------------------------
 
-		public void AppendNewEvent(DEConfigItem item, string eventId, string index, XElement values = null)
+		public void AppendNewEvent(DEConfigItem item, string securityToken, string eventId, string index, XElement values = null)
 		{
 			lock (propertyChanged)
 			{
@@ -232,23 +264,36 @@ namespace TecWare.DE.Server
 					ev.Reset(currentRevision, values);
 				else
 					propertyChanged[key] = ev = new FiredEvent(currentRevision, configPath, eventId, index, values);
-
+				
 				// web socket event handling
-				FireEventOnSocket(configPath, eventId, ev.GetEvent());
+				FireEventOnSocket(configPath, securityToken ?? item.SecurityToken, eventId, ev.GetEvent());
 			}
 		} // proc AppendNewEvent
 
-		private string GetEventKey(string path, string eventId, string index)
+		private static string GetEventKey(string path, string eventId, string index)
 		{
 			if (String.IsNullOrEmpty(path))
 				throw new ArgumentNullException("path");
 			if (String.IsNullOrEmpty(eventId))
 				throw new ArgumentNullException("event");
-			if (String.IsNullOrEmpty(index))
-				index = String.Empty;
 
-			return path + ":" + eventId + "[" + index + "]";
+			return String.IsNullOrEmpty(index)
+				? path + ":" + eventId
+				: path + ":" + eventId + "[" + index + "]";
 		} // func GetEventKey
+
+		private static XElement FormatEvent(string path, string eventId, string index, XElement values)
+		{
+			return new XElement("event",
+				path == null ? null : new XAttribute("path", path),
+				new XAttribute("event", eventId),
+				String.IsNullOrEmpty(index) ? null : new XAttribute("index", index),
+				values
+			);
+		} // func 
+
+		private static string FormatEventLine(XElement xEvent)
+			=> xEvent.ToString(SaveOptions.DisableFormatting);
 
 		private void CleanOutdatedEvents()
 		{
@@ -272,7 +317,7 @@ namespace TecWare.DE.Server
 				}
 
 				// Lösche die Schlüssel
-				for (int i = 0; i < keyCount; i++)
+				for (var i = 0; i < keyCount; i++)
 					propertyChanged.Remove(cleanKeys[i]);
 
 				lastEventClean = Environment.TickCount;
@@ -288,15 +333,26 @@ namespace TecWare.DE.Server
 			if (eventSessionsClosing)
 				return;
 
+			// create event session
 			var eventSession = new EventSession(this, webSocket);
 			try
 			{
-				var b = new byte[1024];
 				var ws = webSocket.WebSocket;
 				while (ws.State == WebSocketState.Open)
 				{
-					var segment = new ArraySegment<byte>(b);
-					await ws.ReceiveAsync(segment, CancellationToken.None);
+					var segment = WebSocket.CreateServerBuffer(1024);
+					var r = await ws.ReceiveAsync(segment, CancellationToken.None);
+					if (r.MessageType == WebSocketMessageType.Text) // message as relative uri
+					{
+						try
+						{
+							await eventSession.ExecuteCommandAsync(Encoding.UTF8.GetString(segment.Array, segment.Offset, segment.Count));
+						}
+						catch (Exception e)
+						{
+							Log.Except("Command failed: ", e);
+						}
+					}
 				}
 			}
 			catch (Exception e)
@@ -305,22 +361,22 @@ namespace TecWare.DE.Server
 			}
 		} // func AcceptWebSocket
 
-		private void FireEventOnSocket(string path, string eventId, XElement xEvent)
+		private void FireEventOnSocket(string path, string securityToken, string eventId, XElement xEvent)
 		{
 			// prepare line
-			var eventLine = xEvent.ToString(SaveOptions.DisableFormatting);
+			var eventLine = FormatEventLine(xEvent);
 			
 			using (eventSessions.EnterReadLock())
 			{
 				// a call to notify can cause a remove of this session, this will be done in a different thread
 				foreach (var es in eventSessions.List.Cast<EventSession>())
-					es.PostNotify(path, eventId, eventLine, CancellationToken.None);
+					es.TryPostNotify(path, securityToken, eventId, eventLine, CancellationToken.None);
 			}
 		} // proc FireEventOnSocket
 
 		string IDEWebSocketProtocol.Protocol => "des_event";
 		string IDEWebSocketProtocol.BasePath => String.Empty;
-		string IDEWebSocketProtocol.SecurityToken => SecuritySys;
+		string IDEWebSocketProtocol.SecurityToken => SecurityUser;
 
 		#endregion
 
@@ -616,10 +672,11 @@ namespace TecWare.DE.Server
 				return new XElement("events",
 					new XAttribute("rev", currentRevision),
 					(
-					from c in propertyChanged.Values
-					where c.Revision > rev
-					select c.GetEvent()
-					));
+						from c in propertyChanged.Values
+						where c.Revision > rev
+						select c.GetEvent()
+					)
+				);
 			}
 		} // func HttpEventAction
 	} // class DEServer

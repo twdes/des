@@ -23,6 +23,7 @@ using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;

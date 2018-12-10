@@ -174,7 +174,7 @@ namespace TecWare.DE.Server.Applications
 				if (securityTokens == null || serverSecurityVersion != currentServerSecurityVersion)
 				{
 					// Resolve token groups to the list
-					securityTokens = Server.BuildSecurityTokens(Config.GetAttribute("groups", String.Empty));
+					securityTokens = Server.BuildSecurityTokens(Config.GetAttribute("groups", String.Empty), SecurityUser);
 
 					// Set the new security version
 					serverSecurityVersion = currentServerSecurityVersion;

@@ -136,12 +136,13 @@ namespace TecWare.DE.Server
 		/// <returns>Wurde etwas geladen.</returns>
 		bool LoadConfigExtension(IDEConfigLoading config, XElement element, string currentNamespace);
 
-		/// <summary></summary>
-		/// <param name="item"></param>
-		/// <param name="event"></param>
-		/// <param name="index"></param>
-		/// <param name="values"></param>
-		void AppendNewEvent(DEConfigItem item, string @event, string index, XElement values);
+		/// <summary>Send a event to the client.</summary>
+		/// <param name="item">Config node, the event is attached to.</param>
+		/// <param name="securityToken">Security token, who can see this event. <c>null</c>, is filled with the node security token.</param>
+		/// <param name="event">Event id</param>
+		/// <param name="index">Index of the event.</param>
+		/// <param name="values">Additional arguments</param>
+		void AppendNewEvent(DEConfigItem item, string securityToken, string @event, string index, XElement values);
 
 		/// <summary>Registriert einen Nutzer innerhalb des HttpServers</summary>
 		/// <param name="user">Nutzer</param>
@@ -156,7 +157,7 @@ namespace TecWare.DE.Server
 		/// <summary>Erzeugt aus der Token-Zeichenfolge eine Tokenliste.</summary>
 		/// <param name="securityTokens">Token-Zeichenfolge</param>
 		/// <returns>Security-Token-Array</returns>
-		string[] BuildSecurityTokens(string securityTokens);
+		string[] BuildSecurityTokens(params string[] securityTokens);
 
 		/// <summary>Gibt das Verzeichnis für die Loginformationen zurück.</summary>
 		string LogPath { get; }

@@ -348,7 +348,7 @@ namespace TecWare.DE.Server
 		private void ValueChangedHandler(object sender, EventArgs e)
 		{
 			if (sender is IDEConfigItemProperty property)
-				FireEvent("tw_properties", property.Name, new XElement("value", (string)Lua.RtConvertValue(property.Value, typeof(string))));
+				FireSysEvent("tw_properties", property.Name, new XElement("value", (string)Lua.RtConvertValue(property.Value, typeof(string))));
 		} // proc ValueChangedHandler
 
 		#endregion

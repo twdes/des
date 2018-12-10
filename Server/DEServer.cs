@@ -627,7 +627,7 @@ namespace TecWare.DE.Server
 				}
 			}
 
-			FireEvent("refresh");
+			FireSysEvent("refresh");
 		} // proc InternalRefreshConfiguration
 
 		public Task<bool> IsInitializedAsync()
@@ -866,10 +866,14 @@ namespace TecWare.DE.Server
 
 		#region -- Security Groups --------------------------------------------------------
 
-		public string[] BuildSecurityTokens(string securityTokens)
+		public string[] BuildSecurityTokens(params string[] securityTokens)
 		{
 			var tokens = new List<string>();
-			BuildSecurityTokens(tokens, SplitSecurityGroup(securityTokens), true);
+			if (securityTokens != null)
+			{
+				foreach (var t in securityTokens)
+					BuildSecurityTokens(tokens, SplitSecurityGroup(t), true);
+			}
 			return tokens.ToArray();
 		} // func BuildSecurityTokens
 
@@ -897,11 +901,10 @@ namespace TecWare.DE.Server
 
 					if (resolveGroups)
 					{
-						// Löse den Token auf
+						// resolve group tokens
 						lock (securityGroups)
 						{
-							string[] groupTokens;
-							if (securityGroups.TryGetValue(token, out groupTokens))
+							if (securityGroups.TryGetValue(token, out var groupTokens))
 								BuildSecurityTokens(tokens, groupTokens, true);
 						}
 					}
@@ -912,12 +915,12 @@ namespace TecWare.DE.Server
 		private string[] SplitSecurityGroup(string securityTokens)
 		{
 			if (String.IsNullOrEmpty(securityTokens))
-				return new string[0];
+				return Array.Empty<string>();
 
 			return securityTokens.Split(new char[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
 		} // func SplitSecurityGroup
 
-		public int SecurityGroupsVersion { get { return securityGroupsVersion; } }
+		public int SecurityGroupsVersion => securityGroupsVersion;
 
 		#endregion
 

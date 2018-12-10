@@ -159,9 +159,6 @@
     <EmbeddedResource Include="..\ServerWebUI\DEViewer.js">
       <Link>Resources\Http\DEViewer.js</Link>
     </EmbeddedResource>
-    <EmbeddedResource Include="..\ServerWebUI\libs\jquery-2.1.4.min.js">
-      <Link>Resources\Http\libs\jquery-2.1.4.min.js</Link>
-    </EmbeddedResource>
     <EmbeddedResource Include="..\ServerWebUI\images\log.error.png">
       <Link>Resources\Http\images\log.error.png</Link>
     </EmbeddedResource>
@@ -174,7 +171,11 @@
   </ItemGroup>
   <ItemGroup />
   <ItemGroup>
+    <EmbeddedResource Include="..\ServerWebUI\libs\jquery-3.3.1.min.js">
+      <Link>Resources\Http\libs\jquery-3.3.1.min.js</Link>
+    </EmbeddedResource>
     <Content Include="Configs\Config.xml" />
+    <EmbeddedResource Include="Resources\Http\images\user1.png" />
     <None Include="Configs\InitDebug.lua" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

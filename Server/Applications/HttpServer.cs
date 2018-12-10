@@ -28,7 +28,6 @@ using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Reflection;
-using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -358,10 +357,15 @@ namespace TecWare.DE.Server
 
 		public TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength = -1)
 		{
+			encoding = encoding ?? Http.DefaultEncoding;
+		
 			// add encoding to the content type
-			contentType = contentType + "; charset=" + (encoding ?? Http.DefaultEncoding).WebName;
+			contentType = contentType + "; charset=" + encoding.WebName;
 			var outputStream = GetOutputStream(contentType, contentLength, contentLength == -1);
-			return outputStream == null ? null : new StreamWriter(outputStream);
+
+			if (encoding == Encoding.UTF8)
+				encoding = new UTF8Encoding(false);
+			return outputStream == null ? null : new StreamWriter(outputStream, encoding);
 		} // func GetOutputTextWriter
 
 		public void Redirect(string url, string statusDescription = null)

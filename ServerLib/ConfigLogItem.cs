@@ -709,7 +709,7 @@ namespace TecWare.DE.Server
 		/// <summary></summary>
 		protected virtual void OnLinesAdded()
 		{
-			FireEvent(LogLineListId, null, new XElement("lines", new XAttribute("lineCount", LogLineCount)));
+			FireSysEvent(LogLineListId, null, new XElement("lines", new XAttribute("lineCount", LogLineCount)));
 			OnPropertyChanged(nameof(LogLineCount));
 			OnPropertyChanged(nameof(LogFileSize));
 		} // proc OnLinesAdded
