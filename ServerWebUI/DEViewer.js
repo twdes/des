@@ -141,9 +141,10 @@ var DELogTab = /** @class */ (function (_super) {
         this.reload2(false);
     }; // reload
     DELogTab.prototype.formatLogLine = function (lineStamp, lineType, lineText) {
+        var timeString = lineStamp.toLocaleString('de', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
         return [
             '<tr>',
-            '<td class="logLineTime logLineBk', lineType, '">', lineStamp.toLocaleTimeString(), ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumIntegerDigits: 3 }), '</td>',
+            '<td class="logLineTime logLineBk', lineType, '">', timeString, ',', lineStamp.getMilliseconds().toLocaleString('de', { minimumIntegerDigits: 3 }), '</td>',
             '<td class="logLineCell"><div class="logLineText logLineTextSingle">', lineText, '</div></td>',
             '</tr>'
         ].join("");

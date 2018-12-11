@@ -271,7 +271,6 @@ namespace TecWare.DE.Server
 
 	#region -- class ClientDebugSession -------------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
 	/// <summary></summary>
 	public abstract class ClientDebugSession : IDisposable
 	{

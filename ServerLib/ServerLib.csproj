@@ -89,13 +89,13 @@
     <None Include="TecWare.DES.ServerLib.nuspec" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Extern\Core\DESCore\DESCore.csproj">
-      <Project>{67528843-e631-4c05-b6e8-514cc8bec7b6}</Project>
-      <Name>DESCore</Name>
-    </ProjectReference>
+    <EmbeddedResource Include="Http\Resources\Listing.html" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Http\Resources\Listing.html" />
+    <ProjectReference Include="..\Extern\Core\DESCore\DESCore.csproj">
+      <Project>{90af6fc3-6fb1-4482-81a4-2c54fd2f83a2}</Project>
+      <Name>DESCore</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

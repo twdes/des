@@ -127,7 +127,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Extern\Core\DESCore\DESCore.csproj">
-      <Project>{67528843-e631-4c05-b6e8-514cc8bec7b6}</Project>
+      <Project>{90af6fc3-6fb1-4482-81a4-2c54fd2f83a2}</Project>
       <Name>DESCore</Name>
     </ProjectReference>
     <ProjectReference Include="..\ServerLib\ServerLib.csproj">

@@ -13,6 +13,7 @@ body {
     height: 54px;
     padding: 0px;
 }
+
 #headFrame {
     position: absolute;
     left: 0px;
@@ -27,19 +28,19 @@ body {
 #headTitle {
 }
 
-#headTitle h1 {
-    display: inline;
-    font-size: 16px;
-    font-style: normal;
-    font-weight: bold;
-}
+    #headTitle h1 {
+        display: inline;
+        font-size: 16px;
+        font-style: normal;
+        font-weight: bold;
+    }
 
-#headTitle h2 {
-    display: inline;
-    font-size: 10px;
-    font-style: normal;
-    font-weight: normal;
-}
+    #headTitle h2 {
+        display: inline;
+        font-size: 10px;
+        font-style: normal;
+        font-weight: normal;
+    }
 
 #currentUri {
     margin: 7px;
@@ -57,11 +58,11 @@ body {
     bottom: 3px;
 }
 
-#tabs span {
-    font-style: normal;
-    padding: 2px 4px 2px 4px;
-    margin: 0px;
-}
+    #tabs span {
+        font-style: normal;
+        padding: 2px 4px 2px 4px;
+        margin: 0px;
+    }
 
 .tabselected {
     cursor: default;
@@ -84,9 +85,9 @@ body {
     font-size: 12px;
 }
 
-#actions span {
-    padding-left: 12px;
-}
+    #actions span {
+        padding-left: 12px;
+    }
 
 .actionButton {
     cursor: pointer;
@@ -143,16 +144,14 @@ span.actionButton:hover {
     width: 100%
 }
 
-.logLineHeader
-{
+.logLineHeader {
     font-size: smaller;
     border-width: 1px;
     border-bottom-style: solid;
     border-color: #b4b4b4;
 }
 
-.logLineTime
-{
+.logLineTime {
     font-family: 'Courier New';
     font-weight: normal;
     text-align: left;
@@ -166,18 +165,15 @@ span.actionButton:hover {
     cursor: pointer;
 }
 
-.logLineBkI
-{
+.logLineBkI {
     background-image: url('images/log.information.png');
 }
 
-.logLineBkW
-{
+.logLineBkW {
     background-image: url('images/log.warning.png');
 }
 
-.logLineBkE
-{
+.logLineBkE {
     background-image: url('images/log.error.png');
 }
 
@@ -186,17 +182,15 @@ span.actionButton:hover {
     white-space: pre-wrap;
 }
 
-.logLineTextSingle
-{
+.logLineTextSingle {
     text-overflow: ellipsis;
     max-height: 1.1em;
     overflow: hidden;
 }
 
-.logLineTextFull
-{
+.logLineTextFull {
     max-height: 15em;
-    overflow-x : auto;
+    overflow-x: auto;
     overflow-y: auto;
 }
 
@@ -204,7 +198,6 @@ span.actionButton:hover {
 /******************************************************************************
  * Server-Informationen
  */
-
 #tabInfo .serverInfoBlock {
     margin: 6px;
 }
@@ -212,8 +205,8 @@ span.actionButton:hover {
 #tabInfo .serverInfoText {
     display: table-cell;
 }
-#tabInfo .serverInfoTopLine {
 
+#tabInfo .serverInfoTopLine {
 }
 
 #tabInfo .serverInfoBottomLine {
@@ -232,9 +225,9 @@ span.actionButton:hover {
     margin: 16px 6px 6px 6px;
 }
 
-#dumpListFrame h3 {
-    font-size: small;
-}
+    #dumpListFrame h3 {
+        font-size: small;
+    }
 
 #dumpList {
     margin: 0px;
@@ -250,56 +243,56 @@ span.actionButton:hover {
     padding-right: 12px;
 }
 
-#tabConfig .configElementBox {
-    padding-left: 32px;
-    left: 0px;
-    right: 0px;
-}
+    #tabConfig .configElementBox {
+        padding-left: 32px;
+        left: 0px;
+        right: 0px;
+    }
 
-#tabConfig .configHeader {
-    margin-left: -32px;
-    border-bottom: 1px solid darkgray;
-}
+    #tabConfig .configHeader {
+        margin-left: -32px;
+        border-bottom: 1px solid darkgray;
+    }
 
-#tabConfig .configHeaderTitle {
-    font-family: "Courier New";
-}
+    #tabConfig .configHeaderTitle {
+        font-family: "Courier New";
+    }
 
-#tabConfig .configHeaderDoc {
-    font-size: smaller;
-    color: darkslategray;
-    vertical-align: text-bottom;
-}
+    #tabConfig .configHeaderDoc {
+        font-size: smaller;
+        color: darkslategray;
+        vertical-align: text-bottom;
+    }
 
-#tabConfig .configAttributeTitle {
-    vertical-align: text-bottom;
-}
+    #tabConfig .configAttributeTitle {
+        vertical-align: text-bottom;
+    }
 
-#tabConfig .configAttributeValue {
-    font-family: "Courier New";
-    vertical-align: text-bottom;
-}
+    #tabConfig .configAttributeValue {
+        font-family: "Courier New";
+        vertical-align: text-bottom;
+    }
 
-#tabConfig .configAttributeDefault {
-    font-family: "Courier New";
-    color: darkgray;
-    vertical-align: text-bottom;
-}
+    #tabConfig .configAttributeDefault {
+        font-family: "Courier New";
+        color: darkgray;
+        vertical-align: text-bottom;
+    }
 
-#tabConfig .configAttributeDocumentation {
-    font-size: smaller;
-    color: darkslategray;
-    vertical-align: text-bottom;
-}
+    #tabConfig .configAttributeDocumentation {
+        font-size: smaller;
+        color: darkslategray;
+        vertical-align: text-bottom;
+    }
 
-#tabConfig table {
-    padding-bottom: 12px;
-}
+    #tabConfig table {
+        padding-bottom: 12px;
+    }
 
-#tabConfig td {
-    min-width: 200px;
-    vertical-align: bottom;
-}
+    #tabConfig td {
+        min-width: 200px;
+        vertical-align: bottom;
+    }
 
 
 /******************************************************************************
@@ -310,27 +303,27 @@ span.actionButton:hover {
     padding-left: 12px;
 }
 
-#tabProperties th {
-    padding-top: 6px;
-    font-weight: bold;
-    text-align: left;
-    border-bottom: 1px solid darkgray;
-}
+    #tabProperties th {
+        padding-top: 6px;
+        font-weight: bold;
+        text-align: left;
+        border-bottom: 1px solid darkgray;
+    }
 
-#tabProperties td {
-    padding-right: 10px;
-}
+    #tabProperties td {
+        padding-right: 10px;
+    }
 
-#tabProperties .propertyDescription {
-    font-size: smaller;
-    color: darkslategray;
-}
+    #tabProperties .propertyDescription {
+        font-size: smaller;
+        color: darkslategray;
+    }
 
-#tabProperties .propertyName {
-    font-family: "Courier New";
-}
+    #tabProperties .propertyName {
+        font-family: "Courier New";
+    }
 
-#tabProperties .propertyValue {
-    font-family: "Courier New";
-    vertical-align: text-bottom;
-}
+    #tabProperties .propertyValue {
+        font-family: "Courier New";
+        vertical-align: text-bottom;
+    }
