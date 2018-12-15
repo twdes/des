@@ -54,7 +54,7 @@
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
     <Compile Include="ClientDebugSession.cs" />
-    <Compile Include="DebugView.cs" />
+    <Compile Include="ConsoleView.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

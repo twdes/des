@@ -21,13 +21,13 @@ using TecWare.DE.Stuff;
 namespace TecWare.DE.Server
 {
 	/// <summary></summary>
-	public sealed class DebugView
+	public sealed class ConsoleView
 	{
 		private readonly object screenLock = new object();
 		private bool isConnected = false;
 		private string usePath = String.Empty;
 
-		public DebugView()
+		public ConsoleView()
 		{
 			UpdateSateText();
 		} // ctor
@@ -255,5 +255,5 @@ namespace TecWare.DE.Server
 		} // prop UsePath
 
 		public object SyncRoot => screenLock;
-	} // class DebugView
+	} // class ConsoleView
 }

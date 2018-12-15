@@ -75,12 +75,12 @@ namespace TecWare.DE.Server
 
 	internal sealed class ConsoleDebugSession : ClientDebugSession
 	{
-		private readonly DebugView view;
+		private readonly ConsoleView view;
 		private readonly Stopwatch startUp;
 
 		private ICredentials currentCredentials;
 
-		public ConsoleDebugSession(DebugView view, Uri serverUri, ICredentials credentials, bool inProcess)
+		public ConsoleDebugSession(ConsoleView view, Uri serverUri, ICredentials credentials, bool inProcess)
 			: base(serverUri)
 		{
 			this.view = view;
@@ -240,7 +240,7 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	public static class Program
 	{
-		private static readonly DebugView view = new DebugView();
+		private static readonly ConsoleView view = new ConsoleView();
 		private static readonly Regex commandSyntax = new Regex(@"\:(?<cmd>\w+)(?:\s+(?<args>(?:\`[^\`]*\`)|(?:[^\s]*)))*", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		private static StringBuilder currentCommand = new StringBuilder(); // holds the current script
