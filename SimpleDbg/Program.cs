@@ -19,24 +19,26 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using CommandLine;
 using CommandLine.Text;
+using Neo.Console;
 using Neo.IronLua;
 using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	#region -- class SimpleDebugArguments -----------------------------------------------
+	#region -- class SimpleDebugArguments ---------------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Command line arguments for data exchange simple debug.</summary>
 	public class SimpleDebugArguments
 	{
 		[Option('o', HelpText = "Uri to the server.", Required = true)]
@@ -52,16 +54,15 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class InteractiveCommandAttribute ----------------------------------------
+	#region -- class InteractiveCommandAttribute --------------------------------------
 
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
+	/// <summary>Interactive command attribute</summary>
 	[AttributeUsage(AttributeTargets.Method)]
 	public class InteractiveCommandAttribute : Attribute
 	{
 		public InteractiveCommandAttribute(string name)
 		{
-			this.Name = name;
+			this.Name = name ?? throw new ArgumentNullException(nameof(name));
 		} // ctor
 
 		public string Name { get; }
@@ -71,186 +72,17 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class ConsoleDebugSession ------------------------------------------------
-
-	internal sealed class ConsoleDebugSession : ClientDebugSession
-	{
-		private readonly ConsoleView view;
-		private readonly Stopwatch startUp;
-
-		private ICredentials currentCredentials;
-
-		public ConsoleDebugSession(ConsoleView view, Uri serverUri, ICredentials credentials, bool inProcess)
-			: base(serverUri)
-		{
-			this.view = view;
-			this.startUp = Stopwatch.StartNew();
-			this.currentCredentials = credentials ?? CredentialCache.DefaultCredentials;
-
-			this.DefaultTimeout = inProcess ? 0 : 10000;
-		} // ctor
-
-		protected override ICredentials GetCredentials()
-			=> currentCredentials;
-
-		protected override void OnCurrentUsePathChanged()
-			=> view.UsePath = CurrentUsePath;
-
-		protected override void OnConnectionEstablished()
-		{
-			view.IsConnected = true;
-		} // proc 
-
-		protected override void OnConnectionLost()
-			=> view.IsConnected = false;
-
-		protected override async Task<bool> OnConnectionFailureAsync(Exception e)
-		{
-			var innerException = e.InnerException as WebException;
-			var authentificationInfo = ClientAuthentificationInformation.Ntlm;
-			if (innerException != null && ClientAuthentificationInformation.TryGet(innerException, ref authentificationInfo, false)) // is this a authentification exception
-			{
-				if (startUp.ElapsedMilliseconds < 10000) // try it for at least 10sec
-				{
-					await Task.Delay(1000);
-					return true;
-				}
-				else
-					currentCredentials = await Program.GetCredentialsFromUserAsync(authentificationInfo.Realm);
-				return true;
-			}
-			else
-			{
-				view.WriteError(e, "Connection failed.");
-				return false;
-			}
-		} // proc OnConnectionFailure
-
-		protected override void OnMessage(char type, string message)
-		{
-			IDisposable SetColorByType()
-			{
-				switch (type)
-				{
-					case 'E':
-						return view.SetColor(ConsoleColor.DarkRed);
-					case 'W':
-						return view.SetColor(ConsoleColor.DarkYellow);
-					case 'I':
-						return view.SetColor(ConsoleColor.White);
-					default:
-						return view.SetColor(ConsoleColor.Gray);
-				}
-			} // func SetColorByType
-
-			using (view.LockScreen())
-			using (SetColorByType())
-			{
-				view.WriteLine(message);
-			}
-		} // proc OnMessage
-
-		protected override void OnStartScript(ClientRunScriptResult.Script script, string message)
-		{
-			var parts = new string[10];
-
-			parts[0] = ">> ";
-			parts[1] = script.ScriptId;
-
-			if (script.Success)
-			{
-				if (script.CompileTime > 0)
-				{
-					parts[2] = " (compile: ";
-					parts[3] = $"{script.CompileTime:N0} ms";
-					parts[4] = ", run: ";
-				}
-				else
-					parts[4] = " (run: ";
-				parts[5] = $"{script.RunTime:N0} ms";
-				parts[6] = ")";
-			}
-			else
-			{
-				parts[7] = " (Error: ";
-				parts[8] = message;
-				parts[9] = ")";
-			}
-
-			view.WriteLine(
-				new ConsoleColor[]
-				{
-					ConsoleColor.White,
-					ConsoleColor.White,
-
-					ConsoleColor.DarkGreen,
-					ConsoleColor.Green,
-					ConsoleColor.DarkGreen,
-					ConsoleColor.Green,
-					ConsoleColor.DarkGreen,
-
-					ConsoleColor.DarkRed,
-					ConsoleColor.Red,
-					ConsoleColor.DarkRed,
-				},
-				parts
-			);
-		} // proc OnStartScript
-
-		protected override void OnTestResult(ClientRunScriptResult.Test test, string message)
-		{
-			var success = test.Success;
-			view.WriteLine(
-				new ConsoleColor[]
-				{
-					ConsoleColor.White,
-					ConsoleColor.White,
-
-					ConsoleColor.DarkGreen,
-					ConsoleColor.Green,
-					ConsoleColor.DarkGreen,
-
-
-					ConsoleColor.DarkRed,
-					ConsoleColor.Red,
-					ConsoleColor.DarkRed,
-				},
-				new string[]
-				{
-					">>>> ",
-					test.Name,
-
-					success ? " (run: " : null,
-					success ? $"{test.Duration:N0} ms" : null,
-					success ? ")" : null,
-
-					success ? null : " (fail: ",
-					success ? null : $"{message}",
-					success ? null : ")",
-				}
-			);
-		} // proc OnTestResult
-
-		protected override void OnCommunicationException(Exception e)
-			=> view.WriteError(e, "Communication exception.");
-	} // class ConsoleDebugSession
-
-	#endregion
-
 	/// <summary></summary>
 	public static class Program
 	{
-		private static readonly ConsoleView view = new ConsoleView();
 		private static readonly Regex commandSyntax = new Regex(@"\:(?<cmd>\w+)(?:\s+(?<args>(?:\`[^\`]*\`)|(?:[^\s]*)))*", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-		private static StringBuilder currentCommand = new StringBuilder(); // holds the current script
-		private static ConsoleDebugSession session;
+		private static ConsoleApplication app = ConsoleApplication.Current;
 
-		private static TaskCompletionSource<ICredentials> credentialGet = null;
-		private static ClientDebugException lastRemoteException = null;
-		private static ClientRunScriptResult lastScriptResult = null;
+		private static DebugRunScriptResult lastScriptResult = null;
+		private static DebugSocketException lastRemoteException = null;
 
-		#region -- Main, RunDebugProgram ------------------------------------------------
+		#region -- Main, RunDebugProgram ----------------------------------------------
 
 		public static int Main(string[] args)
 		{
@@ -266,19 +98,27 @@ namespace TecWare.DE.Server
 			return r.MapResult(
 				options =>
 				{
+					var app = ConsoleApplication.Current;
 					try
 					{
-						Task.Factory.StartNew(RunDebugProgram(options).Wait).Wait();
+						return app.Run(
+							() => RunDebugProgramAsync(
+								new Uri(options.Uri),
+								options.UserName == null ? null : UserCredential.Create(options.UserName, options.Password),
+								options.Wait,
+								false
+							)
+						);
 					}
 					catch (TaskCanceledException) { }
 					catch (Exception e)
 					{
-						view.WriteError(e, "Input loop failed. Application is aborted.");
+						app.WriteError(e, "Input loop failed. Application is aborted.");
 #if DEBUG
 						Console.ReadLine();
 #endif
 					}
-					return 0;
+					return -1;
 				},
 				errors =>
 				{
@@ -286,176 +126,294 @@ namespace TecWare.DE.Server
 					Console.WriteLine(ht.ToString());
 
 					return 1;
-				});
-		} // func Main
-
-		private static async Task RunDebugProgram(SimpleDebugArguments arguments)
-		{
-			// simple wait
-			if (arguments.Wait > 0)
-				await Task.Delay(arguments.Wait);
-
-			await RunDebugProgramAsync(
-				new Uri(arguments.Uri), 
-				arguments.UserName == null ? null : UserCredential.Create(arguments.UserName, arguments.Password), 
-				false
+				}
 			);
-		} // proc RunDebugProgram
+		} // proc Main
 
-		public static async Task RunDebugProgramAsync(Uri uri, ICredentials credentials, bool inProcess)
-		{
-			// connection
-			view.IsConnected = false;
-			session = new ConsoleDebugSession(view, uri, credentials, inProcess);
-
-			// should be post in the thread context
-			Task.Run(() => session.RunProtocolAsync()).ContinueWith(
-				t =>
-				{
-					try
-					{
-						t.Wait();
-					}
-					catch (TaskCanceledException) { }
-					catch (Exception e)
-					{
-						var ex = e.GetInnerException();
-						if (ex is TaskCanceledException)
-							return;
-
-						view.WriteError(ex.ToString());
-					}
-				}, TaskContinuationOptions.ExecuteSynchronously
-			).GetAwaiter();
-
-			// start request loop
-			while (true)
-			{
-				// read command
-				view.Write("> ");
-				var line = Console.ReadLine();
-				if (credentialGet != null)
-				{
-					var t = credentialGet;
-					credentialGet = null;
-					t.SetResult(GetCredentialsFromUser((string)t.Task.AsyncState));
-				}
-				else if (line.Length == 0) // nothing
-				{
-					if (currentCommand.Length == 0) // no current script
-						currentCommand.AppendLine();
-					else
-					{
-						try
-						{
-							await SendCommand(currentCommand.ToString());
-						}
-						catch (Exception e)
-						{
-							SetLastRemoteException(e);
-							view.WriteError(e);
-						}
-						currentCommand.Clear();
-					}
-				}
-				else if (line[0] == ':') // interactive command
-				{
-					var m = commandSyntax.Match(line);
-					if (m.Success)
-					{
-						// get the command
-						var cmd = m.Groups["cmd"].Value;
-
-						if (String.Compare(cmd, "q", StringComparison.OrdinalIgnoreCase) == 0 ||
-							String.Compare(cmd, "quit", StringComparison.OrdinalIgnoreCase) == 0)
-							break; // exit
-						else
-						{
-							var args = m.Groups["args"];
-							var argArray = new string[args.Captures.Count];
-							for (var i = 0; i < args.Captures.Count; i++)
-								argArray[i] = CleanArgument(args.Captures[i].Value ?? String.Empty);
-
-							try
-							{
-								RunCommand(cmd, argArray);
-							}
-							catch (Exception e)
-							{
-								view.WriteError(e);
-							}
-						}
-					}
-					else
-						view.WriteError("Command parse error."); // todo: error
-				}
-				else // add to command buffer
-				{
-					currentCommand.AppendLine(line);
-				}
-			}
-
-			// dispose debug session
-			session.Dispose();
-		} // proc RunDebugProgramAsync
+		/// <summary>Gets called from InvokeDebugger</summary>
+		/// <param name="uri"></param>
+		/// <param name="credentials"></param>
+		/// <param name="inProcess"></param>
+		public static void RunDebugProgram(Uri uri, ICredentials credentials, bool inProcess)
+			=> ConsoleApplication.Current.Run(() => RunDebugProgramAsync(uri, credentials, 0, inProcess));
 
 		/// <summary>Gets called for the server.</summary>
 		public static void WriteMessage(ConsoleColor foreground, string text)
 		{
-			view.Write(text, foreground);
-			view.WriteLine();
-		} // proc WriteMessage
-
-		public static Task<ICredentials> GetCredentialsFromUserAsync(string realm)
-		{
-			view.Write("Press Return to login");
-
-			credentialGet = new TaskCompletionSource<ICredentials>(realm);
-			return credentialGet.Task;
-		} // func GetCredentialsFromUserAsync
-
-		private static ICredentials GetCredentialsFromUser(string realm)
-		{
-			string userName = null;
-			var sec = new SecureString();
-
-			using (view.LockScreen())
-			{
-				Console.WriteLine("Login: {0}", realm);
-				Console.Write("User: ");
-				userName = Console.ReadLine();
-				if (String.IsNullOrEmpty(userName))
-					return CredentialCache.DefaultCredentials;
-
-				Console.Write("Password: ");
-				while (true)
+			app.Invoke(
+				() =>
 				{
-					var k = Console.ReadKey(true);
-
-					if (k.Key == ConsoleKey.Enter)
-						break;
-					else if (k.Key == ConsoleKey.Backspace || k.Key == ConsoleKey.Delete)
-						sec.Clear();
-					else
-					{
-						Console.Write("*");
-						sec.AppendChar(k.KeyChar);
-					}
+					using (app.Color(foreground))
+						app.WriteLine(text);
 				}
-				Console.WriteLine();
-			}
-
-			return UserCredential.Create(userName, sec);
-		} // func GetCredentialsFromUser
+			);
+		} // proc WriteMessage
 
 		#endregion
 
-		#region -- RunCommand -----------------------------------------------------------
+		#region -- RunDebugProgramAsync -----------------------------------------------
+
+		private static async Task<int> RunDebugProgramAsync(Uri uri, ICredentials credentials, int wait, bool inProcess)
+		{
+			// write preamble
+			if (!inProcess)
+			{
+				app.WriteLine(HeadingInfo.Default.ToString());
+				app.WriteLine(CopyrightInfo.Default.ToString());
+			}
+
+			// wait for the program start
+			if (wait > 0)
+				await Task.Delay(wait);
+
+			//app.ReservedBottomRowCount = 1; // reserve for log?
+
+			connectionStateOverlay = new ConnectionStateOverlay(app);
+			if (uri != null)
+				BeginConnection(uri, credentials);
+
+			try
+			{
+				while (true)
+				{
+					var line = await app.ReadLineAsync(new SimpleDebugConsoleReadLineManager()) ?? String.Empty;
+					if (line.Length == 0)
+						continue; // skip empty command
+					else if (line[0] == ':') // interactive command
+					{
+						var m = commandSyntax.Match(line);
+						if (m.Success)
+						{
+							// get the command
+							var cmd = m.Groups["cmd"].Value;
+
+							if (String.Compare(cmd, "q", StringComparison.OrdinalIgnoreCase) == 0 ||
+								String.Compare(cmd, "quit", StringComparison.OrdinalIgnoreCase) == 0)
+								return 0; // exit
+							else
+							{
+								var args = m.Groups["args"];
+								var argArray = new string[args.Captures.Count];
+								for (var i = 0; i < args.Captures.Count; i++)
+									argArray[i] = CleanArgument(args.Captures[i].Value ?? String.Empty);
+
+								try
+								{
+									await RunCommandAsync(cmd, argArray);
+								}
+								catch (Exception e)
+								{
+									app.WriteError(e);
+								}
+							}
+						}
+						else
+							app.WriteError("Command parse error."); // todo: error
+					}
+					else // server command
+					{
+						try
+						{
+							await SendCommandAsync(line);
+						}
+						catch (Exception e)
+						{
+							SetLastRemoteException(e);
+							app.WriteError(e);
+						}
+					}
+				}
+			}
+			finally
+			{
+				connectionStateOverlay.Application = null;
+			}
+		} // func RunDebugProgramAsync
+
+		#endregion
+
+		#region -- Http Connection ----------------------------------------------------
+
+		private static readonly object lockHttpConnection = new object();
+		private static Task httpConnectionTask = null;
+		private static CancellationTokenSource httpConnectionCancellation = null;
+
+		private static DEHttpClient http = null;
+		private static DebugSocket debugSocket = null;
+		private static DEHttpEventSocket eventSocket = null;
+		private static ConnectionStateOverlay connectionStateOverlay = null;
+
+		private static void BeginConnection(Uri uri, ICredentials credentials)
+		{
+			httpConnectionCancellation = new CancellationTokenSource();
+			httpConnectionTask = HttpConnectionAsync(uri, credentials, httpConnectionCancellation.Token);
+		} // proc BeginConnection
+
+		private static void EndConnection()
+		{
+			throw new NotImplementedException();
+		} // proc EndConnection
+
+		private static async Task HttpConnectionAsync(Uri uri, ICredentials credentials, CancellationToken cancellationToken)
+		{
+			var localHttp = DEHttpClient.Create(uri, credentials);
+			var tryCurrentCredentials = 0;
+			while (!cancellationToken.IsCancellationRequested)
+			{
+				// show connection state
+				if (!IsHttpConnected)
+					connectionStateOverlay.SetState(ConnectionState.Connecting, null);
+
+				// try read server info, check for connect
+				try
+				{
+					// try check user agains action
+					var xRootNode = await localHttp.GetXmlAsync("?action=list&recursive=false");
+					if (!IsHttpConnected)
+						SetHttpConnection(localHttp, cancellationToken);
+				}
+				catch (HttpResponseException e)
+				{
+					if (e.StatusCode == HttpStatusCode.Unauthorized // login needed
+						|| e.StatusCode == HttpStatusCode.Forbidden) // better user needed
+					{
+						if (IsHttpConnected)
+							SetHttpConnection(null, cancellationToken);
+
+						if (tryCurrentCredentials < 3)
+						{
+							if (tryCurrentCredentials > 0)
+								await Task.Delay(3000);
+
+							credentials = CredentialCache.DefaultCredentials;
+							tryCurrentCredentials++;
+						}
+						else
+						{
+							// request credentials
+							app.WriteLine();
+							app.WriteLine("Credentials needed (empty for integrated login)");
+							var userName = await app.ReadLineAsync(ConsoleReadLineOverlay.CreatePrompt("User: "));
+							if (!String.IsNullOrEmpty(userName))
+							{
+								var password = await app.ReadSecureStringAsync("Password: ");
+								credentials = UserCredential.Create(userName, password);
+							}
+							else
+								credentials = CredentialCache.DefaultCredentials;
+						}
+
+						// recreate http
+						localHttp?.Dispose();
+						localHttp = DEHttpClient.Create(uri, credentials);
+					}
+					else
+						app.WriteError(e);
+				}
+				catch (HttpRequestException e)
+				{
+					if (IsHttpConnected)
+						SetHttpConnection(null, cancellationToken);
+					app.WriteError(e);
+				}
+
+				// show waiting
+				if (!IsHttpConnected)
+					connectionStateOverlay.SetState(ConnectionState.None, null);
+				await Task.Delay(1000, cancellationToken);
+			}
+		} // proc HttpConnectionAsync
+
+		private static void SetHttpConnection(DEHttpClient newHttp, CancellationToken cancellationToken)
+		{
+			lock (lockHttpConnection)
+			{
+				if(newHttp!= http)
+				{
+					http?.Dispose();
+					debugSocket?.Dispose();
+					eventSocket?.Dispose();
+				}
+				http = newHttp;
+				StartSocket(debugSocket = http != null ? new ConsoleDebugSocket(app, http) : null, cancellationToken);
+				StartSocket(eventSocket = http != null ? new ConsoleEventSocket(app, http) : null, cancellationToken);
+
+				SetConnectionState(ConnectionState.ConnectedHttp, true);
+			}
+		} // proc SetHttpConnection
+
+		private static void StartSocket(DEHttpSocketBase socket, CancellationToken cancellationToken)
+		{
+			if (socket == null)
+				return;
+
+			cancellationToken.Register(socket.Dispose);
+
+			socket.RunProtocolAsync()
+				.ContinueWith(t => app.WriteError(t.Exception), TaskContinuationOptions.OnlyOnFaulted);
+		} // proc StartSocket
+
+		public static bool TryGetHttp(out DEHttpClient http)
+		{
+			lock (lockHttpConnection)
+			{
+				http = Program.http;
+				return http != null;
+			}
+		} // func TryGetHttp
+
+		public static DEHttpClient GetHttp()
+			=> TryGetHttp(out var http) ? http : throw new ArgumentException("Http connection?");
+
+		public static bool TryGetDebug(out DebugSocket socket)
+		{
+			lock (lockHttpConnection)
+			{
+				socket = debugSocket;
+				return socket != null && socket.IsConnected;
+			}
+		} // func TryGetDebug
+
+		public static DebugSocket GetDebug()
+			=> TryGetDebug(out var socket) ? socket : throw new ArgumentException("Debug connection?");
+
+		public static bool TryGetEvent(out DEHttpEventSocket socket)
+		{
+			lock (lockHttpConnection)
+			{
+				socket = eventSocket;
+				return socket != null && socket.IsConnected;
+			}
+		} // func TryGetEvent
+
+		public static DEHttpEventSocket GetEvent()
+			=> TryGetEvent(out var socket) ? socket : throw new ArgumentException("Socket connection?");
+
+		public static void SetConnectionState(ConnectionState state, bool set)
+			=> connectionStateOverlay.SetState(state, set);
+
+		public static void PostNewUsePath(string path)
+		{
+			connectionStateOverlay.SetPath(path);
+		} // proc PostNewUsePath
+
+		private static bool IsHttpConnected
+		{
+			get
+			{
+				lock (lockHttpConnection)
+					return http != null;
+			}
+		} // func IsHttpConnected
+
+		#endregion
+
+		#region -- RunCommandAsync ----------------------------------------------------
 
 		private static string CleanArgument(string value)
 			=> value.Length > 1 && value[0] == '`' && value[value.Length - 1] == '`' ? value.Substring(1, value.Length - 2) : value;
 
-		public static void RunCommand(string cmd, string[] argArray)
+		public static async Task RunCommandAsync(string cmd, string[] argArray)
 		{
 			var ti = typeof(Program).GetTypeInfo();
 
@@ -466,8 +424,7 @@ namespace TecWare.DE.Server
 
 			if (mi == null)
 				throw new Exception($"Command '{cmd}' not found.");
-
-
+			
 			var parameterInfo = mi.GetParameters();
 			var parameters = new object[parameterInfo.Length];
 
@@ -486,101 +443,135 @@ namespace TecWare.DE.Server
 			object r;
 			if (mi.ReturnType == typeof(Task)) // async
 			{
+				// invoke task
 				var t = (Task)mi.Invoke(null, parameters);
-				t.Wait();
-				r = null;
+				await t;
+
+				// get result
+				var resultProperty = t.GetType().GetProperty("Result");
+				if (t.GetType().IsGenericTypeDefinition && t.GetType().GetGenericTypeDefinition() == typeof(Task<>))
+					r = resultProperty.GetValue(t, null);
+				else
+					r = null;
 			}
 			else
 				r = mi.Invoke(null, parameters);
 
 			if (r != null)
-				view.WriteObject(r);
+				app.WriteObject(r);
 		} // proc RunCommand
 
 		#endregion
 
-		#region -- ShowHelp -------------------------------------------------------------
+		#region -- ShowHelp -----------------------------------------------------------
 
 		[InteractiveCommand("help", Short = "h", HelpText = "Shows this text.")]
 		private static void ShowHelp()
 		{
 			var ti = typeof(Program).GetTypeInfo();
-			using (view.LockScreen())
+			var assembly = typeof(Program).Assembly;
+
+			app.WriteLine($"Data Exchange Debugger {assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion}");
+			app.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
+			app.WriteLine();
+			assembly = typeof(Lua).Assembly;
+			var informationalVersionLua = assembly.GetName().Version.ToString();
+			var fileVersionLua = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "0.0.0.0";
+			app.WriteLine($"NeoLua {informationalVersionLua} ({fileVersionLua})");
+			app.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
+			app.WriteLine();
+
+			foreach (var cur in
+				from c in ti.GetRuntimeMethods()
+				let attr = c.GetCustomAttribute<InteractiveCommandAttribute>()
+				where c.IsStatic && attr != null
+				orderby attr.Name
+				select new Tuple<MethodInfo, InteractiveCommandAttribute>(c, attr))
 			{
-				var assembly = typeof(Program).Assembly;
-				view.WriteLine($"Data Exchange Debugger {assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion}");
-				view.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
-				view.WriteLine();
-				assembly = typeof(Lua).Assembly;
-				var informationalVersionLua = assembly.GetName().Version.ToString();
-				var fileVersionLua = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? "0.0.0.0";
-				view.WriteLine($"NeoLua {informationalVersionLua} ({fileVersionLua})");
-				view.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
-				view.WriteLine();
-
-				foreach (var cur in
-					from c in ti.GetRuntimeMethods()
-					let attr = c.GetCustomAttribute<InteractiveCommandAttribute>()
-					where c.IsStatic && attr != null
-					orderby attr.Name
-					select new Tuple<MethodInfo, InteractiveCommandAttribute>(c, attr))
+				app.Write("  ");
+				app.Write(cur.Item2.Name);
+				if (!String.IsNullOrEmpty(cur.Item2.Short))
 				{
-					view.Write("  ");
-					view.Write(cur.Item2.Name);
-					if (!String.IsNullOrEmpty(cur.Item2.Short))
-					{
-						view.Write(" [");
-						view.Write(cur.Item2.Short);
-						view.Write("]");
-					}
-					view.WriteLine();
-					view.Write("    ");
-					using (view.SetColor(ConsoleColor.DarkGray))
-						view.WriteLine(cur.Item2.HelpText);
-
-					foreach (var pi in cur.Item1.GetParameters())
-					{
-						view.WriteLine(
-							new ConsoleColor[]
-							{
-								ConsoleColor.Gray,
-								ConsoleColor.Gray,
-								ConsoleColor.DarkGray,
-								ConsoleColor.Gray
-							},
-							new string[]
-							{
-								"      ",
-								pi.Name,
-								$" ({LuaType.GetType(pi.ParameterType).AliasName ?? pi.ParameterType.Name}): ",
-								pi.GetCustomAttribute<DescriptionAttribute>()?.Description
-							}
-						);
-					}
+					app.Write(" [");
+					app.Write(cur.Item2.Short);
+					app.Write("]");
 				}
+				app.WriteLine();
+				app.Write("    ");
+				using (app.Color(ConsoleColor.DarkGray))
+					app.WriteLine(cur.Item2.HelpText);
 
-				view.WriteLine();
+				foreach (var pi in cur.Item1.GetParameters())
+				{
+					app.WriteLine(
+						new ConsoleColor[]
+						{
+							ConsoleColor.Gray,
+							ConsoleColor.Gray,
+							ConsoleColor.DarkGray,
+							ConsoleColor.Gray
+						},
+						new string[]
+						{
+							"      ",
+							pi.Name,
+							$" ({LuaType.GetType(pi.ParameterType).AliasName ?? pi.ParameterType.Name}): ",
+							pi.GetCustomAttribute<DescriptionAttribute>()?.Description
+						}
+					);
+				}
 			}
+
+			app.WriteLine();
 		} // proc ShowHelp
 
 		#endregion
 
-		#region -- Clear, Quit ----------------------------------------------------------
-
-		[InteractiveCommand("clear", HelpText = "Clears the current command buffer.")]
-		private static void ClearCommandBuffer()
-		{
-			currentCommand.Clear();
-		} // proc ClearCommandBuffer
-
+		#region -- Quit ---------------------------------------------------------------
+		
 		[InteractiveCommand("quit", Short = "q", HelpText = "Exit the application.")]
 		private static void DummyQuit() { }
 
 		#endregion
 
-		#region -- WriteReturn ----------------------------------------------------------
+		#region -- List ---------------------------------------------------------------
+		
+		private static void PrintList(string indent, XElement x, int rlevel)
+		{
+			if (rlevel > 0)
+			{
+				foreach (var c in x.Elements("item"))
+				{
+					var name = c.GetAttribute("name", String.Empty);
+					app.WriteLine(
+						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
+						new string[] { indent, name, " : ", c.GetAttribute("displayname", String.Empty) }
+					);
+					PrintList(indent +  "    ", c, rlevel - 1);
+				}
+			}
+		} // proc PrintList
 
-		#region -- class TableColumn ----------------------------------------------------
+		[InteractiveCommand("list", HelpText = "Lists the current nodes.")]
+		private static async Task SendListAsync(
+			[Description("true to retrieve all sub nodes")]
+			bool recursive = false
+		)
+		{
+			var rlevel = recursive ? 1000 : 1;
+			var x = await GetHttp().GetXmlAsync(HttpStuff.MakeRelativeUri(
+				new PropertyValue("action", "list"),
+				new PropertyValue("published", "false"),
+				new PropertyValue("rlevel", rlevel))
+			);
+			PrintList(String.Empty, x, rlevel);
+		} // func SendListAsync
+
+		#endregion
+
+		#region -- WriteReturn --------------------------------------------------------
+
+		#region -- class TableColumn --------------------------------------------------
 
 		private sealed class TableColumn
 		{
@@ -590,12 +581,12 @@ namespace TecWare.DE.Server
 			private readonly string name;
 			private readonly string type;
 			private int width;
-			private readonly Func<ClientMemberValue, string> formatValue;
+			private readonly Func<DebugMemberValue, string> formatValue;
 
-			public TableColumn(ClientMemberValue mv)
+			public TableColumn(DebugMemberValue mv)
 			{
-				this.name = mv.Name;
-				this.type = mv.TypeName;
+				name = mv.Name;
+				type = mv.TypeName;
 
 				var tc = mv.Type != null ? Type.GetTypeCode(mv.Type) : TypeCode.Object;
 				switch (tc)
@@ -645,10 +636,10 @@ namespace TecWare.DE.Server
 				}
 			} // ctor
 
-			public string FormatValue(ClientMemberValue mv)
+			public string FormatValue(DebugMemberValue mv)
 				=> formatValue(mv);
 
-			private string ToStringValue(ClientMemberValue mv)
+			private string ToStringValue(DebugMemberValue mv)
 				=> mv.ValueAsString;
 
 			private string FormatInteger(long? n)
@@ -659,31 +650,31 @@ namespace TecWare.DE.Server
 					: s.PadLeft(width);
 			} // func FormatInteger
 
-			private string Int8Value(ClientMemberValue mv)
+			private string Int8Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?((sbyte)mv.Value));
 
-			private string UInt8Value(ClientMemberValue mv)
+			private string UInt8Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?((byte)mv.Value));
 
-			private string Int16Value(ClientMemberValue mv)
+			private string Int16Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?((short)mv.Value));
 
-			private string UInt16Value(ClientMemberValue mv)
+			private string UInt16Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?((ushort)mv.Value));
 
-			private string Int32Value(ClientMemberValue mv)
+			private string Int32Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?((int)mv.Value));
 
-			private string UInt32Value(ClientMemberValue mv)
+			private string UInt32Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?((uint)mv.Value));
 
-			private string Int64Value(ClientMemberValue mv)
+			private string Int64Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?((long)mv.Value));
 
-			private string UInt64Value(ClientMemberValue mv)
+			private string UInt64Value(DebugMemberValue mv)
 				=> FormatInteger(mv.Value == null ? null : new long?(unchecked((long)(ulong)mv.Value)));
 
-			private string BooleanValue(ClientMemberValue mv)
+			private string BooleanValue(DebugMemberValue mv)
 				=> mv.Value == null ? nullValue : ((bool)mv.Value ? "true" : "false");
 
 			public bool IsVariable => width < 0;
@@ -696,7 +687,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private static void WriteTableMeasureColumns(ClientMemberValue[] sampleRow, out TableColumn[] columns)
+		private static void WriteTableMeasureColumns(DebugMemberValue[] sampleRow, out TableColumn[] columns)
 		{
 			var maxWidth = Console.WindowWidth - 1;
 			const int minColWith = 10;
@@ -766,10 +757,9 @@ namespace TecWare.DE.Server
 				return new string(' ', maxWidth);
 			else if (value.Length > maxWidth)
 			{
-				if (maxWidth < 10)
-					return value.Substring(0, maxWidth);
-				else
-					return value.Substring(0, maxWidth - 3) + "...";
+				return maxWidth < 10
+					? value.Substring(0, maxWidth)
+					: value.Substring(0, maxWidth - 3) + "...";
 			}
 			else
 				return value.PadRight(maxWidth);
@@ -780,14 +770,14 @@ namespace TecWare.DE.Server
 			for (var i = 0; i < columns.Length; i++)
 			{
 				if (i > 0)
-					Console.Write(" ");
+					app.Write(" ");
 				var col = columns[i];
-				Console.Write(TableStringPad(getValue(col, values[i]), col.Width));
+				app.Write(TableStringPad(getValue(col, values[i]), col.Width));
 			}
-			Console.WriteLine();
+			app.WriteLine();
 		} // proc WriteRow
 
-		private static void WriteTable(IEnumerable<ClientMemberValue[]> list)
+		private static void WriteTable(IEnumerable<DebugMemberValue[]> list)
 		{
 
 			var columns = (TableColumn[])null;
@@ -800,7 +790,7 @@ namespace TecWare.DE.Server
 					// header
 					WriteRow(columns, columns, (_, c) => c.Name);
 					// type
-					using (view.SetColor(ConsoleColor.DarkGray))
+					using (app.Color(ConsoleColor.DarkGray))
 						WriteRow(columns, columns, (_, c) => c.TypeName);
 					// sep
 					WriteRow(columns, columns, (_, c) => new string('-', c.Width));
@@ -810,132 +800,125 @@ namespace TecWare.DE.Server
 			}
 		} // proc WriteTable
 
-		private static void WriteReturn(string indent, IEnumerable<ClientMemberValue> r)
+		private static void WriteReturn(string indent, IEnumerable<DebugMemberValue> r)
 		{
 			foreach (var v in r)
 			{
-				lock (view.SyncRoot)
+				app.Write(indent);
+				app.Write(v.Name);
+				if (v.IsValueList && v.Value is IEnumerable<DebugMemberValue[]> list)
 				{
-					Console.Write(indent);
-					Console.Write(v.Name);
-					if (v.IsValueList && v.Value is IEnumerable<ClientMemberValue[]> list)
+					app.WriteLine();
+					app.WriteLine();
+					WriteTable(list);
+					app.WriteLine();
+				}
+				else if (v.IsValueArray && v.Value is IEnumerable<DebugMemberValue> array)
+				{
+					app.WriteLine();
+					WriteReturn(indent + "    ", array);
+				}
+				else
+				{
+					app.Write(": ");
+					using (app.Color(ConsoleColor.DarkGray))
 					{
-						Console.WriteLine();
-						Console.WriteLine();
-						WriteTable(list);
-						Console.WriteLine();
+						app.Write("(");
+						app.Write(v.TypeName);
+						app.Write(")");
 					}
-					else if (v.IsValueArray && v.Value is IEnumerable<ClientMemberValue> array)
-					{
-						Console.WriteLine();
-						WriteReturn(indent + "    ", array);
-					}
-					else
-					{
-						Console.Write(": ");
-						using (view.SetColor(ConsoleColor.DarkGray))
-						{
-							Console.Write("(");
-							Console.Write(v.TypeName);
-							Console.Write(")");
-						}
-						Console.WriteLine(v.ValueAsString);
-					}
+					app.WriteLine(v.ValueAsString);
 				}
 			}
 		} // proc WriteReturn
 
 		#endregion
 
-		#region -- SendCommand ----------------------------------------------------------
+		#region -- SendCommand --------------------------------------------------------
 
-		private static async Task SendCommand(string commandText)
+		private static async Task SendCommandAsync(string commandText)
 		{
-			var r = await session.SendExecuteAsync(commandText);
-			using (view.LockScreen())
+			var r = await GetDebug().ExecuteAsync(commandText);
+
+			WriteReturn(String.Empty, r);
+
+			var parts = new string[7];
+			var colors = new ConsoleColor[]
 			{
-				WriteReturn(String.Empty, r);
+				ConsoleColor.DarkGreen,
 
-				var parts = new string[7];
-				var colors = new ConsoleColor[]
-				{
-					ConsoleColor.DarkGreen,
+				ConsoleColor.DarkGreen,
+				ConsoleColor.Green,
+				ConsoleColor.Green,
 
-					ConsoleColor.DarkGreen,
-					ConsoleColor.Green,
-					ConsoleColor.Green,
+				ConsoleColor.DarkGreen,
+				ConsoleColor.Green,
+				ConsoleColor.Green
+			};
+			parts[0] = "==> ";
 
-					ConsoleColor.DarkGreen,
-					ConsoleColor.Green,
-					ConsoleColor.Green
-				};
-				parts[0] = "==> ";
-
-				if (r.CompileTime > 0)
-				{
-					parts[1] = "compile: ";
-					parts[2] = r.CompileTime.ToString("N0");
-					parts[3] = " ms ";
-				}
-
-				parts[4] = "run: ";
-				parts[5] = r.RunTime.ToString("N0");
-				parts[6] = " ms";
-
-				view.WriteLine(colors, parts, true);
+			if (r.CompileTime > 0)
+			{
+				parts[1] = "compile: ";
+				parts[2] = r.CompileTime.ToString("N0");
+				parts[3] = " ms ";
 			}
-		} // proc SendCommand
+
+			parts[4] = "run: ";
+			parts[5] = r.RunTime.ToString("N0");
+			parts[6] = " ms";
+
+			app.WriteLine(colors, parts, true);
+		} // proc SendCommandAsync
 
 		#endregion
 
-		#region -- SendRecompile --------------------------------------------------------
+		#region -- SendRecompile ------------------------------------------------------
 
 		[InteractiveCommand("recompile", HelpText = "Force a recompile and rerun of all script files (if the are outdated).")]
-		private static async Task SendRecompile()
+		private static async Task SendRecompileAsync()
 		{
-			var r = await session.SendRecompileAsync();
-			using (view.LockScreen())
+			var r = await GetDebug().RecompileAsync();
+
+			var scripts = 0;
+			var failed = 0;
+			var first = true;
+			foreach (var c in r)
 			{
-				var scripts = 0;
-				var failed = 0;
-				var first = true;
-				foreach (var c in r)
-				{
-					if (first)
-						first = false;
-					else
-						view.Write(", ");
-					using (view.SetColor(c.failed ? ConsoleColor.Red : ConsoleColor.Gray))
-						view.Write(c.scriptId);
+				if (first)
+					first = false;
+				else
+					app.Write(", ");
+				using (app.Color(c.failed ? ConsoleColor.Red : ConsoleColor.Gray))
+					app.Write(c.scriptId);
 
-					if (c.failed)
-						failed++;
-					scripts++;
-				}
-				if (!first)
-					view.WriteLine();
-
-				view.WriteLine(
-					new ConsoleColor[]
-					{
-						ConsoleColor.Gray,
-						ConsoleColor.Green,
-						ConsoleColor.Red
-					},
-					new string[]
-					{
-						"==> recompile: ",
-						$"{scripts:N0} scripts",
-						failed > 0 ? $", {failed:N0} failed" : null
-					},
-					true
-				);
+				if (c.failed)
+					failed++;
+				scripts++;
 			}
-		}  // proc SendRecompile
+			if (!first)
+				app.WriteLine();
+
+			app.WriteLine(
+				new ConsoleColor[]
+				{
+					ConsoleColor.Gray,
+					ConsoleColor.Green,
+					ConsoleColor.Red
+				},
+				new string[]
+				{
+					"==> recompile: ",
+					$"{scripts:N0} scripts",
+					failed > 0 ? $", {failed:N0} failed" : null
+				},
+				true
+			);
+		}  // proc SendRecompileAsync
 
 		#endregion
 
-		#region -- SendRunScript --------------------------------------------------------
+		#region -- SendRunScript ------------------------------------------------------
 
 		[InteractiveCommand("run", HelpText = "Executes a test script and stores the result.")]
 		private static async Task SendRunScript(
@@ -949,13 +932,13 @@ namespace TecWare.DE.Server
 			var failedTests = 0;
 			var failedScripts = 0;
 
-			if(methodFilter == null)
+			if (methodFilter == null)
 			{
 				methodFilter = scriptFilter;
 				scriptFilter = null;
 			}
 
-			lastScriptResult = await session.SendRunScriptAsync(scriptFilter, methodFilter);
+			lastScriptResult = await GetDebug().RunScriptAsync(scriptFilter, methodFilter);
 
 			foreach (var s in lastScriptResult.Scripts)
 			{
@@ -972,7 +955,7 @@ namespace TecWare.DE.Server
 
 			if (failedScripts > 0)
 			{
-				view.WriteLine(
+				app.WriteLine(
 					new ConsoleColor[]
 					{
 						ConsoleColor.Red,
@@ -986,7 +969,7 @@ namespace TecWare.DE.Server
 				);
 			}
 
-			view.WriteLine(
+			app.WriteLine(
 				new ConsoleColor[]
 				{
 					ConsoleColor.Gray,
@@ -1013,10 +996,10 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- ViewRunScriptResult --------------------------------------------------
+		#region -- ViewRunScriptResult ------------------------------------------------
 
 		private static void NoResult()
-			=> view.WriteLine(new ConsoleColor[] { ConsoleColor.DarkGray }, new string[] { "==> no result" });
+			=> app.WriteLine(new ConsoleColor[] { ConsoleColor.DarkGray }, new string[] { "==> no result" });
 
 		[InteractiveCommand("scripts", HelpText = "Show the prev. executed test results.")]
 		private static void ViewScriptResult(
@@ -1040,79 +1023,77 @@ namespace TecWare.DE.Server
 			else // detail
 			{
 				var firstScript = firstScripts[0];
-				using (view.LockScreen())
+				var parts = new string[7];
+
+				parts[0] = firstScript.ScriptId;
+
+				if (firstScript.Success)
 				{
-					var parts = new string[7];
-
-					parts[0] = firstScript.ScriptId;
-
-					if (firstScript.Success)
+					if (firstScript.CompileTime > 0)
 					{
-						if (firstScript.CompileTime > 0)
-						{
-							parts[1] = " (compile: ";
-							parts[2] = $"{firstScript.CompileTime:N0} ms";
-							parts[3] = ", run: ";
-						}
-						else
-							parts[3] = " (run: ";
-						parts[4] = $"{firstScript.RunTime:N0} ms";
-						parts[5] = ")";
+						parts[1] = " (compile: ";
+						parts[2] = $"{firstScript.CompileTime:N0} ms";
+						parts[3] = ", run: ";
 					}
 					else
-						parts[6] = " failed.";
+						parts[3] = " (run: ";
+					parts[4] = $"{firstScript.RunTime:N0} ms";
+					parts[5] = ")";
+				}
+				else
+					parts[6] = " failed.";
 
-					view.WriteLine(
+				app.WriteLine(
+					new ConsoleColor[]
+					{
+						ConsoleColor.White,
+
+						ConsoleColor.DarkGreen,
+						ConsoleColor.Green,
+						ConsoleColor.DarkGreen,
+						ConsoleColor.Green,
+						ConsoleColor.DarkGreen,
+
+						ConsoleColor.Red
+					},
+					parts
+				);
+
+				if (firstScript.Exception != null)
+				{
+					app.WriteLine();
+					WriteLastExceptionCore(firstScript.Exception);
+				}
+				else
+				{
+					app.WriteLine();
+					WriteTable(firstScript.Tests.Select(t => t.Format()));
+
+					var totalDuration = firstScript.Tests.Sum(t => t.Duration);
+
+					app.WriteLine();
+					app.WriteLine(
 						new ConsoleColor[]
 						{
-					ConsoleColor.White,
-
-					ConsoleColor.DarkGreen,
-					ConsoleColor.Green,
-					ConsoleColor.DarkGreen,
-					ConsoleColor.Green,
-					ConsoleColor.DarkGreen,
-
-					ConsoleColor.Red
-						},
-						parts
-					);
-
-					if (firstScript.Exception != null)
-					{
-						view.WriteError();
-						WriteLastExceptionCore(firstScript.Exception);
-					}
-					else
-					{
-						view.WriteLine();
-						WriteTable(firstScript.Tests.Select(t => t.Format()));
-
-						var totalDuration = firstScript.Tests.Sum(t => t.Duration);
-
-						view.WriteLine();
-						view.WriteLine(
-							new ConsoleColor[]
-							{
 							ConsoleColor.Gray,
 							ConsoleColor.White,
 							ConsoleColor.DarkGreen,
 							ConsoleColor.Green,
 							ConsoleColor.DarkRed,
 							ConsoleColor.Red,
-							},
-							new string[]
-							{
+						},
+						new string[]
+						{
 							"==> total:",
 							$"{totalDuration:N0} ms",
 							", passed: ",
 							$"{firstScript.Passed:N0}",
 							", failed: ",
 							$"{firstScript.Failed:N0}"
-							},
-							true
-						);
-					}
+						},
+						true
+					);
+
 				}
 			}
 		} // proc ViewScriptResult
@@ -1131,7 +1112,7 @@ namespace TecWare.DE.Server
 				return;
 			}
 
-			Func<ClientRunScriptResult.Test, bool> filterFunc;
+			Func<DebugRunScriptResult.Test, bool> filterFunc;
 			if (methodFilter != null) // filter script and tests
 			{
 				var filterScriptFunc = Procs.GetFilerFunction(scriptFilter, true);
@@ -1157,59 +1138,55 @@ namespace TecWare.DE.Server
 			else // print detail
 			{
 				var firstTest = firstTests[0];
+				var parts = new string[7];
 
-				using (view.LockScreen())
+				parts[0] = firstTest.Script?.ScriptId;
+				parts[1] = ": ";
+				parts[2] = firstTest.Name;
+				if (firstTest.Success)
 				{
-					var parts = new string[7];
+					parts[3] = " (time: ";
+					parts[4] = $"{firstTest.Duration} ms";
+					parts[5] = ")";
+				}
+				else
+					parts[6] = " failed.";
 
-					parts[0] = firstTest.Script?.ScriptId;
-					parts[1] = ": ";
-					parts[2] = firstTest.Name;
-					if (firstTest.Success)
+
+				app.WriteLine(
+					new ConsoleColor[]
 					{
-						parts[3] = " (time: ";
-						parts[4] = $"{firstTest.Duration} ms";
-						parts[5] = ")";
-					}
-					else
-						parts[6] = " failed.";
-
-
-					view.WriteLine(
-						new ConsoleColor[]
-						{
-							ConsoleColor.White,
-							ConsoleColor.Gray,
-							ConsoleColor.White,
-							ConsoleColor.Gray,
-							ConsoleColor.White,
-							ConsoleColor.Gray,
-							ConsoleColor.Red
-						},
-						parts
-					);
-					if (firstTest.Exception != null)
-					{
-						view.WriteError();
-						WriteLastExceptionCore(firstTest.Exception);
-					}
+						ConsoleColor.White,
+						ConsoleColor.Gray,
+						ConsoleColor.White,
+						ConsoleColor.Gray,
+						ConsoleColor.White,
+						ConsoleColor.Gray,
+						ConsoleColor.Red
+					},
+					parts
+				);
+				if (firstTest.Exception != null)
+				{
+					app.WriteLine();
+					WriteLastExceptionCore(firstTest.Exception);
 				}
 			}
 		} // func ViewTestResult
 
 		#endregion
 
-		#region -- SendUseNode ----------------------------------------------------------
+		#region -- SendUseNode --------------------------------------------------------
 
 		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.")]
-		private static async Task SendUseNode(
+		private static async Task SendUseNodeAsync(
 			[Description("absolute or relative path")]
 			string node = null
 		)
 		{
-			var p = await session.SendUseAsync(node ?? String.Empty);
-			view.WriteLine(
-				new ConsoleColor[] 
+			var p = await GetDebug().UseAsync(node ?? String.Empty);
+			app.WriteLine(
+				new ConsoleColor[]
 				{
 					ConsoleColor.Gray,
 					ConsoleColor.White,
@@ -1217,79 +1194,27 @@ namespace TecWare.DE.Server
 				new string[] { "==> Current Node: ", p },
 				true
 			);
-		} // func SendUseNode
+		} // func SendUseNodeAsync
 
 		#endregion
 
-		#region -- SendVariables --------------------------------------------------------
+		#region -- SendVariables ------------------------------------------------------
 
 		[InteractiveCommand("members", Short = "m", HelpText = "Lists the current available global variables.")]
-		private static async Task SendVariables()
+		private static async Task VariablesAsync()
 		{
-			WriteReturn(String.Empty, await session.SendMembersAsync(String.Empty));
-		} // proc SendVariables
+			WriteReturn(String.Empty, await GetDebug().MembersAsync(String.Empty));
+		} // proc VariablesAsync
 
 		#endregion
 
-		#region -- SendList -------------------------------------------------------------
-
-		private static void PrintList(string indent, XElement x)
-		{
-			foreach (var c in x.Elements("n"))
-			{
-				Console.WriteLine("{0}{1}: {2}", indent, c.GetAttribute("name", String.Empty), c.GetAttribute("displayName", String.Empty));
-				PrintList(indent + "    ", c);
-			}
-		} // proc PrintList
-
-		[InteractiveCommand("list", HelpText = "Lists the current nodes.")]
-		private static async Task SendList(
-			[Description("true to retrieve all sub nodes")]
-			bool recursive = false
-		)
-		{
-			var x = await session.SendListAsync(recursive);
-			using (view.LockScreen())
-				PrintList(String.Empty, x);
-		} // func SendList
-
-
-		#endregion
-
-		#region -- SetTimeout -----------------------------------------------------------
-
-		[InteractiveCommand("timeout", Short = "t", HelpText = "Sets the timeout in ms.")]
-		private static void SetTimeout(
-			[Description("Optional new timeout in ms")]
-			int timeout = -1
-		)
-		{
-			if (timeout >= 0)
-				session.DefaultTimeout = timeout;
-			view.WriteLine(
-				new ConsoleColor[]
-				{
-					ConsoleColor.Gray,
-					ConsoleColor.White,
-				},
-				new string[]
-				{
-					"==> timeout is: ",
-					$"{session.DefaultTimeout} ms"
-				},
-				true
-			);
-		} // func SendList
-
-		#endregion
-
-		#region -- BeginScope, CommitScope, RollbackScope -------------------------------
+		#region -- BeginScope, CommitScope, RollbackScope -----------------------------
 
 		[InteractiveCommand("begin", HelpText = "Starts a new transaction scope.")]
-		private static async Task BeginScope()
+		private static async Task BeginScopeAsync()
 		{
-			var userName = await session.SendBeginScopeAsync();
-			view.WriteLine(
+			var userName = await GetDebug().BeginScopeAsync();
+			app.WriteLine(
 				new ConsoleColor[]
 				{
 					ConsoleColor.Gray,
@@ -1302,13 +1227,13 @@ namespace TecWare.DE.Server
 				},
 				true
 			);
-		} // proc BeginScope
+		} // proc BeginScopeAsync
 
 		[InteractiveCommand("commit", HelpText = "Commits the current scope and creates a new one.")]
-		private static async Task CommitScope()
+		private static async Task CommitScopeAsync()
 		{
-			var userName = await session.SendCommitScopeAsync();
-			view.WriteLine(
+			var userName = await GetDebug().CommitScopeAsync();
+			app.WriteLine(
 				new ConsoleColor[]
 				{
 					ConsoleColor.Gray,
@@ -1321,13 +1246,13 @@ namespace TecWare.DE.Server
 				},
 				true
 			);
-		} // proc CommitScope
+		} // proc CommitScopeAsync
 
 		[InteractiveCommand("rollback", HelpText = "Rollbacks the current scope and creates a new one.")]
-		private static async Task RollbackScope()
+		private static async Task RollbackScopeAsync()
 		{
-			var userName = await session.SendRollbackScopeAsync();
-			view.WriteLine(
+			var userName = await GetDebug().RollbackScopeAsync();
+			app.WriteLine(
 				new ConsoleColor[]
 				{
 					ConsoleColor.Gray,
@@ -1340,18 +1265,18 @@ namespace TecWare.DE.Server
 				},
 				true
 			);
-		} // proc RollbackScope
+		} // proc RollbackScopeAsync
 
 		#endregion
 
-		#region -- LastException --------------------------------------------------------
+		#region -- LastException ------------------------------------------------------
 
 		private static void SetLastRemoteException(Exception e)
 		{
 			lastRemoteException = null;
 			while (e != null)
 			{
-				if (e is ClientDebugException re)
+				if (e is DebugSocketException re)
 				{
 					lastRemoteException = re;
 					return;
@@ -1364,16 +1289,16 @@ namespace TecWare.DE.Server
 		{
 			if (ex != null)
 			{
-				view.WriteError(ex);
-				view.WriteError();
-				view.WriteError(ex.StackTrace);
+				app.WriteError(ex);
+				app.WriteLine();
+				app.WriteError(ex.StackTrace);
 
-				if (ex is ClientDebugException cde)
+				if (ex is DebugSocketException cde)
 				{
 					foreach (var innerException in cde.InnerExceptions)
 					{
-						view.WriteError();
-						view.WriteError("== Inner Exception ==");
+						app.WriteLine();
+						app.WriteError("== Inner Exception ==");
 						WriteLastExceptionCore(innerException);
 					}
 				}

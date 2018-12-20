@@ -338,19 +338,35 @@ namespace TecWare.DE.Server
 			try
 			{
 				var ws = webSocket.WebSocket;
+				var recvOffset = 0;
+				var recvBuffer = new byte[16 << 10];
+				var segment = WebSocket.CreateServerBuffer(1024);
 				while (ws.State == WebSocketState.Open)
 				{
-					var segment = WebSocket.CreateServerBuffer(1024);
-					var r = await ws.ReceiveAsync(segment, CancellationToken.None);
-					if (r.MessageType == WebSocketMessageType.Text) // message as relative uri
+					var rest = recvBuffer.Length - recvOffset;
+					if (rest <= 0)
+						await ws.CloseAsync(WebSocketCloseStatus.ProtocolError, "Message to big", CancellationToken.None);
+					else
 					{
-						try
+						var r = await ws.ReceiveAsync(new ArraySegment<byte>(recvBuffer, recvOffset, rest), CancellationToken.None);
+						if (r.MessageType == WebSocketMessageType.Text) // message as relative uri
 						{
-							await eventSession.ExecuteCommandAsync(Encoding.UTF8.GetString(segment.Array, segment.Offset, segment.Count));
-						}
-						catch (Exception e)
-						{
-							Log.Except("Command failed: ", e);
+							recvOffset += r.Count;
+							if (r.EndOfMessage)
+							{
+								try
+								{
+									await eventSession.ExecuteCommandAsync(Encoding.UTF8.GetString(segment.Array, 0, recvOffset));
+								}
+								catch (Exception e)
+								{
+									Log.Except("Command failed: ", e);
+								}
+								finally
+								{
+									recvOffset = 0;
+								}
+							}
 						}
 					}
 				}

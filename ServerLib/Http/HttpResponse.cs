@@ -1065,25 +1065,4 @@ namespace TecWare.DE.Server.Http
 	} // class HttpResponseHelper
 
 	#endregion
-
-	#region -- class HttpResponseException --------------------------------------------
-
-	/// <summary>Spezielle Exception die einen Http-Status-Code weitergeben kann.</summary>
-	public class HttpResponseException : Exception
-	{
-		/// <summary>Spezielle Exception die einen Http-Status-Code weitergeben kann.</summary>
-		/// <param name="code">Http-Fehlercode</param>
-		/// <param name="message">Nachricht zu diesem Fehlercode</param>
-		/// <param name="innerException">Optionale </param>
-		public HttpResponseException(HttpStatusCode code, string message, Exception innerException = null)
-			: base(message, innerException)
-		{
-			this.Code = code;
-		} // ctor
-
-		/// <summary>Code der übermittelt werden soll.</summary>
-		public HttpStatusCode Code { get; }
-	} // class HttpResponseException
-
-	#endregion
 }

@@ -23,6 +23,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -32,6 +33,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="CommandLine, Version=2.0.275.0, Culture=neutral, PublicKeyToken=de6f01bd326f8c32, processorArchitecture=MSIL">
@@ -53,8 +55,14 @@
     <Compile Include="..\Common\AssemblyInfoServer.cs">
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
-    <Compile Include="ClientDebugSession.cs" />
+    <Compile Include="ConsoleDebugSocket.cs" />
+    <Compile Include="ConsoleEventSocket.cs" />
     <Compile Include="ConsoleView.cs" />
+    <Compile Include="NeoConsole\NativeMethods.cs" />
+    <Compile Include="NeoConsole\NeoConsole.cs" />
+    <Compile Include="NeoConsole\NeoConsoleApp.cs" />
+    <Compile Include="NeoConsole\NeoConsoleInput.cs" />
+    <Compile Include="NeoConsole\NeoConsoleOutput.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

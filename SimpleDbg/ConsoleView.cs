@@ -15,245 +15,293 @@
 #endregion
 using System;
 using System.Linq;
-using System.Threading;
-using TecWare.DE.Stuff;
+using Neo.Console;
+using Neo.IronLua;
+using TecWare.DE.Networking;
 
 namespace TecWare.DE.Server
 {
-	/// <summary></summary>
-	public sealed class ConsoleView
-	{
-		private readonly object screenLock = new object();
-		private bool isConnected = false;
-		private string usePath = String.Empty;
+	#region -- class SimpleDebugConsoleReadLineManager --------------------------------
 
-		public ConsoleView()
+	internal sealed class SimpleDebugConsoleReadLineManager : IConsoleReadLineManager, IConsoleReadLineScanner
+	{
+		public bool CanExecute(string command)
+			=> (command.Length > 0 && command[0] == ':') || command.EndsWith(Environment.NewLine);
+
+		public string GetPrompt()
+			=> "> ";
+
+		public int GetNextToken(int offset, string text, bool reverse)
+			=> throw new NotImplementedException();
+
+		private static ConsoleColor GetTokenColor(LuaToken typ)
 		{
-			UpdateSateText();
+			switch (typ)
+			{
+				case LuaToken.KwAnd:
+				case LuaToken.KwBreak:
+				case LuaToken.KwCast:
+				case LuaToken.KwConst:
+				case LuaToken.KwDo:
+				case LuaToken.KwElse:
+				case LuaToken.KwElseif:
+				case LuaToken.KwEnd:
+				case LuaToken.KwFalse:
+				case LuaToken.KwFor:
+				case LuaToken.KwForEach:
+				case LuaToken.KwFunction:
+				case LuaToken.KwGoto:
+				case LuaToken.KwIf:
+				case LuaToken.KwIn:
+				case LuaToken.KwLocal:
+				case LuaToken.KwNil:
+				case LuaToken.KwNot:
+				case LuaToken.KwOr:
+				case LuaToken.KwRepeat:
+				case LuaToken.KwReturn:
+				case LuaToken.KwThen:
+				case LuaToken.KwTrue:
+				case LuaToken.KwUntil:
+				case LuaToken.KwWhile:
+				case LuaToken.DotDotDot:
+					return ConsoleColor.White;
+				case LuaToken.Comment:
+				case LuaToken.InvalidComment:
+					return ConsoleColor.Green;
+				case LuaToken.String:
+				case LuaToken.InvalidString:
+					return ConsoleColor.DarkYellow;
+				case LuaToken.Assign:
+				case LuaToken.BitAnd:
+				case LuaToken.BitOr:
+				case LuaToken.BracketClose:
+				case LuaToken.BracketCurlyClose:
+				case LuaToken.BracketCurlyOpen:
+				case LuaToken.BracketOpen:
+				case LuaToken.BracketSquareClose:
+				case LuaToken.BracketSquareOpen:
+				case LuaToken.Colon:
+				case LuaToken.Comma:
+				case LuaToken.Dot:
+				case LuaToken.DotDot:
+				case LuaToken.Equal:
+				case LuaToken.Greater:
+				case LuaToken.GreaterEqual:
+				case LuaToken.Lower:
+				case LuaToken.LowerEqual:
+				case LuaToken.Minus:
+				case LuaToken.NotEqual:
+				case LuaToken.Percent:
+				case LuaToken.Semicolon:
+				case LuaToken.ShiftLeft:
+				case LuaToken.ShiftRight:
+				case LuaToken.Slash:
+				case LuaToken.SlashShlash:
+				case LuaToken.Star:
+					return ConsoleColor.DarkGray;
+				case LuaToken.Number:
+					return ConsoleColor.DarkCyan;
+				case LuaToken.InvalidChar:
+					return ConsoleColor.Red;
+				default:
+					return ConsoleColor.Gray;
+			}
+		} // func GetTokenColor
+
+		public void Scan(IConsoleReadLineScannerSource source)
+		{
+			if (source.LineCount == 0)
+				return;
+
+			var cmdLine = source[0];
+			if (cmdLine.StartsWith(":")) // command
+			{
+				var startOfArgs = cmdLine.IndexOf(' ');
+				if (startOfArgs == -1)
+					startOfArgs = cmdLine.Length;
+				source.AppendToken(0, 0, 0, startOfArgs, ConsoleColor.White);
+				source.AppendToken(0, startOfArgs, 0, cmdLine.Length, ConsoleColor.Gray);
+			}
+			else
+			{
+				using (var lex = new LuaLexer("cmd.lua", source.TextReader, 0, 0))
+				{
+					lex.Next();
+					while (lex.Current.Typ != LuaToken.Eof)
+					{
+						source.AppendToken(lex.Current.Start.Line, lex.Current.Start.Col, lex.Current.End.Line, lex.Current.End.Col, GetTokenColor(lex.Current.Typ));
+
+						lex.Next();
+					}
+				}
+			}
+		} // proc Scan
+	} // class SimpleDebugConsoleReadLineManager
+
+	#endregion
+
+	#region -- enum ConnectionState ---------------------------------------------------
+
+	public enum ConnectionState
+	{
+		None = 0,
+		Connecting = 1,
+		ConnectedHttp = 2,
+		ConnectedDebug = 4,
+		ConnectedEvent = 8
+	} // enum ConnectionState
+
+	#endregion
+
+	#region -- class ConnectionStateOverlay -------------------------------------------
+
+	internal sealed class ConnectionStateOverlay : ConsoleOverlay
+	{
+		private ConnectionState currentState = ConnectionState.None;
+		private string currentPath = "/";
+
+		public ConnectionStateOverlay(ConsoleApplication app)
+		{
+			Application = app ?? throw new ArgumentNullException(nameof(app));
+			ZOrder = 1000;
+
+			// create char buffer
+			Resize(20, 1);
+			Left = -Width;
+			Top = 0;
+
+			// position
+			Position = ConsoleOverlayPosition.Window;
+			OnResize();
 		} // ctor
 
-		public IDisposable LockScreen()
+		protected override void OnRender()
 		{
-			Monitor.Enter(screenLock);
-			return new DisposableScope(
-				() =>
-				{
-					Monitor.Exit(screenLock);
-					UpdateSateText();
-				}
-			);
-		} // func LockScreen
-		
-		public void WriteLine()
-		{
-			WriteLine(String.Empty);
-		} // proc WriteLine
-
-		public void WriteLine(string text)
-		{
-			using (LockScreen())
-				Console.Out.WriteLine(text);
-		} // proc WriteLine
-
-		public void WriteLine(ConsoleColor[] colors, string[] parts, bool rightAlign = false)
-		{
-			using (LockScreen())
+			ConsoleColor GetStateColor()
 			{
-				if (rightAlign)
-					MoveRight(parts.Sum(c => c?.Length ?? 0) + 1);
+				if ((currentState & ConnectionState.ConnectedDebug) != 0)
+					return ConsoleColor.DarkGreen;
+				else if ((currentState & ConnectionState.ConnectedHttp) != 0)
+					return ConsoleColor.DarkBlue;
+				else
+					return ConsoleColor.DarkRed;
+			} // func GetStateColor
 
-				Write(colors, parts);
-				WriteLine();
-			}
-		} // proc WriteLine
-
-		public void WriteObject(object o)
-		{
-			if (o == null)
-				WriteLine("<null>");
+			var stateText = currentState == ConnectionState.None ? "None..." : (currentState == ConnectionState.Connecting ? "Connecting..." : currentPath);
+			if (stateText.Length > 18)
+				stateText = " ..." + stateText.Substring(stateText.Length - 15, 15) + " ";
 			else
-				WriteLine(o.ToString());
-		} // proc WriteObject
+				stateText = " " + stateText.PadRight(19);
 
-		public void WriteError(Exception exception, string message = null)
+			Content.Write(0, 0, stateText, false, ConsoleColor.White, GetStateColor());
+		} // proc OnRender
+
+		private void SetStateCore(ConnectionState state, bool? set)
+		{
+			var newState = set.HasValue
+				? (set.Value ? state | currentState : ~state & currentState)
+				: state;
+
+			if (newState != currentState)
+			{
+				currentState = newState;
+				Invalidate();
+			}
+		} // proc SetStateCore
+
+		private void SetPathCore(string newPath)
+		{
+			if(newPath != currentPath)
+			{
+				currentPath = newPath;
+				Invalidate();
+			}
+		} // proc SetPathCore
+
+		public void SetState(ConnectionState state, bool? set)
+			=> Application.Invoke(() => SetStateCore(state, set));
+
+		public void SetPath(string path)
+			=> Application.Invoke(() => SetPathCore(path));
+	} // class ConnectionStateOverlay
+
+	#endregion
+
+	#region -- ConsoleView ------------------------------------------------------------
+
+	internal static class ConsoleView
+	{
+		#region -- WriteError ---------------------------------------------------------
+
+		public static void WriteError(this ConsoleApplication app, string message)
+		{
+			using (app.Color(ConsoleColor.Red))
+				app.WriteLine(message);
+		} // proc WriteError
+
+		public static void WriteError(this ConsoleApplication app, Exception exception, string message = null)
 		{
 			if (exception == null)
 				return;
 
 			if (!String.IsNullOrEmpty(message))
-			{
-				using (SetColor(ConsoleColor.Red))
-					Console.WriteLine(message);
-			}
+				WriteError(app, message);
 
 			if (exception is AggregateException aggEx)
 			{
 				foreach (var ex in aggEx.InnerExceptions)
-					WriteError(ex);
+					WriteError(app, ex);
 			}
 			else
 			{
 				// write exception
-				using (LockScreen())
+				using (app.Color(ConsoleColor.Red))
 				{
-					using (SetColor(ConsoleColor.Red))
-					{
-						if (exception is ClientDebugException cde)
-							Console.WriteLine($"[R:{cde.ExceptionType}]");
-						else
-							Console.WriteLine($"[{exception.GetType().Name}]");
+					if (exception is DebugSocketException cde)
+						app.WriteLine($"[R:{cde.ExceptionType}]");
+					else
+						app.WriteLine($"[{exception.GetType().Name}]");
 
-						Console.WriteLine($"  {exception.Message}");
-					}
+					app.WriteLine($"  {exception.Message}");
 				}
 
 				// chain exceptions
-				WriteError(exception.InnerException);
+				WriteError(app, exception.InnerException);
 			}
 		} // proc WriteError
 
-		public void WriteError(string text)
+		#endregion
+
+		#region -- WriteLine ----------------------------------------------------------
+
+		public static void WriteObject(this ConsoleApplication app, object o)
+			=> app.WriteLine(o == null ? "<null>" : o.ToString());
+
+		public static void Write(this ConsoleApplication app, ConsoleColor[] colors, string[] parts)
 		{
-			using (LockScreen())
-			using (SetColor(ConsoleColor.Red))
-				Console.WriteLine(text);
-		} // proc WriteError
-
-		public void WriteError()
-			=> WriteLine();
-
-		public void Write(string text)
-			=> Write(text, ConsoleColor.Gray);
-
-		public void Write(string text, ConsoleColor foreground, ConsoleColor background = ConsoleColor.Black)
-		{
-			using (LockScreen())
+			for (var i = 0; i < parts.Length; i++)
 			{
-				using (SetColor(foreground, background))
-					Console.Write(text);
-			}
-		} // proc WriteLine
-
-		public void Write(ConsoleColor[] colors, string[] parts)
-		{
-			using (LockScreen())
-			{
-				for (var i = 0; i < parts.Length; i++)
-				{
-					if (parts[i] == null)
-						continue;
-					using (SetColor(colors[i]))
-						Console.Write(parts[i]);
-				}
+				if (parts[i] == null)
+					continue;
+				using (app.Color(colors[i]))
+					app.Write(parts[i]);
 			}
 		} // proc Write
 
-		#region -- SetColor -----------------------------------------------------------
-
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		private sealed class ResetColors : IDisposable
+		public static void WriteLine(this ConsoleApplication app, ConsoleColor[] colors, string[] parts, bool rightAlign = false)
 		{
-			public ResetColors(ConsoleColor foregroundColor, ConsoleColor backgroundColor)
-			{
-				this.OldBackgroundColor = Console.BackgroundColor;
-				this.OldForegroundColor = Console.ForegroundColor;
-				Console.BackgroundColor = backgroundColor;
-				Console.ForegroundColor = foregroundColor;
-			} // ctor
+			if (rightAlign)
+				MoveRight(app, parts.Sum(c => c?.Length ?? 0) + 1);
 
-			public void Dispose()
-			{
-				Console.ForegroundColor = this.OldForegroundColor;
-				Console.BackgroundColor = this.OldBackgroundColor;
-			} // proc Dispose
+			Write(app, colors, parts);
+			app.WriteLine();
+		} // proc WriteLine
 
-			public ConsoleColor OldForegroundColor { get; }
-			public ConsoleColor OldBackgroundColor { get; }
-		} // class ResetColors
-
-		public IDisposable SetColor(ConsoleColor foreground, ConsoleColor background = ConsoleColor.Black)
-			=> new ResetColors(foreground, background);
+		public static void MoveRight(this ConsoleApplication app, int right)
+			=> app.CursorLeft = app.WindowRight - right + 1;
 
 		#endregion
-
-		#region -- SetCursor ----------------------------------------------------------
-
-		private sealed class ResetCursor : IDisposable
-		{			
-			public ResetCursor(int left, int  top, bool visible)
-			{
-				this.OldCursorLeft = Console.CursorLeft;
-				this.OldCursorTop = Console.CursorTop;
-				this.OldVisible = Console.CursorVisible;
-
-				Console.CursorLeft = left;
-				Console.CursorTop = top;
-				Console.CursorVisible = visible;
-			} // ctor
-
-			public void Dispose()
-			{
-				Console.CursorLeft = OldCursorLeft;
-				Console.CursorTop = OldCursorTop;
-				Console.CursorVisible = OldVisible;
-			} // proc Dispose
-
-			public int OldCursorLeft { get; }
-			public int OldCursorTop { get; }
-			public bool OldVisible { get; }
-		} // class ResetCursor
-
-		public IDisposable SetCursor(int? left = null, int? top = null, bool? visible = null)
-			=> new ResetCursor(left ?? Console.CursorLeft, top ?? Console.CursorTop, visible ?? Console.CursorVisible);
-
-		public void MoveRight(int right)
-			=> Console.CursorLeft = Console.WindowWidth - right;
-
-		#endregion
-
-		private void UpdateSateText()
-		{
-			using (SetColor(ConsoleColor.White, isConnected ? ConsoleColor.DarkGreen : ConsoleColor.DarkRed))
-			using (SetCursor(Console.WindowWidth - 20, Console.WindowTop, false))
-			{
-				var stateText = isConnected ? usePath : "Connecting...";
-
-				if (stateText.Length > 18)
-					stateText = " ..." + stateText.Substring(stateText.Length - 15, 15) + " ";
-				else
-					stateText = " " + stateText.PadRight(19);
-
-				Console.Write(stateText);
-			}
-		} // proc UpdateStateText
-
-		public bool IsConnected
-		{
-			get { return isConnected; }
-			set
-			{
-				if (isConnected != value)
-				{
-					isConnected = value;
-					UpdateSateText();
-				}
-			}
-		} // prop IsConnected
-
-		public string UsePath
-		{
-			get { return usePath; }
-			set
-			{
-				if (usePath != value)
-				{
-					usePath = value;
-					UpdateSateText();
-				}
-			}
-		} // prop UsePath
-
-		public object SyncRoot => screenLock;
 	} // class ConsoleView
+
+	#endregion
 }

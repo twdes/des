@@ -24,6 +24,7 @@ using System.Threading;
 using System.Xml;
 using System.Xml.Linq;
 using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
 
@@ -794,30 +795,6 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEConfigItemPublicPanel ------------------------------------------
-
-	/// <summary>Public panel</summary>
-	public sealed class DEConfigItemPublicPanel
-	{
-		/// <summary></summary>
-		/// <param name="id"></param>
-		/// <param name="uri"></param>
-		public DEConfigItemPublicPanel(string id, string uri)
-		{
-			this.Id = id;
-			this.Uri = uri;
-		} // ctor
-
-		/// <summary></summary>
-		public string Id { get; }
-		/// <summary></summary>
-		public string DisplayName { get; set; }
-		/// <summary></summary>
-		public string Uri { get; }
-	} // class DEConfigItemPublicPanel
-
-	#endregion
-
 	#region -- class DEConfigItem -----------------------------------------------------
 
 	public partial class DEConfigItem
@@ -874,9 +851,6 @@ namespace TecWare.DE.Server
 				case DEConfigItemPublicAction action:
 					id = action.ActionId;
 					break;
-				case DEConfigItemPublicPanel panel:
-					id = panel.Id;
-					break;
 				default:
 					throw new ArgumentException(nameof(item));
 			}
@@ -884,16 +858,6 @@ namespace TecWare.DE.Server
 			lock (publishedItems)
 				publishedItems[id] = item;
 		} // proc PublishItem
-
-		[LuaMember("PublishPanel")]
-		private void LuaPublishPanel(string sId, string sUri, LuaTable t)
-		{
-			var configPanel = new DEConfigItemPublicPanel(sId, sUri);
-			if (t != null)
-				t.SetObjectMember(configPanel);
-
-			PublishItem(configPanel);
-		} // proc LuaPublishPanel
 
 		[LuaMember("PublishAction")]
 		private void LuaPublishAction(string sAction, LuaTable t)
@@ -950,15 +914,6 @@ namespace TecWare.DE.Server
 				);
 				return x;
 			}
-			else if (item is DEConfigItemPublicPanel configPanel)
-			{
-				var x = new XElement("panel",
-					new XAttribute("id", configPanel.Id),
-					Procs.XAttributeCreate("displayname", configPanel.DisplayName),
-					new XText(configPanel.Uri)
-				);
-				return x;
-			}
 			else
 				return null;
 		} // func GetControllerXmlNode
@@ -967,8 +922,10 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("list", SecurityToken = SecuritySys),
 		Description("Gibt die Konfigurationsstruktur des Servers zurück.")
 		]
-		private XElement HttpListAction(bool recursive = true)
+		private XElement HttpListAction(bool recursive = true, bool published = true, int rlevel = Int32.MaxValue)
 		{
+			recursive = recursive || (rlevel != Int32.MaxValue);
+
 			// Aktuelle Element anlegen
 			var x = new XElement("item",
 				new XAttribute("name", Name),
@@ -977,17 +934,20 @@ namespace TecWare.DE.Server
 			);
 
 			// Füge die entsprechenden Collections
-			lock (publishedItems)
+			if (published)
 			{
-				foreach (var cur in publishedItems)
-					x.Add(GetControllerXmlNode(cur.Key, cur.Value));
+				lock (publishedItems)
+				{
+					foreach (var cur in publishedItems)
+						x.Add(GetControllerXmlNode(cur.Key, cur.Value));
+				}
 			}
 
 			// Füge die untergeordneten Knoten an
-			if (recursive)
+			if (recursive && rlevel > 0)
 			{
 				foreach (var c in subItems)
-					x.Add(c.HttpListAction(recursive));
+					x.Add(c.HttpListAction(recursive, published, rlevel - 1));
 			}
 
 			return x;

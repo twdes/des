@@ -256,8 +256,6 @@ namespace TecWare.DE.Server
 					IdleMemoryViewerRefreshValue(false, ref tmp);
 				}, 3000
 			);
-
-			PublishItem(new DEConfigItemPublicPanel("tw_server_info", "/wpf/ServerInfoControl.xaml") { DisplayName = "Server Informationen" });
 		} // proc InitServerInfo
 
 		private string GetServerFileVersion()
@@ -274,7 +272,7 @@ namespace TecWare.DE.Server
 				propertyMemory.Value = lastMemory = newMemory;
 		} // proc IdleMemoryViewerRefreshValue
 
-		#region -- GetServerInfoData ------------------------------------------------------
+		#region -- GetServerInfoData --------------------------------------------------
 
 		private XElement GetServerInfoAssembly(string name, string assemblyName, string title, string version, string copyright, string imagePath)
 		{
@@ -341,7 +339,7 @@ namespace TecWare.DE.Server
 			xData.Add(xAssemblies);
 
 			// NeoLua
-			var asmLua = typeof(Neo.IronLua.Lua).Assembly;
+			var asmLua = typeof(Lua).Assembly;
 
 			var luaCompany = asmLua.GetCustomAttribute<AssemblyCompanyAttribute>();
 			var luaCopyright = asmLua.GetCustomAttribute<AssemblyCopyrightAttribute>();
@@ -358,8 +356,8 @@ namespace TecWare.DE.Server
 				)
 			);
 
-			// Geladene Assemblies
-			foreach (Assembly asmCur in AppDomain.CurrentDomain.GetAssemblies())
+			// get description for loaded assemblies
+			foreach (var asmCur in AppDomain.CurrentDomain.GetAssemblies())
 			{
 				var attrDesc = asmCur.GetCustomAttribute<DescriptionAttribute>();
 				if (attrDesc != null)
@@ -371,7 +369,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- HttpProcessAction ------------------------------------------------------
+		#region -- HttpProcessAction --------------------------------------------------
 
 		[
 		DEConfigHttpAction("process", SecurityToken = SecuritySys),
@@ -388,10 +386,10 @@ namespace TecWare.DE.Server
 			}
 
 			// Speicherinformation des Processes
-			using (Process p = Process.GetCurrentProcess())
+			using (var p = Process.GetCurrentProcess())
 			{
 				// Rückgabe zusammensetzen
-				XElement r = new XElement("process");
+				var r = new XElement("process");
 				if ((typ & 1) != 0)
 				{
 					var count = 0;
@@ -426,7 +424,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- HttpDumpAction -------------------------------------------------------
+		#region -- HttpDumpAction -----------------------------------------------------
 
 		private int lastDumpFileInfoId = 0;
 
@@ -472,7 +470,7 @@ namespace TecWare.DE.Server
 
 				var outputText = p.StandardOutput.ReadToEnd();
 
-				return DEConfigItem.SetStatusAttributes(
+				return SetStatusAttributes(
 					new XElement("return",
 						new XAttribute("id", fi.Id),
 						new XAttribute("exitcode", p.ExitCode)

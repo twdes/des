@@ -1450,7 +1450,7 @@ namespace TecWare.DE.Server
 			var httpEx = ex as HttpResponseException;
 
 			// Start logging, or stop
-			if (httpEx != null && httpEx.Code == HttpStatusCode.Unauthorized)
+			if (httpEx != null && httpEx.StatusCode == HttpStatusCode.Unauthorized)
 			{
 				r?.LogStop();
 			}
@@ -1467,7 +1467,7 @@ namespace TecWare.DE.Server
 				}
 			}
 
-			ctx.Response.StatusCode = httpEx != null ? (int)httpEx.Code : (int)HttpStatusCode.InternalServerError;
+			ctx.Response.StatusCode = httpEx != null ? (int)httpEx.StatusCode : (int)HttpStatusCode.InternalServerError;
 			ctx.Response.StatusDescription = Procs.FilterHttpStatusDescription(ex.Message);
 			ctx.Response.Close();
 		} // proc ProcessResponeOnException

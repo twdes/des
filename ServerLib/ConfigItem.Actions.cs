@@ -22,6 +22,7 @@ using System.Linq.Expressions;
 using System.Net;
 using System.Reflection;
 using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
 
