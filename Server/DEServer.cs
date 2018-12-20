@@ -40,17 +40,11 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server
 {
-	#region -- interface IDEServerResolver ----------------------------------------------
+	#region -- interface IDEServerResolver --------------------------------------------
 
-	/// <summary></summary>
 	internal interface IDEServerResolver
 	{
-		/// <summary></summary>
-		/// <param name="path"></param>
 		void AddPath(string path);
-		/// <summary></summary>
-		/// <param name="assemblyName"></param>
-		/// <returns></returns>
 		Assembly Load(string assemblyName);
 	} // interface IDEServerResolver
 
@@ -62,11 +56,9 @@ namespace TecWare.DE.Server
 		public const string ServerCategory = "Dienst";
 		public const string NetworkCategory = "Netzwerk";
 
-		#region -- class DumpFileInfo -----------------------------------------------------
+		#region -- class DumpFileInfo -------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		[DEListTypePropertyAttribute("dump")]
+		[DEListTypeProperty("dump")]
 		private sealed class DumpFileInfo
 		{
 			public DumpFileInfo(int id, string fileName)
@@ -127,7 +119,7 @@ namespace TecWare.DE.Server
 
 		private DEList<DumpFileInfo> dumpFiles;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		public DEServer(string configurationFile, IEnumerable<string> properties)
 			: base(new ServiceContainer(), "Main")
@@ -225,7 +217,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- ServerInfo Member - Http -----------------------------------------------
+		#region -- ServerInfo Member - Http -------------------------------------------
 
 		private SimpleConfigItemProperty<long> propertyMemory = null;
 		private long lastMemory = 0;
@@ -475,7 +467,7 @@ namespace TecWare.DE.Server
 						new XAttribute("id", fi.Id),
 						new XAttribute("exitcode", p.ExitCode)
 					),
-					p.ExitCode > 0,
+					p.ExitCode > 0 ? DEHttpReturnState.Ok : DEHttpReturnState.Error,
 					outputText
 				);
 			}
@@ -511,7 +503,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- OnProcessRequest -------------------------------------------------------
+		#region -- OnProcessRequest ---------------------------------------------------
 
 		protected override async Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
 		{
@@ -526,7 +518,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Configuration Load -----------------------------------------------------
+		#region -- Configuration Load -------------------------------------------------
 
 		private Action refreshConfig;
 		private readonly TaskCompletionSource<bool> serviceInitialized = new TaskCompletionSource<bool>();
@@ -683,11 +675,9 @@ namespace TecWare.DE.Server
 						{
 							lock (securityGroups)
 							{
-								string[] tmp;
-								if (securityGroups.TryGetValue(name, out tmp))
-									securityGroups[name] = CombineSecurityTokens(tmp, SplitSecurityGroup(cur.Value));
-								else
-									securityGroups[name] = SplitSecurityGroup(cur.Value);
+								securityGroups[name] = securityGroups.TryGetValue(name, out var tmp)
+									? CombineSecurityTokens(tmp, SplitSecurityGroup(cur.Value))
+									: SplitSecurityGroup(cur.Value);
 							}
 						}
 					}
@@ -728,7 +718,7 @@ namespace TecWare.DE.Server
 				propertyLogCount = new SimpleConfigItemProperty<int>(this, "tw_base_logcount", "Logs", ServerCategory, "Anzahl der Log-Dateien.", "{0:N0}", 0);
 			}
 			else if (String.Compare(newLogPath, logPath, true) != 0)
-				Log.Warn("Für die Änderung des LogPath ist ein Neustart erforderlich.");
+				Log.Warn("LogPath is changed. Restart needed.");
 
 			// Initialisiere die Basis
 			base.OnBeginReadConfiguration(config);
@@ -754,7 +744,7 @@ namespace TecWare.DE.Server
 		} // proc OnEndReadConfiguration
 
 		[ThreadStatic]
-		private static MethodInfo miRegisterSubItem = null;
+		private static MethodInfo registerSubItemMethodInfo = null;
 
 		public bool LoadConfigExtension(IDEConfigLoading config, XElement load, string currentNamespace)
 		{
@@ -764,16 +754,16 @@ namespace TecWare.DE.Server
 				if (type == null)
 				{
 					if (!String.IsNullOrEmpty(currentNamespace) && load.Name.NamespaceName != currentNamespace)
-						Log.LogMsg(LogMsgType.Warning, "Typ für Element '{0}' wurde nicht im Schema gefunden.", load.Name);
+						Log.LogMsg(LogMsgType.Warning, "Type for element '{0}' is missing in schema.", load.Name);
 					return false;
 				}
 
 				// Suche die Methode
-				if (miRegisterSubItem == null)
-					miRegisterSubItem = config.GetType().GetMethod("RegisterSubItem");
+				if (registerSubItemMethodInfo == null)
+					registerSubItemMethodInfo = config.GetType().GetMethod("RegisterSubItem");
 
 				// Erzeuge die Method
-				var mi = miRegisterSubItem.MakeGenericMethod(type);
+				var mi = registerSubItemMethodInfo.MakeGenericMethod(type);
 				mi.Invoke(config, new object[] { load });
 
 				return true;
@@ -799,10 +789,10 @@ namespace TecWare.DE.Server
 			var cur = Array.Find(ServiceController.GetServices(), sv => String.Compare(sv.ServiceName, serviceName, true) == 0);
 
 			if (cur == null)
-				LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gefunden...", serviceName));
+				LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' not found...", serviceName));
 			else
 			{
-				LogMsg(EventLogEntryType.Information, String.Format("Warte auf Service '{0}' für maximal {1:N0}ms...", serviceName, maxTime));
+				LogMsg(EventLogEntryType.Information, String.Format("Wait {1:N0}ms for service '{0}' start up...", serviceName, maxTime));
 				while (cur.Status != ServiceControllerStatus.Running && maxTime > 0)
 				{
 					// serviceLog.RequestAdditionalTime(700); service is already started
@@ -811,7 +801,7 @@ namespace TecWare.DE.Server
 					maxTime -= 500;
 				}
 				if (cur.Status != ServiceControllerStatus.Running)
-					LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' nicht gestartet...", serviceName));
+					LogMsg(EventLogEntryType.Warning, String.Format("Service '{0}' not started...", serviceName));
 			}
 		} // proc WaitForService
 
@@ -862,7 +852,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Security Groups --------------------------------------------------------
+		#region -- Security Groups ----------------------------------------------------
 
 		public string[] BuildSecurityTokens(params string[] securityTokens)
 		{
@@ -1074,6 +1064,53 @@ namespace TecWare.DE.Server
 			{
 				this.server = server ?? throw new ArgumentNullException(nameof(server));
 			} // ctor
+
+			/// <summary>Throw a exception.</summary>
+			/// <param name="value"></param>
+			/// <param name="message"></param>
+			/// <returns></returns>
+			[LuaMember("assert")]
+			private new object LuaAssert(object value, string message)
+			{
+				if (!value.ChangeType<bool>())
+					throw new LuaAssertRuntimeException(message ?? "Assertion failed!", 1, true);
+				return value;
+			} // func LuaAssert
+
+			/// <summary>Throw a user error.</summary>
+			/// <param name="message"></param>
+			/// <param name="arg1"></param>
+			[LuaMember("error")]
+			private static void LuaError(object message, object arg1)
+			{
+				var level = 1;
+
+				if (arg1 is int i && i > 1)  // validate stack trace level
+					level = i;
+
+				if (message is Exception ex) // throw exception
+				{
+					if (arg1 is string text)
+						throw new LuaUserRuntimeException(text, ex);
+					else
+						throw ex;
+				}
+				else if (message is string text) // generate exception with message
+				{
+					if (arg1 is Exception innerException)
+						throw new LuaUserRuntimeException(text, innerException);
+					else
+						throw new LuaUserRuntimeException(text, level, true);
+				}
+				else
+				{
+					var messageText = message?.ToString() ?? "Internal error.";
+					if (arg1 is Exception innerException)
+						throw new LuaRuntimeException(messageText, innerException);
+					else
+						throw new LuaRuntimeException(messageText, level, true);
+				}
+			} // proc LuaError
 
 			[LuaMember("await")]
 			private LuaResult LuaAwait(object func)

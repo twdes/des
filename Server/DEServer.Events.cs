@@ -223,6 +223,8 @@ namespace TecWare.DE.Server
 
 		private int lastEventClean = Environment.TickCount;
 
+		#region -- AddEventSession, RemoveEventSession --------------------------------
+
 		private void AddEventSession(EventSession eventSession)
 			=> eventSessions.Add(eventSession);
 
@@ -247,7 +249,9 @@ namespace TecWare.DE.Server
 				Task.WaitAll(closeTasks.ToArray(), 5000);
 		} // proc CloseEventSessions
 
-		#region -- Events -----------------------------------------------------------------
+		#endregion
+
+		#region -- Events -------------------------------------------------------------
 
 		public void AppendNewEvent(DEConfigItem item, string securityToken, string eventId, string index, XElement values = null)
 		{
@@ -326,7 +330,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- WebSocket Events -------------------------------------------------------
+		#region -- WebSocket Events ---------------------------------------------------
 
 		public async Task ExecuteWebSocketAsync(IDEWebSocketScope webSocket)
 		{

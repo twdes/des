@@ -601,8 +601,7 @@ namespace TecWare.DE.Server
 					Lua.RtInvoke(value);
 
 				// Rufe Dispose des Objektes
-				var d = value as IDisposable;
-				if (d != null)
+				if (value is IDisposable d)
 					d.Dispose();
 			}
 			catch (Exception e) { Log.Warn(e); }
@@ -1093,12 +1092,12 @@ namespace TecWare.DE.Server
 			}
 			else if (returnValue == null)
 			{
-				returnValue = CreateDefaultReturn(r, true);
+				returnValue = CreateDefaultReturn(r, DEHttpReturnState.Ok);
 			}
 			else if (returnValue is XElement x)
 			{
 				if (x.Attribute("status") == null)
-					SetStatusAttributes(x, true);
+					SetStatusAttributes(x, DEHttpReturnState.Ok);
 			}
 			else if (returnValue is LuaResult result)
 			{
@@ -1106,24 +1105,24 @@ namespace TecWare.DE.Server
 				{
 					case LuaTable t:
 						if (t.GetMemberValue("status", rawGet: true) == null)
-							SetStatusMembers(t, true, result[1] as string);
+							SetStatusMembers(t, DEHttpReturnState.Ok, result[1] as string);
 						returnValue = t;
 						break;
 					case XElement x0:
 						if (x0.Attribute("status") == null)
-							SetStatusAttributes(x0, true, result[1] as string);
+							SetStatusAttributes(x0, DEHttpReturnState.Ok, result[1] as string);
 						returnValue = x0;
 						break;
 					case null:
 					default:
-						returnValue = CreateDefaultReturn(r, true);
+						returnValue = CreateDefaultReturn(r, DEHttpReturnState.Ok);
 						break;
 				}
 			}
 			else if (returnValue is LuaTable t)
 			{
 				if (t.GetMemberValue("status", rawGet: true) == null)
-					SetStatusMembers(t, true);
+					SetStatusMembers(t, DEHttpReturnState.Ok);
 			}
 
 			// write return value in thread pool
@@ -1177,9 +1176,9 @@ namespace TecWare.DE.Server
 		/// <param name="state"></param>
 		/// <param name="text"></param>
 		/// <returns></returns>
-		public static XElement SetStatusAttributes(XElement x, bool state, string text = null)
+		public static XElement SetStatusAttributes(XElement x, DEHttpReturnState state, string text = null)
 		{
-			x.SetAttributeValue("status", state ? "ok" : "error");
+			x.SetAttributeValue("status", HttpStuff.FormatReturnState(state));
 			if (text != null)
 				x.SetAttributeValue("text", text);
 			return x;
@@ -1190,9 +1189,9 @@ namespace TecWare.DE.Server
 		/// <param name="state"></param>
 		/// <param name="text"></param>
 		/// <returns></returns>
-		public static LuaTable SetStatusMembers(LuaTable t, bool state, string text = null)
+		public static LuaTable SetStatusMembers(LuaTable t, DEHttpReturnState state, string text = null)
 		{
-			t.SetMemberValue("status", state ? "ok" : "error");
+			t.SetMemberValue("status", HttpStuff.FormatReturnState(state));
 			if (text != null)
 				t.SetMemberValue("text", text);
 			return t;
@@ -1203,7 +1202,7 @@ namespace TecWare.DE.Server
 		/// <param name="state"></param>
 		/// <param name="text"></param>
 		/// <returns></returns>
-		public static object CreateDefaultReturn(IDEWebRequestScope r, bool state, string text = null)
+		public static object CreateDefaultReturn(IDEWebRequestScope r, DEHttpReturnState state, string text = null)
 		{
 			if (r.AcceptType(MimeTypes.Text.Lson))
 				return SetStatusMembers(new LuaTable(), state, text);

@@ -274,7 +274,8 @@ namespace TecWare.DE.Server
 				}
 				catch (HttpResponseException e)
 				{
-					if (e.StatusCode == HttpStatusCode.Unauthorized // login needed
+					var clientAuthentification = ClientAuthentificationInformation.Unknown;
+					if (ClientAuthentificationInformation.TryGet(e, ref clientAuthentification) // login needed
 						|| e.StatusCode == HttpStatusCode.Forbidden) // better user needed
 					{
 						if (IsHttpConnected)
@@ -292,7 +293,12 @@ namespace TecWare.DE.Server
 						{
 							// request credentials
 							app.WriteLine();
-							app.WriteLine("Credentials needed (empty for integrated login)");
+							var ntlmAllowed = clientAuthentification.Type == ClientAuthentificationType.Ntlm;
+							if (ntlmAllowed)
+								app.WriteLine("Credentials needed (empty for integrated login)");
+							else
+								app.WriteLine(String.Format("Credentials needed ({0})", clientAuthentification.Realm ?? "Basic"));
+
 							var userName = await app.ReadLineAsync(ConsoleReadLineOverlay.CreatePrompt("User: "));
 							if (!String.IsNullOrEmpty(userName))
 							{

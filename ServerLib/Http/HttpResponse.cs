@@ -1047,19 +1047,31 @@ namespace TecWare.DE.Server.Http
 		/// <param name="x"></param>
 		/// <param name="successMessage"></param>
 		public static void WriteSafeCall(this IDEWebRequestScope r, XElement x, string successMessage = null)
-			=> WriteXml(r, DEConfigItem.SetStatusAttributes(x ?? new XElement("return"), true, successMessage));
+			=> WriteXml(r, DEConfigItem.SetStatusAttributes(x ?? new XElement("return"), DEHttpReturnState.Ok, successMessage));
 
 		/// <summary></summary>
 		/// <param name="r"></param>
 		/// <param name="errorMessage"></param>
 		public static void WriteSafeCall(this IDEWebRequestScope r, string errorMessage)
-			=> WriteObject(r, DEConfigItem.CreateDefaultReturn(r, false, errorMessage));
+			=> WriteObject(r, DEConfigItem.CreateDefaultReturn(r, DEHttpReturnState.Error, errorMessage));
+
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <param name="userError"></param>
+		/// <param name="errorMessage"></param>
+		public static void WriteSafeCall(this IDEWebRequestScope r, bool userError, string errorMessage)
+			=> WriteObject(r, DEConfigItem.CreateDefaultReturn(r, userError ? DEHttpReturnState.User : DEHttpReturnState.Error, errorMessage));
 
 		/// <summary></summary>
 		/// <param name="r"></param>
 		/// <param name="e"></param>
 		public static void WriteSafeCall(this IDEWebRequestScope r, Exception e)
-			=> WriteSafeCall(r, e.Message);
+		{
+			if (e is ILuaUserRuntimeException userMessage)
+				WriteSafeCall(r, true, userMessage.Message);
+			else
+				WriteSafeCall(r, false, e.Message);
+		} // proc WriteSafeCall
 
 		#endregion
 	} // class HttpResponseHelper

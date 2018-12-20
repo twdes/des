@@ -389,8 +389,16 @@ namespace TecWare.DE.Server
 					throw;
 
 				// Write protocol
-				Log.LogMsg(LogMsgType.Error, e.GetMessageString());
-				return (false, CreateDefaultReturn(context, false, e.Message));
+				if (e is ILuaUserRuntimeException userMessage)
+				{
+					Log.LogMsg(LogMsgType.Warning, e.GetMessageString());
+					return (false, CreateDefaultReturn(context, DEHttpReturnState.User, userMessage.Message));
+				}
+				else
+				{
+					Log.LogMsg(LogMsgType.Error, e.GetMessageString());
+					return (false, CreateDefaultReturn(context, DEHttpReturnState.Error, e.Message));
+				}
 			}
 		} // func InvokeAction
 

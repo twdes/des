@@ -24,8 +24,6 @@ using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
-using System.Text;
-using System.Threading.Tasks;
 using CommandLine;
 using CommandLine.Text;
 using TecWare.DE.Server.Http;
@@ -33,16 +31,12 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
 	internal partial class DEServer
 	{
 		private const string servicePrefix = "Tw_DES_";
 
-		#region -- interface IServiceLog ------------------------------------------------
+		#region -- interface IServiceLog ----------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private interface IServiceLog
 		{
 			void LogMessage(EventLogEntryType type, string message, int id, short category, byte[] rawData);
@@ -51,21 +45,19 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class Service --------------------------------------------------------
+		#region -- class Service ------------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary>Service-Wrapper</summary>
-		private class Service : ServiceBase, IServiceLog
+		private sealed class Service : ServiceBase, IServiceLog
 		{
-			private DEServer app;
+			private readonly DEServer app;
 			private EventLog log;
 
 			public Service(string serviceName, DEServer app)
 			{
-				this.app = app;
+				this.app = app ?? throw new ArgumentNullException(nameof(app));
 				this.app.ServiceLog = this;
 
-				this.ServiceName = serviceName;
+				this.ServiceName = serviceName ?? throw new ArgumentNullException(nameof(serviceName));
 				this.AutoLog = true;
 				this.CanHandlePowerEvent = false;
 				this.CanHandleSessionChangeEvent = false;
@@ -97,8 +89,7 @@ namespace TecWare.DE.Server
 					{
 						if (!EventLog.SourceExists(ServiceName))
 							EventLog.CreateEventSource(ServiceName, "Application");
-						log = new EventLog("Application");
-						log.Source = ServiceName;
+						log = new EventLog("Application") { Source = ServiceName };
 					}
 
 					// Die Nachrichten sind längen beschränkt, wir schneiden den Rest einfach ab.
@@ -116,11 +107,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class ConsoleLog -----------------------------------------------------
+		#region -- class ConsoleLog ---------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		private class ConsoleLog : IServiceLog
+		private sealed class ConsoleLog : IServiceLog
 		{
 			public void LogMessage(EventLogEntryType type, string message, int id, short category, byte[] rawData)
 			{
@@ -145,24 +134,20 @@ namespace TecWare.DE.Server
 			} // proc LogMessage
 
 			public void RequestAdditionalTime(int milliseconds)
-			{
-				LogMessage(EventLogEntryType.Information, String.Format("Wait additional: {0}ms", milliseconds), 0, 0, null);
-			} // proc RequestAdditionalTime
+				=> LogMessage(EventLogEntryType.Information, String.Format("Wait additional: {0}ms", milliseconds), 0, 0, null);
 		} // class ConsoleLog
 
 		#endregion
 
-		#region -- class DebugLog -------------------------------------------------------
+		#region -- class DebugLog -----------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
-		private class DebugLog : IServiceLog
+		private sealed class DebugLog : IServiceLog
 		{
 			private readonly Action<ConsoleColor, string> writeMessage;
 
 			public DebugLog(MethodInfo writeMessageMethodInfo)
 			{
-				this.writeMessage = (Action<ConsoleColor, string>)Delegate.CreateDelegate(typeof(Action<ConsoleColor, string>), writeMessageMethodInfo);
+				writeMessage = (Action<ConsoleColor, string>)Delegate.CreateDelegate(typeof(Action<ConsoleColor, string>), writeMessageMethodInfo);
 			} // ctor
 
 			public void LogMessage(EventLogEntryType type, string message, int id, short category, byte[] rawData)
@@ -184,17 +169,13 @@ namespace TecWare.DE.Server
 			} // proc LogMessage
 
 			public void RequestAdditionalTime(int milliseconds)
-			{
-				LogMessage(EventLogEntryType.Information, String.Format("Wait additional: {0}ms", milliseconds), 0, 0, null);
-			} // proc RequestAdditionalTime
+				=> LogMessage(EventLogEntryType.Information, String.Format("Wait additional: {0}ms", milliseconds), 0, 0, null);
 		} // class DebugLog
 
 		#endregion
 
-		#region -- class ServerOptions --------------------------------------------------
+		#region -- class ServerOptions ------------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private abstract class ServerOptions
 		{
 			private string configurationFile = null;
@@ -206,9 +187,9 @@ namespace TecWare.DE.Server
 
 			protected ServerOptions(ServerOptions options)
 			{
-				this.configurationFile = options.configurationFile;
-				this.serviceName = options.serviceName;
-				this.Properties = options.Properties; // use the reference 
+				configurationFile = options.configurationFile;
+				serviceName = options.serviceName;
+				Properties = options.Properties; // use the reference 
 			} // ctor
 
 			public void Validate()
@@ -222,17 +203,8 @@ namespace TecWare.DE.Server
 			[Option('c', "config", HelpText = "Path to the configuration file.", Required = true)]
 			public string ConfigurationFile
 			{
-				get
-				{
-					return configurationFile;
-				}
-				set
-				{
-					if (String.IsNullOrEmpty(value))
-						configurationFile = null;
-					else
-						configurationFile = Path.GetFullPath(value);
-				}
+				get => configurationFile;
+				set => configurationFile = String.IsNullOrEmpty(value) ? null : Path.GetFullPath(value);
 			} // prop ConfigurationFile
 
 			private string GetDefaultServiceName() => String.IsNullOrEmpty(ConfigurationFile) ? null : Path.GetFileNameWithoutExtension(ConfigurationFile);
@@ -240,17 +212,8 @@ namespace TecWare.DE.Server
 			[Option('n', "name", HelpText = "Name of the service.")]
 			public string ServiceName
 			{
-				get
-				{
-					return serviceName ?? GetDefaultServiceName();
-				}
-				set
-				{
-					if (GetDefaultServiceName() == value)
-						serviceName = null;
-					else
-						serviceName = value;
-				}
+				get => serviceName ?? GetDefaultServiceName();
+				set => serviceName = GetDefaultServiceName() == value ? null : value;
 			} // prop ServiceName		 
 
 			[Value(0, HelpText = "Properties for the configuration parser (e.g. key0=v0 key1=v1).", MetaName = "properties")]
@@ -259,7 +222,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class RunOptions -----------------------------------------------------
+		#region -- class RunOptions ---------------------------------------------------
 
 		[Verb("run", HelpText = "Executes a configuration.")]
 		private sealed class RunOptions : ServerOptions
@@ -279,7 +242,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class RegisterOptions ------------------------------------------------
+		#region -- class RegisterOptions ----------------------------------------------
 
 		[Verb("register", HelpText = "Installs a configuration as a service.")]
 		private class RegisterOptions : ServerOptions
@@ -288,7 +251,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class UnregisterOptions ----------------------------------------------
+		#region -- class UnregisterOptions --------------------------------------------
 
 		[Verb("unregister", HelpText = "Uninstalls the configuration from the service controll manager.")]
 		private sealed class UnregisterOptions
@@ -301,14 +264,12 @@ namespace TecWare.DE.Server
 
 		private IServiceLog serviceLog = null;
 
-		#region -- LogMsg methods -------------------------------------------------------
+		#region -- LogMsg methods -----------------------------------------------------
 
 		/// <summary>Writes a exception to the event protocol.</summary>
 		/// <param name="e"></param>
 		public void LogMsg(Exception e)
-		{
-			LogMsg(EventLogEntryType.Error, e.GetMessageString());
-		} // proc LogMessage
+			=> LogMsg(EventLogEntryType.Error, e.GetMessageString());
 
 		/// <summary>Writes a event to the windows log.</summary>
 		/// <param name="type"></param>
@@ -317,23 +278,20 @@ namespace TecWare.DE.Server
 		/// <param name="category"></param>
 		/// <param name="rawData"></param>
 		public void LogMsg(EventLogEntryType type, string sMessage, int id = 0, short category = 0, byte[] rawData = null)
-		{
-			if (serviceLog != null)
-				serviceLog.LogMessage(type, sMessage, id, category, rawData);
-		} // proc LogMsg
+			=> serviceLog?.LogMessage(type, sMessage, id, category, rawData);
 
 		#endregion
 
 		/// <summary>Access to the service log.</summary>
-		private IServiceLog ServiceLog { get { return serviceLog; } set { serviceLog = value; } }
+		private IServiceLog ServiceLog { get => serviceLog; set => serviceLog = value; }
 
-		// -- Static --------------------------------------------------------------
+		// -- Static ----------------------------------------------------------
 
-		#region -- Service registration -------------------------------------------------
+		#region -- Service registration -----------------------------------------------
 
 		private static void RegisterService(string name, string commandLine)
 		{
-			IntPtr hScm = NativeMethods.OpenSCManager(null, null, 0x01 | 0x02); // SC_MANAGER_CREATE_SERVICE
+			var hScm = NativeMethods.OpenSCManager(null, null, 0x01 | 0x02); // SC_MANAGER_CREATE_SERVICE
 			if (hScm == IntPtr.Zero)
 				throw new Win32Exception();
 
@@ -369,8 +327,10 @@ namespace TecWare.DE.Server
 
 				try
 				{
-					var s = new NativeMethods.SERVICE_DESCRIPTION();
-					s.description = Marshal.StringToHGlobalUni("Data Exchange Server is the backend for the CPS infrastructure.");
+					var s = new NativeMethods.SERVICE_DESCRIPTION
+					{
+						description = Marshal.StringToHGlobalUni("Data Exchange Server is the backend for the CPS infrastructure.")
+					};
 					try
 					{
 						if (!NativeMethods.ChangeServiceConfig2(hService, 1, ref s))
@@ -422,16 +382,18 @@ namespace TecWare.DE.Server
 		{
 			const string csValidChar = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
 
-			for (int i = 0; i < sName.Length; i++)
+			for (var i = 0; i < sName.Length; i++)
+			{
 				if (csValidChar.IndexOf(sName[i]) == -1)
 					return false;
+			}
 
 			return true;
 		} // func ValidateServiceName
 
 		#endregion
 
-		#region -- InvokeDebugger -------------------------------------------------------
+		#region -- InvokeDebugger -----------------------------------------------------
 
 		private bool InvokeDebugger()
 		{
@@ -474,6 +436,8 @@ namespace TecWare.DE.Server
 		} // proc InvokeDebugger
 
 		#endregion
+
+		#region -- Main ---------------------------------------------------------------
 
 		public static void AddToProcessEnvironment(string path)
 		{
@@ -608,5 +572,7 @@ namespace TecWare.DE.Server
 #endif
 			}
 		} // proc Main
+
+		#endregion
 	} // class DEServer
 }
