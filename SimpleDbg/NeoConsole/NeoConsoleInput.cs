@@ -60,6 +60,8 @@ namespace Neo.Console
 	[Flags]
 	public enum ConsoleKeyModifiers
 	{
+		/// <summary></summary>
+		None = 0,
 		/// <summary>The right ALT key is pressed.</summary>
 		RightAltPressed = 0x0001,
 		/// <summary>The left ALT key is pressed.</summary>

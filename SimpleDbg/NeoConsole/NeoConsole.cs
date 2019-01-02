@@ -91,7 +91,7 @@ namespace Neo.Console
 			if (foreground.HasValue)
 				a = unchecked((ushort)((a & 0xFFF0) | (int)foreground.Value));
 			if (background.HasValue)
-				a = unchecked((ushort)((a & 0xFF0F) | ((int)foreground.Value << 4)));
+				a = unchecked((ushort)((a & 0xFF0F) | ((int)background.Value << 4)));
 			chars[top, left].Attributes = (CharAttributes)a;
 		} // proc Set
 

@@ -425,7 +425,7 @@ namespace TecWare.DE.Server
 			}
 
 			var http = this.GetService<IDEHttpServer>(true);
-			var uri = new Uri(http.DefaultBaseUri, ((IDEConfigItem)luaEngine).Name);
+			var uri = http.DefaultBaseUri;
 
 			// switch logging
 			ServiceLog = new DebugLog(writeMessage);

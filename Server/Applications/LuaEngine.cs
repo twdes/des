@@ -42,7 +42,7 @@ namespace TecWare.DE.Server
 	/// <summary>Service for Debugging and running lua scripts.</summary>
 	internal sealed class LuaEngine : DEConfigLogItem, IDEWebSocketProtocol, IDELuaEngine
 	{
-		#region -- class LuaScript ------------------------------------------------------
+		#region -- class LuaScript ----------------------------------------------------
 
 		/// <summary>Loaded script.</summary>
 		internal abstract class LuaScript : IDisposable
@@ -55,7 +55,7 @@ namespace TecWare.DE.Server
 			private readonly object chunkLock = new object();
 			private LuaChunk chunk;
 
-			#region -- Ctor/Dtor --------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			protected LuaScript(LuaEngine engine, string scriptId, bool compileWithDebugger)
 			{
@@ -100,9 +100,9 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Compile ----------------------------------------------------------
+			#region -- Compile --------------------------------------------------------
 
-			protected virtual void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
+			protected virtual void Compile(ILuaLexer code, KeyValuePair<string, Type>[] args)
 			{
 				lock (chunkLock)
 				{
@@ -110,8 +110,7 @@ namespace TecWare.DE.Server
 					Procs.FreeAndNil(ref chunk);
 
 					// recompile the script
-					using (var tr = open())
-						chunk = Lua.CompileChunk(tr, ScriptBase ?? scriptId, compiledWithDebugger ? engine.debugOptions : null, args);
+					chunk = Lua.CompileChunk(code, compiledWithDebugger ? engine.debugOptions : null, args);
 				}
 			} // proc Compile
 
@@ -178,10 +177,14 @@ namespace TecWare.DE.Server
 				SetDebugMode(compileWithDebugger);
 			} // ctor
 
-			protected sealed override void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
+			protected sealed override void Compile(ILuaLexer code, KeyValuePair<string, Type>[] args) 
+				=> base.Compile(code, args);
+
+			protected void Compile(Func<TextReader> open, KeyValuePair<string, Type>[] args)
 			{
 				// Re-create the script
-				base.Compile(open, args);
+				using (var code = LuaLexer.Create(ScriptBase ?? ScriptId, open(), false))
+					Compile(code, args);
 				compiledStamp = DateTime.Now;
 				OnCompiled();
 			} // proc Compile
@@ -292,19 +295,22 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaMemoryScript ------------------------------------------------
+		#region -- class LuaMemoryScript ----------------------------------------------
 
 		/// <summary>In memory script, that is not based on a file.</summary>
 		private sealed class LuaMemoryScript : LuaScript, ILuaScript
 		{
 			private readonly string scriptBase;
 
-			#region -- Ctor/Dtor --------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
-			public LuaMemoryScript(LuaEngine engine, Func<TextReader> code, string scriptBase, KeyValuePair<string, Type>[] args)
+			public LuaMemoryScript(LuaEngine engine, ILuaLexer code, string scriptBase, KeyValuePair<string, Type>[] args)
 				: base (engine, Guid.NewGuid().ToString("D"), true)
 			{
-				this.scriptBase = scriptBase;
+				if (code.Current == null)
+					code.Next();
+
+				this.scriptBase = scriptBase ?? code.Current.Start.FileName;
 
 				try
 				{
@@ -1742,8 +1748,14 @@ namespace TecWare.DE.Server
 			}
 		} // func AttachScript
 
-		public ILuaScript CreateScript(Func<TextReader> code, string sciptBase, params KeyValuePair<string, Type>[] parameters)
-		   => new LuaMemoryScript(this, code, sciptBase, parameters);
+		public ILuaScript CreateScript(Func<TextReader> open, string scriptBase, params KeyValuePair<string, Type>[] parameters)
+		{
+			using (var code = LuaLexer.Create(scriptBase, open()))
+				return new LuaMemoryScript(this, code, scriptBase, parameters);
+		} // func CreateScript
+
+		public ILuaScript CreateScript(ILuaLexer code, string scriptBase, params KeyValuePair<string, Type>[] parameters)
+			=> new LuaMemoryScript(this, code, scriptBase, parameters);
 
 		public Lua Lua => lua;
 

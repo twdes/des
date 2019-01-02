@@ -121,14 +121,14 @@ namespace TecWare.DE.Server
 			if (String.IsNullOrEmpty(propertyName))
 				throw new ArgumentNullException();
 
-			var sTypeName = LuaType.GetType(type).AliasOrFullName;
+			var typeName = LuaType.GetType(type).AliasOrFullName;
 
 			if (propertyName == ".")
-				WriteProperty(PropertyType.Value, String.Empty, sTypeName);
+				WriteProperty(PropertyType.Value, String.Empty, typeName);
 			else if (propertyName.StartsWith("@"))
-				WriteProperty(PropertyType.Attribute, propertyName.Substring(1), sTypeName);
+				WriteProperty(PropertyType.Attribute, propertyName.Substring(1), typeName);
 			else
-				WriteProperty(PropertyType.Element, propertyName, sTypeName);
+				WriteProperty(PropertyType.Element, propertyName, typeName);
 		} // proc WriteProperty
 
 		private void WriteProperty(PropertyType type, string propertyName, string typeString)
@@ -160,7 +160,7 @@ namespace TecWare.DE.Server
 
 		private static void CheckXmlName(string propertyName)
 		{
-			for (int i = 0; i < propertyName.Length; i++)
+			for (var i = 0; i < propertyName.Length; i++)
 			{
 				if (!Char.IsLetterOrDigit(propertyName[i]) && propertyName[i] != '.')
 					throw new ArgumentException("Invalid xml name.");

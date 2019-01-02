@@ -14,10 +14,12 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Neo.Console;
 using Neo.IronLua;
 using TecWare.DE.Networking;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
@@ -124,7 +126,7 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				using (var lex = new LuaLexer("cmd.lua", source.TextReader, 0, 0))
+				using (var lex = LuaLexer.Create("cmd.lua", source.TextReader, true, 0, 0, 0))
 				{
 					lex.Next();
 					while (lex.Current.Typ != LuaToken.Eof)
@@ -219,25 +221,139 @@ namespace TecWare.DE.Server
 		} // proc SetPathCore
 
 		public void SetState(ConnectionState state, bool? set)
-			=> Application.Invoke(() => SetStateCore(state, set));
+			=> Application?.Invoke(() => SetStateCore(state, set));
 
 		public void SetPath(string path)
-			=> Application.Invoke(() => SetPathCore(path));
+			=> Application?.Invoke(() => SetPathCore(path));
 	} // class ConnectionStateOverlay
 
 	#endregion
 
-	#region -- ConsoleView ------------------------------------------------------------
+	#region -- class SelectListOverlay ------------------------------------------------
+
+	internal sealed class SelectListOverlay : ConsoleDialogOverlay
+	{
+		private readonly KeyValuePair<object, string>[] values;
+		private int selectedIndex = -1;
+		private string title;
+
+		public SelectListOverlay(ConsoleApplication app, IEnumerable<KeyValuePair<object, string>> values)
+		{
+			this.values = values.ToArray() ?? throw new ArgumentNullException(nameof(values));
+
+			Application = app ?? throw new ArgumentNullException(nameof(values));
+
+			var windowWidth = app.WindowRight - app.WindowLeft + 1;
+			var windowHeight = app.WindowBottom - app.WindowTop + 1;
+
+			var maxWidth = this.values.Max(GetLineLength) + 2;
+			var maxHeight = this.values.Length + 1;
+
+			Position = ConsoleOverlayPosition.Window;
+			Resize(
+				Math.Min(windowWidth, maxWidth),
+				Math.Min(windowHeight, maxHeight)
+			);
+
+			Left = (windowWidth - Width) / 2;
+			Top = (windowHeight - Height) / 2;
+		} // ctor
+
+		protected override void OnRender()
+		{
+			RenderTitle("Use");
+
+			for (var i = 0; i < values.Length; i++)
+			{
+				var top = i + 1;
+				Content.Set(0, top, ' ', background: BackgroundColor);
+				var foregroundColor = i == selectedIndex ? ConsoleColor.Black : ForegroundColor;
+				var backgroundColor = i == selectedIndex ? ConsoleColor.Cyan : BackgroundColor;
+				var (endLeft, endTop) = Content.Write(1, top, values[i].Value, foreground: foregroundColor, background: backgroundColor);
+				if (endLeft < Width)
+					Content.Fill(endLeft, top, Width - 2, top, ' ', background: backgroundColor);
+				Content.Set(Width - 1, top, ' ', background: BackgroundColor);
+			}
+		} // proc OnRender
+
+		public override bool OnHandleEvent(EventArgs e)
+		{
+			if (e is ConsoleKeyDownEventArgs keyDown)
+			{
+				switch (keyDown.Key)
+				{
+					case ConsoleKey.DownArrow:
+						SelectIndex(selectedIndex + 1);
+						return true;
+					case ConsoleKey.UpArrow:
+						SelectIndex(selectedIndex - 1);
+						return true;
+				}
+			}
+
+			return base.OnHandleEvent(e);
+		} // func OnHandleEvent
+
+		private void SelectValue(object key)
+			=> SelectIndex(Array.FindIndex(values, v => Equals(v.Key, key)));
+
+		public void SelectIndex(int newIndex)
+		{
+			if (newIndex == -1)
+			{
+				selectedIndex = -1;
+				Invalidate();
+			}
+			else if (newIndex >= 0 && newIndex < values.Length && newIndex != selectedIndex)
+			{
+				selectedIndex = newIndex;
+				Invalidate();
+			}
+		} // proc SelectIndex
+
+		protected override void OnAccept()
+		{
+			if (selectedIndex == -1)
+				return;
+			base.OnAccept();
+		} // proc OnAccept
+
+		private static int GetLineLength(KeyValuePair<object, string> p)
+			=> p.Value?.Length ?? 0;
+
+		public string Title
+		{
+			get => title;
+			set
+			{
+				if (title != value)
+				{
+					title = value;
+					Invalidate();
+				}
+			}
+		} // proc Title
+
+		public object SelectedValue
+		{
+			get => selectedIndex >= 0 && selectedIndex < values.Length ? values[selectedIndex].Key : null;
+			set => SelectValue(value);
+		} // prop SelectedValue
+	} // class UseListOverlay 
+
+	#endregion
+
+	#region -- class ConsoleView ------------------------------------------------------
 
 	internal static class ConsoleView
 	{
-		#region -- WriteError ---------------------------------------------------------
+		#region -- WriteError, WriteWarning -------------------------------------------
+
+		public static void WriteWarning(this ConsoleApplication app, string message)
+			=> WriteLine(app, ConsoleColor.DarkYellow, message);
 
 		public static void WriteError(this ConsoleApplication app, string message)
-		{
-			using (app.Color(ConsoleColor.Red))
-				app.WriteLine(message);
-		} // proc WriteError
+			=> WriteLine(app, ConsoleColor.Red, message);
 
 		public static void WriteError(this ConsoleApplication app, Exception exception, string message = null)
 		{
@@ -287,6 +403,12 @@ namespace TecWare.DE.Server
 					app.Write(parts[i]);
 			}
 		} // proc Write
+
+		public static void WriteLine(this ConsoleApplication app, ConsoleColor color, string text)
+		{
+			using (app.Color(color))
+				app.WriteLine(text);
+		} // proc WriteLine
 
 		public static void WriteLine(this ConsoleApplication app, ConsoleColor[] colors, string[] parts, bool rightAlign = false)
 		{

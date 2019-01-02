@@ -17,6 +17,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
@@ -344,241 +345,6 @@ namespace TecWare.DE.Server.Http
 		/// <summary></summary>
 		public const long CacheSize = 2L << 20;
 
-		#region -- ParseHtml ----------------------------------------------------------
-
-		internal static string ParseHtml(TextReader tr, long capacity, out bool isPlainHtml, out bool openOutput)
-		{
-			var readBuffer = new char[4096];
-
-			var luaCode = new StringBuilder(unchecked((int)capacity));
-			var htmlBuffer = new StringBuilder();
-			var luaCmd = new StringBuilder();
-			var fmtBuffer = new StringBuilder();
-			int readed;
-			var state = 0;
-			var isFirst = true;
-			var inCommand = 0;  // 0
-								// 1 lua code
-								// 2 lua var
-
-			isPlainHtml = true;
-			openOutput = true;
-
-			do
-			{
-				// read content
-				readed = tr.Read(readBuffer, 0, readBuffer.Length);
-
-				// parse the html content for inline lua
-				for (var i = 0; i < readed; i++)
-				{
-					var c = readBuffer[i];
-
-					switch (state)
-					{
-						#region -- Basis --
-						case 0: // Basis
-							if (c == '<') // open bracket
-							{
-								state = 1;
-							}
-							else if (!isFirst)
-								htmlBuffer.Append(c);
-							else if (!Char.IsWhiteSpace(c))
-							{
-								isFirst = false;
-								htmlBuffer.Append(c);
-							}
-							break;
-
-						case 1: // check type of bracket
-							if (c == '!') // comment?
-								state = 10;
-							else if (c == '%') // command
-								state = 20;
-							else
-							{
-								htmlBuffer.Append('<');
-								state = 0;
-								goto case 0;
-							}
-							break;
-						#endregion
-						#region -- 10 - Comment --
-						case 10:
-							if (c == '-')
-								state = 11;
-							else
-							{
-								htmlBuffer.Append("<!");
-								state = 0;
-								goto case 0;
-							}
-							break;
-						case 11:
-							if (c == '-')
-								state = 12;
-							else
-							{
-								htmlBuffer.Append("<!-");
-								state = 0;
-								goto case 0;
-							}
-							break;
-						case 12:
-							if (c == '-')
-								state = 13;
-							break;
-						case 13:
-							if (c == '-')
-								state = 14;
-							else
-								state = 12;
-							break;
-						case 14:
-							if (c == '>')
-								state = 0;
-							else
-								state = 12;
-							break;
-						#endregion
-						#region -- 20 - Command --
-						case 20:
-							if (c == '=') // variable syntax
-							{
-								inCommand = 2;
-								state = 21;
-								break;
-							}
-							else
-							{
-								inCommand = 1;
-								luaCmd.Length = 0;
-								state = 21;
-								goto case 21;
-							}
-						case 21:
-							if (c == '%')
-								state = 22;
-							else if (inCommand == 2 && c == ':')
-								state = 23;
-							else if (inCommand == 3)
-								fmtBuffer.Append(c);
-							else
-								luaCmd.Append(c);
-							break;
-						case 22:
-							if (c == '>')
-							{
-								state = 0;
-
-								isPlainHtml = false;
-								if (isFirst)
-									openOutput = false;
-
-								GenerateHtmlBlock(luaCode, htmlBuffer);
-								if (inCommand == 1)
-									luaCode.Append(luaCmd).AppendLine(); // append the script
-								else if (inCommand == 2)
-								{
-									luaCode.Append("printValue(")
-										.Append(luaCmd)
-										.AppendLine(");");
-								}
-								else if (inCommand == 3)
-								{
-									luaCode.Append("printValue(")
-										.Append(luaCmd)
-										.Append(", \"")
-										.Append(fmtBuffer.ToString())
-										.Append('"')
-										.AppendLine(");");
-								}
-								else
-									throw new ArgumentException();
-
-								inCommand = 0;
-								fmtBuffer.Length = 0;
-								luaCmd.Length = 0;
-							}
-							else
-							{
-								state = 21;
-								luaCmd.Append('%');
-								goto case 21;
-							}
-							break;
-						case 23:
-							if (c == ':')
-							{
-								inCommand = 3;
-								state = 21;
-								break;
-							}
-							else
-							{
-								luaCmd.Append(':');
-								state = 21;
-								goto case 21;
-							}
-						#endregion
-						default:
-							throw new InvalidOperationException();
-					}
-				}
-			} while (readed > 0);
-
-			// Prüfe einen offnen Commandblock
-			if (inCommand != 0)
-				throw new ArgumentException("Unexpected eof.");
-
-			if (htmlBuffer.Length > 0)
-			{
-				if (isPlainHtml)
-					luaCode.Append(htmlBuffer);
-				else
-					GenerateHtmlBlock(luaCode, htmlBuffer);
-			}
-
-			return luaCode.ToString();
-		} // proc Parse
-
-		private static void GenerateHtmlBlock(StringBuilder lua, StringBuilder html)
-		{
-			if (html.Length > 0)
-			{
-				lua.Append("print(\"");
-
-				for (var i = 0; i < html.Length; i++)
-				{
-					var c = html[i];
-					switch (c)
-					{
-						case '\r':
-							lua.Append("\\r");
-							break;
-						case '\n':
-							lua.Append("\\n");
-							break;
-						case '\t':
-							lua.Append("\\t");
-							break;
-						case '"':
-							lua.Append("\\\"");
-							break;
-						default:
-							lua.Append(c);
-							break;
-					}
-				}
-
-				lua.AppendLine("\");");
-			}
-			html.Length = 0;
-		} // proc GenerateHtmlBlock
-
-		#endregion
-
 		#region -- SetLastModified, SetXXXXFileName -----------------------------------
 
 		/// <summary>Sets the output last modified date</summary>
@@ -778,12 +544,12 @@ namespace TecWare.DE.Server.Http
 				assembly.FullName.Replace(" ", "") + "\\" + resourceName, contentType);
 		} // proc WriteResource
 
-		private static object CreateScript(IDEWebRequestScope context, Func<TextReader> createSource, string sciptBase)
+		private static object CreateScript(IDEWebRequestScope context, ILuaLexer code, string scriptBase)
 		{
 			var luaEngine = context.Server.GetService<IDELuaEngine>(true);
 			return luaEngine.CreateScript(
-				createSource,
-				sciptBase
+				code,
+				scriptBase
 			);
 		} // func CreateScript
 
@@ -824,12 +590,25 @@ namespace TecWare.DE.Server.Http
 					if (cacheItem)
 					{
 						var isText = contentType.StartsWith("text/");
+						var scriptBase = GetFileNameFromSource(src);
 						if (isLua)
-							o = CreateScript(context, () => new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true), GetFileNameFromSource(src));
+						{
+							using (var code = LuaLexer.Create(scriptBase, new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true)))
+								o = CreateScript(context, code, scriptBase);
+						}
 						else if (isHtml)
 						{
-							var content = ParseHtml(new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true), src.CanSeek ? src.Length : 1024, out var isPlainText, out var openOutput);
-							o = isPlainText ? content : CreateScript(context, () => new StringReader(openOutput ? "otext('text/html');" + content : content), GetFileNameFromSource(src));
+							using (var chars = new LuaCharLexer(scriptBase, new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true), LuaLexer.HtmlCharStreamLookAHead, false))
+							using (var code = LuaLexer.CreateHtml(chars,
+								chars.CreateTokenAtStart(LuaToken.Identifier, "otext"),
+								chars.CreateTokenAtStart(LuaToken.String, MimeTypes.Text.Html),
+								chars.CreateTokenAtStart(LuaToken.Semicolon)
+							))
+							{
+								o = Lua.IsConstantScript(code)
+									? code.LookAhead.Value
+									: CreateScript(context, code, scriptBase);
+							}
 						}
 						else if (isText)
 						{

@@ -16,13 +16,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
-using System.Security;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -113,7 +110,8 @@ namespace TecWare.DE.Server
 					catch (TaskCanceledException) { }
 					catch (Exception e)
 					{
-						app.WriteError(e, "Input loop failed. Application is aborted.");
+						Console.WriteLine("Input loop failed. Application is aborted.");
+						Console.Write(e.GetMessageString());
 #if DEBUG
 						Console.ReadLine();
 #endif
@@ -167,6 +165,8 @@ namespace TecWare.DE.Server
 				await Task.Delay(wait);
 
 			//app.ReservedBottomRowCount = 1; // reserve for log?
+
+			app.ConsoleKeyUp += App_ConsoleKeyUp;
 
 			connectionStateOverlay = new ConnectionStateOverlay(app);
 			if (uri != null)
@@ -227,8 +227,15 @@ namespace TecWare.DE.Server
 			finally
 			{
 				connectionStateOverlay.Application = null;
+				EndConnection();
 			}
 		} // func RunDebugProgramAsync
+
+		private static void App_ConsoleKeyUp(object sender, ConsoleKeyUpEventArgs e)
+		{
+			if (e.Modifiers == 0 && e.Key == ConsoleKey.F2)
+				BeginTask(SelectUseNodeAsync());
+		} // event App_ConsoleKeyUp
 
 		#endregion
 
@@ -242,6 +249,7 @@ namespace TecWare.DE.Server
 		private static DebugSocket debugSocket = null;
 		private static DEHttpEventSocket eventSocket = null;
 		private static ConnectionStateOverlay connectionStateOverlay = null;
+		private static string currentUsePath = "/"; // current use path
 
 		private static void BeginConnection(Uri uri, ICredentials credentials)
 		{
@@ -251,7 +259,16 @@ namespace TecWare.DE.Server
 
 		private static void EndConnection()
 		{
-			throw new NotImplementedException();
+			if (httpConnectionCancellation != null)
+			{
+				// cancel connection
+				httpConnectionCancellation.Cancel();
+				httpConnectionCancellation.Dispose();
+				httpConnectionCancellation = null;
+
+				// clear connection handles
+				SetHttpConnection(null, false, CancellationToken.None);
+			}
 		} // proc EndConnection
 
 		private static async Task HttpConnectionAsync(Uri uri, ICredentials credentials, CancellationToken cancellationToken)
@@ -268,9 +285,12 @@ namespace TecWare.DE.Server
 				try
 				{
 					// try check user agains action
-					var xRootNode = await localHttp.GetXmlAsync("?action=list&recursive=false");
+					var xRootNode = await localHttp.GetXmlAsync("?action=serverinfo&simple=true");
 					if (!IsHttpConnected)
-						SetHttpConnection(localHttp, cancellationToken);
+					{
+						var isDebugAllowed = xRootNode?.Attribute("debug")?.Value;
+						SetHttpConnection(localHttp, String.Compare(isDebugAllowed, "true", StringComparison.OrdinalIgnoreCase) == 0, cancellationToken);
+					}
 				}
 				catch (HttpResponseException e)
 				{
@@ -279,7 +299,7 @@ namespace TecWare.DE.Server
 						|| e.StatusCode == HttpStatusCode.Forbidden) // better user needed
 					{
 						if (IsHttpConnected)
-							SetHttpConnection(null, cancellationToken);
+							SetHttpConnection(null, false, cancellationToken);
 
 						if (tryCurrentCredentials < 3)
 						{
@@ -319,7 +339,7 @@ namespace TecWare.DE.Server
 				catch (HttpRequestException e)
 				{
 					if (IsHttpConnected)
-						SetHttpConnection(null, cancellationToken);
+						SetHttpConnection(null, false, cancellationToken);
 					app.WriteError(e);
 				}
 
@@ -330,18 +350,21 @@ namespace TecWare.DE.Server
 			}
 		} // proc HttpConnectionAsync
 
-		private static void SetHttpConnection(DEHttpClient newHttp, CancellationToken cancellationToken)
+		private static void SetHttpConnection(DEHttpClient newHttp, bool openDebug, CancellationToken cancellationToken)
 		{
 			lock (lockHttpConnection)
 			{
-				if(newHttp!= http)
+				if (newHttp != http)
 				{
 					http?.Dispose();
 					debugSocket?.Dispose();
 					eventSocket?.Dispose();
 				}
 				http = newHttp;
-				StartSocket(debugSocket = http != null ? new ConsoleDebugSocket(app, http) : null, cancellationToken);
+				if (newHttp != null && !openDebug)
+					app.WriteWarning("Debugging is not active");
+
+				StartSocket(debugSocket = http != null && openDebug ? new ConsoleDebugSocket(app, http) : null, cancellationToken);
 				StartSocket(eventSocket = http != null ? new ConsoleEventSocket(app, http) : null, cancellationToken);
 
 				SetConnectionState(ConnectionState.ConnectedHttp, true);
@@ -400,8 +423,28 @@ namespace TecWare.DE.Server
 
 		public static void PostNewUsePath(string path)
 		{
+			app.CheckThreadSynchronization();
+
+			currentUsePath = path; // update path
 			connectionStateOverlay.SetPath(path);
 		} // proc PostNewUsePath
+
+		private static string MakeUri(params PropertyValue[] args)
+			=> MakeUri(CurrentUsePath, args);
+
+		private static string MakeUri(string usePath, params PropertyValue[] args)
+		{
+			// build use path
+			if (String.IsNullOrEmpty(usePath))
+				usePath = CurrentUsePath;
+			else if (usePath[0] != '/')
+				usePath = CurrentUsePath + usePath;
+
+			// make relative
+			usePath = usePath.Substring(1);
+
+			return HttpStuff.MakeRelativeUri(usePath, args);
+		} // func MakeUri
 
 		private static bool IsHttpConnected
 		{
@@ -411,6 +454,15 @@ namespace TecWare.DE.Server
 					return http != null;
 			}
 		} // func IsHttpConnected
+
+		private static string CurrentUsePath
+		{
+			get
+			{
+				lock (lockHttpConnection)
+					return currentUsePath;
+			}
+		} // prop CurrentUsePath
 
 		#endregion
 
@@ -430,7 +482,7 @@ namespace TecWare.DE.Server
 
 			if (mi == null)
 				throw new Exception($"Command '{cmd}' not found.");
-			
+
 			var parameterInfo = mi.GetParameters();
 			var parameters = new object[parameterInfo.Length];
 
@@ -465,7 +517,14 @@ namespace TecWare.DE.Server
 
 			if (r != null)
 				app.WriteObject(r);
-		} // proc RunCommand
+		} // proc RunCommandAsync
+
+		private static void BeginTask(Task task)
+		{
+			task.ContinueWith(
+				t => app.WriteError(t.Exception), TaskContinuationOptions.OnlyOnFaulted
+			);
+		} // proc BeginTask
 
 		#endregion
 
@@ -534,44 +593,191 @@ namespace TecWare.DE.Server
 		#endregion
 
 		#region -- Quit ---------------------------------------------------------------
-		
+
 		[InteractiveCommand("quit", Short = "q", HelpText = "Exit the application.")]
 		private static void DummyQuit() { }
 
 		#endregion
 
-		#region -- List ---------------------------------------------------------------
-		
-		private static void PrintList(string indent, XElement x, int rlevel)
+		#region -- List/Use -----------------------------------------------------------
+
+		private static Task<XElement> GetListInfoAsync(string path, int rlevel, bool published)
 		{
-			if (rlevel > 0)
+			return GetHttp().GetXmlAsync(MakeUri(path,
+				new PropertyValue("action", "list"),
+				new PropertyValue("published", published),
+				new PropertyValue("rlevel", rlevel)
+			));
+		} // func GetListInfo
+
+		private static IEnumerable<(string path, string name, string displayName)> GetFormattedList(XElement xRoot, string basePath, string baseIndent, int maxLevel)
+		{
+			var s = new Stack<(XElement x, string indent, string path)>();
+			var x = xRoot.FirstNode;
+			var indent = baseIndent;
+			var path = basePath;
+			while (true)
 			{
-				foreach (var c in x.Elements("item"))
+				// move to element
+				while (x != null && !(x is XElement xe && xe.Name == "item"))
+					x = x.NextNode;
+
+				if (x == null)
 				{
-					var name = c.GetAttribute("name", String.Empty);
-					app.WriteLine(
-						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
-						new string[] { indent, name, " : ", c.GetAttribute("displayname", String.Empty) }
-					);
-					PrintList(indent +  "    ", c, rlevel - 1);
+					if (s.Count == 0)
+						yield break;
+
+					(x, indent, path) = s.Pop();
 				}
+				else
+				{
+					var xItem = (XElement)x;
+					var name = xItem.Attribute("name")?.Value;
+					var displayName = xItem.Attribute("displayname")?.Value;
+
+					var newPath = path + name + "/";
+					yield return (newPath, indent + name, displayName);
+
+					if (xItem.FirstNode != null && s.Count < maxLevel - 1)
+					{
+						s.Push((xItem, indent, path));
+						x = xItem.FirstNode;
+						indent = "    ";
+						path = newPath;
+					}
+				}
+
+				x = x.NextNode;
 			}
-		} // proc PrintList
+		} // func GetFormattedList
 
 		[InteractiveCommand("list", HelpText = "Lists the current nodes.")]
 		private static async Task SendListAsync(
-			[Description("true to retrieve all sub nodes")]
+			[Description("true to get all sub nodes of the current node.")]
 			bool recursive = false
 		)
 		{
-			var rlevel = recursive ? 1000 : 1;
-			var x = await GetHttp().GetXmlAsync(HttpStuff.MakeRelativeUri(
-				new PropertyValue("action", "list"),
-				new PropertyValue("published", "false"),
-				new PropertyValue("rlevel", rlevel))
-			);
-			PrintList(String.Empty, x, rlevel);
+			var maxLevel = recursive ? 1000 : 1;
+			var xList = await GetListInfoAsync(CurrentUsePath, maxLevel, maxLevel == 1);
+
+			if (maxLevel > 1)
+			{
+				// print formatted list
+				foreach (var c in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
+				{
+					app.WriteLine(
+						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
+						new string[] { c.path, " : ", c.displayName }
+					);
+				}
+			}
+			else
+			{
+				void PrintList(string listHeader, IEnumerable<KeyValuePair<string, string>> items)
+				{
+					var first = true;
+					foreach (var c in items)
+					{
+						if (first)
+						{
+							app.WriteLine(listHeader);
+							first = false;
+						}
+
+						app.WriteLine(
+							new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
+							new string[] { "    ", c.Key, " : ", c.Value }
+						);
+					}
+					if (!first)
+					{
+						app.WriteLine();
+						first = true;
+					}
+
+				} // proc PrintList
+
+				// print sub list items
+				PrintList("Nodes:", GetFormattedList(xList, CurrentUsePath, String.Empty, 1).Select(c => new KeyValuePair<string, string>(c.name, c.displayName)));
+
+				// print available actions
+				PrintList("Actions:",
+					from x in xList.Elements("action")
+					let id = x.GetAttribute("id", null)
+					where id != null
+					select new KeyValuePair<string, string>(id, x.GetAttribute("displayname", id))
+				);
+
+				// print available lists
+				PrintList("Lists:",
+					from x in xList.Elements("list")
+					let id = x.GetAttribute("id", null)
+					where id != null
+					select new KeyValuePair<string, string>(id, x.GetAttribute("displayname", id))
+				);
+			}
 		} // func SendListAsync
+
+		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.")]
+		private static async Task UseNodeAsync(
+			[Description("absolute or relative path, if this parameter is empty. The current path is returned.")]
+			string node = null
+		)
+		{
+			var currentPath = CurrentUsePath;
+
+			// change path and get path
+			if (TryGetDebug(out var socket)) // change socket in debug context
+				currentPath = await socket.UseAsync(node ?? String.Empty);
+			else if (!String.IsNullOrEmpty(node)) // change current path, 
+			{
+				if (node[0] != '/') // make absolute
+					node = CurrentUsePath + node;
+				if (node[node.Length - 1] != '/')
+					node += '/';
+
+				string lastName;
+				if (node == "/") // change to root
+					lastName = "Main";
+				else
+				{
+					var p = node.LastIndexOf('/', node.Length - 2);
+					lastName = node.Substring(p + 1, node.Length - p - 2);
+				}
+
+				var x = await GetListInfoAsync(node, 0, false);
+				if (String.Compare(x.Attribute("name")?.Value, lastName, StringComparison.OrdinalIgnoreCase) != 0)
+					throw new ArgumentException("Could not change path.");
+
+				PostNewUsePath(node);
+				currentPath = node;
+			}
+
+			app.WriteLine(
+				new ConsoleColor[]
+				{
+					ConsoleColor.Gray,
+					ConsoleColor.White,
+				},
+				new string[] { "==> Current Node: ", currentPath },
+				true
+			);
+		} // func UseNodeAsync
+
+		private static async Task SelectUseNodeAsync()
+		{
+			var selectList = new SelectListOverlay(app,
+				(new KeyValuePair<object, string>[] { new KeyValuePair<object, string>("/", "/") }).Concat(
+				from c in GetFormattedList(await GetListInfoAsync("/", 1000, false), "/", String.Empty, 1000)
+				orderby c.path
+				select new KeyValuePair<object, string>(c.path, c.name)
+				)
+			);
+			selectList.Activate();
+			selectList.SelectedValue = CurrentUsePath;
+			if (await selectList.DialogResult)
+				await UseNodeAsync((string)selectList.SelectedValue);
+		} // proc SelectUseNodeAsync
 
 		#endregion
 
@@ -785,7 +991,6 @@ namespace TecWare.DE.Server
 
 		private static void WriteTable(IEnumerable<DebugMemberValue[]> list)
 		{
-
 			var columns = (TableColumn[])null;
 			foreach (var r in list)
 			{
@@ -1182,28 +1387,6 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- SendUseNode --------------------------------------------------------
-
-		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.")]
-		private static async Task SendUseNodeAsync(
-			[Description("absolute or relative path")]
-			string node = null
-		)
-		{
-			var p = await GetDebug().UseAsync(node ?? String.Empty);
-			app.WriteLine(
-				new ConsoleColor[]
-				{
-					ConsoleColor.Gray,
-					ConsoleColor.White,
-				},
-				new string[] { "==> Current Node: ", p },
-				true
-			);
-		} // func SendUseNodeAsync
-
-		#endregion
-
 		#region -- SendVariables ------------------------------------------------------
 
 		[InteractiveCommand("members", Short = "m", HelpText = "Lists the current available global variables.")]
@@ -1314,6 +1497,158 @@ namespace TecWare.DE.Server
 		[InteractiveCommand("lastex", HelpText = "Detail for the last remote exception.")]
 		private static void WriteLastException()
 			=> WriteLastExceptionCore(lastRemoteException);
+
+		#endregion
+
+		#region -- Server Info --------------------------------------------------------
+
+		[InteractiveCommand("serverinfo", HelpText = "Reads information about the connected server.")]
+		private static async Task ServerInfoAsync()
+		{
+			var xInfo = await GetHttp().GetXmlAsync(HttpStuff.MakeRelativeUri(
+				new PropertyValue("action", "serverinfo"),
+				new PropertyValue("simple", false)
+			), rootName: "serverinfo");
+
+			var versionColors = new ConsoleColor[] { ConsoleColor.White, ConsoleColor.Gray };
+
+			app.Write(versionColors, new string[] { "Data Exchange Server ", xInfo.GetAttribute("version", "0.0.0.0") });
+			var xDebugAttr = xInfo.Attribute("debug");
+			if (xDebugAttr == null)
+				app.WriteLine();
+			else
+				app.WriteLine(String.Compare(xDebugAttr.Value, Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0 ? " (Debugging)" : " (No Debugging)");
+			app.WriteLine(ConsoleColor.DarkGray, xInfo.GetAttribute("copyright", "@copyright missing"));
+			app.WriteLine();
+
+			var xOS = xInfo.Element("os");
+			if (xOS != null)
+			{
+				app.WriteLine(versionColors, new string[] { "Microsoft Windows ", xOS.GetAttribute("version", "0.0.0.0") });
+				app.WriteLine(ConsoleColor.Gray, xOS.GetAttribute("versionstring", "unknown"));
+				app.WriteLine();
+			}
+
+			var xNet = xInfo.Element("net");
+			if (xNet != null)
+			{
+				app.WriteLine(versionColors, new string[] { xNet.GetAttribute("versionstring", "unknown"), " (" + xNet.GetAttribute("versionfile", "0.0.0.0") + ", " + xNet.GetAttribute("version", "0.0.0.0") + ")" });
+				app.WriteLine(ConsoleColor.Gray, xNet.GetAttribute("copyright", "unknown"));
+				app.WriteLine();
+			}
+
+			foreach (var xAsm in xInfo.Element("assemblies")?.Elements("assembly"))
+			{
+				var name = xAsm.GetAttribute("title", xAsm.GetAttribute("name", String.Empty));
+				var version = xAsm.GetAttribute("version", "0.0.0.0");
+				var assemblyName = xAsm.GetAttribute("assembly", null);
+				var copyright = xAsm.GetAttribute("copyright", null);
+
+				app.WriteLine(versionColors, new string[] { name, " (" + version + ")" });
+				if (assemblyName != null)
+					app.WriteLine(ConsoleColor.Gray, assemblyName);
+				if (copyright != null)
+					app.WriteLine(ConsoleColor.Gray, copyright);
+
+				app.WriteLine();
+			}
+		} // func ServerInfoAsync
+
+		#endregion
+
+		#region -- GetList ------------------------------------------------------------
+
+		[InteractiveCommand("listget", HelpText = "Get a server list.")]
+		private static async Task GetListAsync(string list = null)
+		{
+			if (String.IsNullOrEmpty(list))
+				throw new ArgumentNullException(nameof(list));
+
+			var xList = await GetHttp().GetXmlAsync(MakeUri(
+				new PropertyValue("action", "listget"),
+				new PropertyValue("id", list),
+				new PropertyValue("desc", true),
+				new PropertyValue("count", 100)
+			), rootName: "list");
+
+
+			// parse type
+			var xType = xList.Element("typedef");
+			if (xType == null)
+				return;
+
+			var xTypeDesc = xType.Elements().First();
+			var xElementName = xTypeDesc.Name;
+			var columns = new List<Func<XElement, DebugMemberValue>>();
+
+			DebugMemberValue CreateAttribute(XElement x, string displayName, string typeName, XName attributeName)
+				=> DebugMemberValue.Create(displayName, typeName, x.Attribute(attributeName)?.Value);
+
+			DebugMemberValue CreateElement(XElement x, string displayName, string typeName, XName elementName)
+				=> DebugMemberValue.Create(displayName, typeName, x.Element(elementName)?.Value);
+
+			DebugMemberValue CreateValue(XElement x, string displayName, string typeName)
+				=> DebugMemberValue.Create(displayName, typeName, x.Value);
+
+			foreach (var xCol in xTypeDesc.Elements())
+			{
+				if (xCol.Name == "attribute")
+				{
+					var attrName = xCol.Attribute("name")?.Value;
+					var typeName = xCol.Attribute("type")?.Value;
+					columns.Add(x => CreateAttribute(x, attrName, typeName, attrName));
+				}
+				else if (xCol.Name == "element")
+				{
+					var elementName = xCol.Attribute("name")?.Value;
+					var typeName = xCol.Attribute("type")?.Value;
+					if (elementName == null)
+						columns.Add(x => CreateValue(x, ".", typeName));
+					else
+						columns.Add(x => CreateElement(x, elementName, typeName, xElementName.Namespace + elementName));
+				}
+			}
+
+			var xItems = xList.Element("items");
+			if (xItems == null)
+				return;
+
+			var totalCount = xItems.GetAttribute("tc", -1);
+			var count = xItems.GetAttribute("c", 0);
+
+			// enumerate all sum elements
+			DebugMemberValue[] BuildRows(XElement x)
+			{
+				var row = new DebugMemberValue[columns.Count];
+				for (var i = 0; i < row.Length; i++)
+					row[i] = columns[i](x);
+				return row;
+			} // func BuildRows
+
+			WriteTable(
+				xItems.Elements(xElementName).Select(BuildRows)
+			);
+			if (totalCount >= 0 && (count == 0 || totalCount > count))
+				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} from {totalCount:N0}" }, true);
+			else if (count >= 0)
+				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} lines" }, true);
+		} //  func GetListAsync
+
+		#endregion
+
+		#region -- GetList ------------------------------------------------------------
+
+		[InteractiveCommand("action", HelpText = "Invoke a server action.")]
+		private static async Task ActionAsync(string action = null)
+		{
+			if (String.IsNullOrEmpty(action))
+				throw new ArgumentNullException(nameof(action));
+
+			var xReturn = await GetHttp().GetXmlAsync(MakeUri(
+				new PropertyValue("action", action)
+			));
+			app.WriteLine(xReturn.Value ?? "Success.");
+		} //  func GetListAsync
 
 		#endregion
 	} // class Program

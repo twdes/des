@@ -28,40 +28,4 @@ namespace TecWare.DE.Server
 			Assert.AreEqual(MimeTypes.Text.Plain, MimeTypeMapping.GetMimeTypeFromExtension(".text"));
 		}
 	}
-
-	[TestClass]
-	public class HtmlParser
-	{
-		private static string T(params string[] lines)
-			=> String.Join(Environment.NewLine, lines) + Environment.NewLine;
-
-		private static void TestParser(bool isExpectedPlainHtml, bool isExpectedOpenOutput, string expected, string lines)
-		{
-			var source = String.Join(Environment.NewLine, lines);
-			using (var tr = new StringReader(source))
-			{
-				var s = HttpResponseHelper.ParseHtml(tr, 0, out var isPlainHtml, out var openOutput);
-				Assert.AreEqual(isExpectedPlainHtml, isPlainHtml);
-				Assert.AreEqual(isExpectedOpenOutput, openOutput);
-				Assert.AreEqual(expected ?? source, s);
-			}
-		}
-
-		[TestMethod]
-		public void ParsePlainTest()
-			=> TestParser(true, true, null, "<html> < a% >");
-
-
-		[TestMethod]
-		public void ParseLuaTest()
-			=> TestParser(false, true, T("print(\"<html>\");","test(); ","print(\"</html>\");"), "<html><%test(); %></html>");
-
-		[TestMethod]
-		public void ParseOutputTest()
-			=> TestParser(false, false, T("otext();", "test();", "print(\"<html>\");", "test(); ", "print(\"</html>\");"), "  <%otext();%> <%test();%> <html><%test(); %></html>");
-
-		[TestMethod]
-		public void ParseVarTest()
-			=> TestParser(false, true, T("print(\"<html>\");", "printValue(test, \"N0\");", "print(\"</html>\");"), "<html><%=test::N0%></html>");
-	}
 }

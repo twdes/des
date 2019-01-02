@@ -34,10 +34,17 @@ namespace TecWare.DE.Server
 		ILuaAttachedScript AttachScript(string scriptId, LuaTable table, bool autoRun = false);
 		/// <summary>Create a private script.</summary>
 		/// <param name="code">Code of the script</param>
-		/// <param name="sciptBase">Name of the script.</param>
-		/// <param name="parameter">Script arguments.</param>
+		/// <param name="scriptBase">Name of the script.</param>
+		/// <param name="parameters">Script arguments.</param>
 		/// <returns>Created script.</returns>
-		ILuaScript CreateScript(Func<TextReader> code, string sciptBase, params KeyValuePair<string, Type>[] parameter);
+		ILuaScript CreateScript(Func<TextReader> code, string scriptBase, params KeyValuePair<string, Type>[] parameters);
+
+		/// <summary>Create a private script.</summary>
+		/// <param name="code">Code of the script</param>
+		/// <param name="scriptBase">Name of the script.</param>
+		/// <param name="parameters">Script arguments.</param>
+		/// <returns>Created script.</returns>
+		ILuaScript CreateScript(ILuaLexer code, string scriptBase, params KeyValuePair<string, Type>[] parameters);
 
 		/// <summary>Access to the internal Lua-Script-Engine.</summary>
 		Lua Lua { get; }

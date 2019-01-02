@@ -48,7 +48,7 @@ namespace Neo.Console
 		private int left = 0;
 		private int top = 0;
 		private CharBuffer content = null;
-		private bool isInvalidate = false;
+		private bool isInvalidate = true;
 		private bool isVisible = true;
 		private int zOrder = 0;
 
@@ -304,6 +304,68 @@ namespace Neo.Console
 		public int CursorTop => cursorTop;
 		public int CursorSize => cursorVisible;
 	} // class ConsoleFocusableOverlay
+
+	#endregion
+
+	#region -- class ConsoleDialogOverlay ---------------------------------------------
+
+	public abstract class ConsoleDialogOverlay : ConsoleFocusableOverlay
+	{
+		private readonly TaskCompletionSource<bool> dialogResult;
+
+		public ConsoleDialogOverlay()
+		{
+			dialogResult = new TaskCompletionSource<bool>();
+			SetCursor(0, 0, 0);
+		} // ctor
+
+		public void RenderTitle(string title)
+		{
+			var left = (Width / 2 - title.Length / 2);
+			var spaces = left > 0 ? new string('=', left) : String.Empty;
+			var titleBar = spaces + " " + title + " " + spaces;
+
+			Content.Write(0, 0, titleBar, foreground: ForegroundColor, background: BackgroundColor);
+		} // proc RenderTitle
+
+		protected virtual void OnAccept()
+		{
+			dialogResult.SetResult(true);
+			Application = null;
+		} // proc OnAccept
+
+		protected virtual void OnCancel()
+		{
+			dialogResult.SetResult(false);
+			Application = null;
+		} // proc OnCancel
+
+		public override bool OnHandleEvent(EventArgs e)
+		{
+			if (e is ConsoleKeyUpEventArgs keyUp)
+			{
+				if (keyUp.Key == ConsoleKey.Enter)
+				{
+					OnAccept();
+					return true;
+				}
+				else if (keyUp.Key == ConsoleKey.Escape)
+				{
+					OnCancel();
+					return true;
+				}
+				else
+					return base.OnHandleEvent(e);
+			}
+			else
+				return base.OnHandleEvent(e);
+		} // proc OnHandleEvent
+
+		public ConsoleColor ForegroundColor { get; set; } = ConsoleColor.White;
+		public ConsoleColor BackgroundColor { get; set; } = ConsoleColor.DarkCyan;
+
+		public Task<bool> DialogResult => dialogResult.Task;
+	} // class ConsoleDialogOverlay
 
 	#endregion
 
@@ -732,6 +794,7 @@ namespace Neo.Console
 								currentLineOffset++;
 								Invalidate();
 							}
+							return true;
 						}
 						else
 						{
@@ -740,7 +803,7 @@ namespace Neo.Console
 								case ConsoleKey.Delete:
 									if (CurrentLine.Remove(currentLineOffset))
 										Invalidate();
-									break;
+									return true;
 
 								case ConsoleKey.UpArrow:
 									if (currentLineIndex > 0)
@@ -748,31 +811,31 @@ namespace Neo.Console
 										currentLineIndex--;
 										Invalidate();
 									}
-									break;
+									return true;
 								case ConsoleKey.DownArrow:
 									if (currentLineIndex < lines.Count - 1)
 									{
 										currentLineIndex++;
 										Invalidate();
 									}
-									break;
+									return true;
 								case ConsoleKey.LeftArrow:
 									if (currentLineOffset > 0)
 										currentLineOffset--;
 									else
 										currentLineOffset = 0;
 									Invalidate();
-									break;
+									return true;
 								case ConsoleKey.RightArrow:
 									if (currentLineOffset < CurrentLine.Content.Length)
 										currentLineOffset++;
 									else
 										currentLineOffset = CurrentLine.Content.Length;
 									Invalidate();
-									break;
+									return true;
 							}
 						}
-						return true;
+						break;
 				}
 			}
 			else if (e is ConsoleKeyUpEventArgs keyUp)
@@ -784,22 +847,21 @@ namespace Neo.Console
 							currentLineIndex = lines.Count - 1;
 						currentLineOffset = CurrentLine.Content.Length;
 						Invalidate();
-						break;
+						return true;
 					case ConsoleKey.Home:
 						if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
 							currentLineIndex = 0;
 						currentLineOffset = 0;
 						Invalidate();
-						break;
+						return true;
 					case ConsoleKey.Insert:
 						overwrite = !overwrite;
 						Invalidate();
-						break;
+						return true;
 				}
-				return true;
 			}
-			else
-				return base.OnHandleEvent(e);
+			
+			return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
 
 		private InputLine CurrentLine => lines[currentLineIndex];
@@ -1203,6 +1265,9 @@ namespace Neo.Console
 			overlays.Insert(insertAt, overlay);
 			if (overlay is ConsoleFocusableOverlay fo)
 				AddActiveOverlay(fo);
+
+			if (overlay.IsRenderable)
+				Invalidate();
 		} // proc AddOverlay
 
 		private void AddActiveOverlay(ConsoleFocusableOverlay overlay)

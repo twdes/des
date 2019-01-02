@@ -300,60 +300,66 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("serverinfo", SecurityToken = SecuritySys),
 		Description("Gibt die Information über den Server zurück.")
 		]
-		private XElement GetServerInfoData()
+		private XElement GetServerInfoData(bool simple = false)
 		{
 			var xData = new XElement("serverinfo");
 
-			// Server selbst
+			var luaEngine = this.GetService<IDELuaEngine>(false);
+
+			// send server info
 			var attrCopy = typeof(DEServer).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>();
 			xData.SetAttributeValue("version", GetServerFileVersion());
 			xData.SetAttributeValue("copyright", attrCopy == null ? "err" : attrCopy.Copyright);
+			xData.SetAttributeValue("debug", luaEngine?.IsDebugAllowed ?? false);
 
-			// Betriebssystem Informationen / .net Informationen
-			var asmDotNet = typeof(IQueryable).Assembly;
-			var attrVersionDotNet = asmDotNet.GetCustomAttribute<AssemblyFileVersionAttribute>();
-			var versionDotNet = attrVersionDotNet == null ? asmDotNet.GetName().Version : new Version(attrVersionDotNet.Version);
-			var attrCopyDotNet = asmDotNet.GetCustomAttribute<AssemblyCopyrightAttribute>();
-
-			xData.Add(new XElement("os",
-				new XAttribute("versionstring", Environment.OSVersion.VersionString),
-				new XAttribute("version", Environment.OSVersion.Version.ToString())
-			));
-			xData.Add(new XElement("net",
-				new XAttribute("assembly", asmDotNet.GetName().ToString()),
-				new XAttribute("versionstring", String.Format(".Net Framework {0}.{1}", versionDotNet.Major, versionDotNet.Minor)),
-				new XAttribute("versionfile", versionDotNet),
-				new XAttribute("version", Environment.Version.ToString()),
-				new XAttribute("copyright", attrCopyDotNet.Copyright)
-			));
-
-			var xAssemblies = new XElement("assemblies");
-			xData.Add(xAssemblies);
-
-			// NeoLua
-			var asmLua = typeof(Lua).Assembly;
-
-			var luaCompany = asmLua.GetCustomAttribute<AssemblyCompanyAttribute>();
-			var luaCopyright = asmLua.GetCustomAttribute<AssemblyCopyrightAttribute>();
-			var luaFileVersion = asmLua.GetCustomAttribute<AssemblyFileVersionAttribute>();
-			var versionLua = asmLua.GetName().Version;
-
-			xAssemblies.Add(GetServerInfoAssembly(
-					"NeoLua",
-					asmLua.FullName,
-					String.Format("NeoLua {0}.{1}", versionLua.Major, versionLua.Minor),
-					luaFileVersion.Version,
-					luaCopyright.Copyright + " " + luaCompany.Company,
-					"/images/lua16.png"
-				)
-			);
-
-			// get description for loaded assemblies
-			foreach (var asmCur in AppDomain.CurrentDomain.GetAssemblies())
+			if (!simple)
 			{
-				var attrDesc = asmCur.GetCustomAttribute<DescriptionAttribute>();
-				if (attrDesc != null)
-					xAssemblies.Add(GetServerInfoAssembly(asmCur, "/?action=resource&image=" + attrDesc.Description + "," + asmCur.FullName.Replace(" ", "")));
+				// Operation system / .net informationen
+				var asmDotNet = typeof(IQueryable).Assembly;
+				var attrVersionDotNet = asmDotNet.GetCustomAttribute<AssemblyFileVersionAttribute>();
+				var versionDotNet = attrVersionDotNet == null ? asmDotNet.GetName().Version : new Version(attrVersionDotNet.Version);
+				var attrCopyDotNet = asmDotNet.GetCustomAttribute<AssemblyCopyrightAttribute>();
+
+				xData.Add(new XElement("os",
+					new XAttribute("versionstring", Environment.OSVersion.VersionString),
+					new XAttribute("version", Environment.OSVersion.Version.ToString())
+				));
+				xData.Add(new XElement("net",
+					new XAttribute("assembly", asmDotNet.GetName().ToString()),
+					new XAttribute("versionstring", String.Format(".Net Framework {0}.{1}", versionDotNet.Major, versionDotNet.Minor)),
+					new XAttribute("versionfile", versionDotNet),
+					new XAttribute("version", Environment.Version.ToString()),
+					new XAttribute("copyright", attrCopyDotNet.Copyright)
+				));
+
+				var xAssemblies = new XElement("assemblies");
+				xData.Add(xAssemblies);
+
+				// NeoLua
+				var asmLua = typeof(Lua).Assembly;
+
+				var luaCompany = asmLua.GetCustomAttribute<AssemblyCompanyAttribute>();
+				var luaCopyright = asmLua.GetCustomAttribute<AssemblyCopyrightAttribute>();
+				var luaFileVersion = asmLua.GetCustomAttribute<AssemblyFileVersionAttribute>();
+				var versionLua = asmLua.GetName().Version;
+
+				xAssemblies.Add(GetServerInfoAssembly(
+						"NeoLua",
+						asmLua.FullName,
+						String.Format("NeoLua {0}.{1}", versionLua.Major, versionLua.Minor),
+						luaFileVersion.Version,
+						luaCopyright.Copyright + " " + luaCompany.Company,
+						"/images/lua16.png"
+					)
+				);
+
+				// get description for loaded assemblies
+				foreach (var asmCur in AppDomain.CurrentDomain.GetAssemblies())
+				{
+					var attrDesc = asmCur.GetCustomAttribute<DescriptionAttribute>();
+					if (attrDesc != null)
+						xAssemblies.Add(GetServerInfoAssembly(asmCur, "/?action=resource&image=" + attrDesc.Description + "," + asmCur.FullName.Replace(" ", "")));
+				}
 			}
 
 			return xData;

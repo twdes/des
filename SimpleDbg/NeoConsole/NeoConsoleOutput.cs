@@ -243,8 +243,8 @@ namespace Neo.Console
 			{
 				if (cursorSize > 100)
 					cursorSize = 100;
-				if (cursorSize < 0)
-					cursorSize = 0;
+				if (cursorSize < 1)
+					cursorSize = 1;
 
 				var v = unchecked((uint)cursorSize);
 				if (v != cursorInfo.dwSize)
