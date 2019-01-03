@@ -99,8 +99,14 @@ namespace TecWare.DE.Server
 
 			using (var sw = new StreamWriter(historyFile.FullName, false, Encoding.UTF8))
 			{
+				var first = true;
 				foreach (var cur in history)
 				{
+					if (first)
+						first = false;
+					else
+						sw.WriteLine(); // command seperator
+
 					foreach (var (startAt, len) in cur.SplitNewLinesTokens())
 					{
 						if (len == 0)
@@ -108,7 +114,6 @@ namespace TecWare.DE.Server
 						else
 							sw.WriteLine(cur.Substring(startAt, len));
 					}
-					sw.WriteLine();
 				}
 			}
 
@@ -380,7 +385,7 @@ namespace TecWare.DE.Server
 			else
 				stateText = " " + stateText.PadRight(19);
 
-			Content.Write(0, 0, stateText, false, ConsoleColor.White, GetStateColor());
+			Content.Write(0, 0, stateText, null, ConsoleColor.White, GetStateColor());
 		} // proc OnRender
 
 		private void SetStateCore(ConnectionState state, bool? set)

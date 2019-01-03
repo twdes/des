@@ -96,7 +96,7 @@ namespace Neo.Console
 				catch (Exception e)
 				{
 					// fill content with error message
-					var (endLeft, endTop) = Content.Write(0, 0, e.ToString(), true, ConsoleColor.White, ConsoleColor.Red);
+					var (endLeft, endTop) = Content.Write(0, 0, e.ToString(), 0, ConsoleColor.White, ConsoleColor.Red);
 					while (endTop < Content.Height)
 					{
 						while (endLeft < Content.Width)
@@ -524,9 +524,18 @@ namespace Neo.Console
 
 			#region -- Insert, Remove -------------------------------------------------
 
-			public void AppendLine(StringBuilder text)
+			public void InsertLine(int index, StringBuilder text)
 			{
-				content.Append(text);
+				for (var i = 0; i < text.Length; i++)
+					content.Insert(index++, text[i]);
+				ClearTokenCache();
+			} // proc AppendLine
+
+			public void InsertLine(ref int index, string text, int startAt, int count)
+			{
+				var endAt = startAt + count;
+				for (var i = startAt; i < endAt; i++)
+					content.Insert(index++, text[i]);
 				ClearTokenCache();
 			} // proc AppendLine
 
@@ -803,7 +812,7 @@ namespace Neo.Console
 					l.SetDefaultToken();
 				// write tokens
 				foreach (var tok in l.tokenCache)
-					(endLeft, endTop) = Content.Write(endLeft, endTop, tok.Text, foreground: tok.Color);
+					(endLeft, endTop) = Content.Write(endLeft, endTop, tok.Text, lineBreakTo: 0, foreground: tok.Color);
 
 				if (endLeft < w)
 					Content.Fill(endLeft, endTop, w - 1, endTop, ' ');
@@ -845,11 +854,7 @@ namespace Neo.Console
 						}
 						else
 						{
-							currentHistoryIndex = -1;
-							lastInputCommand = null;
-
-							lines.Insert(++currentLineIndex, new InputLine(manager.GetPrompt()));
-							currentLineOffset = 0;
+							InsertNewLine();
 							Invalidate();
 						}
 						return true;
@@ -901,7 +906,7 @@ namespace Neo.Console
 							currentLineOffset = prevLine.ContentLength;
 
 							if (currLine.ContentLength > 0) // copy content
-								prevLine.AppendLine(currLine.content);
+								prevLine.InsertLine(currentLineOffset, currLine.content);
 
 							lines.RemoveAt(currentLineIndex);
 							currentLineIndex--;
@@ -951,7 +956,7 @@ namespace Neo.Console
 
 										if (currentLineIndex < lines.Count - 1)
 										{
-											CurrentLine.AppendLine(lines[currentLineIndex + 1].content);
+											CurrentLine.InsertLine(currentLineOffset, lines[currentLineIndex + 1].content);
 											lines.RemoveAt(currentLineIndex + 1);
 											Invalidate();
 										}
@@ -1023,7 +1028,7 @@ namespace Neo.Console
 			{
 				switch (keyUp.Key)
 				{
-					#region -- Home,End,Up,Down,Left,Right --
+					#region -- Home,End,Up,Down,PageUp,PageDown --
 					case ConsoleKey.PageUp:
 						MoveHistory(false);
 						return true;
@@ -1067,12 +1072,22 @@ namespace Neo.Console
 						Invalidate();
 						return true;
 					//case ConsoleKey.V:
-					//	if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
-					//	{
+						//if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
+						//{
+						//	var clipText = Clipboard.GetText();
+						//	var first = true;
+						//	foreach (var (startAt, len) in Procs.SplitNewLinesTokens(clipText))
+						//	{
+						//		if (first)
+						//			first = false;
+						//		else // new line
+						//			InsertNewLine();
 
-					//		return true;
-					//	}
-					//	break;
+						//		CurrentLine.InsertLine(ref currentLineOffset, clipText, startAt, len);
+						//	}
+						//	return true;
+						//}
+						//break;
 					#endregion
 					default:
 						{
@@ -1085,6 +1100,33 @@ namespace Neo.Console
 
 			return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
+
+		private void InsertNewLine()
+		{
+			currentHistoryIndex = -1;
+			lastInputCommand = null;
+
+			var initalText = String.Empty;
+			var currentLine = CurrentLine;
+
+			if (currentLineOffset < currentLine.ContentLength)
+			{
+				var removeLength = currentLine.ContentLength - currentLineOffset;
+				initalText = currentLine.content.ToString(currentLineOffset, removeLength);
+				currentLine.content.Remove(currentLineOffset, removeLength);
+				currentLine.ClearTokenCache();
+			}
+
+			var line = new InputLine(manager.GetPrompt());
+			lines.Insert(++currentLineIndex, line);
+			currentLineOffset = 0;
+
+			if (initalText.Length > 0)
+			{
+				var idx = currentLineOffset;
+				line.InsertLine(ref idx, initalText, 0, initalText.Length);
+			}
+		} // proc InsertNewLine
 
 		private static bool IsNewCharGroup(int idx, string text, bool leftMove, ref int state)
 		{

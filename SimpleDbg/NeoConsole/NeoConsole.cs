@@ -109,7 +109,7 @@ namespace Neo.Console
 			}
 		} // proc Fill
 
-		public (int endLeft, int endTop) Write(int left, int top, string value, bool lineBreak = false, ConsoleColor foreground = ConsoleColor.Gray, ConsoleColor background = ConsoleColor.Black)
+		public (int endLeft, int endTop) Write(int left, int top, string value, int? lineBreakTo = null, ConsoleColor foreground = ConsoleColor.Gray, ConsoleColor background = ConsoleColor.Black)
 		{
 			if (String.IsNullOrEmpty(value))
 				return (left, top);
@@ -123,10 +123,10 @@ namespace Neo.Console
 			{
 				if (x >= Width)
 				{
-					if (lineBreak)
+					if (lineBreakTo.HasValue)
 					{
 						y++;
-						x = left;
+						x = lineBreakTo.Value;
 					}
 					else
 						return (x, y);

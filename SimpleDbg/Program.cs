@@ -79,6 +79,7 @@ namespace TecWare.DE.Server
 
 		private static DebugRunScriptResult lastScriptResult = null;
 		private static DebugSocketException lastRemoteException = null;
+		private static HttpRequestException lastHttpResponseException = null;
 
 		#region -- Main, RunDebugProgram ----------------------------------------------
 
@@ -257,6 +258,8 @@ namespace TecWare.DE.Server
 
 		private static void BeginConnection(Uri uri, ICredentials credentials)
 		{
+			EndConnection();
+
 			httpConnectionCancellation = new CancellationTokenSource();
 			httpConnectionTask = HttpConnectionAsync(uri, credentials, httpConnectionCancellation.Token);
 		} // proc BeginConnection
@@ -344,7 +347,7 @@ namespace TecWare.DE.Server
 				{
 					if (IsHttpConnected)
 						SetHttpConnection(null, false, cancellationToken);
-					app.WriteError(e);
+					WriteErrorIfNew(e);
 				}
 
 				// show waiting
@@ -374,6 +377,16 @@ namespace TecWare.DE.Server
 				SetConnectionState(ConnectionState.ConnectedHttp, true);
 			}
 		} // proc SetHttpConnection
+
+		private static void WriteErrorIfNew(HttpRequestException e)
+		{
+			if (lastHttpResponseException == null
+				|| e.Message != lastHttpResponseException.Message)
+			{
+				lastHttpResponseException = e;
+				app.WriteError(e);
+			}
+		} // proc WriteErrorIfNew
 
 		private static void StartSocket(DEHttpSocketBase socket, CancellationToken cancellationToken)
 		{
@@ -600,6 +613,21 @@ namespace TecWare.DE.Server
 
 		[InteractiveCommand("quit", Short = "q", HelpText = "Exit the application.")]
 		private static void DummyQuit() { }
+
+		#endregion
+
+		#region -- Open ---------------------------------------------------------------
+
+		[InteractiveCommand("open", HelpText = "Open a new connection.")]
+		private static void Open(
+			[Description("Uri to the server.")]
+			string url =  null
+		)
+		{
+			var uri = new Uri(url ?? "http://localhost:8080/", UriKind.Absolute);
+
+			BeginConnection(uri, null);
+		} // func Open
 
 		#endregion
 

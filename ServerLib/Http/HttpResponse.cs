@@ -576,7 +576,7 @@ namespace TecWare.DE.Server.Http
 				return;
 			}
 
-			var http = context.Server as IDEHttpServer;
+			var http = context.Server.GetService<IDEHttpServer>();
 			var o = http?.GetWebCache(cacheId);
 
 			// create the item

@@ -196,7 +196,9 @@ namespace TecWare.DE.Server
 						await SendEventLineAsync(FormatEventLine(FormatEvent(null, "pong", null, null))); // write empty event
 						break;
 					default:
-						throw new ArgumentOutOfRangeException(nameof(commandLine), firstPart, "Unknown command.");
+						if (!String.IsNullOrEmpty(firstPart))
+							throw new ArgumentOutOfRangeException(nameof(commandLine), firstPart, "Unknown command.");
+						break;
 				}
 			} // proc ExecuteCommandAsync
 
@@ -360,7 +362,16 @@ namespace TecWare.DE.Server
 							{
 								try
 								{
-									await eventSession.ExecuteCommandAsync(Encoding.UTF8.GetString(segment.Array, 0, recvOffset));
+									var leadingZeros = 0;
+									var endSegment = segment.Offset + recvOffset;
+									for (var i = segment.Offset; i < endSegment; i++)
+									{
+										if (segment.Array[i] != 0)
+											break;
+										leadingZeros++;
+									}
+
+									await eventSession.ExecuteCommandAsync(Encoding.UTF8.GetString(segment.Array, leadingZeros, recvOffset - leadingZeros));
 								}
 								catch (Exception e)
 								{
