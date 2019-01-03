@@ -14,8 +14,11 @@
 //
 #endregion
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using Neo.Console;
 using Neo.IronLua;
 using TecWare.DE.Networking;
@@ -23,18 +26,182 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
+	#region -- class SimpleDebugCommandHistory ----------------------------------------
+
+	internal sealed class SimpleDebugCommandHistory : IConsoleReadLineHistory
+	{
+		private readonly FileInfo historyFile;
+		private readonly List<string> history = new List<string>();
+		private long historySize = 0L;
+		private DateTime lastReadStamp;
+		private int lastCheckTick;
+
+		public SimpleDebugCommandHistory()
+		{
+			historyFile = new FileInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TecWare", "SimpleDebug.txt"));
+
+			Read();
+		} // ctor
+
+		private void Read()
+		{
+			historySize = 0;
+			history.Clear();
+
+			historyFile.Refresh();
+			if (!historyFile.Exists)
+				return;
+
+			using (var sr = new StreamReader(historyFile.FullName, true))
+			{
+				var currentCommand = new StringBuilder();
+				string line;
+				while ((line = sr.ReadLine()) != null)
+				{
+					if (String.IsNullOrEmpty(line))
+					{
+						if (currentCommand.Length > 0)
+							AppendCore(currentCommand.ToString());
+						currentCommand.Clear();
+					}
+					else
+					{
+						if (currentCommand.Length > 0)
+							currentCommand.AppendLine();
+						currentCommand.Append(line);
+					}
+				}
+
+				if (currentCommand.Length > 0)
+					AppendCore(currentCommand.ToString());
+			}
+
+			lastReadStamp = historyFile.LastWriteTimeUtc;
+			lastCheckTick = Environment.TickCount;
+		} // proc Read
+
+		private void CheckForReload()
+		{
+			if (unchecked(Environment.TickCount - lastCheckTick) < 1000)
+				return;
+
+			// refresh file
+			historyFile.Refresh();
+			if (historyFile.LastWriteTimeUtc > lastReadStamp)
+				Read();
+			lastCheckTick = Environment.TickCount;
+		} // proc CheckForReload
+
+		private void Save()
+		{
+			if (!historyFile.Directory.Exists)
+				historyFile.Directory.Create();
+
+			using (var sw = new StreamWriter(historyFile.FullName, false, Encoding.UTF8))
+			{
+				foreach (var cur in history)
+				{
+					foreach (var (startAt, len) in cur.SplitNewLinesTokens())
+					{
+						if (len == 0)
+							sw.WriteLine("\t");
+						else
+							sw.WriteLine(cur.Substring(startAt, len));
+					}
+					sw.WriteLine();
+				}
+			}
+
+			historyFile.Refresh();
+			lastReadStamp = historyFile.LastWriteTimeUtc;
+			lastCheckTick = Environment.TickCount;
+		} // proc Save
+
+		private void RemoveAt(int idx)
+		{
+			if (idx < history.Count)
+			{
+				historySize -= history[idx].Length;
+				history.RemoveAt(idx);
+			}
+		} // proc RemoveAt
+
+		private void AppendCore(string command)
+		{
+			// remove beginning items
+			while (historySize > 0x40000)
+				RemoveAt(0);
+
+			history.Add(command);
+			historySize += command.Length;
+		} // proc AppendCore
+
+		public void Append(string command)
+		{
+			CheckForReload();
+
+			while (true)
+			{
+				var idx = history.FindIndex(c => String.Compare(c, command, StringComparison.OrdinalIgnoreCase) == 0);
+				if (idx == -1)
+					break;
+				RemoveAt(idx);
+			}
+
+			AppendCore(command);
+
+			Save();
+		} // proc Append
+
+		public IEnumerator<string> GetEnumerator()
+			=> history.GetEnumerator();
+
+		IEnumerator IEnumerable.GetEnumerator() 
+			=> GetEnumerator();
+
+		public int Count
+		{
+			get
+			{
+				CheckForReload();
+				return history.Count;
+			}
+		} // prop Count
+
+		public string this[int index] =>history[index];
+	} // class SimpleDebugCommandHistory
+
+	#endregion
+
 	#region -- class SimpleDebugConsoleReadLineManager --------------------------------
 
-	internal sealed class SimpleDebugConsoleReadLineManager : IConsoleReadLineManager, IConsoleReadLineScanner
+	internal sealed class SimpleDebugConsoleReadLineManager : IConsoleReadLineManager, IConsoleReadLineScanner, IConsoleReadLineHistory
 	{
+		private readonly SimpleDebugCommandHistory history;
+
+		#region -- Ctor/Dtor ----------------------------------------------------------
+
+		public SimpleDebugConsoleReadLineManager(SimpleDebugCommandHistory history)
+		{
+			this.history = history ?? throw new ArgumentNullException(nameof(history));
+		} // ctor
+
+		#endregion
+
+		#region -- IConsoleReadLineManager implementation -----------------------------
+
 		public bool CanExecute(string command)
 			=> (command.Length > 0 && command[0] == ':') || command.EndsWith(Environment.NewLine);
 
 		public string GetPrompt()
 			=> "> ";
 
+		#endregion
+
+		#region -- IConsoleReadLineScanner implementation -----------------------------
+
 		public int GetNextToken(int offset, string text, bool reverse)
-			=> throw new NotImplementedException();
+			=> -1;
 
 		private static ConsoleColor GetTokenColor(LuaToken typ)
 		{
@@ -138,6 +305,24 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc Scan
+
+		#endregion
+
+		#region -- IConsoleReadLineHistory implementation -----------------------------
+
+		IEnumerator<string> IEnumerable<string>.GetEnumerator()
+			=> history.GetEnumerator();
+
+		IEnumerator IEnumerable.GetEnumerator()
+			=> history.GetEnumerator();
+
+		string IReadOnlyList<string>.this[int index]
+			=> history[index];
+
+		int IReadOnlyCollection<string>.Count
+			=> history.Count;
+
+		#endregion
 	} // class SimpleDebugConsoleReadLineManager
 
 	#endregion

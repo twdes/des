@@ -75,6 +75,7 @@ namespace TecWare.DE.Server
 		private static readonly Regex commandSyntax = new Regex(@"\:(?<cmd>\w+)(?:\s+(?<args>(?:\`[^\`]*\`)|(?:[^\s]*)))*", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
 		private static ConsoleApplication app = ConsoleApplication.Current;
+		private static SimpleDebugCommandHistory commandHistory = new SimpleDebugCommandHistory();
 
 		private static DebugRunScriptResult lastScriptResult = null;
 		private static DebugSocketException lastRemoteException = null;
@@ -176,7 +177,7 @@ namespace TecWare.DE.Server
 			{
 				while (true)
 				{
-					var line = await app.ReadLineAsync(new SimpleDebugConsoleReadLineManager()) ?? String.Empty;
+					var line = await app.ReadLineAsync(new SimpleDebugConsoleReadLineManager(commandHistory)) ?? String.Empty;
 					if (line.Length == 0)
 						continue; // skip empty command
 					else if (line[0] == ':') // interactive command
@@ -184,6 +185,8 @@ namespace TecWare.DE.Server
 						var m = commandSyntax.Match(line);
 						if (m.Success)
 						{
+							commandHistory.Append(line);
+
 							// get the command
 							var cmd = m.Groups["cmd"].Value;
 
@@ -214,6 +217,7 @@ namespace TecWare.DE.Server
 					{
 						try
 						{
+							commandHistory.Append(line);
 							await SendCommandAsync(line);
 						}
 						catch (Exception e)
@@ -1556,10 +1560,10 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- GetList ------------------------------------------------------------
+		#region -- ListGet ------------------------------------------------------------
 
 		[InteractiveCommand("listget", HelpText = "Get a server list.")]
-		private static async Task GetListAsync(string list = null)
+		private static async Task ListGetAsync(string list = null)
 		{
 			if (String.IsNullOrEmpty(list))
 				throw new ArgumentNullException(nameof(list));
@@ -1632,7 +1636,7 @@ namespace TecWare.DE.Server
 				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} from {totalCount:N0}" }, true);
 			else if (count >= 0)
 				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} lines" }, true);
-		} //  func GetListAsync
+		} //  func ListGetAsync
 
 		#endregion
 

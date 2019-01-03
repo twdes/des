@@ -24,6 +24,7 @@ using System.Security;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using TecWare.DE.Stuff;
 
 namespace Neo.Console
 {
@@ -88,7 +89,26 @@ namespace Neo.Console
 
 			if (isInvalidate)
 			{
-				OnRender();
+				try
+				{
+					OnRender();
+				}
+				catch (Exception e)
+				{
+					// fill content with error message
+					var (endLeft, endTop) = Content.Write(0, 0, e.ToString(), true, ConsoleColor.White, ConsoleColor.Red);
+					while (endTop < Content.Height)
+					{
+						while (endLeft < Content.Width)
+						{
+							Content.Set(endLeft, endTop, ' ', ConsoleColor.White, ConsoleColor.Red);
+							endLeft++;
+						}
+
+						endTop++;
+						endLeft = 0;
+					}
+				}
 				isInvalidate = false;
 			}
 
@@ -393,27 +413,75 @@ namespace Neo.Console
 
 	#region -- class ConsoleReadLineOverlay -------------------------------------------
 
+	#region -- interface IConsoleReadLineManager --------------------------------------
+
+	/// <summary>Basic ReadLine interface.</summary>
 	public interface IConsoleReadLineManager
 	{
+		/// <summary>Leave the read line.</summary>
+		/// <param name="command">Currently, collected text.</param>
+		/// <returns></returns>
 		bool CanExecute(string command);
+		/// <summary>Get prompt for the line.</summary>
+		/// <returns>Prompt or nothing.</returns>
 		string GetPrompt();
 	} // interface IConsoleReadLineManager
 
+	#endregion
+
+	#region -- interface IConsoleReadLineScannerSource --------------------------------
+
+	/// <summary>Text buffer access (implemented by read line).</summary>
 	public interface IConsoleReadLineScannerSource
 	{
+		/// <summary>Set color for a specific text part.</summary>
+		/// <param name="lineStart"></param>
+		/// <param name="columnStart"></param>
+		/// <param name="lineEnd"></param>
+		/// <param name="columnEnd"></param>
+		/// <param name="color"></param>
 		void AppendToken(int lineStart, int columnStart, int lineEnd, int columnEnd, ConsoleColor color);
 
+		/// <summary>Sequential text buffer of the current text buffer.</summary>
 		TextReader TextReader { get; }
 
+		/// <summary>Content of a line.</summary>
+		/// <param name="lineIndex">Index of the line</param>
+		/// <returns></returns>
 		string this[int lineIndex] { get; }
+		/// <summary>Number of lines.</summary>
 		int LineCount { get; }
 	} // interface IConsoleReadLineScannerSource
 
+	#endregion
+
+	#region -- interface IConsoleReadLineScanner --------------------------------------
+
+	/// <summary>Colorization implementation.</summary>
 	public interface IConsoleReadLineScanner
 	{
+		/// <summary>Starts the colorization.</summary>
+		/// <param name="source">Text buffer source.</param>
 		void Scan(IConsoleReadLineScannerSource source);
-		int GetNextToken(int offset, string text, bool reverse);
+	
+		/// <summary>Get the next offset for strg+cursor key.</summary>
+		/// <param name="offset"></param>
+		/// <param name="text"></param>
+		/// <param name="left"></param>
+		/// <returns>-1 for not implemented.</returns>
+		int GetNextToken(int offset, string text, bool left);
 	} // interface IConsoleReadLineScanner
+
+	#endregion
+
+	#region -- interface IConsoleReadLineHistory --------------------------------------
+
+	/// <summary>Command history</summary>
+	public interface IConsoleReadLineHistory : IReadOnlyList<string>
+	{
+	} // interface IConsoleReadLineHistory
+
+	#endregion
 
 	public sealed class ConsoleReadLineOverlay : ConsoleFocusableOverlay
 	{
@@ -455,6 +523,12 @@ namespace Neo.Console
 			} // ctor
 
 			#region -- Insert, Remove -------------------------------------------------
+
+			public void AppendLine(StringBuilder text)
+			{
+				content.Append(text);
+				ClearTokenCache();
+			} // proc AppendLine
 
 			public bool Insert(ref int index, char c, bool overwrite)
 			{
@@ -512,7 +586,7 @@ namespace Neo.Console
 
 			#endregion
 
-			private bool ClearTokenCache()
+			public bool ClearTokenCache()
 			{
 				tokenCache = null;
 				return true;
@@ -529,6 +603,8 @@ namespace Neo.Console
 			public string Content => content.ToString();
 
 			public int LineHeight => height;
+
+			public int ContentLength => content.Length;
 			public int TotalLineLength => prompt.Length + content.Length;
 		} // class InputLine
 
@@ -558,7 +634,7 @@ namespace Neo.Console
 				try
 				{
 					var lastLineIndex = lines.Count - 1;
-					EmitCurrentColor(lastLineIndex, lines[lastLineIndex].Content.Length);
+					EmitCurrentColor(lastLineIndex, lines[lastLineIndex].ContentLength);
 					if (lineTokens.Count > 0)
 						EmitTokens();
 				}
@@ -572,7 +648,7 @@ namespace Neo.Console
 			{
 				if (currentLineIndex < lines.Count)
 				{
-					var len = lines[currentLineIndex].Content.Length;
+					var len = lines[currentLineIndex].ContentLength;
 					if (currentLineOffset < len)
 						return lines[currentLineIndex].Content[currentLineOffset++];
 					else
@@ -653,6 +729,8 @@ namespace Neo.Console
 
 		#endregion
 
+		private static readonly char[] whiteSpaces = new char[] { ' ', '\t', '\u00a0', '\u0085' };
+
 		private readonly IConsoleReadLineManager manager;
 		private readonly TaskCompletionSource<string> commandAccepted;
 
@@ -660,6 +738,9 @@ namespace Neo.Console
 		private int currentLineOffset = 0;
 		private bool overwrite = false;
 		private readonly List<InputLine> lines = new List<InputLine>();
+
+		private string lastInputCommand = null;
+		private int currentHistoryIndex = -1;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
@@ -751,64 +832,151 @@ namespace Neo.Console
 			{
 				switch (keyDown.KeyChar)
 				{
+					#region -- Return --
 					case '\r':
 						var command = Command;
 						if (currentLineIndex >= lines.Count - 1 && manager.CanExecute(command))
 						{
+							currentHistoryIndex = -1;
+							lastInputCommand = null;
+
 							if (commandAccepted != null)
 								commandAccepted.SetResult(command);
 						}
 						else
 						{
+							currentHistoryIndex = -1;
+							lastInputCommand = null;
+
 							lines.Insert(++currentLineIndex, new InputLine(manager.GetPrompt()));
 							currentLineOffset = 0;
 							Invalidate();
 						}
 						return true;
+					#endregion
+					#region -- Escape --
+					case '\x1B':
+						if (lastInputCommand != null)
+						{
+							Command = lastInputCommand;
+							lastInputCommand = null;
+							currentHistoryIndex = -1;
+							Invalidate();
+						}
+						else if (currentLineIndex > 0 || currentLineOffset > 0)
+						{
+							currentLineIndex = 0;
+							currentLineOffset = 0;
+							Invalidate();
+						}
+						else if (CurrentLine.ContentLength > 0 && lines.Count > 0)
+						{
+							Command = String.Empty;
+							Invalidate();
+						}
+						return true;
+					#endregion
+					#region -- Backspace --
 					case '\b':
 						CurrentLine.FixLineEnd(ref currentLineOffset);
 						if (currentLineOffset > 0)
 						{
+							currentHistoryIndex = -1;
+							lastInputCommand = null;
 							currentLineOffset--;
 							if (CurrentLine.Remove(currentLineOffset))
 								Invalidate();
 						}
-						return true;
-					case '\t':
+						else if (currentLineIndex > 0)
 						{
-							for (var i = 0; i < 4; i++)
-							{
-								if (CurrentLine.Insert(ref currentLineOffset, ' ', overwrite))
-								{
-									currentLineOffset++;
-									Invalidate();
-								}
-							}
+							currentHistoryIndex = -1;
+							lastInputCommand = null;
+
+							if (currentLineIndex >= lines.Count)
+								currentLineIndex = lines.Count - 1;
+
+							var prevLine = lines[currentLineIndex - 1];
+							var currLine = CurrentLine;
+
+							currentLineOffset = prevLine.ContentLength;
+
+							if (currLine.ContentLength > 0) // copy content
+								prevLine.AppendLine(currLine.content);
+
+							lines.RemoveAt(currentLineIndex);
+							currentLineIndex--;
+							
+							Invalidate();
 						}
 						return true;
-					default:
-						if (keyDown.KeyChar != '\0')
+					#endregion
+					#region -- Tab --
+					case '\t':
+						for (var i = 0; i < 4; i++)
 						{
-							if (CurrentLine.Insert(ref currentLineOffset, keyDown.KeyChar, overwrite))
+							if (CurrentLine.Insert(ref currentLineOffset, ' ', overwrite))
 							{
+								currentHistoryIndex = -1;
+								lastInputCommand = null;
 								currentLineOffset++;
 								Invalidate();
 							}
+						}
+						return true;
+					#endregion
+					default:
+						if (keyDown.KeyChar != '\0')
+						{
+							#region -- Char --
+							if (CurrentLine.Insert(ref currentLineOffset, keyDown.KeyChar, overwrite))
+							{
+								currentHistoryIndex = -1;
+								lastInputCommand = null;
+								currentLineOffset++;
+								Invalidate();
+							}
+							#endregion
 							return true;
 						}
 						else
 						{
 							switch (keyDown.Key)
 							{
+								#region -- Delete --
 								case ConsoleKey.Delete:
-									if (CurrentLine.Remove(currentLineOffset))
-										Invalidate();
-									return true;
+									if (currentLineOffset >= CurrentLine.ContentLength)
+									{
+										currentHistoryIndex = -1;
+										lastInputCommand = null;
 
+										if (currentLineIndex < lines.Count - 1)
+										{
+											CurrentLine.AppendLine(lines[currentLineIndex + 1].content);
+											lines.RemoveAt(currentLineIndex + 1);
+											Invalidate();
+										}
+									}
+									else if (CurrentLine.Remove(currentLineOffset))
+									{
+										currentHistoryIndex = -1;
+										lastInputCommand = null;
+										Invalidate();
+									}
+									return true;
+								#endregion
+								#region -- Up,Down,Left,Right --
 								case ConsoleKey.UpArrow:
 									if (currentLineIndex > 0)
 									{
-										currentLineIndex--;
+										if (currentLineIndex >= lines.Count)
+										{
+											if (lines.Count > 1)
+												currentLineIndex = lines.Count - 2;
+											else
+												currentLineIndex = 0;
+										}
+										else
+											currentLineIndex--;
 										Invalidate();
 									}
 									return true;
@@ -818,21 +986,34 @@ namespace Neo.Console
 										currentLineIndex++;
 										Invalidate();
 									}
+									else if (currentLineIndex >= lines.Count)
+										currentLineIndex = lines.Count - 1;
 									return true;
 								case ConsoleKey.LeftArrow:
-									if (currentLineOffset > 0)
+									if ((keyDown.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
+									{
+										MoveCursorByToken(CurrentLine.Content, true);
+										return true;
+									}
+									else if (currentLineOffset > 0)
 										currentLineOffset--;
 									else
 										currentLineOffset = 0;
 									Invalidate();
 									return true;
 								case ConsoleKey.RightArrow:
-									if (currentLineOffset < CurrentLine.Content.Length)
+									if ((keyDown.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
+									{
+										MoveCursorByToken(CurrentLine.Content, false);
+										return true;
+									}
+									else if (currentLineOffset < CurrentLine.ContentLength)
 										currentLineOffset++;
 									else
-										currentLineOffset = CurrentLine.Content.Length;
+										currentLineOffset = CurrentLine.ContentLength;
 									Invalidate();
 									return true;
+									#endregion
 							}
 						}
 						break;
@@ -842,10 +1023,35 @@ namespace Neo.Console
 			{
 				switch (keyUp.Key)
 				{
+					#region -- Home,End,Up,Down,Left,Right --
+					case ConsoleKey.PageUp:
+						MoveHistory(false);
+						return true;
+					case ConsoleKey.UpArrow:
+						{
+							if ((keyUp.KeyModifiers & ConsoleKeyModifiers.AltPressed) != 0)
+							{
+								MoveHistory(false);
+								return true;
+							}
+						}
+						break;
+					case ConsoleKey.PageDown:
+						MoveHistory(true);
+						return true;
+					case ConsoleKey.DownArrow:
+						{
+							if (manager is IConsoleReadLineHistory history && (keyUp.KeyModifiers & ConsoleKeyModifiers.AltPressed) != 0)
+							{
+								MoveHistory(true);
+								return true;
+							}
+						}
+						break;
 					case ConsoleKey.End:
 						if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
 							currentLineIndex = lines.Count - 1;
-						currentLineOffset = CurrentLine.Content.Length;
+						currentLineOffset = CurrentLine.ContentLength;
 						Invalidate();
 						return true;
 					case ConsoleKey.Home:
@@ -854,17 +1060,167 @@ namespace Neo.Console
 						currentLineOffset = 0;
 						Invalidate();
 						return true;
+					#endregion
+					#region -- Insert --
 					case ConsoleKey.Insert:
 						overwrite = !overwrite;
 						Invalidate();
 						return true;
+					//case ConsoleKey.V:
+					//	if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
+					//	{
+
+					//		return true;
+					//	}
+					//	break;
+					#endregion
+					default:
+						{
+							//if (manager is IConsoleReadLineHistory history && (keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0 && keyUp.Key == ConsoleKey.R)
+							//	;
+						}
+						break;
 				}
 			}
-			
+
 			return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
 
-		private InputLine CurrentLine => lines[currentLineIndex];
+		private static bool IsNewCharGroup(int idx, string text, bool leftMove, ref int state)
+		{
+			int GetCharGroup(char c)
+			{
+				switch(c)
+				{
+					case '[':
+					case ']':
+						return 12;
+					case '(':
+					case ')':
+						return 13;
+					case '{':
+					case '}':
+						return 14;
+					default:
+						if (Char.IsLetterOrDigit(c))
+							return 10;
+						else if (Char.IsSymbol(c))
+							return 11;
+						else
+							return 1;
+				}
+			}
+
+			switch(state)
+			{
+				case 0: // set char group
+				if (Char.IsWhiteSpace(text[idx]))
+					state = leftMove ? 0 : 1;
+				else
+					state = GetCharGroup(text[idx]);
+					return false;
+				case 1: // skip spaces
+					return !Char.IsWhiteSpace(text[idx]);
+				default:
+					if (!leftMove && Char.IsWhiteSpace(text[idx]))
+					{
+						state = 1;
+						return false;
+					}
+					return state != GetCharGroup(text[idx]);
+			}
+		} // proc IsNewCharGroup
+
+		private int GetNextTokenDefault(int offset, string text, bool leftMove)
+		{
+			var state = 0;
+			if (leftMove)
+			{
+				if (offset <= 0)
+					return -1;
+
+				var idx = offset;
+				while (idx > 0)
+				{
+					idx--;
+					if (IsNewCharGroup(idx, text, leftMove, ref state))
+					{
+						idx++;
+						break;
+					}
+				}
+				return idx;
+			}
+			else
+			{
+				if (offset >= text.Length)
+					return -1;
+
+				var idx = offset;
+				while (idx < text.Length)
+				{
+					if (IsNewCharGroup(idx, text, leftMove, ref state))
+						break;
+					idx++;
+				}
+
+				return idx;
+			}
+		} // func GetNextTokenDefault
+
+		private void MoveCursorByToken(string content, bool leftMove)
+		{
+			var nextIndex = -1;
+			if (manager is IConsoleReadLineScanner scan)
+				nextIndex = scan.GetNextToken(currentLineOffset, content, leftMove);
+
+			if (nextIndex < 0)
+				nextIndex = GetNextTokenDefault(currentLineOffset, content, leftMove);
+
+			if (nextIndex >= 0 && nextIndex <= content.Length)
+				currentLineOffset = nextIndex;
+
+			Invalidate();
+		} // proc MoveCursorByToken
+
+		private void MoveHistory(bool forward)
+		{
+			if (!(manager is IConsoleReadLineHistory history)
+				|| history.Count == 0)
+				return;
+
+			if (currentHistoryIndex == -1)
+			{
+				if (forward)
+					return;
+
+				lastInputCommand = Command;
+				currentHistoryIndex = history.Count - 1;
+
+				Command = history[currentHistoryIndex];
+			}
+			else
+			{
+				if (forward)
+				{
+					if (currentHistoryIndex >= history.Count - 1)
+					{
+						Command = lastInputCommand;
+						currentHistoryIndex = -1;
+						lastInputCommand = null;
+					}
+					else
+						Command = history[++currentHistoryIndex];
+				}
+				else
+				{
+					if (currentHistoryIndex > 0)
+						Command = history[--currentHistoryIndex];
+				}
+			}
+		} // proc MoveHistory
+
+		private InputLine CurrentLine => lines[currentLineIndex >= lines.Count ? lines.Count - 1 : currentLineIndex];
 
 		#endregion
 
@@ -876,6 +1232,20 @@ namespace Neo.Console
 				for (var i = 0; i < cmd.Length; i++)
 					cmd[i] = lines[i].Content.ToString();
 				return String.Join(Environment.NewLine, cmd);
+			}
+			set
+			{
+				lines.Clear();
+				foreach (var (startAt, len) in Procs.SplitNewLinesTokens(value))
+				{
+					var line = new InputLine(manager.GetPrompt());
+					line.content.Append(value, startAt, len);
+					lines.Add(line);
+				}
+				if (lines.Count == 0)
+					lines.Add(new InputLine(manager.GetPrompt()));
+
+				Invalidate();
 			}
 		} // prop Command
 
