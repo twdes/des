@@ -22,7 +22,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEMpowershell", "Extern\pow
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleDbg", "SimpleDbg\SimpleDbg.csproj", "{95374A74-71DE-43B1-A3B6-F5DEC5887815}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DESCore", "Extern\Core\DESCore\DESCore.csproj", "{90AF6FC3-6FB1-4482-81A4-2C54FD2F83A2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DESCore", "Extern\Core\DESCore\DESCore.csproj", "{90AF6FC3-6FB1-4482-81A4-2C54FD2F83A2}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{F472E4CF-2A58-4014-AD99-9E5EE1836B52}"
+	ProjectSection(SolutionItems) = preProject
+		Common\AssemblyInfoServer.template.cs = Common\AssemblyInfoServer.template.cs
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
