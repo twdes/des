@@ -1,0 +1,1 @@
+C:\Projects\PPSnOS\twdes\des\Server\bin\Release\DEServer.exe run -v  --config C:\Projects\PPSnOS\twdes\des\Server\Configs\Config.xml

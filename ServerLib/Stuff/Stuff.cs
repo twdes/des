@@ -164,7 +164,7 @@ namespace TecWare.DE.Stuff
 				}
 				if (parts.Length >= 2) // check for store name
 				{
-					if (!Enum.TryParse<StoreName>(parts[ofs], true, out storeName))
+					if (!Enum.TryParse(parts[ofs], true, out storeName))
 						storeName = StoreName.My;
 					ofs++;
 				}

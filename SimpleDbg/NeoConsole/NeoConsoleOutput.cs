@@ -395,6 +395,12 @@ namespace Neo.Console
 
 		#endregion
 
+		/// <summary>Try change console mode.</summary>
+		/// <param name="consoleMode"></param>
+		/// <returns></returns>
+		public bool TrySetConsoleMode(uint consoleMode)
+			=> SetConsoleMode(DangerousGetHandle, consoleMode);
+
 		/// <summary></summary>
 		public uint ConsoleMode
 		{
@@ -406,7 +412,7 @@ namespace Neo.Console
 			}
 			set
 			{
-				if (!SetConsoleMode(DangerousGetHandle, value))
+				if (!TrySetConsoleMode(value))
 					throw new Win32Exception();
 			}
 		}

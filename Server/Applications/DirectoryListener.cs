@@ -351,7 +351,11 @@ namespace TecWare.DE.Server
 
 							// add archive flag
 							if (notifyMethod == NotifyMethod.ArchiveBit)
-								item.File.Attributes = item.File.Attributes | FileAttributes.Archive;
+							{
+								item.File.Refresh();
+								if (item.File.Exists)
+									item.File.Attributes = item.File.Attributes | FileAttributes.Archive;
+							}
 						}
 						catch (Exception e)
 						{

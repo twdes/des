@@ -1477,7 +1477,7 @@ namespace Neo.Console
 		private ConsoleApplication(ConsoleOutputBuffer output = null, ConsoleInputBuffer input = null)
 		{
 			this.activeOutput = output ?? ConsoleOutputBuffer.GetActiveBuffer();
-			this.activeOutput.ConsoleMode = activeOutput.ConsoleMode | 0x0008; //  ENABLE_WINDOW_INPUT
+			this.activeOutput.TrySetConsoleMode(activeOutput.ConsoleMode | 0x0008); //  ENABLE_WINDOW_INPUT
 			this.output = activeOutput.Copy(); // create buffer the console content
 
 			lastWindow = activeOutput.GetWindow();
