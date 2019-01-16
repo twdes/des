@@ -548,45 +548,53 @@ namespace TecWare.DE.Server
 				return;
 
 			Debug.Print("BEGIN DISPOSE [{0}]", name);
-			using (EnterReadLock(true))
+			try
 			{
-				using (EnterWriteLock())
-					state = DEConfigItemState.Disposed;
+				using (EnterReadLock(true))
+				{
+					using (EnterWriteLock())
+						state = DEConfigItemState.Disposed;
 
-				// Gibt es Objekte die freigeben werden sollen
-				var disposeList = GetMemberValue(LuaDispose, false, true) as LuaTable;
-				if (disposeList != null)
-				{
-					foreach (var c in disposeList.Values)
-						DisposeLuaValue(c.Key, c.Value);
-				}
-				// Gib die darunterliegenden Elemente frei
-				if (subItems != null)
-				{
-					while (subItems.Count > 0)
+					// Gibt es Objekte die freigeben werden sollen
+					var disposeList = GetMemberValue(LuaDispose, false, true) as LuaTable;
+					if (disposeList != null)
 					{
-						var c = subItems[subItems.Count - 1];
-						c.Dispose();
-						using (EnterWriteLock())
-							subItems.Remove(c);
+						foreach (var c in disposeList.Values)
+							DisposeLuaValue(c.Key, c.Value);
+					}
+					// Gib die darunterliegenden Elemente frei
+					if (subItems != null)
+					{
+						while (subItems.Count > 0)
+						{
+							var c = subItems[subItems.Count - 1];
+							c.Dispose();
+							using (EnterWriteLock())
+								subItems.Remove(c);
+						}
+					}
+
+					// Gib die zugeordneten Skripte frei
+					lock (scripts)
+					{
+						foreach (var cur in scripts)
+							cur.Dispose();
+						scripts.Clear();
 					}
 				}
 
-				// Gib die zugeordneten Skripte frei
-				lock (scripts)
-				{
-					foreach (var cur in scripts)
-						cur.Dispose();
-					scripts.Clear();
-				}
+				scripts?.Dispose();
+				properties?.Dispose();
+				actions?.Dispose();
+
+				Procs.FreeAndNil(ref lockConfig);
+				Debug.Print("END DISPOSE [{0}]", name);
 			}
-
-			scripts?.Dispose();
-			properties?.Dispose();
-			actions?.Dispose();
-
-			Procs.FreeAndNil(ref lockConfig);
-			Debug.Print("END DISPOSE [{0}]", name);
+			catch (Exception e)
+			{
+				Debug.Print("END DISPOSE FAILED [{0}] {1}", name, e.ToString());
+				state = DEConfigItemState.Disposed;
+			}
 		} // proc Disposing
 
 		private void DisposeLuaValue(object key, object value)
@@ -622,9 +630,6 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public IDisposable EnterReadLock(bool upgradeable = false)
 		{
-			if (lockConfig == null)
-				return null;
-
 			if (upgradeable)
 			{
 				lockConfig.EnterUpgradeableReadLock();
@@ -639,9 +644,6 @@ namespace TecWare.DE.Server
 
 		private IDisposable EnterWriteLock()
 		{
-			if (lockConfig == null)
-				return null;
-
 			lockConfig.EnterWriteLock();
 			return new DisposableScopeThreadSecure(lockConfig.ExitWriteLock);
 		} // func EnterWriteLock
