@@ -622,6 +622,9 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public IDisposable EnterReadLock(bool upgradeable = false)
 		{
+			if (lockConfig == null)
+				return null;
+
 			if (upgradeable)
 			{
 				lockConfig.EnterUpgradeableReadLock();
@@ -636,6 +639,9 @@ namespace TecWare.DE.Server
 
 		private IDisposable EnterWriteLock()
 		{
+			if (lockConfig == null)
+				return null;
+
 			lockConfig.EnterWriteLock();
 			return new DisposableScopeThreadSecure(lockConfig.ExitWriteLock);
 		} // func EnterWriteLock
