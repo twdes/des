@@ -55,6 +55,7 @@ namespace TecWare.DE.Server
 			using (var sr = new StreamReader(historyFile.FullName, true))
 			{
 				var currentCommand = new StringBuilder();
+				var first = true;
 				string line;
 				while ((line = sr.ReadLine()) != null)
 				{
@@ -63,12 +64,16 @@ namespace TecWare.DE.Server
 						if (currentCommand.Length > 0)
 							AppendCore(currentCommand.ToString());
 						currentCommand.Clear();
+						first = true;
 					}
 					else
 					{
-						if (currentCommand.Length > 0)
+						if (first)
+							first = false;
+						else
 							currentCommand.AppendLine();
-						currentCommand.Append(line);
+						if (line != "\t")
+							currentCommand.Append(line);
 					}
 				}
 
