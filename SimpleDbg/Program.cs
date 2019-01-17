@@ -83,6 +83,7 @@ namespace TecWare.DE.Server
 
 		#region -- Main, RunDebugProgram ----------------------------------------------
 
+		[STAThread]
 		public static int Main(string[] args)
 		{
 			var parser = new Parser(

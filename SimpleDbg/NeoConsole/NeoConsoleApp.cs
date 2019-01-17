@@ -463,7 +463,7 @@ namespace Neo.Console
 		/// <summary>Starts the colorization.</summary>
 		/// <param name="source">Text buffer source.</param>
 		void Scan(IConsoleReadLineScannerSource source);
-	
+
 		/// <summary>Get the next offset for strg+cursor key.</summary>
 		/// <param name="offset"></param>
 		/// <param name="text"></param>
@@ -516,7 +516,7 @@ namespace Neo.Console
 			private int height = 1;
 
 			public ConsoleToken[] tokenCache = null;
-			
+
 			public InputLine(string prompt)
 			{
 				this.prompt = prompt ?? String.Empty;
@@ -535,13 +535,23 @@ namespace Neo.Console
 			{
 				var endAt = startAt + count;
 				for (var i = startAt; i < endAt; i++)
-					content.Insert(index++, text[i]);
+				{
+					if (text[i] == '\t')
+					{
+						content.Insert(index++, ' ');
+						content.Insert(index++, ' ');
+						content.Insert(index++, ' ');
+						content.Insert(index++, ' ');
+					}
+					else if (!Char.IsControl(text[i]))
+						content.Insert(index++, text[i]);
+				}
 				ClearTokenCache();
 			} // proc AppendLine
 
 			public bool Insert(ref int index, char c, bool overwrite)
 			{
-				if(index < content.Length)
+				if (index < content.Length)
 				{
 					if (overwrite)
 						content[index] = c;
@@ -560,7 +570,7 @@ namespace Neo.Console
 			public bool Remove(int index)
 			{
 				if (content.Length > 0 && index < content.Length)
-				{		
+				{
 					content.Remove(index, 1);
 					return ClearTokenCache();
 				}
@@ -605,9 +615,9 @@ namespace Neo.Console
 			{
 				tokenCache = new ConsoleToken[] { new ConsoleToken(content, 0, content.Length, ConsoleColor.Gray) };
 			} // proc SetDefault
-			
+
 			public bool IsTokenCacheEmpty => tokenCache == null;
-			
+
 			public string Prompt => prompt;
 			public string Content => content.ToString();
 
@@ -765,7 +775,7 @@ namespace Neo.Console
 
 		#region -- OnResize, OnRender -------------------------------------------------
 
-		public override void OnResize() 
+		public override void OnResize()
 			=> Invalidate();
 
 		protected override void OnRender()
@@ -910,7 +920,7 @@ namespace Neo.Console
 
 							lines.RemoveAt(currentLineIndex);
 							currentLineIndex--;
-							
+
 							Invalidate();
 						}
 						return true;
@@ -930,7 +940,7 @@ namespace Neo.Console
 						return true;
 					#endregion
 					default:
-						if (keyDown.KeyChar != '\0')
+						if (!Char.IsControl(keyDown.KeyChar))
 						{
 							#region -- Char --
 							if (CurrentLine.Insert(ref currentLineOffset, keyDown.KeyChar, overwrite))
@@ -1071,23 +1081,24 @@ namespace Neo.Console
 						overwrite = !overwrite;
 						Invalidate();
 						return true;
-					//case ConsoleKey.V:
-						//if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
-						//{
-						//	var clipText = Clipboard.GetText();
-						//	var first = true;
-						//	foreach (var (startAt, len) in Procs.SplitNewLinesTokens(clipText))
-						//	{
-						//		if (first)
-						//			first = false;
-						//		else // new line
-						//			InsertNewLine();
+					case ConsoleKey.V:
+						if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
+						{
+							var clipText = GetClipboardText();
+							var first = true;
+							foreach (var (startAt, len) in Procs.SplitNewLinesTokens(clipText))
+							{
+								if (first)
+									first = false;
+								else // new line
+									InsertNewLine();
 
-						//		CurrentLine.InsertLine(ref currentLineOffset, clipText, startAt, len);
-						//	}
-						//	return true;
-						//}
-						//break;
+								CurrentLine.InsertLine(ref currentLineOffset, clipText, startAt, len);
+								Invalidate();
+							}
+							return true;
+						}
+						break;
 					#endregion
 					default:
 						{
@@ -1100,6 +1111,26 @@ namespace Neo.Console
 
 			return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
+
+		private static string GetClipboardText()
+		{
+			var apartmentState = Thread.CurrentThread.GetApartmentState();
+			if (apartmentState == ApartmentState.STA)
+				return System.Windows.Forms.Clipboard.GetText();
+			else
+			{
+				var sb = new StringBuilder();
+				var thread = new Thread(ReadClipboardText);
+				thread.SetApartmentState(ApartmentState.STA);
+				thread.Start(sb);
+				thread.Join();
+				return sb.ToString();
+			}
+		} // proc GetClipboardText
+
+		[STAThread]
+		private static void ReadClipboardText(object state)
+			=> ((StringBuilder)state).Append(System.Windows.Forms.Clipboard.GetText());
 
 		private void InsertNewLine()
 		{
@@ -1132,7 +1163,7 @@ namespace Neo.Console
 		{
 			int GetCharGroup(char c)
 			{
-				switch(c)
+				switch (c)
 				{
 					case '[':
 					case ']':
@@ -1153,13 +1184,13 @@ namespace Neo.Console
 				}
 			}
 
-			switch(state)
+			switch (state)
 			{
 				case 0: // set char group
-				if (Char.IsWhiteSpace(text[idx]))
-					state = leftMove ? 0 : 1;
-				else
-					state = GetCharGroup(text[idx]);
+					if (Char.IsWhiteSpace(text[idx]))
+						state = leftMove ? 0 : 1;
+					else
+						state = GetCharGroup(text[idx]);
 					return false;
 				case 1: // skip spaces
 					return !Char.IsWhiteSpace(text[idx]);
@@ -1312,7 +1343,7 @@ namespace Neo.Console
 			this.prompt = prompt ?? String.Empty;
 			this.commandAccepted = commandAccepted;
 		} // ctor
-		
+
 		public void Dispose()
 		{
 			content.Dispose();
@@ -1343,7 +1374,7 @@ namespace Neo.Console
 				}
 			}
 		} // proc OnRender
-		
+
 		#endregion
 
 		#region -- OnHandleEvent ------------------------------------------------------
@@ -1360,7 +1391,7 @@ namespace Neo.Console
 							commandAccepted.SetResult(GetSecureString());
 						return true;
 					case '\b':
-						if(content.Length > 0)
+						if (content.Length > 0)
 						{
 							content.RemoveAt(content.Length - 1);
 							Invalidate();
@@ -1477,7 +1508,16 @@ namespace Neo.Console
 		private ConsoleApplication(ConsoleOutputBuffer output = null, ConsoleInputBuffer input = null)
 		{
 			this.activeOutput = output ?? ConsoleOutputBuffer.GetActiveBuffer();
-			this.activeOutput.TrySetConsoleMode(activeOutput.ConsoleMode | 0x0008); //  ENABLE_WINDOW_INPUT
+			var mode = activeOutput.ConsoleMode
+				| 0x0008 //  ENABLE_WINDOW_INPUT
+				| 0x0080 // ENABLE_EXTENDED_FLAGS 
+				;
+
+			//mode = mode & ~(uint)(
+			//	0x0040 // ENABLE_QUICK_EDIT_MODE
+			//);
+
+			this.activeOutput.TrySetConsoleMode(mode); 
 			this.output = activeOutput.Copy(); // create buffer the console content
 
 			lastWindow = activeOutput.GetWindow();
@@ -1494,7 +1534,7 @@ namespace Neo.Console
 		#region -- Thread Handling ----------------------------------------------------
 
 		#region -- class InvokeAction -------------------------------------------------
-		
+
 		private sealed class InvokeAction
 		{
 			private readonly ManualResetEventSlim wait;
@@ -1673,7 +1713,7 @@ namespace Neo.Console
 			var insertZ = overlay.ZOrder;
 			while (insertAt < overlays.Count && insertZ > overlays[insertAt].ZOrder)
 				insertAt++;
-			
+
 			overlays.Insert(insertAt, overlay);
 			if (overlay is ConsoleFocusableOverlay fo)
 				AddActiveOverlay(fo);
@@ -1756,7 +1796,7 @@ namespace Neo.Console
 
 			public void Dispose()
 			{
-				output.CurrentForeground= currentForegroundColor;
+				output.CurrentForeground = currentForegroundColor;
 				output.CurrentBackground = currentBackgroundColor;
 			} // proc Dispose
 		} // class ResetColor
@@ -1794,7 +1834,7 @@ namespace Neo.Console
 
 			output.Write(text);
 			output.Write(Environment.NewLine);
-			
+
 			Invalidate();
 		} // proc WriteLine
 
@@ -1890,9 +1930,9 @@ namespace Neo.Console
 					if (activeOverlay != null)
 					{
 						OnRenderCursor(
-							activeOverlay.ActualLeft + activeOverlay.CursorLeft, 
+							activeOverlay.ActualLeft + activeOverlay.CursorLeft,
 							activeOverlay.ActualTop + activeOverlay.CursorTop,
-							activeOverlay.CursorSize, 
+							activeOverlay.CursorSize,
 							activeOverlay.CursorSize > 0,
 							out afterWindow
 						);
@@ -1918,7 +1958,7 @@ namespace Neo.Console
 			//var topRow = window.Top - top - ReservedTopRowCount;
 			//if (topRow > 0)
 			//	activeOutput.SetWindow(left, top - topRow);
-			var bottomRow = top  -window.Bottom + ReservedBottomRowCount;
+			var bottomRow = top - window.Bottom + ReservedBottomRowCount;
 			if (bottomRow > 0)
 			{
 				activeOutput.ResizeWindow(0, bottomRow, 0, bottomRow);
@@ -1938,6 +1978,8 @@ namespace Neo.Console
 
 		private void OnHandleEventUnsafe(EventArgs ev)
 		{
+			//Debug.WriteLine(ev.ToString());
+
 			// refresh buffer
 			if (ev is ConsoleBufferSizeEventArgs)
 			{
@@ -1990,16 +2032,15 @@ namespace Neo.Console
 					if (o == ActiveOverlay)
 						continue;
 
-					if(o.OnHandleEvent(ev))
+					if (o.OnHandleEvent(ev))
 					{
 						if (isKeyEvent)
 							return;
 					}
 				}
 			}
-			
+
 			// call events handler
-			
 			switch (ev)
 			{
 				case ConsoleKeyDownEventArgs keyDown:
