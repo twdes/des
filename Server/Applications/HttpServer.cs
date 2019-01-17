@@ -364,7 +364,7 @@ namespace TecWare.DE.Server
 			var outputStream = GetOutputStream(contentType, contentLength, contentLength == -1);
 
 			if (encoding == Encoding.UTF8)
-				encoding = new UTF8Encoding(false);
+				encoding = Procs.Utf8Encoding;
 			return outputStream == null ? null : new StreamWriter(outputStream, encoding);
 		} // func GetOutputTextWriter
 
