@@ -759,6 +759,8 @@ namespace Neo.Console
 		private readonly List<InputLine> lines = new List<InputLine>();
 
 		private string lastInputCommand = null;
+		private int lastLineIndex = 0;
+		private int lastLineOffset = 0;
 		private int currentHistoryIndex = -1;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
@@ -842,6 +844,33 @@ namespace Neo.Console
 
 		#endregion
 
+		#region -- Last input command -------------------------------------------------
+
+		private void ClearLastInputCommand()
+		{
+			currentHistoryIndex = -1;
+			lastLineIndex = 0;
+			lastLineOffset = 0;
+			lastInputCommand = null;
+		} // proc ClearLastInputCommand
+
+		private void SaveLastInputCommand()
+		{
+			lastLineIndex = currentLineIndex;
+			lastLineOffset = currentLineOffset;
+			lastInputCommand = Command;
+		} // proc SaveLastInputCommand
+
+		private void ResetLastInputCommand()
+		{
+			Command = lastInputCommand;
+			currentLineIndex = lastLineIndex;
+			currentLineOffset = lastLineOffset;
+			ClearLastInputCommand();
+		} // proc ResetLastInputCommand
+		
+		#endregion
+
 		#region -- OnHandleEvent ------------------------------------------------------
 
 		public override bool OnHandleEvent(EventArgs e)
@@ -856,8 +885,7 @@ namespace Neo.Console
 						var command = Command;
 						if (currentLineIndex >= lines.Count - 1 && manager.CanExecute(command))
 						{
-							currentHistoryIndex = -1;
-							lastInputCommand = null;
+							ClearLastInputCommand();
 
 							if (commandAccepted != null)
 								commandAccepted.SetResult(command);
@@ -873,9 +901,7 @@ namespace Neo.Console
 					case '\x1B':
 						if (lastInputCommand != null)
 						{
-							Command = lastInputCommand;
-							lastInputCommand = null;
-							currentHistoryIndex = -1;
+							ResetLastInputCommand();
 							Invalidate();
 						}
 						else if (currentLineIndex > 0 || currentLineOffset > 0)
@@ -896,16 +922,14 @@ namespace Neo.Console
 						CurrentLine.FixLineEnd(ref currentLineOffset);
 						if (currentLineOffset > 0)
 						{
-							currentHistoryIndex = -1;
-							lastInputCommand = null;
+							ClearLastInputCommand();
 							currentLineOffset--;
 							if (CurrentLine.Remove(currentLineOffset))
 								Invalidate();
 						}
 						else if (currentLineIndex > 0)
 						{
-							currentHistoryIndex = -1;
-							lastInputCommand = null;
+							ClearLastInputCommand();
 
 							if (currentLineIndex >= lines.Count)
 								currentLineIndex = lines.Count - 1;
@@ -931,8 +955,7 @@ namespace Neo.Console
 						{
 							if (CurrentLine.Insert(ref currentLineOffset, ' ', overwrite))
 							{
-								currentHistoryIndex = -1;
-								lastInputCommand = null;
+								ClearLastInputCommand();
 								currentLineOffset++;
 								Invalidate();
 							}
@@ -945,8 +968,7 @@ namespace Neo.Console
 							#region -- Char --
 							if (CurrentLine.Insert(ref currentLineOffset, keyDown.KeyChar, overwrite))
 							{
-								currentHistoryIndex = -1;
-								lastInputCommand = null;
+								ClearLastInputCommand();
 								currentLineOffset++;
 								Invalidate();
 							}
@@ -961,8 +983,7 @@ namespace Neo.Console
 								case ConsoleKey.Delete:
 									if (currentLineOffset >= CurrentLine.ContentLength)
 									{
-										currentHistoryIndex = -1;
-										lastInputCommand = null;
+										ClearLastInputCommand();
 
 										if (currentLineIndex < lines.Count - 1)
 										{
@@ -973,8 +994,7 @@ namespace Neo.Console
 									}
 									else if (CurrentLine.Remove(currentLineOffset))
 									{
-										currentHistoryIndex = -1;
-										lastInputCommand = null;
+										ClearLastInputCommand();
 										Invalidate();
 									}
 									return true;
@@ -1134,8 +1154,7 @@ namespace Neo.Console
 
 		private void InsertNewLine()
 		{
-			currentHistoryIndex = -1;
-			lastInputCommand = null;
+			ClearLastInputCommand();
 
 			var initalText = String.Empty;
 			var currentLine = CurrentLine;
@@ -1267,7 +1286,7 @@ namespace Neo.Console
 				if (forward)
 					return;
 
-				lastInputCommand = Command;
+				SaveLastInputCommand();
 				currentHistoryIndex = history.Count - 1;
 
 				Command = history[currentHistoryIndex];
@@ -1277,11 +1296,7 @@ namespace Neo.Console
 				if (forward)
 				{
 					if (currentHistoryIndex >= history.Count - 1)
-					{
-						Command = lastInputCommand;
-						currentHistoryIndex = -1;
-						lastInputCommand = null;
-					}
+						ResetLastInputCommand();
 					else
 						Command = history[++currentHistoryIndex];
 				}
@@ -1317,6 +1332,9 @@ namespace Neo.Console
 				}
 				if (lines.Count == 0)
 					lines.Add(new InputLine(manager.GetPrompt()));
+
+				currentLineIndex = lines.Count - 1;
+				currentLineOffset = lines[currentLineIndex].ContentLength;
 
 				Invalidate();
 			}
