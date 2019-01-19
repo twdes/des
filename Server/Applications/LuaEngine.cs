@@ -363,9 +363,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaAttachedGlobal ----------------------------------------------
+		#region -- class LuaAttachedGlobal --------------------------------------------
 
-		/// <summary>Verbindung zwischen den Skripten</summary>
+		/// <summary>Connection between scripts and environments.</summary>
 		internal sealed class LuaAttachedGlobal : ILuaAttachedScript
 		{
 			public event CancelEventHandler ScriptChanged;
@@ -374,14 +374,14 @@ namespace TecWare.DE.Server
 			private readonly LuaEngine engine;
 			private readonly LoggerProxy log;
 			private readonly string scriptId;
-			private LuaTable table;
+			private readonly LuaTable table;
 			private bool autoRun;
 			private bool needToRun;
 
-			private object scriptLock = new object();
+			private readonly object scriptLock = new object();
 			private LuaScript currentScript = null;
 
-			#region -- Ctor/Dtor --------------------------------------------------------
+			#region -- Ctor/Dtor ------------------------------------------------------
 
 			public LuaAttachedGlobal(LuaEngine engine, string scriptId, LuaTable table, bool autoRun)
 			{
@@ -406,8 +406,7 @@ namespace TecWare.DE.Server
 			private static ILogger GetHostLog(LuaTable table)
 			{
 				// Check for a logger
-				var sp = table.GetMemberValue("host") as IServiceProvider;
-				if (sp != null)
+				if (table.GetMemberValue("host") is IServiceProvider sp)
 					return sp.GetService<ILogger>(false);
 
 				return null;
@@ -415,7 +414,7 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			#region -- Run, ResetScript -------------------------------------------------
+			#region -- Run, ResetScript -----------------------------------------------
 
 			public void ResetScript()
 			{
@@ -426,7 +425,9 @@ namespace TecWare.DE.Server
 			public void Run(bool throwExceptions)
 			{
 				lock (scriptLock)
+				{
 					using (var m = log.CreateScope(LogMsgType.Information, true, true))
+					{
 						try
 						{
 							if (GetScript(throwExceptions) == null)
@@ -449,6 +450,8 @@ namespace TecWare.DE.Server
 
 							m.WriteException(e);
 						}
+					}
+				}
 			} // proc Run
 
 			private LuaScript GetScript(bool throwExceptions)
@@ -457,7 +460,7 @@ namespace TecWare.DE.Server
 				{
 					currentScript = engine.FindScript(scriptId);
 					if (currentScript == null && throwExceptions)
-						throw new ArgumentException(String.Format("Skript '{0}' nicht gefunden.", scriptId));
+						throw new ArgumentOutOfRangeException(nameof(ScriptId), String.Format("Script '{0}' not found.", scriptId));
 				}
 				return currentScript;
 			} // func GetScript
@@ -465,8 +468,7 @@ namespace TecWare.DE.Server
 			public void OnScriptChanged()
 			{
 				var e = new CancelEventArgs(!autoRun);
-				if (ScriptChanged != null)
-					ScriptChanged(this, e);
+				ScriptChanged?.Invoke(this, e);
 
 				if (e.Cancel || !IsCompiled)
 				{
@@ -478,10 +480,7 @@ namespace TecWare.DE.Server
 			} // proc OnScriptChanged
 
 			public void OnScriptCompiled()
-			{
-				if (ScriptCompiled != null)
-					ScriptCompiled(this, EventArgs.Empty);
-			} // proc OnScriptCompiled
+				=> ScriptCompiled?.Invoke(this, EventArgs.Empty);
 
 			#endregion
 
@@ -547,11 +546,11 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class LuaTestEnvironment ---------------------------------------------
+		#region -- class LuaTestEnvironment -------------------------------------------
 
 		private sealed class LuaTestEnvironment : LuaTable
 		{
-			#region -- class LuaTestFunctionSet -----------------------------------------
+			#region -- class LuaTestFunctionSet ---------------------------------------
 
 			private sealed class LuaTestFunctionSet : LuaTable
 			{
@@ -1711,10 +1710,15 @@ namespace TecWare.DE.Server
 
 		async Task IDEWebSocketProtocol.ExecuteWebSocketAsync(IDEWebSocketScope webSocket)
 		{
-			if (!IsDebugAllowed)
+			switch (DebugAllowed)
 			{
-				await webSocket.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Debugging is not active.", CancellationToken.None); // close and dispose socket
-				return;
+				case LuaEngineAllowDebug.Local:
+					if (!webSocket.IsLocal)
+						goto case LuaEngineAllowDebug.Disabled;
+					break;
+				case LuaEngineAllowDebug.Disabled:
+					await webSocket.WebSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, "Debugging is not active.", CancellationToken.None); // close and dispose socket
+					return;
 			}
 
 			using (var session = new LuaDebugSession(this, webSocket, CancellationToken.None))
@@ -1764,9 +1768,39 @@ namespace TecWare.DE.Server
 		[LuaMember("DebugEnv")]
 		public LuaTable DebugEnvironment => debugEnvironment;
 
-		public bool IsDebugAllowed => Config.GetAttribute("allowDebug", false);
+		public LuaEngineAllowDebug DebugAllowed => TryParseAllowDebug(Config.GetAttribute("allowDebug", "local"), out var t) ? t : LuaEngineAllowDebug.Disabled;
 
 		public override string Icon => "/images/lua16.png";
+
+		public static bool TryParseAllowDebug(string value, out LuaEngineAllowDebug allowDebug)
+		{
+			switch(value)
+			{
+				case "true":
+				case "remote":
+					allowDebug = LuaEngineAllowDebug.Remote;
+					return true;
+				case "local":
+					allowDebug = LuaEngineAllowDebug.Local;
+					return true;
+				default:
+					allowDebug = LuaEngineAllowDebug.Disabled;
+					return true;
+			}
+		} // func TryParseAllowDebug
+
+		public static string FormatAllowDebug(LuaEngineAllowDebug allowDebug)
+		{
+			switch(allowDebug)
+			{
+				case LuaEngineAllowDebug.Local:
+					return "local";
+				case LuaEngineAllowDebug.Remote:
+					return "remote";
+				default:
+					return "false";
+			}
+		} // func FormatAllowDebug
 	} // class LuaEngine
 
 	#endregion

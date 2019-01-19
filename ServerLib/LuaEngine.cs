@@ -21,6 +21,21 @@ using Neo.IronLua;
 
 namespace TecWare.DE.Server
 {
+	#region -- enum LuaEngineAllowDebug -----------------------------------------------
+
+	/// <summary>Allow debug type.</summary>
+	public enum LuaEngineAllowDebug
+	{
+		/// <summary>Disable debugging at all</summary>
+		Disabled,
+		/// <summary>Only from local host</summary>
+		Local,
+		/// <summary>Accept a debug connection from everywhere</summary>
+		Remote
+	} // enum LuaEngineAllowDebug
+
+	#endregion
+
 	#region -- interface IDELuaEngine -------------------------------------------------
 
 	/// <summary>Script engine of the data exchange server.</summary>
@@ -49,7 +64,7 @@ namespace TecWare.DE.Server
 		/// <summary>Access to the internal Lua-Script-Engine.</summary>
 		Lua Lua { get; }
 		/// <summary>Is debugging active.</summary>
-		bool IsDebugAllowed { get; }
+		LuaEngineAllowDebug DebugAllowed { get; }
 	} // interface IDELuaEngine
 
 	#endregion

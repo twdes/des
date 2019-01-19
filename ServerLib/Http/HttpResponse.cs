@@ -113,6 +113,11 @@ namespace TecWare.DE.Server.Http
 		/// <summary>Access to the websocket.</summary>
 		WebSocket WebSocket { get; }
 
+		/// <summary>Is this a local request.</summary>
+		bool IsLocal { get; }
+		/// <summary>Orgination of the request.</summary>
+		IPEndPoint RemoteEndPoint { get; }
+
 		/// <summary>The full request path.</summary>
 		string AbsolutePath { get; }
 	} // interface IDEWebSocketScope

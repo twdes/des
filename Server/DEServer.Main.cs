@@ -236,7 +236,7 @@ namespace TecWare.DE.Server
 			{
 			} // ctor
 
-			[Option('v', "verbose", Default = false, HelpText = "Starts the service in console mode.")]
+			[Option('v', "verbose", Default = false, HelpText = "Starts the service in debug mode (if simple debug exists).")]
 			public bool Verbose { get; set; } = false;
 		} // class RunOptions
 
@@ -416,17 +416,9 @@ namespace TecWare.DE.Server
 			var writeMessage = debuggerProgram.GetRuntimeMethod("WriteMessage", new Type[] { typeof(ConsoleColor), typeof(string) })
 				?? throw new ArgumentException("WriteMessage not found.");
 
-			// check debugging
-			var luaEngine = this.GetService<IDELuaEngine>(true);
-			if (!luaEngine.IsDebugAllowed)
-			{
-				LogMsg(EventLogEntryType.Warning, "Debugging is deactivated.");
-				return false;
-			}
-
 			var http = this.GetService<IDEHttpServer>(true);
 			var uri = http.DefaultBaseUri;
-
+			
 			// switch logging
 			ServiceLog = new DebugLog(writeMessage);
 

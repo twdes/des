@@ -296,8 +296,8 @@ namespace TecWare.DE.Server
 					var xRootNode = await localHttp.GetXmlAsync("?action=serverinfo&simple=true");
 					if (!IsHttpConnected)
 					{
-						var isDebugAllowed = xRootNode?.Attribute("debug")?.Value;
-						SetHttpConnection(localHttp, String.Compare(isDebugAllowed, "true", StringComparison.OrdinalIgnoreCase) == 0, cancellationToken);
+						var debugAllowed = xRootNode?.Attribute("debug")?.Value;
+						SetHttpConnection(localHttp, CanOpenDebug(localHttp.BaseAddress, debugAllowed), cancellationToken);
 					}
 				}
 				catch (HttpResponseException e)
@@ -357,6 +357,19 @@ namespace TecWare.DE.Server
 				await Task.Delay(1000, cancellationToken);
 			}
 		} // proc HttpConnectionAsync
+
+		private static bool CanOpenDebug(Uri baseAddress, string debugAllowed)
+		{
+			switch (debugAllowed)
+			{
+				case "remote":
+					return true;
+				case "local":
+					return baseAddress.IsLoopback;
+				default:
+					return false;
+			}
+		} // func CanOpenDebug
 
 		private static void SetHttpConnection(DEHttpClient newHttp, bool openDebug, CancellationToken cancellationToken)
 		{

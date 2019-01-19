@@ -168,6 +168,10 @@ namespace TecWare.DE.Server
 
 		/// <summary>Returns the websocket</summary>
 		public WebSocket WebSocket => webSocketContext.WebSocket;
+
+		public bool IsLocal => context.Request.IsLocal;
+
+		public IPEndPoint RemoteEndPoint => context.Request.RemoteEndPoint;
 	} // class DEWebSocketContext
 
 	#endregion

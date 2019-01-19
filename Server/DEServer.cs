@@ -310,7 +310,7 @@ namespace TecWare.DE.Server
 			var attrCopy = typeof(DEServer).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>();
 			xData.SetAttributeValue("version", GetServerFileVersion());
 			xData.SetAttributeValue("copyright", attrCopy == null ? "err" : attrCopy.Copyright);
-			xData.SetAttributeValue("debug", luaEngine?.IsDebugAllowed ?? false);
+			xData.SetAttributeValue("debug", LuaEngine.FormatAllowDebug(luaEngine?.DebugAllowed ?? LuaEngineAllowDebug.Disabled));
 
 			if (!simple)
 			{

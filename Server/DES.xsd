@@ -8,6 +8,15 @@
 	<xs:include schemaLocation="Configuration/DEScore.xsd" />
 	<xs:include schemaLocation="Configuration/DESconfigItem.xsd" />
 
+	<xs:simpleType name="AllowDebugType">
+		<xs:restriction base="xs:string">
+			<xs:enumeration value="false" />
+			<xs:enumeration value="true" />
+			<xs:enumeration value="local" />
+			<xs:enumeration value="remote" />
+		</xs:restriction>
+	</xs:simpleType>
+	
 	<xs:complexType name="UserType">
 		<xs:complexContent>
 			<xs:extension base="ConfigItemType">
@@ -465,7 +474,7 @@
 							</xs:element>
 						</xs:sequence>
 					</xs:sequence>
-					<xs:attribute name="allowDebug" type="xs:boolean" use="optional" default="false">
+					<xs:attribute name="allowDebug" type="AllowDebugType" use="optional" default="local">
 						<xs:annotation>
 							<xs:documentation>Sets if it is possible to connect with the debug protocol (Default: true)</xs:documentation>
 						</xs:annotation>
