@@ -736,27 +736,55 @@ namespace TecWare.DE.Server.Http
 				await Task.Run(() => value.Save(tw));
 		} // proc WriteXml
 
+		private static DEHttpTableFormat GetTableFormat(IDEWebRequestScope context, DEHttpTableFormat defaultTableFormat)
+		{
+			if (context.AcceptType(MimeTypes.Text.Lson)) // test if lson is givven
+				return DEHttpTableFormat.Lson;
+			else if (context.AcceptType(MimeTypes.Text.Json)) // test if json is givven
+				return DEHttpTableFormat.Json;
+			else
+				return defaultTableFormat;
+		} // func GetTableFormat
+
 		/// <summary>Write Lua-Table to output.</summary>
 		/// <param name="context"></param>
 		/// <param name="table"></param>
-		public static void WriteLuaTable(this IDEWebRequestScope context, LuaTable table)
+		/// <param name="defaultTableFormat">Table format, if no accepted mime type exists.</param>
+		public static void WriteLuaTable(this IDEWebRequestScope context, LuaTable table, DEHttpTableFormat defaultTableFormat = DEHttpTableFormat.Xml)
 		{
-			if (context.AcceptType(MimeTypes.Text.Lson)) // test if lson is givven
-				WriteText(context, table.ToLson(false), MimeTypes.Text.Lson);
-			else
-				WriteXml(context, new XDocument(Procs.ToXml(table)));
+			switch (GetTableFormat(context, defaultTableFormat))
+			{
+				case DEHttpTableFormat.Lson:
+					WriteText(context, table.ToLson(false), MimeTypes.Text.Lson);
+					break;
+				case DEHttpTableFormat.Json:
+					WriteText(context, table.ToJson(false), MimeTypes.Text.Json);
+					break;
+				case DEHttpTableFormat.Xml:
+					WriteXml(context, new XDocument(Procs.ToXml(table)));
+					break;
+				default:
+					throw new ArgumentOutOfRangeException(nameof(defaultTableFormat), defaultTableFormat, "Invalid table format.");
+			}
 		} // WriteLuaTable
 
 		/// <summary>Write Lua-Table to output</summary>
 		/// <param name="context"></param>
 		/// <param name="table"></param>
-		/// <returns></returns>
-		public static Task WriteLuaTableAsync(this IDEWebRequestScope context, LuaTable table)
+		/// <param name="defaultTableFormat">Table format, if no accepted mime type exists.</param>
+		public static Task WriteLuaTableAsync(this IDEWebRequestScope context, LuaTable table, DEHttpTableFormat defaultTableFormat = DEHttpTableFormat.Xml)
 		{
-			if (context.AcceptType(MimeTypes.Text.Lson)) // test if lson is givven
-				return WriteTextAsync(context, table.ToLson(false), MimeTypes.Text.Lson);
-			else
-				return WriteXmlAsync(context, new XDocument(Procs.ToXml(table)));
+			switch (GetTableFormat(context, defaultTableFormat))
+			{
+				case DEHttpTableFormat.Lson:
+					return WriteTextAsync(context, table.ToLson(false), MimeTypes.Text.Lson);
+				case DEHttpTableFormat.Json:
+					return WriteTextAsync(context, table.ToJson(false), MimeTypes.Text.Json);
+				case DEHttpTableFormat.Xml:
+					return WriteXmlAsync(context, new XDocument(Procs.ToXml(table)));
+				default:
+					throw new ArgumentOutOfRangeException(nameof(defaultTableFormat), defaultTableFormat, "Invalid table format.");
+			}
 		} // func WriteLuaTableAsync
 
 		/// <summary></summary>
