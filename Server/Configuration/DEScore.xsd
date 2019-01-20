@@ -5,6 +5,15 @@
            xmlns="http://tecware-gmbh.de/dev/des/2014"
            xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
+	<xs:simpleType name="VariableType">
+		<xs:annotation>
+			<xs:documentation>Defines the regulare expression for a variable.</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="\$\([\w-]+\)" />
+		</xs:restriction>
+	</xs:simpleType>
+
 	<xs:simpleType name="KeyType">
 		<xs:annotation>
 			<xs:documentation>Defines a type, that marks an attribute of an element as a key field for the merge process.</xs:documentation>
@@ -14,13 +23,19 @@
 		</xs:restriction>
 	</xs:simpleType>
 
-	<xs:simpleType name="PathType">
+	<xs:simpleType name="PathTypeCore">
 		<xs:annotation>
 			<xs:documentation>Defines a file or path, that is relatively routed to the current configuration file.</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
 			<xs:maxLength value="1024" />
 		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="PathType">
+		<xs:annotation>
+			<xs:documentation>Defines a file or path, that is relatively routed to the current configuration file.</xs:documentation>
+		</xs:annotation>
+		<xs:union memberTypes="PathTypeCore VariableType" />
 	</xs:simpleType>
 
 	<xs:simpleType name="PathArray">
@@ -34,7 +49,7 @@
 		<xs:annotation>
 			<xs:documentation>Defines a file or search expression, that is used for the certificate store.</xs:documentation>
 		</xs:annotation>
-		<xs:union memberTypes="PathType xs:string" />
+		<xs:union memberTypes="PathTypeCore VariableType xs:string" />
 	</xs:simpleType>
 
 	<xs:simpleType name="ScriptList">
@@ -53,13 +68,19 @@
 		</xs:restriction>
 	</xs:simpleType>
 
-	<xs:simpleType name="PasswordType">
+	<xs:simpleType name="PasswordTypeCore">
 		<xs:annotation>
 			<xs:documentation>Password type</xs:documentation>
 		</xs:annotation>
 		<xs:restriction base="xs:string">
 			<xs:pattern value="\w{5}\:.*" />
 		</xs:restriction>
+	</xs:simpleType>
+	<xs:simpleType name="PasswordType">
+		<xs:annotation>
+			<xs:documentation>Password type</xs:documentation>
+		</xs:annotation>
+		<xs:union memberTypes="PasswordTypeCore VariableType" />
 	</xs:simpleType>
 
 	<xs:complexType name="LogType">
