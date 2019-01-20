@@ -62,7 +62,7 @@
 							<xs:documentation>Nutzer mit dem der Prozess gestartet werden soll.</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
-					<xs:attribute name="password" type="xs:string" use="optional">
+					<xs:attribute name="password" type="PasswordType" use="optional">
 						<xs:annotation>
 							<xs:documentation>Password des Nutzers</xs:documentation>
 						</xs:annotation>

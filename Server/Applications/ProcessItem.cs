@@ -29,20 +29,16 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
-	///////////////////////////////////////////////////////////////////////////////
-	/// <summary></summary>
 	internal class DEProcessItem : DEConfigLogItem, IDEProcessItem
 	{
 		public const string ProcessCategory = "Process";
 
 		private static readonly XName xnArguments = DEConfigurationConstants.MainNamespace + "arguments";
-		private static readonly XName xnEnv =  DEConfigurationConstants.MainNamespace + "env";
+		private static readonly XName xnEnv = DEConfigurationConstants.MainNamespace + "env";
 		private static readonly XName xnKill = DEConfigurationConstants.MainNamespace + "kill";
 
-		#region -- class ProcessWaitHandle ------------------------------------------------
+		#region -- class ProcessWaitHandle --------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private class ProcessWaitHandle : WaitHandle
 		{
 			public ProcessWaitHandle(IntPtr hProcess)
@@ -53,10 +49,8 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- class ProcessProperty --------------------------------------------------
+		#region -- class ProcessProperty ----------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private sealed class ProcessProperty : IDEConfigItemProperty
 		{
 			public event EventHandler ValueChanged;
@@ -73,7 +67,7 @@ namespace TecWare.DE.Server
 			public ProcessProperty(DEProcessItem item, string propertyName, string displayName, string description, string format)
 			{
 				this.item = item;
-				
+
 				// find property
 				this.property = typeof(Process).GetRuntimeProperty(propertyName);
 				if (this.property == null)
@@ -110,9 +104,6 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private Encoding outputEncoding = null; // Encoding für die Ausgaben der Anwendung
-		private Encoding inputEncoding = null;  // Encoding für Input-Texte
-
 		private Process process = null;         // Aktuell laufender Prozess
 		private IntPtr hUser = IntPtr.Zero;
 		private IntPtr hProfile = IntPtr.Zero;
@@ -123,12 +114,12 @@ namespace TecWare.DE.Server
 		private StreamReader errorStream = null;
 		private IAsyncResult arOutputStream = null;
 		private IAsyncResult arErrorStream = null;
-		private Action<LogMsgType, StreamReader> procProcessLogLine;
+		private readonly Action<LogMsgType, StreamReader> procProcessLogLine;
 
-		private ProcessProperty[] publishedProperties;
-		private Action procRefreshProperties;
+		private readonly ProcessProperty[] publishedProperties;
+		private readonly Action procRefreshProperties;
 
-		#region -- Ctor/Dtor/Config -------------------------------------------------------
+		#region -- Ctor/Dtor/Config ---------------------------------------------------
 
 		public DEProcessItem(IServiceProvider sp, string name)
 			: base(sp, name)
@@ -140,33 +131,33 @@ namespace TecWare.DE.Server
 			PublishItem(new DEConfigItemPublicAction("processRefresh") { DisplayName = "Refresh(process)" });
 
 			publishedProperties = new ProcessProperty[]
-				{
-					new ProcessProperty(this, "Id","(Id)", "Gets the unique identifier for the associated process.", "N0"),
-					new ProcessProperty(this, "HandleCount","Handles", "Gets the number of handles opened by the process.", "N0"),
+			{
+				new ProcessProperty(this, "Id","(Id)", "Gets the unique identifier for the associated process.", "N0"),
+				new ProcessProperty(this, "HandleCount","Handles", "Gets the number of handles opened by the process.", "N0"),
 
-					new ProcessProperty(this, "PagedSystemMemorySize64","Memory (paged, system)", "Gets the amount of pageable system memory, in bytes, allocated for the associated process.", "FILESIZE"),
-					new ProcessProperty(this, "NonpagedSystemMemorySize64","Memory (none paged,system)", "Gets the amount of nonpaged system memory, in bytes, allocated for the associated process.", "FILESIZE"),
-					new ProcessProperty(this, "PagedMemorySize64","Memory (paged)", "Gets the amount of paged memory, in bytes, allocated for the associated process.", "FILESIZE"),
-					new ProcessProperty(this, "PeakPagedMemorySize64","Memory (paged,peak)", "Gets the maximum amount of memory in the virtual memory paging file, in bytes, used by the associated process.", "FILESIZE"),
-					new ProcessProperty(this, "VirtualMemorySize64","Memory (virtual)", "Gets the amount of the virtual memory, in bytes, allocated for the associated process.", "FILESIZE"),
-					new ProcessProperty(this, "PeakVirtualMemorySize64","Memory (virtual,peak)", "Gets the maximum amount of virtual memory, in bytes, used by the associated process.", "FILESIZE"),
-					new ProcessProperty(this, "PeakWorkingSet64","Memory (workingset,peak)", "Gets the maximum amount of physical memory, in bytes, used by the associated process.", "FILESIZE"),
-					new ProcessProperty(this, "WorkingSet64","Memory (workingset)", "Gets the amount of physical memory, in bytes, allocated for the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "PagedSystemMemorySize64","Memory (paged, system)", "Gets the amount of pageable system memory, in bytes, allocated for the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "NonpagedSystemMemorySize64","Memory (none paged,system)", "Gets the amount of nonpaged system memory, in bytes, allocated for the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "PagedMemorySize64","Memory (paged)", "Gets the amount of paged memory, in bytes, allocated for the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "PeakPagedMemorySize64","Memory (paged,peak)", "Gets the maximum amount of memory in the virtual memory paging file, in bytes, used by the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "VirtualMemorySize64","Memory (virtual)", "Gets the amount of the virtual memory, in bytes, allocated for the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "PeakVirtualMemorySize64","Memory (virtual,peak)", "Gets the maximum amount of virtual memory, in bytes, used by the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "PeakWorkingSet64","Memory (workingset,peak)", "Gets the maximum amount of physical memory, in bytes, used by the associated process.", "FILESIZE"),
+				new ProcessProperty(this, "WorkingSet64","Memory (workingset)", "Gets the amount of physical memory, in bytes, allocated for the associated process.", "FILESIZE"),
 
-					new ProcessProperty(this, "ProcessName","Name", "Gets the name of the process.", null),
-					new ProcessProperty(this, "StartTime","StartTime", "Gets the time that the associated process was started.", "G"),
-					new ProcessProperty(this, "TotalProcessorTime","Time (total)", "Gets the total processor time for this process.", null),
-					new ProcessProperty(this, "UserProcessorTime","Time (user)", "Gets the user processor time for this process.", null),
-					new ProcessProperty(this, "PrivilegedProcessorTime","Time (system)", "Gets the privileged processor time for this process.", null)
-				};
+				new ProcessProperty(this, "ProcessName","Name", "Gets the name of the process.", null),
+				new ProcessProperty(this, "StartTime","StartTime", "Gets the time that the associated process was started.", "G"),
+				new ProcessProperty(this, "TotalProcessorTime","Time (total)", "Gets the total processor time for this process.", null),
+				new ProcessProperty(this, "UserProcessorTime","Time (user)", "Gets the user processor time for this process.", null),
+				new ProcessProperty(this, "PrivilegedProcessorTime","Time (system)", "Gets the privileged processor time for this process.", null)
+			};
 
 			foreach (var c in publishedProperties)
 				RegisterProperty(c);
 
 			procRefreshProperties = HttpRefreshProperties;
 			Server.Queue.RegisterIdle(procRefreshProperties, 3000);
-    } // ctor
-		
+		} // ctor
+
 		protected override void Dispose(bool disposing)
 		{
 			try
@@ -181,7 +172,6 @@ namespace TecWare.DE.Server
 				{
 					foreach (var c in publishedProperties)
 						UnregisterProperty(c.Name);
-					publishedProperties = null;
 				}
 			}
 			finally
@@ -211,7 +201,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Http -------------------------------------------------------------------
+		#region -- Http ---------------------------------------------------------------
 
 		[
 		DEConfigHttpAction("processStart", IsSafeCall = true),
@@ -255,10 +245,10 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc HttpRefreshProperties
-		
+
 		#endregion
 
-		#region -- Start/Stop Process -------------------------------------------------------
+		#region -- Start/Stop Process -------------------------------------------------
 
 		private unsafe char[] CreateEnvironment(IntPtr hToken, string userName, bool loadProfile)
 		{
@@ -275,9 +265,11 @@ namespace TecWare.DE.Server
 			{
 				if (loadProfile)
 				{
-					var profileInfo = new NativeMethods.PROFILEINFO();
-					profileInfo.dwSize = Marshal.SizeOf(typeof(NativeMethods.PROFILEINFO));
-					profileInfo.lpUserName = userName;
+					var profileInfo = new NativeMethods.PROFILEINFO
+					{
+						dwSize = Marshal.SizeOf(typeof(NativeMethods.PROFILEINFO)),
+						lpUserName = userName
+					};
 					if (!NativeMethods.LoadUserProfile(hToken, ref profileInfo))
 						throw new Win32Exception();
 					hProfile = profileInfo.hProfile;
@@ -293,7 +285,7 @@ namespace TecWare.DE.Server
 			{
 				// Suche das Ende im Environment
 				var envLength = 0;
-				char* c = pEnv;
+				var c = pEnv;
 				while (*c != '\0' || *(c + 1) != '\0')
 				{
 					envLength++;
@@ -330,19 +322,19 @@ namespace TecWare.DE.Server
 
 		private void CreateProcessPipe(bool isInput, out SafeFileHandle parent, out SafeFileHandle child)
 		{
-			var securityAttributes = new NativeMethods.SECURITY_ATTRIBUTES();
-			securityAttributes.bInheritHandle = true;
+			var securityAttributes = new NativeMethods.SECURITY_ATTRIBUTES
+			{
+				bInheritHandle = true
+			};
 
 			SafeFileHandle hFile = null;
 			try
 			{
-				bool lRet;
-				if (isInput)
-					lRet = NativeMethods.CreatePipe(out child, out hFile, securityAttributes, 0);
-				else
-					lRet = NativeMethods.CreatePipe(out hFile, out child, securityAttributes, 0);
+				var ret = isInput
+					? NativeMethods.CreatePipe(out child, out hFile, securityAttributes, 0)
+					: NativeMethods.CreatePipe(out hFile, out child, securityAttributes, 0);
 
-				if (!lRet || child.IsInvalid || hFile.IsInvalid)
+				if (!ret || child.IsInvalid || hFile.IsInvalid)
 					throw new Win32Exception();
 
 				var p = new HandleRef(this, NativeMethods.GetCurrentProcess());
@@ -363,43 +355,42 @@ namespace TecWare.DE.Server
 				if (IsProcessRunning)
 					StopProcess();
 
-				Log.LogMsg(LogMsgType.Information, "Starte anwendung...");
-				if (inputEncoding != null)
-					Console.InputEncoding = inputEncoding;
+				Log.LogMsg(LogMsgType.Information, "Start process...");
 
 				SafeFileHandle hInput = null;
 				SafeFileHandle hOutput = null;
 				SafeFileHandle hError = null;
 				var hEnvironment = default(GCHandle);
 				using (var startupInfo = new NativeMethods.STARTUPINFO())
+				{
 					try
 					{
-						// Erzeuge die Befehlszeile
-						var sbCommand = new StringBuilder();
+						// Create command line
+						var command = new StringBuilder();
 
-						var fileName = Config.GetAttribute("filename", String.Empty);
+						var fileName = ConfigNode.GetAttribute<string>("filename");
 						if (!String.IsNullOrEmpty(fileName))
 						{
 							if (fileName.Length > 0 && fileName[0] == '"' && fileName[fileName.Length] == '"')
-								sbCommand.Append(fileName);
+								command.Append(fileName);
 							else
-								sbCommand.Append('"').Append(fileName).Append('"');
+								command.Append('"').Append(fileName).Append('"');
 						}
 
-						string sArguments = Config.GetAttribute("arguments", String.Empty);
-						if (!String.IsNullOrEmpty(sArguments))
-							sbCommand.Append(' ').Append(sArguments);
-						XElement arguments = Config.Element(xnArguments);
-						if (arguments != null && !String.IsNullOrEmpty(arguments.Value))
-							sbCommand.Append(' ').Append(arguments.Value);
+						var argumentsAttr = Config.GetAttribute("arguments", String.Empty);
+						if (!String.IsNullOrEmpty(argumentsAttr))
+							command.Append(' ').Append(argumentsAttr);
+						var argumentsElement = Config.Element(xnArguments);
+						if (argumentsElement != null && !String.IsNullOrEmpty(argumentsElement.Value))
+							command.Append(' ').Append(argumentsElement.Value);
 
-						if (sbCommand.Length == 0)
-							throw new ArgumentException("filename", "Keine Datei angegeben.");
+						if (command.Length == 0)
+							throw new ArgumentException("@filename", "Filename is missing.");
 
 						// Working-Directory
 						var workingDirectory = Config.GetAttribute("workingDirectory", null);
 
-						// Soll der Prozess unter einem anderen Nutzer ausgeführt werden
+						// Run program as a different user
 						var domain = Config.GetAttribute("domain", null);
 						var userName = Config.GetAttribute("username", null);
 						var password = Config.GetAttribute("password", null);
@@ -409,38 +400,39 @@ namespace TecWare.DE.Server
 								throw new Win32Exception();
 						}
 
-						// Erzeuge eine Environment für den Prozess
+						// Create environment for the user
 						hEnvironment = GCHandle.Alloc(CreateEnvironment(hUser, userName, Config.GetAttribute("loadUserProfile", false)), GCHandleType.Pinned);
 
-						// Flags für den neuen Prozess
+						// Flags for the process
 						var flags = NativeMethods.CREATE_PROCESS_FLAGS.CREATE_NEW_PROCESS_GROUP | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_NO_WINDOW | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_UNICODE_ENVIRONMENT | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_SUSPENDED;
 
-						// Erzeuge die Startparameter
+						// Create start parameter
 						startupInfo.dwFlags = 0x00000100;
 						CreateProcessPipe(true, out hInput, out startupInfo.hStdInput);
 						CreateProcessPipe(false, out hOutput, out startupInfo.hStdOutput);
 						CreateProcessPipe(false, out hError, out startupInfo.hStdError);
 
-						NativeMethods.PROCESS_INFORMATION processinformation = new NativeMethods.PROCESS_INFORMATION();
+						var processinformation = new NativeMethods.PROCESS_INFORMATION();
 						try
 						{
 							if (hUser == IntPtr.Zero)
 							{
-								if (!NativeMethods.CreateProcess(null, sbCommand, null, null, true, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
+								if (!NativeMethods.CreateProcess(null, command, null, null, true, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
 									throw new Win32Exception();
 							}
 							else
 							{
-								if (!NativeMethods.CreateProcessAsUser(hUser, null, sbCommand, null, null, true, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
+								if (!NativeMethods.CreateProcessAsUser(hUser, null, command, null, null, true, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
 									throw new Win32Exception();
 							}
 
-							// Erzeuge das .net Prozess-Objekt
+							// Create the .net process-objekt
 							process = Process.GetProcessById(processinformation.dwProcessId);
 
 							// Erzeuge die Pipes
-							inputStream = new StreamWriter(new FileStream(hInput, FileAccess.Write, 4096, false), inputEncoding ?? Console.InputEncoding);
-							inputStream.AutoFlush = true;
+							var inputEncoding = Config.Attribute("inputEncoding") == null ? null : ConfigNode.GetAttribute<Encoding>("inputEncoding");
+							var outputEncoding = Config.Attribute("outputEncoding") == null ? null : ConfigNode.GetAttribute<Encoding>("outputEncoding");
+							inputStream = new StreamWriter(new FileStream(hInput, FileAccess.Write, 4096, false), inputEncoding ?? Console.InputEncoding) { AutoFlush = true };
 							outputStream = new StreamReader(new FileStream(hOutput, FileAccess.Read, 4096, false), outputEncoding ?? Console.OutputEncoding);
 							errorStream = new StreamReader(new FileStream(hError, FileAccess.Read, 4096, false), outputEncoding ?? Console.OutputEncoding);
 
@@ -450,7 +442,7 @@ namespace TecWare.DE.Server
 							arOutputStream = procProcessLogLine.BeginInvoke(LogMsgType.Information, outputStream, null, outputStream);
 							arErrorStream = procProcessLogLine.BeginInvoke(LogMsgType.Warning, errorStream, null, errorStream);
 
-							// Starte die Anwendung
+							// Run application
 							NativeMethods.ResumeThread(processinformation.hThread);
 						}
 						finally
@@ -476,6 +468,7 @@ namespace TecWare.DE.Server
 						if (hEnvironment.IsAllocated)
 							hEnvironment.Free();
 					}
+				}
 
 				CallMemberDirect("ProcessStarted", new object[] { process }, throwExceptions: false);
 				HttpRefreshProperties();
@@ -514,7 +507,7 @@ namespace TecWare.DE.Server
 			{
 				var isCommandSended = SendKillCommand();
 
-				// Prüfe ob das Script ne Idee hat
+				// Has the script a kill implementation
 				if (!isCommandSended)
 				{
 					var sendKillCommand = this[csSendKillCommand];
@@ -529,7 +522,7 @@ namespace TecWare.DE.Server
 				//	lCommandSended = true;
 				//}
 
-				// Warte auf das Ende
+				// Wait for exist, and kill.
 				if (!process.WaitForExit(isCommandSended ? Config.GetAttribute("exitTimeout", 3000) : 100))
 				{
 					Log.LogMsg(LogMsgType.Warning, "Prozess wird abgeschossen.");
@@ -546,6 +539,8 @@ namespace TecWare.DE.Server
 			=> inputStream?.WriteLine(cmd);
 
 		#endregion
+
+		#region -- Process Events -----------------------------------------------------
 
 		private void ProcessLogLine(LogMsgType type, string line)
 		{
@@ -570,6 +565,7 @@ namespace TecWare.DE.Server
 		{
 			string line;
 			while ((line = sr.ReadLine()) != null)
+			{
 				try
 				{
 					ProcessLogLine(LogMsgType.Information, line);
@@ -578,17 +574,17 @@ namespace TecWare.DE.Server
 				{
 					Log.Except(e);
 				}
+			}
 		} // proc ProcessReceiveLine
 
 		private void ProcessExited(object state, bool timeout)
 		{
-			uint exitCode;
-			if (!NativeMethods.GetExitCodeProcess(exitWaitHandle.SafeWaitHandle, out exitCode))
-				exitCode = uint.MaxValue;
+			if (!NativeMethods.GetExitCodeProcess(exitWaitHandle.SafeWaitHandle, out var exitCode))
+				exitCode = UInt32.MaxValue;
 
 			try
 			{
-				Log.LogMsg(LogMsgType.Information, "Prozess beendet (ExitCode={0})", unchecked((int)exitCode));
+				Log.LogMsg(LogMsgType.Information, "Process closed (ExitCode={0})", unchecked((int)exitCode));
 
 				if (this["ProcessStopped"] != null)
 					CallMemberDirect("ProcessStopped", new object[] { (Process)state }, throwExceptions: false);
@@ -621,6 +617,8 @@ namespace TecWare.DE.Server
 				process = null;
 			}
 		} // proc ProcessExited
+
+		#endregion
 
 		/// <summary>Zugriff auf den Prozess</summary>
 		public Process Process => process;
