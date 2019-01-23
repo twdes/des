@@ -151,12 +151,12 @@ namespace TecWare.DE.Server
 		public static extern bool CloseServiceHandle(IntPtr hSCObject);
 
 
-		[DllImport(csAdvApi32, CharSet = CharSet.Auto)]
-		public static extern bool LogonUser(string lpszUsername, string lpszDomain, string lpszPassword, LOGON_TYPE dwLogonType, LOGON_PROVIDER dwLogonProvider, out IntPtr phToken);
-		[DllImport(csAdvApi32, SetLastError = true, CharSet = CharSet.Auto)]
+		[DllImport(csAdvApi32, CharSet = CharSet.Unicode)]
+		public static extern bool LogonUser(string lpszUsername, string lpszDomain, IntPtr lpszPassword, LOGON_TYPE dwLogonType, LOGON_PROVIDER dwLogonProvider, out IntPtr phToken);
+		[DllImport(csAdvApi32, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool CreateProcessAsUser(IntPtr hToken, string lpApplicationName, StringBuilder lpCommandLine, SECURITY_ATTRIBUTES lpProcessAttributes, SECURITY_ATTRIBUTES lpThreadAttributes, bool bInheritHandles, CREATE_PROCESS_FLAGS dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, STARTUPINFO lpStartupInfo, PROCESS_INFORMATION lpProcessInformation);
 		
-		[DllImport(csKernel32, SetLastError = true, CharSet = CharSet.Auto)]
+		[DllImport(csKernel32, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool CreateProcess(string lpApplicationName, StringBuilder lpCommandLine, SECURITY_ATTRIBUTES lpProcessAttributes, SECURITY_ATTRIBUTES lpThreadAttributes, bool bInheritHandles, CREATE_PROCESS_FLAGS dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, STARTUPINFO lpStartupInfo, PROCESS_INFORMATION lpProcessInformation);
 		[DllImport(csKernel32)]
 		public static extern bool GetExitCodeProcess(SafeHandle hProcess, out uint dwExitCode);
@@ -180,11 +180,11 @@ namespace TecWare.DE.Server
 		[DllImport(csKernel32)]
 		public static extern bool ResumeThread(IntPtr hThread);
 
-		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Auto)]
+		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool LoadUserProfile(IntPtr hToken, ref PROFILEINFO lpProfileInfo);
-		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Auto)]
+		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool UnloadUserProfile(IntPtr hToken, IntPtr hProfile);
-		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Auto)]
+		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static unsafe extern bool CreateEnvironmentBlock(out char* lpEnvironment, IntPtr hToken, bool lInherit);
 		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Auto)]
 		public static unsafe extern bool DestroyEnvironmentBlock(char* lpEnvironment);

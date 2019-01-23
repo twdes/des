@@ -22,6 +22,37 @@ using System.Text;
 
 namespace TecWare.DE.Stuff
 {
+	#region -- class PasswordHandle ---------------------------------------------------
+
+	/// <summary>Password handle</summary>
+	public sealed class PasswordHandle : SafeHandle
+	{
+		private readonly bool isUnicode;
+
+		internal PasswordHandle(IntPtr passwordPtr, bool isUnicode, bool ownsHandle)
+			: base(IntPtr.Zero, ownsHandle)
+		{
+			this.isUnicode = isUnicode;
+			SetHandle(passwordPtr);
+		} // ctor
+
+		/// <summary></summary>
+		/// <returns></returns>
+		protected override bool ReleaseHandle()
+		{
+			if (isUnicode)
+				Marshal.ZeroFreeGlobalAllocUnicode(handle);
+			else
+				Marshal.ZeroFreeGlobalAllocAnsi(handle);
+			return true;
+		} // func ReleaseHandle
+
+		/// <summary></summary>
+		public override bool IsInvalid => handle == IntPtr.Zero;
+	} // class PasswordHandle
+
+	#endregion
+
 	#region -- class Passwords --------------------------------------------------------
 
 	internal static class Passwords
@@ -285,6 +316,25 @@ namespace TecWare.DE.Stuff
 
 			return r;
 		} // func HashPassword
+
+		#endregion
+
+		#region -- GetPasswordHandle --------------------------------------------------
+
+		/// <summary></summary>
+		/// <param name="secureString"></param>
+		/// <param name="unicode"></param>
+		/// <returns></returns>
+		public static PasswordHandle GetPasswordHandle(this SecureString secureString, bool unicode = true)
+		{
+			if (secureString == null)
+				return null;
+			var pPassword = unicode
+				? Marshal.SecureStringToGlobalAllocUnicode(secureString)
+				: Marshal.SecureStringToGlobalAllocAnsi(secureString);
+
+			return new PasswordHandle(pPassword, unicode, true);
+		} // func GetPasswordHandle
 
 		#endregion
 	} // class Passwords

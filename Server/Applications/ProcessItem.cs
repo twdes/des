@@ -14,11 +14,13 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Threading;
 using System.Xml.Linq;
@@ -43,7 +45,7 @@ namespace TecWare.DE.Server
 		{
 			public ProcessWaitHandle(IntPtr hProcess)
 			{
-				this.SafeWaitHandle = new SafeWaitHandle(hProcess, false);
+				SafeWaitHandle = new SafeWaitHandle(hProcess, false);
 			} // ctor
 		} // class ProcessWaitHandle
 
@@ -109,6 +111,7 @@ namespace TecWare.DE.Server
 		private IntPtr hProfile = IntPtr.Zero;
 		private ProcessWaitHandle exitWaitHandle = null;
 		private RegisteredWaitHandle waitHandle = null;
+		private ManualResetEventSlim waitForExitEvent = null;
 		private StreamWriter inputStream = null;
 		private StreamReader outputStream = null;
 		private StreamReader errorStream = null;
@@ -252,7 +255,6 @@ namespace TecWare.DE.Server
 
 		private unsafe char[] CreateEnvironment(IntPtr hToken, string userName, bool loadProfile)
 		{
-			char[] r;
 			char* pEnv;
 
 			if (hToken == IntPtr.Zero)
@@ -283,32 +285,85 @@ namespace TecWare.DE.Server
 
 			try
 			{
-				// Suche das Ende im Environment
-				var envLength = 0;
+				// Create environment dictionary
 				var c = pEnv;
-				while (*c != '\0' || *(c + 1) != '\0')
+
+				var pName = c;
+				var pNameEnd = c;
+				var pValue = c;
+				var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+				
+				while (true)
 				{
-					envLength++;
+					if (*c == '=') // property name split
+					{
+						pNameEnd = c;
+						pValue = c + 1;
+					}
+					else if(*c == '\0') // value split
+					{
+						if (pName == c)
+							break; // doppel zero
+
+						var key = new string(pName, 0, (int)(pNameEnd - pName));
+						var value = new string(pValue, 0, (int)(c - pValue));
+
+						dict.Add(key, value);
+
+						pName =
+							pNameEnd =
+							pValue = c + 1;
+					}
+
 					c++;
 				}
-				envLength++;
 
-				// Erzeuge die Zusätze 
-				var sbEnvAdd = new StringBuilder();
+				// change dictionary
 				foreach (var env in Config.Elements(xnEnv))
 				{
 					var key = env.GetAttribute("key", String.Empty);
 					if (!String.IsNullOrEmpty(key))
-						sbEnvAdd.Append(key).Append('=').Append(env.Value).Append('\0');
+					{
+						var value = env.Value;
+						if (value.Contains("%%"))
+						{
+							if (dict.TryGetValue(key, out var currentValue))
+								value = value.Replace("%%", currentValue);
+							else
+								value = value.Replace("%%", String.Empty);
+						}
+						dict[key] = value;
+					}
 				}
 
-				// Kopiere das Env
-				r = new char[envLength + sbEnvAdd.Length + 1];
-				Marshal.Copy(new IntPtr(pEnv), r, 0, envLength);
-				sbEnvAdd.CopyTo(0, r, envLength, sbEnvAdd.Length);
-				r[r.Length - 1] = '\0';
+				// recreate environment
+				var len = 1;
+				foreach (var kv in dict)
+				{
+					len += kv.Key.Length;
+					len += kv.Value.Length;
+					len += 2;
+				}
+				var envBuffer = new char[len];
+				var offset = 0;
 
-				return r;
+				void CopyStringToBuffer(string v)
+				{
+					var l = v.Length;
+					v.CopyTo(0, envBuffer, offset, l);
+					offset += l;
+				} // func CopyStringToBuffer
+
+				foreach (var kv in dict)
+				{
+					CopyStringToBuffer(kv.Key);
+					envBuffer[offset++] = '=';
+					CopyStringToBuffer(kv.Value);
+					envBuffer[offset++] = '\0';
+				}
+				envBuffer[offset++] = '\0';
+
+				return envBuffer;
 			}
 			finally
 			{
@@ -391,17 +446,20 @@ namespace TecWare.DE.Server
 						var workingDirectory = Config.GetAttribute("workingDirectory", null);
 
 						// Run program as a different user
-						var domain = Config.GetAttribute("domain", null);
-						var userName = Config.GetAttribute("username", null);
-						var password = Config.GetAttribute("password", null);
+						var domain = ConfigNode.GetAttribute<string>("domain");
+						var userName = ConfigNode.GetAttribute<string>("username");
+						var password = ConfigNode.GetAttribute<SecureString>("password");
 						if (!String.IsNullOrEmpty(userName))
 						{
-							if (!NativeMethods.LogonUser(userName, domain, password, Environment.UserInteractive ? NativeMethods.LOGON_TYPE.LOGON32_LOGON_INTERACTIVE : NativeMethods.LOGON_TYPE.LOGON32_LOGON_SERVICE, NativeMethods.LOGON_PROVIDER.LOGON32_PROVIDER_DEFAULT, out hUser))
-								throw new Win32Exception();
+							using (var pPassword = password.GetPasswordHandle())
+							{
+								if (!NativeMethods.LogonUser(userName, domain, pPassword.DangerousGetHandle(), Environment.UserInteractive ? NativeMethods.LOGON_TYPE.LOGON32_LOGON_INTERACTIVE : NativeMethods.LOGON_TYPE.LOGON32_LOGON_SERVICE, NativeMethods.LOGON_PROVIDER.LOGON32_PROVIDER_DEFAULT, out hUser))
+									throw new Win32Exception();
+							}
 						}
 
 						// Create environment for the user
-						hEnvironment = GCHandle.Alloc(CreateEnvironment(hUser, userName, Config.GetAttribute("loadUserProfile", false)), GCHandleType.Pinned);
+						hEnvironment = GCHandle.Alloc(CreateEnvironment(hUser, userName, ConfigNode.GetAttribute<bool>("loadUserProfile")), GCHandleType.Pinned);
 
 						// Flags for the process
 						var flags = NativeMethods.CREATE_PROCESS_FLAGS.CREATE_NEW_PROCESS_GROUP | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_NO_WINDOW | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_UNICODE_ENVIRONMENT | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_SUSPENDED;
@@ -429,7 +487,7 @@ namespace TecWare.DE.Server
 							// Create the .net process-objekt
 							process = Process.GetProcessById(processinformation.dwProcessId);
 
-							// Erzeuge die Pipes
+							// Create pipes
 							var inputEncoding = Config.Attribute("inputEncoding") == null ? null : ConfigNode.GetAttribute<Encoding>("inputEncoding");
 							var outputEncoding = Config.Attribute("outputEncoding") == null ? null : ConfigNode.GetAttribute<Encoding>("outputEncoding");
 							inputStream = new StreamWriter(new FileStream(hInput, FileAccess.Write, 4096, false), inputEncoding ?? Console.InputEncoding) { AutoFlush = true };
@@ -437,6 +495,7 @@ namespace TecWare.DE.Server
 							errorStream = new StreamReader(new FileStream(hError, FileAccess.Read, 4096, false), outputEncoding ?? Console.OutputEncoding);
 
 							exitWaitHandle = new ProcessWaitHandle(processinformation.hProcess);
+							waitForExitEvent = new ManualResetEventSlim(false);
 							waitHandle = ThreadPool.RegisterWaitForSingleObject(exitWaitHandle, ProcessExited, process, -1, true);
 
 							arOutputStream = procProcessLogLine.BeginInvoke(LogMsgType.Information, outputStream, null, outputStream);
@@ -523,11 +582,14 @@ namespace TecWare.DE.Server
 				//}
 
 				// Wait for exist, and kill.
-				if (!process.WaitForExit(isCommandSended ? Config.GetAttribute("exitTimeout", 3000) : 100))
+				var waitForExitTimeout = isCommandSended ? ConfigNode.GetAttribute<int>("exitTimeout") : 100;
+				if (!process.WaitForExit(waitForExitTimeout))
 				{
 					Log.LogMsg(LogMsgType.Warning, "Prozess wird abgeschossen.");
 					process.Kill();
 				}
+
+				waitForExitEvent?.Wait(waitForExitTimeout * 2);
 			}
 			catch (Exception e)
 			{
@@ -535,6 +597,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc StopProcess
 
+		[LuaMember]
 		public void SendCommand(string cmd)
 			=> inputStream?.WriteLine(cmd);
 
@@ -596,25 +659,33 @@ namespace TecWare.DE.Server
 				Procs.FreeAndNil(ref exitWaitHandle);
 				waitHandle = null;
 
-				if (hUser != IntPtr.Zero)
+				try
 				{
-					Debug.Print("UnloadProfile={0}", NativeMethods.UnloadUserProfile(hUser, hProfile));
-					Debug.Print("CloseUserHandle={0}", NativeMethods.CloseHandle(hUser));
+					if (hUser != IntPtr.Zero)
+					{
+						Debug.Print("UnloadProfile={0}", NativeMethods.UnloadUserProfile(hUser, hProfile));
+						Debug.Print("CloseUserHandle={0}", NativeMethods.CloseHandle(hUser));
+					}
+
+					if (arOutputStream != null)
+						procProcessLogLine.EndInvoke(arOutputStream);
+					if (arErrorStream != null)
+						procProcessLogLine.EndInvoke(arErrorStream);
+
+					arOutputStream = null;
+					arErrorStream = null;
+
+					Procs.FreeAndNil(ref inputStream);
+					Procs.FreeAndNil(ref outputStream);
+					Procs.FreeAndNil(ref errorStream);
 				}
+				finally
+				{
+					waitForExitEvent.Set();
+					Procs.FreeAndNil(ref waitForExitEvent);
 
-				if (arOutputStream != null)
-					procProcessLogLine.EndInvoke(arOutputStream);
-				if (arErrorStream != null)
-					procProcessLogLine.EndInvoke(arErrorStream);
-
-				arOutputStream = null;
-				arErrorStream = null;
-
-				Procs.FreeAndNil(ref inputStream);
-				Procs.FreeAndNil(ref outputStream);
-				Procs.FreeAndNil(ref errorStream);
-
-				process = null;
+					process = null;
+				}
 			}
 		} // proc ProcessExited
 
