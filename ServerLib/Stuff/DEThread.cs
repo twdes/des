@@ -271,25 +271,40 @@ namespace TecWare.DE.Server
 		} // func GetScope
 
 		/// <summary>Returns a global service of the current scope or a parent scope (service model).</summary>
+		/// <param name="serviceType"></param>
+		/// <param name="throwException"></param>
+		/// <returns></returns>
+		public static object GetScopeService(Type serviceType, bool throwException = false)
+		{
+			var currentScope = SynchronizationContext.Current as DEScopeContext;
+			var r = (object)null;
+			while (currentScope != null)
+			{
+				if (!currentScope.Scope.IsDisposed)
+					r = currentScope.Scope.GetService(serviceType);
+				currentScope = currentScope.ParentScopeContext;
+			}
+
+			if (r == null && throwException)
+				throw new ArgumentException($"Service {serviceType.Name} is not implemented by the current scope.");
+
+			return r;
+		} // func GetScopeService
+
+
+		/// <summary>Returns a global service of the current scope or a parent scope (service model).</summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="throwException"></param>
 		/// <returns></returns>
 		public static T GetScopeService<T>(bool throwException = false)
 			where T : class
 		{
-			var currentScope = SynchronizationContext.Current as DEScopeContext;
-			var r = (T)null;
-			while (currentScope != null)
-			{
-				if (!currentScope.Scope.IsDisposed)
-					r = currentScope.Scope.GetService<T>(false);
-				currentScope = currentScope.ParentScopeContext;
-			}
-
-			if (r == null && throwException)
+			if (GetScopeService(typeof(T), throwException) is T r)
+				return r;
+			else if (throwException)
 				throw new ArgumentException($"Service {typeof(T).Name} is not implemented by the current scope.");
-
-			return r;
+			else
+				return null;
 		} // func GetScopeService
 	} // class DEScope
 

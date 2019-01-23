@@ -1167,6 +1167,32 @@ namespace TecWare.DE.Server
 			public string DecodePassword(string passwordValue)
 				=> Passwords.DecodePassword(passwordValue).AsPlainText();
 
+			/// <summary>Access the current scope.</summary>
+			/// <returns>Returns the current scope or throws an exception.</returns>
+			[LuaMember]
+			public object GetCurrentScope()
+				=> DEScope.GetScope(true);
+
+			/// <summary>Access the current scope.</summary>
+			/// <returns>Returns the current scope or <c>null</c>.</returns>
+			[LuaMember]
+			public object TryGetCurrentScope()
+				=> DEScope.GetScope(false);
+
+			/// <summary>Get a service of the current scope.</summary>
+			/// <param name="serviceType">Type of the service</param>
+			/// <returns>The service instance or an exception.</returns>
+			[LuaMember]
+			public object GetScopeService(object serviceType)
+				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, true), true);
+
+			/// <summary>Get a service of the current scope.</summary>
+			/// <param name="serviceType">Type of the service</param>
+			/// <returns>The service instance or <c>null</c>.</returns>
+			[LuaMember]
+			public object TryGetScopeService(object serviceType)
+				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, false), false);
+
 			[LuaMember("format")]
 			private string LuaFormat(string text, params object[] args)
 				=> String.Format(text, args);

@@ -976,7 +976,7 @@ namespace TecWare.DE.Server
 		public virtual object GetService(Type serviceType)
 		{
 			if (serviceType == null)
-				throw new ArgumentNullException("serviceType");
+				throw new ArgumentNullException(nameof(serviceType));
 
 			if (serviceType.IsAssignableFrom(GetType()))
 				return this;
@@ -1312,24 +1312,7 @@ namespace TecWare.DE.Server
 
 		[LuaMember("GetService")]
 		private object LuaGetService(object serviceType)
-		{
-			var createServiceType = new Func<object, Type>(v =>
-			 {
-				 if (v is Type)
-					 return (Type)v;
-				 else if (v is LuaType)
-					 return ((LuaType)v).Type;
-				 else if (v is string)
-					 return LuaType.GetType((string)v);
-				 else
-					 return null;
-			 });
-
-			if (serviceType == null)
-				return null;
-			else
-				return GetService(createServiceType(serviceType));
-		} // func GetService
+			=> GetService(ProcsDE.GetServiceType(serviceType, true));
 
 		[LuaMember(nameof(RegisterDisposable))]
 		private object RegisterDisposable(string key, object value)

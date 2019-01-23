@@ -23,6 +23,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Xml;
+using Neo.IronLua;
 using TecWare.DE.Server;
 
 namespace TecWare.DE.Stuff
@@ -382,6 +383,29 @@ namespace TecWare.DE.Stuff
 		/// <returns></returns>
 		public static bool IsPathEqual(string path1, string path2)
 			=> String.Compare(Path.GetFullPath(path1), Path.GetFullPath(path2), StringComparison.OrdinalIgnoreCase) == 0;
+
+		/// <summary>Convert the object to a type-object.</summary>
+		/// <param name="serviceType">Type description string, type or luatype</param>
+		/// <param name="throwException">Exception if the object is not convertible.</param>
+		/// <returns>Returns the type</returns>
+		public static Type GetServiceType(object serviceType, bool throwException)
+		{
+			switch(serviceType)
+			{
+				case null:
+					return null;
+				case Type t:
+					return t;
+				case LuaType lt:
+					return lt.Type;
+				case string typeString:
+					return LuaType.GetType(typeString, lateAllowed: throwException).Type;
+				default:
+					if (throwException)
+						throw new ArgumentException(nameof(serviceType));
+					return null;
+			}
+		} // func GetServiceType
 	} // class ProcsDE
 
 	#endregion

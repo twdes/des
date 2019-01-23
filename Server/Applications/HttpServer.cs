@@ -1251,15 +1251,11 @@ namespace TecWare.DE.Server
 					}
 				}
 
-				// Setze den Cache
+				// Set cached item
 				if (freeIndex >= 0)
-				{
 					cacheItems[freeIndex].Set(cacheId, data);
-				}
 				else if (minHitIndex >= 0)
-				{
 					cacheItems[minHitIndex].Set(cacheId, data);
-				}
 
 				return true;
 			}
@@ -1269,7 +1265,7 @@ namespace TecWare.DE.Server
 		{
 			lock (cacheItems)
 			{
-				for (int i = 0; i < cacheItems.Length; i++)
+				for (var i = 0; i < cacheItems.Length; i++)
 					cacheItems[i].Clear();
 			}
 		} // proc ClearHttpCache
