@@ -1085,14 +1085,26 @@ namespace TecWare.DE.Server
 
 			/// <summary>Throw a user error.</summary>
 			/// <param name="message"></param>
+			/// <param name="level"></param>
+			[LuaMember("error")]
+			public static new void LuaError(object message, int level)
+			{
+				// this method is needed to overwrite Lua-default
+				LuaError(message, null, level);
+			} // func LuaError
+
+			/// <summary>Throw a user error.</summary>
+			/// <param name="message"></param>
 			/// <param name="arg1"></param>
 			[LuaMember("error")]
-			private static void LuaError(object message, object arg1)
+			private static void LuaError(object message, object arg1, object arg2)
 			{
 				var level = 1;
 
 				if (arg1 is int i && i > 1)  // validate stack trace level
 					level = i;
+				else if (arg2 is int i2 && i2 > 1)
+					level = i2;
 
 				if (message is Exception ex) // throw exception
 				{
@@ -1256,7 +1268,7 @@ namespace TecWare.DE.Server
 
 		/// <summary>Basic lua runtime methods.</summary>
 		[LuaMember("Basic")]
-		private LuaTable LuaRuntime => luaRuntime;
+		public LuaTable LuaRuntime { get => luaRuntime; set { } }
 
 		#endregion
 
