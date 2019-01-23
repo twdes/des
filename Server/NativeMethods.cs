@@ -151,7 +151,7 @@ namespace TecWare.DE.Server
 		public static extern bool CloseServiceHandle(IntPtr hSCObject);
 
 
-		[DllImport(csAdvApi32, CharSet = CharSet.Unicode)]
+		[DllImport(csAdvApi32, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool LogonUser(string lpszUsername, string lpszDomain, IntPtr lpszPassword, LOGON_TYPE dwLogonType, LOGON_PROVIDER dwLogonProvider, out IntPtr phToken);
 		[DllImport(csAdvApi32, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool CreateProcessAsUser(IntPtr hToken, string lpApplicationName, StringBuilder lpCommandLine, SECURITY_ATTRIBUTES lpProcessAttributes, SECURITY_ATTRIBUTES lpThreadAttributes, bool bInheritHandles, CREATE_PROCESS_FLAGS dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, STARTUPINFO lpStartupInfo, PROCESS_INFORMATION lpProcessInformation);
