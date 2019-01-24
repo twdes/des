@@ -402,22 +402,24 @@ namespace TecWare.DE.Server
 					hFile.Close();
 			}
 		} // proc CreateProcessPipe
-
+			   
 		public bool StartProcess()
 		{
+			var errorLogged = false;
 			try
 			{
 				if (IsProcessRunning)
 					StopProcess();
 
-				Log.LogMsg(LogMsgType.Information, "Start process...");
-
 				SafeFileHandle hInput = null;
 				SafeFileHandle hOutput = null;
 				SafeFileHandle hError = null;
 				var hEnvironment = default(GCHandle);
+				using (var msg = Log.GetScope(LogMsgType.Information, stopTime: true))
 				using (var startupInfo = new NativeMethods.STARTUPINFO())
 				{
+					msg.WriteLine("Start process...");
+
 					try
 					{
 						// Create command line
@@ -451,41 +453,55 @@ namespace TecWare.DE.Server
 						var password = ConfigNode.GetAttribute<SecureString>("password");
 						if (!String.IsNullOrEmpty(userName))
 						{
+							msg.WriteLine("Logon user...");
 							using (var pPassword = password.GetPasswordHandle())
 							{
-								if (!NativeMethods.LogonUser(userName, domain, pPassword.DangerousGetHandle(), Environment.UserInteractive ? NativeMethods.LOGON_TYPE.LOGON32_LOGON_INTERACTIVE : NativeMethods.LOGON_TYPE.LOGON32_LOGON_SERVICE, NativeMethods.LOGON_PROVIDER.LOGON32_PROVIDER_DEFAULT, out hUser))
+								if (!NativeMethods.LogonUser(userName, domain, pPassword.DangerousGetHandle(),
+									Environment.UserInteractive
+										? NativeMethods.LOGON_TYPE.LOGON32_LOGON_INTERACTIVE
+										: NativeMethods.LOGON_TYPE.LOGON32_LOGON_SERVICE,
+									NativeMethods.LOGON_PROVIDER.LOGON32_PROVIDER_DEFAULT, out hUser))
 									throw new Win32Exception();
 							}
 						}
 
 						// Create environment for the user
+						msg.WriteLine("Create environment...");
 						hEnvironment = GCHandle.Alloc(CreateEnvironment(hUser, userName, ConfigNode.GetAttribute<bool>("loadUserProfile")), GCHandleType.Pinned);
 
 						// Flags for the process
 						var flags = NativeMethods.CREATE_PROCESS_FLAGS.CREATE_NEW_PROCESS_GROUP | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_NO_WINDOW | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_UNICODE_ENVIRONMENT | NativeMethods.CREATE_PROCESS_FLAGS.CREATE_SUSPENDED;
 
 						// Create start parameter
+						msg.WriteLine("Create pipes...");
 						startupInfo.dwFlags = 0x00000100;
 						CreateProcessPipe(true, out hInput, out startupInfo.hStdInput);
 						CreateProcessPipe(false, out hOutput, out startupInfo.hStdOutput);
 						CreateProcessPipe(false, out hError, out startupInfo.hStdError);
+						
+						startupInfo.lpDesktop = "winsta0\\default";
 
 						var processinformation = new NativeMethods.PROCESS_INFORMATION();
 						try
 						{
 							if (hUser == IntPtr.Zero)
 							{
+								msg.WriteLine("Create process...");
 								if (!NativeMethods.CreateProcess(null, command, null, null, true, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
 									throw new Win32Exception();
 							}
 							else
 							{
+								msg.WriteLine("Create process as user...");
 								if (!NativeMethods.CreateProcessAsUser(hUser, null, command, null, null, true, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
 									throw new Win32Exception();
+								//if (!NativeMethods.CreateProcessWithTokenW(hUser, 2, null, command, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
+								//	throw new Win32Exception();
 							}
 
 							// Create the .net process-objekt
 							process = Process.GetProcessById(processinformation.dwProcessId);
+							msg.WriteLine("Process crreated (ProcessId: {0}; Session: {1})", process.Id, process.SessionId);
 
 							// Create pipes
 							var inputEncoding = Config.Attribute("inputEncoding") == null ? null : ConfigNode.GetAttribute<Encoding>("inputEncoding");
@@ -502,14 +518,17 @@ namespace TecWare.DE.Server
 							arErrorStream = procProcessLogLine.BeginInvoke(LogMsgType.Warning, errorStream, null, errorStream);
 
 							// Run application
+							msg.WriteLine("Resume process...");
 							NativeMethods.ResumeThread(processinformation.hThread);
 						}
 						finally
 						{
 							NativeMethods.CloseHandle(processinformation.hThread);
 						}
+
+						msg.WriteLine("Successful loaded.");
 					}
-					catch
+					catch (Exception e)
 					{
 						if (hUser != IntPtr.Zero)
 							NativeMethods.CloseHandle(hUser);
@@ -520,6 +539,8 @@ namespace TecWare.DE.Server
 						if (hError != null && !hError.IsInvalid)
 							hError.Close();
 
+						msg.WriteException(e);
+						errorLogged = true;
 						throw;
 					}
 					finally
@@ -536,7 +557,8 @@ namespace TecWare.DE.Server
 			}
 			catch (Exception e)
 			{
-				Log.LogMsg(LogMsgType.Error, e.GetMessageString());
+				if (!errorLogged)
+					Log.LogMsg(LogMsgType.Error, e.GetMessageString());
 				return false;
 			}
 		} // proc StartProcess
