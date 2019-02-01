@@ -479,7 +479,7 @@ namespace TecWare.DE.Server
 						CreateProcessPipe(false, out hOutput, out startupInfo.hStdOutput);
 						CreateProcessPipe(false, out hError, out startupInfo.hStdError);
 						
-						startupInfo.lpDesktop = "winsta0\\default";
+						startupInfo.lpDesktop = String.Empty;
 
 						var processinformation = new NativeMethods.PROCESS_INFORMATION();
 						try
@@ -492,10 +492,11 @@ namespace TecWare.DE.Server
 							}
 							else
 							{
+								// user32.dll failed to initialize under system context?
 								msg.WriteLine("Create process as user...");
 								if (!NativeMethods.CreateProcessAsUser(hUser, null, command, null, null, true, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
 									throw new Win32Exception();
-								//if (!NativeMethods.CreateProcessWithTokenW(hUser, 2, null, command, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
+								//if (!NativeMethods.CreateProcessWithTokenW(hUser, 1, null, command, flags, hEnvironment.AddrOfPinnedObject(), workingDirectory, startupInfo, processinformation))
 								//	throw new Win32Exception();
 							}
 

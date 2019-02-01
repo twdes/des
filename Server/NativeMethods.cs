@@ -137,7 +137,7 @@ namespace TecWare.DE.Server
 		[DllImport(csAdvApi32, EntryPoint = "OpenSCManagerW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)]
 		public static extern IntPtr OpenSCManager(string machineName, string databaseName, uint dwAccess);
 		[DllImport(csAdvApi32, CharSet = CharSet.Unicode, SetLastError = true)]
-		public static extern Boolean ChangeServiceConfig(IntPtr hService, int nServiceType, int nStartType, int nErrorControl, string lpBinaryPathName, string lpLoadOrderGroup, IntPtr lpdwTagId, [In] char[] lpDependencies, string lpServiceStartName, string lpPassword, string lpDisplayName);
+		public static extern bool ChangeServiceConfig(IntPtr hService, int nServiceType, int nStartType, int nErrorControl, string lpBinaryPathName, string lpLoadOrderGroup, IntPtr lpdwTagId, [In] char[] lpDependencies, string lpServiceStartName, string lpPassword, string lpDisplayName);
 		[DllImport(csAdvApi32, SetLastError = true, CharSet = CharSet.Auto)]
 		[return: MarshalAs(UnmanagedType.Bool)]
 		public static extern bool ChangeServiceConfig2(IntPtr hService, int dwInfoLevel, ref SERVICE_DESCRIPTION lpInfo);
@@ -155,7 +155,9 @@ namespace TecWare.DE.Server
 		public static extern bool LogonUser(string lpszUsername, string lpszDomain, IntPtr lpszPassword, LOGON_TYPE dwLogonType, LOGON_PROVIDER dwLogonProvider, out IntPtr phToken);
 		[DllImport(csAdvApi32, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool CreateProcessAsUser(IntPtr hToken, string lpApplicationName, StringBuilder lpCommandLine, SECURITY_ATTRIBUTES lpProcessAttributes, SECURITY_ATTRIBUTES lpThreadAttributes, bool bInheritHandles, CREATE_PROCESS_FLAGS dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, STARTUPINFO lpStartupInfo, PROCESS_INFORMATION lpProcessInformation);
-		
+		[DllImport(csAdvApi32, SetLastError = true, CharSet = CharSet.Unicode)]
+		public static extern bool CreateProcessWithTokenW(IntPtr hToken, uint dwLogonFlags, string lpApplicationName, StringBuilder lpCommandLine, CREATE_PROCESS_FLAGS dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, STARTUPINFO lpStartupInfo, PROCESS_INFORMATION lpProcessInformation);
+
 		[DllImport(csKernel32, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern bool CreateProcess(string lpApplicationName, StringBuilder lpCommandLine, SECURITY_ATTRIBUTES lpProcessAttributes, SECURITY_ATTRIBUTES lpThreadAttributes, bool bInheritHandles, CREATE_PROCESS_FLAGS dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, STARTUPINFO lpStartupInfo, PROCESS_INFORMATION lpProcessInformation);
 		[DllImport(csKernel32)]
@@ -188,6 +190,5 @@ namespace TecWare.DE.Server
 		public static unsafe extern bool CreateEnvironmentBlock(out char* lpEnvironment, IntPtr hToken, bool lInherit);
 		[DllImport(csUserEnv, SetLastError = true, CharSet = CharSet.Auto)]
 		public static unsafe extern bool DestroyEnvironmentBlock(char* lpEnvironment);
-
 	} // class NativeMethods
 }

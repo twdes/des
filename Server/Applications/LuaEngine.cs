@@ -785,15 +785,17 @@ namespace TecWare.DE.Server
 
 			#region -- CreateException, CreateMember ----------------------------------
 
-			private string RemoveInvalidXmlChars(string value)
+			private static string RemoveInvalidXmlChars(string value)
 			{
 				var sb = new StringBuilder(value.Length);
 
-				for(var i=0;i<value.Length;i++)
+				for (var i = 0; i < value.Length; i++)
 				{
 					var c = value[i];
 					if (XmlConvert.IsXmlChar(c))
 						sb.Append(c);
+					else
+						sb.Append(' ');
 				}
 
 				return sb.ToString();
@@ -938,7 +940,7 @@ namespace TecWare.DE.Server
 					{
 						var v = r[i];
 						if (v != null)
-							xRow.Add(new XElement(columnNames[i], v.ChangeType<string>()));
+							xRow.Add(new XElement(columnNames[i], RemoveInvalidXmlChars(v.ChangeType<string>())));
 					}
 
 					rowCount++;
@@ -1051,7 +1053,7 @@ namespace TecWare.DE.Server
 				}
 				catch (Exception e)
 				{
-					var x = CreateException(new XElement(xAnswer.Name), e);
+					var x = CreateException(new XElement("exception"), e);
 					UpdateAnswerToken(xMessage, x);
 					buf = Encoding.UTF8.GetBytes(x.ToString(SaveOptions.None));
 				}
