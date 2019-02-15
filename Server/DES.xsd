@@ -331,14 +331,14 @@
 							<xs:complexType>
 								<xs:complexContent>
 									<xs:extension base="UserType">
-										<xs:attribute name="password" type="xs:string" use="optional">
+										<xs:attribute name="password" type="PasswordType" use="optional">
 											<xs:annotation>
 												<xs:documentation>Passwort des Nutzers.</xs:documentation>
 											</xs:annotation>
 										</xs:attribute>
 										<xs:attribute name="passwordHash" type="xs:string" use="optional">
 											<xs:annotation>
-												<xs:documentation>Passwort des Nutzers.</xs:documentation>
+												<xs:documentation>Passwort-Hash des Nutzers.</xs:documentation>
 											</xs:annotation>
 										</xs:attribute>
 									</xs:extension>

@@ -17,10 +17,9 @@ namespace TecWare.DE.Server
 
 		public object GetService(Type serviceType)
 		{
-			object v;
 			if (serviceType.IsAssignableFrom(GetType()))
 				return this;
-			else if (services.TryGetValue(serviceType, out v))
+			else if (services.TryGetValue(serviceType, out var v))
 				return v;
 			else
 				return null;

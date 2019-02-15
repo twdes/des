@@ -249,7 +249,7 @@ namespace TecWare.DE.Stuff
 			var testPasswordBytes = Encoding.Unicode.GetBytes(testPassword);
 
 			// create the SHA256 hash (Password + Salt)
-			var sha = SHA512Managed.Create();
+			var sha = SHA512.Create();
 			sha.TransformBlock(testPasswordBytes, 0, testPasswordBytes.Length, testPasswordBytes, 0);
 			sha.TransformFinalBlock(passwordHash, 2, 4);
 

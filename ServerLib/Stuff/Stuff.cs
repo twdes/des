@@ -269,6 +269,68 @@ namespace TecWare.DE.Stuff
 				return new SecureString(c + offset, length);
 		} // func CereateSecureString
 
+		/// <summary></summary>
+		/// <param name="secureString"></param>
+		/// <param name="other"></param>
+		/// <returns></returns>
+		public static unsafe bool Compare(this SecureString secureString, string other)
+		{
+			// simple tests
+			if (secureString == null && other == null)
+				return true;
+			else if (secureString == null)
+				return false;
+			else if (other == null)
+				return false;
+			else  if (secureString.Length != other.Length)
+				return false;
+
+			using (var p1 = secureString.GetPasswordHandle(true))
+			{
+				var c1 = (char*)p1.DangerousGetHandle();
+				for (var i = 0; i < other.Length; i++)
+				{
+					if (*c1 != other[i])
+						return false;
+					c1++;
+				}
+			}
+
+			return true;
+		} // func Compare
+
+		/// <summary></summary>
+		/// <param name="secureString"></param>
+		/// <param name="other"></param>
+		/// <returns></returns>
+		public static unsafe bool Compare(this SecureString secureString, SecureString other)
+		{
+			if (secureString == null && other == null)
+				return true;
+			else if (secureString == null)
+				return false;
+			else if (other == null)
+				return false;
+			else if (secureString.Length != other.Length)
+				return false;
+
+			using (var p1 = secureString.GetPasswordHandle(true))
+			using (var p2 = other.GetPasswordHandle(true))
+			{
+				var c1 = (char*)p1.DangerousGetHandle();
+				var c2 = (char*)p2.DangerousGetHandle();
+				var l = secureString.Length;
+				for (var i = 0; i < l; i++)
+				{
+					if (*c1 != *c2)
+						return false;
+					c1++;
+				}
+			}
+
+			return true;
+		} // func Compare
+
 		/// <summary>Extract password a string.</summary>
 		/// <param name="ss"></param>
 		/// <returns></returns>

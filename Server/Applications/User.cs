@@ -15,6 +15,7 @@
 #endregion
 using System;
 using System.Net;
+using System.Security;
 using System.Security.Principal;
 using System.Threading.Tasks;
 using TecWare.DE.Stuff;
@@ -184,9 +185,9 @@ namespace TecWare.DE.Server.Applications
 
 		private bool TestPassword(string testPassword)
 		{
-			var password = Config.GetAttribute("password", null);
+			var password = ConfigNode.GetAttribute<SecureString>("password");
 			if (password != null)
-				return password == testPassword;
+				return password.Compare(testPassword);
 			else
 			{
 				try
