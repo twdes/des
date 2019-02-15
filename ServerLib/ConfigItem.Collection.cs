@@ -760,17 +760,18 @@ namespace TecWare.DE.Server
 	[AttributeUsage(AttributeTargets.Property | AttributeTargets.Class | AttributeTargets.Interface)]
 	public class DEListTypePropertyAttribute : Attribute
 	{
-		private readonly string name;
-
 		/// <summary></summary>
 		/// <param name="name"></param>
 		public DEListTypePropertyAttribute(string name)
 		{
-			this.name = name;
+			if (String.IsNullOrWhiteSpace(name))
+				throw new ArgumentNullException(nameof(name));
+
+			Name = name.Trim();
 		} // ctor
 
 		/// <summary>Name of the property.</summary>
-		public string Name => name;
+		public string Name { get; }
 	} // class DEListTypePropertyAttribute
 
 	#endregion
@@ -784,7 +785,10 @@ namespace TecWare.DE.Server
 		/// <param name="actionId"></param>
 		public DEConfigItemPublicAction(string actionId)
 		{
-			this.ActionId = actionId;
+			if (String.IsNullOrWhiteSpace(actionId))
+				throw new ArgumentNullException(nameof(actionId));
+
+			ActionId = actionId;
 		} // ctor
 
 		/// <summary>Id of the action.</summary>
@@ -859,10 +863,13 @@ namespace TecWare.DE.Server
 				publishedItems[id] = item;
 		} // proc PublishItem
 
+		/// <summary></summary>
+		/// <param name="action"></param>
+		/// <param name="t"></param>
 		[LuaMember("PublishAction")]
-		private void LuaPublishAction(string sAction, LuaTable t)
+		public void LuaPublishAction(string action, LuaTable t)
 		{
-			var configAction = new DEConfigItemPublicAction(sAction);
+			var configAction = new DEConfigItemPublicAction(action);
 			if (t != null)
 				t.SetObjectMember(configAction);
 
@@ -998,7 +1005,7 @@ namespace TecWare.DE.Server
 						var cur = new KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>(attr, pi);
 						if (attr.Name == ".")
 							properties.Add(cur);
-						else if (attr.Name == "@")
+						else if (attr.Name[0] == '@')
 						{
 							properties.Insert(attributeBorder++, cur);
 							elementBorder++;

@@ -727,7 +727,7 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- DEServerBaseLog ----------------------------------------------------------
+	#region -- DEServerBaseLog --------------------------------------------------------
 
 	/// <summary>Ermöglicht den Zugriff auf die Basis-Logdatei</summary>
 	public class DEServerBaseLog { }
