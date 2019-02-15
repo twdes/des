@@ -5,7 +5,7 @@ VisualStudioVersion = 15.0.27004.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Extern", "Extern", "{19C46279-A2EA-4356-A0C7-4D172B97FD2E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerLib", "ServerLib\ServerLib.csproj", "{6A13EE24-AE1A-4242-8F61-0E32F1E9E37D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ServerLib", "ServerLib\ServerLib.csproj", "{6A13EE24-AE1A-4242-8F61-0E32F1E9E37D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "Server\Server.csproj", "{4D97B8D8-3ED2-404C-8BE4-417B5BB588D2}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -16,9 +16,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Server", "Server\Server.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerTests", "ServerTests\ServerTests.csproj", "{B1B84A00-DDC4-485A-A799-9FEC23BE43B9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEModette", "Extern\odette\DEModette\DEModette.csproj", "{72EED527-236E-4124-B360-54B25F0F9105}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DEModette", "Extern\odette\DEModette\DEModette.csproj", "{72EED527-236E-4124-B360-54B25F0F9105}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEMpowershell", "Extern\powershell\DEMpowershell\DEMpowershell.csproj", "{0496732B-0812-4E06-B7FE-212F2761EBAF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DEMpowershell", "Extern\powershell\DEMpowershell\DEMpowershell.csproj", "{0496732B-0812-4E06-B7FE-212F2761EBAF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleDbg", "SimpleDbg\SimpleDbg.csproj", "{95374A74-71DE-43B1-A3B6-F5DEC5887815}"
 EndProject
@@ -27,6 +27,13 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{F472E4CF-2A58-4014-AD99-9E5EE1836B52}"
 	ProjectSection(SolutionItems) = preProject
 		Common\AssemblyInfoServer.template.cs = Common\AssemblyInfoServer.template.cs
+		ReadMe.md = ReadMe.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{075816AA-6B91-4BA9-AD94-08C7644E0E70}"
+	ProjectSection(SolutionItems) = preProject
+		docs\SecurityTokens.de.md = docs\SecurityTokens.de.md
+		docs\Users.de.md = docs\Users.de.md
 	EndProjectSection
 EndProject
 Global
@@ -71,6 +78,7 @@ Global
 		{72EED527-236E-4124-B360-54B25F0F9105} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 		{0496732B-0812-4E06-B7FE-212F2761EBAF} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 		{90AF6FC3-6FB1-4482-81A4-2C54FD2F83A2} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
+		{075816AA-6B91-4BA9-AD94-08C7644E0E70} = {F472E4CF-2A58-4014-AD99-9E5EE1836B52}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EC1BED07-4FD3-47AF-8C62-1B75DCE120AC}
