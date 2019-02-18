@@ -51,6 +51,21 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- enum InteractiveCommandConnection --------------------------------------
+
+	[Flags]
+	public enum InteractiveCommandConnection
+	{
+		/// <summary>No service needed.</summary>
+		None = 0,
+		/// <summary>Http connection needed.</summary>
+		Http = 1,
+		/// <summary>Debug connection needed.</summary>
+		Debug = 2
+	} // enum InteractiveCommandConnection
+
+	#endregion
+
 	#region -- class InteractiveCommandAttribute --------------------------------------
 
 	/// <summary>Interactive command attribute</summary>
@@ -63,6 +78,7 @@ namespace TecWare.DE.Server
 		} // ctor
 
 		public string Name { get; }
+		public InteractiveCommandConnection ConnectionRequest { get; set; } = InteractiveCommandConnection.None;
 		public string Short { get; set; }
 		public string HelpText { get; set; }
 	} // class InteractiveCommandAttribute
@@ -567,6 +583,12 @@ namespace TecWare.DE.Server
 			var ti = typeof(Program).GetTypeInfo();
 			var assembly = typeof(Program).Assembly;
 
+			var conFlags = InteractiveCommandConnection.None;
+			if (TryGetHttp(out var http))
+				conFlags |= InteractiveCommandConnection.Http;
+			if (TryGetDebug(out var debug))
+				conFlags |= InteractiveCommandConnection.Debug;
+
 			app.WriteLine($"Data Exchange Debugger {assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion}");
 			app.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
 			app.WriteLine();
@@ -580,7 +602,7 @@ namespace TecWare.DE.Server
 			foreach (var cur in
 				from c in ti.GetRuntimeMethods()
 				let attr = c.GetCustomAttribute<InteractiveCommandAttribute>()
-				where c.IsStatic && attr != null
+				where c.IsStatic && attr != null && (attr.ConnectionRequest == InteractiveCommandConnection.None || (attr.ConnectionRequest & conFlags) != 0)
 				orderby attr.Name
 				select new Tuple<MethodInfo, InteractiveCommandAttribute>(c, attr))
 			{
@@ -697,7 +719,7 @@ namespace TecWare.DE.Server
 			}
 		} // func GetFormattedList
 
-		[InteractiveCommand("list", HelpText = "Lists the current nodes.")]
+		[InteractiveCommand("list", HelpText = "Lists the current nodes.", ConnectionRequest = InteractiveCommandConnection.Http)]
 		private static async Task SendListAsync(
 			[Description("true to get all sub nodes of the current node.")]
 			bool recursive = false
@@ -764,7 +786,7 @@ namespace TecWare.DE.Server
 			}
 		} // func SendListAsync
 
-		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.")]
+		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.", ConnectionRequest = InteractiveCommandConnection.Http | InteractiveCommandConnection.Debug)]
 		private static async Task UseNodeAsync(
 			[Description("absolute or relative path, if this parameter is empty. The current path is returned.")]
 			string node = null
@@ -1132,7 +1154,7 @@ namespace TecWare.DE.Server
 
 		#region -- SendRecompile ------------------------------------------------------
 
-		[InteractiveCommand("recompile", HelpText = "Force a recompile and rerun of all script files (if the are outdated).")]
+		[InteractiveCommand("recompile", HelpText = "Force a recompile and rerun of all script files (if the are outdated).", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static async Task SendRecompileAsync()
 		{
 			var r = await GetDebug().RecompileAsync();
@@ -1177,7 +1199,7 @@ namespace TecWare.DE.Server
 
 		#region -- SendRunScript ------------------------------------------------------
 
-		[InteractiveCommand("run", HelpText = "Executes a test script and stores the result.")]
+		[InteractiveCommand("run", HelpText = "Executes a test script and stores the result.", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static async Task SendRunScript(
 			[Description("optional filter expression to select one or more scripts")]
 			string scriptFilter = null,
@@ -1258,7 +1280,7 @@ namespace TecWare.DE.Server
 		private static void NoResult()
 			=> app.WriteLine(new ConsoleColor[] { ConsoleColor.DarkGray }, new string[] { "==> no result" });
 
-		[InteractiveCommand("scripts", HelpText = "Show the prev. executed test results.")]
+		[InteractiveCommand("scripts", HelpText = "Show the prev. executed test results.", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static void ViewScriptResult(
 			[Description("filter expression to select one or more scripts")]
 			string filter = null
@@ -1355,7 +1377,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc ViewScriptResult
 
-		[InteractiveCommand("tests", HelpText = "Show the prev. executed test results.")]
+		[InteractiveCommand("tests", HelpText = "Show the prev. executed test results.", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static void ViewTestResult(
 			[Description("optional filter expression to select one or more scripts")]
 			string scriptFilter = null,
@@ -1435,7 +1457,7 @@ namespace TecWare.DE.Server
 
 		#region -- SendVariables ------------------------------------------------------
 
-		[InteractiveCommand("members", Short = "m", HelpText = "Lists the current available global variables.")]
+		[InteractiveCommand("members", Short = "m", HelpText = "Lists the current available global variables.", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static async Task VariablesAsync()
 		{
 			WriteReturn(String.Empty, await GetDebug().MembersAsync(String.Empty));
@@ -1445,7 +1467,7 @@ namespace TecWare.DE.Server
 
 		#region -- BeginScope, CommitScope, RollbackScope -----------------------------
 
-		[InteractiveCommand("begin", HelpText = "Starts a new transaction scope.")]
+		[InteractiveCommand("begin", HelpText = "Starts a new transaction scope.", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static async Task BeginScopeAsync()
 		{
 			var userName = await GetDebug().BeginScopeAsync();
@@ -1464,7 +1486,7 @@ namespace TecWare.DE.Server
 			);
 		} // proc BeginScopeAsync
 
-		[InteractiveCommand("commit", HelpText = "Commits the current scope and creates a new one.")]
+		[InteractiveCommand("commit", HelpText = "Commits the current scope and creates a new one.", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static async Task CommitScopeAsync()
 		{
 			var userName = await GetDebug().CommitScopeAsync();
@@ -1483,7 +1505,7 @@ namespace TecWare.DE.Server
 			);
 		} // proc CommitScopeAsync
 
-		[InteractiveCommand("rollback", HelpText = "Rollbacks the current scope and creates a new one.")]
+		[InteractiveCommand("rollback", HelpText = "Rollbacks the current scope and creates a new one.", ConnectionRequest = InteractiveCommandConnection.Debug)]
 		private static async Task RollbackScopeAsync()
 		{
 			var userName = await GetDebug().RollbackScopeAsync();
@@ -1548,7 +1570,7 @@ namespace TecWare.DE.Server
 
 		#region -- Server Info --------------------------------------------------------
 
-		[InteractiveCommand("serverinfo", HelpText = "Reads information about the connected server.")]
+		[InteractiveCommand("serverinfo", HelpText = "Reads information about the connected server.", ConnectionRequest = InteractiveCommandConnection.Http)]
 		private static async Task ServerInfoAsync()
 		{
 			var xInfo = await GetHttp().GetXmlAsync(HttpStuff.MakeRelativeUri(
@@ -1619,7 +1641,7 @@ namespace TecWare.DE.Server
 
 		#region -- ListGet ------------------------------------------------------------
 
-		[InteractiveCommand("listget", HelpText = "Get a server list.")]
+		[InteractiveCommand("listget", HelpText = "Get a server list.", ConnectionRequest = InteractiveCommandConnection.Http)]
 		private static async Task ListGetAsync(string list = null)
 		{
 			if (String.IsNullOrEmpty(list))
@@ -1697,9 +1719,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- GetList ------------------------------------------------------------
+		#region -- Action -------------------------------------------------------------
 
-		[InteractiveCommand("action", HelpText = "Invoke a server action.")]
+		[InteractiveCommand("action", HelpText = "Invoke a server action.", ConnectionRequest = InteractiveCommandConnection.Http)]
 		private static async Task ActionAsync(string action = null)
 		{
 			if (String.IsNullOrEmpty(action))
