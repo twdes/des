@@ -1560,10 +1560,25 @@ namespace TecWare.DE.Server
 
 			app.Write(versionColors, new string[] { "Data Exchange Server ", xInfo.GetAttribute("version", "0.0.0.0") });
 			var xDebugAttr = xInfo.Attribute("debug");
-			if (xDebugAttr == null)
+			if (xDebugAttr == null || String.IsNullOrEmpty(xDebugAttr.Value))
 				app.WriteLine();
 			else
-				app.WriteLine(String.Compare(xDebugAttr.Value, Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0 ? " (Debugging)" : " (No Debugging)");
+			{
+				switch (Char.ToUpper(xDebugAttr.Value[0]))
+				{
+					case 'T':
+					case 'R':
+						app.WriteLine(" (Debugging-Remote)");
+						break;
+					case 'L':
+						app.WriteLine(" (Debugging-Local)");
+						break;
+					default:
+						app.WriteLine(" (No Debugging)");
+						break;
+				}
+			}
+			app.WriteLine(String.Compare(xDebugAttr.Value, Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0 ? " (Debugging)" : " (No Debugging)");
 			app.WriteLine(ConsoleColor.DarkGray, xInfo.GetAttribute("copyright", "@copyright missing"));
 			app.WriteLine();
 
