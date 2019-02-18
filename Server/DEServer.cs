@@ -1243,9 +1243,9 @@ namespace TecWare.DE.Server
 
 		#region -- class DELuaIO ------------------------------------------------------
 
-		/// <summary></summary>
+		/// <summary>IO package for lua. It gives access to the static methods from <see cref="DEFile"/>.</summary>
 		/// <remarks>Does not support the file handles, because of the async.</remarks>
-		private sealed class DELuaIO : LuaTable
+		public sealed class DELuaIO : LuaTable
 		{
 			private static LuaResult SafeIO(Func<LuaResult> action)
 			{
@@ -1259,6 +1259,23 @@ namespace TecWare.DE.Server
 				}
 			} // func SafeIO
 
+			/// <summary>Open a lua file handle for a file. The file will be added to the current scope. Files they 
+			/// are open for write, the changes to the file will be added to the transaction.</summary>
+			/// <param name="filename">Name of the file to open or create.</param>
+			/// <param name="mode">Mode to open.
+			/// `r`
+			/// :  Open the file for read access.
+			/// `w`
+			/// :  Open the file for write access.
+			/// `b`
+			/// :  Use binary access to the file.
+			/// `t`
+			/// :  Enforce the transaction.
+			/// `m`
+			/// :  Transaktion log is only written in memory.
+			/// </param>
+			/// <param name="encoding">Char encoding for the text access.</param>
+			/// <returns><see cref="LuaFile"/>-Handle.</returns>
 			[LuaMember("open")]
 			public LuaResult Open(string filename, string mode = "r", Encoding encoding = null)
 			{
@@ -1267,12 +1284,7 @@ namespace TecWare.DE.Server
 					var forWrite = mode.IndexOfAny(new char[] { '+', 'w' }) > 0;
 					var forTrans = mode.IndexOf('t') >= 0;
 					if (forTrans && forWrite)
-					{
-						var inMemory = mode.IndexOf('m') >= 0;
-						return inMemory
-							? new LuaResult(DEFile.OpenInMemoryAsync(filename, encoding).AwaitTask())
-							: new LuaResult(DEFile.OpenCopyAsync(filename, encoding).AwaitTask());
-					}
+						return new LuaResult(OpenRaw(filename, mode.IndexOf('m') >= 0));
 					else // only read, no transaction
 					{
 						var file = LuaFileStream.OpenFile(filename, mode, encoding ?? Encoding.UTF8);
@@ -1285,53 +1297,123 @@ namespace TecWare.DE.Server
 					return new LuaResult(null, e.Message);
 				}
 			} // func Open
-			
+
+			/// <summary>Open a stream to an file and actived write transactions.</summary>
+			/// <param name="filename">Name of the file.</param>
+			/// <param name="inMemory">Transaktion log is only written in memory.</param>
+			/// <returns>A <see cref="Stream"/> that supports transactions.</returns>
+			[LuaMember("openraw")]
+			public Stream OpenRaw(string filename, bool inMemory)
+			{
+				var stream = inMemory
+					? DEFile.OpenInMemoryAsync(filename).AwaitTask()
+					: DEFile.OpenCopyAsync(filename).AwaitTask();
+
+				DEScope.GetScopeService<IDECommonScope>(true).RegisterDispose(stream);
+
+				return stream;
+			} // func OpenRaw
+
 			/// <summary>Create a new tmp file.</summary>
-			/// <returns></returns>
+			/// <param name="encoding">Char encoding for the text access.</param>
+			/// <returns><see cref="LuaFile"/>-Handle.</returns>
 			[LuaMember("tmpfilenew")]
 			public LuaFile OpenTemp(Encoding encoding)
 				=> LuaTempFile.Create(Path.GetTempFileName(), encoding ?? Encoding.UTF8);
 
+			/// <summary>Delete a file within a transaction.</summary>
+			/// <param name="fileName"></param>
+			/// <param name="throwException"></param>
+			/// <returns></returns>
 			[LuaMember("delete")]
-			public static LuaResult DeleteFile(string sourceFileName, bool throwException = true)
+			public static LuaResult DeleteFile(string fileName, bool throwException = true)
 			{
 				if (throwException)
 				{
-					DEFile.DeleteAsync(sourceFileName).AwaitTask();
+					DEFile.DeleteAsync(fileName).AwaitTask();
 					return new LuaResult(true);
 				}
 				else
-					return SafeIO(() => DeleteFile(sourceFileName, true));
+					return SafeIO(() => DeleteFile(fileName, true));
 			} // func DeleteFile
 
+			private static DEFileTargetExists GetTargetExists(object targetExists, bool throwException)
+			{
+				switch (targetExists)
+				{
+					case null:
+						return throwException ? DEFileTargetExists.Error : DEFileTargetExists.Ignore;
+					case bool k:
+						return k ? DEFileTargetExists.KeepTarget : DEFileTargetExists.Error;
+					case DEFileTargetExists r:
+						return r;
+					case int i:
+						return (DEFileTargetExists)i;
+					case string s:
+						if (s.Length > 0)
+						{
+							switch (Char.ToLower(s[0]))
+							{
+								case 'e':
+									return DEFileTargetExists.Error;
+								case 'i':
+									return DEFileTargetExists.Ignore;
+								case 'k':
+									return DEFileTargetExists.KeepTarget;
+								case 'a':
+									return DEFileTargetExists.OverwriteAlways;
+								case 'n':
+									return DEFileTargetExists.OverwriteNewer;
+							}
+						}
+						goto default;
+					default:
+						if (throwException)
+							throw new ArgumentOutOfRangeException(nameof(targetExists), targetExists, "Could not interpret argument.");
+						return DEFileTargetExists.Ignore;
+				}
+			} // func GetTargetExists
+
+			/// <summary>Copy a file within a transaction.</summary>
+			/// <param name="sourceFileName"></param>
+			/// <param name="destinationName"></param>
+			/// <param name="throwException"></param>
+			/// <param name="targetExists"></param>
+			/// <returns></returns>
 			[LuaMember("copy")]
-			public static LuaResult CopyFile(string sourceFileName, string destinationName, bool throwException, bool allowRenameDestination)
+			public static LuaResult CopyFile(string sourceFileName, string destinationName, bool throwException, object targetExists)
 			{
 				if (throwException)
 				{
 					var fi = DEFile.CopyAsync(sourceFileName, destinationName,
-						allowRenameDestination ? DEFileTargetExists.KeepTarget : DEFileTargetExists.Error,
+						GetTargetExists(targetExists, throwException),
 						null
 					).AwaitTask();
 					return new LuaResult(true, fi);
 				}
 				else
-					return SafeIO(() => CopyFile(sourceFileName, destinationName, true, allowRenameDestination));
+					return SafeIO(() => CopyFile(sourceFileName, destinationName, true, targetExists));
 			} // func CopyFile
 
+			/// <summary>Move a file within a transaction.</summary>
+			/// <param name="sourceFileName"></param>
+			/// <param name="destinationName"></param>
+			/// <param name="throwException"></param>
+			/// <param name="targetExists"></param>
+			/// <returns></returns>
 			[LuaMember("move")]
-			public static LuaResult MoveFile(string sourceFileName, string destinationName, bool throwException, bool allowRenameDestination)
+			public static LuaResult MoveFile(string sourceFileName, string destinationName, bool throwException, object targetExists)
 			{
 				if (throwException)
 				{
 					var fi = DEFile.MoveAsync(sourceFileName, destinationName,
-						allowRenameDestination ? DEFileTargetExists.KeepTarget : (throwException ? DEFileTargetExists.Error : DEFileTargetExists.Ignore),
+						GetTargetExists(targetExists, throwException),
 						null
 					).AwaitTask();
 					return new LuaResult(true, fi);
 				}
 				else
-					return SafeIO(() => MoveFile(sourceFileName, destinationName, true, allowRenameDestination));
+					return SafeIO(() => MoveFile(sourceFileName, destinationName, true, targetExists));
 			} // func MoveFile
 		} // func DELuaIO
 

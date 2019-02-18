@@ -32,6 +32,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{F472E4
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{075816AA-6B91-4BA9-AD94-08C7644E0E70}"
 	ProjectSection(SolutionItems) = preProject
+		docs\Env.IO.de.md = docs\Env.IO.de.md
 		docs\SecurityTokens.de.md = docs\SecurityTokens.de.md
 		docs\Users.de.md = docs\Users.de.md
 	EndProjectSection

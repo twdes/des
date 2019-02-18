@@ -664,7 +664,25 @@ namespace TecWare.DE.Server
 		public void RegisterDispose(IDisposable obj)
 		{
 			lock (autoDispose)
+			{
 				autoDispose.Add(obj);
+
+				switch(obj)
+				{
+					case IDETransaction trans:
+						RegisterCommitAction(new Action(trans.Commit));
+						RegisterRollbackAction(new Action(trans.Rollback));
+						break;
+					case IDETransactionAsync transAsync:
+						RegisterCommitAction(new Func<Task>(transAsync.CommitAsync));
+						RegisterRollbackAction(new Func<Task>(transAsync.RollbackAsync));
+						break;
+					case IDbTransaction transDb:
+						RegisterCommitAction(new Action(transDb.Commit));
+						RegisterRollbackAction(new Action(transDb.Rollback));
+						break;
+				}
+			}
 		} // proc RegisterDispose
 
 		/// <summary></summary>

@@ -14,10 +14,9 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading.Tasks;
-using Neo.IronLua;
 
 namespace TecWare.DE.Server.IO
 {
@@ -397,42 +396,428 @@ namespace TecWare.DE.Server.IO
 
 		#region -- OpenAsync ----------------------------------------------------------
 
-		#region -- class LuaMemoryTransaction -----------------------------------------
+		#region -- class TransactionStream --------------------------------------------
 
-		private sealed class LuaMemoryTransaction : LuaFile
+		private abstract class TransactionStream : Stream, IDETransactionAsync
 		{
-			public LuaMemoryTransaction(TextReader tr, TextWriter tw) 
-				: base(tr, tw)
+			#region -- struct BlockInfo -----------------------------------------------
+
+			private struct BlockInfo
+			{
+				public int Index;
+				public int Ofs;
+				public int Len;
+			} // struct BlockInfo
+
+			#endregion
+
+			protected const int blockBits = 16;
+			protected const int blockSize = 1 << blockBits; // 64k
+			protected const int blockMask = blockSize - 1;
+
+			private readonly Stream stream;
+			private long position = 0;
+			private long length = 0;
+
+			private bool? commited = null;
+
+			#region -- Ctor/Dtor ------------------------------------------------------
+
+			public TransactionStream(Stream stream)
+			{
+				this.stream = stream ?? throw new ArgumentNullException(nameof(stream));
+				position = stream.Position;
+				length = stream.Length;
+
+				if (!stream.CanSeek
+					|| !stream.CanRead
+					|| !stream.CanWrite)
+					throw new ArgumentException("Stream must be seek-, read- and writable.", nameof(stream));
+			} // ctor
+
+			protected override void Dispose(bool disposing)
+			{
+				if (!commited.HasValue)
+					RollbackAsync().AwaitTask();
+			} // proc Dispose
+
+			public async Task CommitAsync()
+			{
+				if (commited.HasValue)
+					throw new InvalidOperationException();
+
+				await CommitCoreAsync(stream);
+				stream.Dispose();
+
+				commited = true;
+			} // func CommitAsync
+
+			public void Commit()
+				=> CommitAsync().AwaitTask();
+
+			public void Rollback()
+				=> CommitAsync().AwaitTask();
+
+			protected virtual async Task CommitCoreAsync(Stream stream)
+			{
+				var setOffset = true;
+				var blockIndex = 0;
+				var pos = 0L;
+				while (pos < Length)
+				{
+					var buf = ReadBlock(blockIndex);
+					if (buf == null)
+						setOffset = true;
+					else
+					{
+						if (setOffset)
+						{
+							stream.Seek(pos, SeekOrigin.Begin);
+							setOffset = false;
+						}
+
+						var r = Length - pos;
+						await stream.WriteAsync(buf, 0, blockSize < r ? blockSize : unchecked((int)r));
+					}
+
+					pos += blockSize;
+					blockIndex++;
+				}
+			} // func CommitCoreAsync
+
+			public async Task RollbackAsync()
+			{
+				if (commited.HasValue)
+					throw new InvalidOperationException();
+
+				await RollbackCoreAsync();
+				stream.Dispose();
+				commited = false;
+			} // proc Rollback
+
+			protected virtual Task RollbackCoreAsync()
+				=> Task.CompletedTask;
+
+			#endregion
+
+			protected abstract byte[] ReadBlock(int index);
+
+			protected abstract void WriteBlock(int index, byte[] block);
+
+			public sealed override void Flush() { }
+
+			private IEnumerable<BlockInfo> GetBlockOffset(long position, int offset, int count)
+			{
+				// first block
+				var blockIndex = (int)(position >> blockBits);
+				var blockOfs = (int)(position & blockMask);
+				var blockLen = blockSize - blockOfs;
+				yield return new BlockInfo() { Index = blockIndex, Ofs = blockOfs, Len = blockLen };
+
+				count -= blockLen;
+				blockIndex++;
+
+				// next blocks
+				while (count > 0)
+				{
+					blockLen = Math.Min(blockSize, count);
+					yield return new BlockInfo() { Index = blockIndex, Ofs = 0, Len = blockLen };
+
+					count -= blockLen;
+					blockIndex++;
+				}
+			} // func GetBlockOffset
+
+			public sealed override int Read(byte[] buffer, int offset, int count)
+			{
+				var readed = 0;
+
+				foreach (var b in GetBlockOffset(position, offset, count))
+				{
+					var block = ReadBlock(b.Index);
+					if (block != null)
+						Array.Copy(block, b.Ofs, buffer, offset, b.Len);
+					else
+					{
+						stream.Position = position;
+						stream.Read(buffer, b.Ofs, b.Len);
+					}
+
+					offset += b.Len;
+					readed += b.Len;
+					position += b.Len;
+				}
+
+				return readed;
+			} // func Read
+
+			public sealed override void Write(byte[] buffer, int offset, int count)
+			{
+				foreach (var b in GetBlockOffset(position, offset, count))
+				{
+					var block = ReadBlock(b.Index);
+
+					if (block == null)
+					{
+						block = new byte[blockSize];
+						// read current content
+						if (position < stream.Length)
+						{
+							stream.Position = position;
+							stream.Read(block, b.Ofs, b.Len);
+						}
+					}
+
+					// copy content
+					Array.Copy(buffer, offset, block, b.Ofs, b.Len);
+					// write block change
+					WriteBlock(b.Index, block);
+
+					offset += b.Len;
+					position += b.Len;
+					if (position > length)
+						length = position;
+				}
+			} // proc Write
+
+			public sealed override long Seek(long offset, SeekOrigin origin)
+			{
+				long GetNewPosition()
+				{
+					switch (origin)
+					{
+						case SeekOrigin.Begin:
+							return offset;
+						case SeekOrigin.Current:
+							return position + offset;
+						case SeekOrigin.End:
+							return Length - offset;
+						default:
+							throw new ArgumentOutOfRangeException(nameof(origin));
+					}
+				} // GetNewPosition
+
+				var newPosition = GetNewPosition();
+				if (newPosition > Length)
+					throw new ArgumentOutOfRangeException(nameof(offset));
+
+				return position = newPosition;
+			} // func Seek
+
+			public override void SetLength(long value)
+				=> length = value;
+
+			public override bool CanSeek => true;
+			public override bool CanWrite => true;
+			public override bool CanRead => true;
+
+			public override long Position { get => position; set => Seek(value, SeekOrigin.Begin); }
+			public override long Length => length;
+		} // class TransactionStream
+
+		#endregion
+
+		#region -- class MemoryTransactionStream --------------------------------------
+
+		private sealed class MemoryTransactionStream : TransactionStream
+		{
+			private readonly List<byte[]> blocks = new List<byte[]>();
+
+			public MemoryTransactionStream(Stream stream)
+				: base(stream)
 			{
 			} // ctor
 
-			public override long Length => base.Length;
+			protected override async Task CommitCoreAsync(Stream stream)
+			{
+				var setOffset = true;
+				var blockIndex = 0;
+				var pos = 0L;
+				while(pos < Length)
+				{
+					var buf = ReadBlock(blockIndex);
+					if (buf == null)
+						setOffset = true;
+					else
+					{
+						if (setOffset)
+						{
+							stream.Seek(pos, SeekOrigin.Begin);
+							setOffset = false;
+						}
 
-			public override void flush() => base.flush();
-			public override LuaResult seek(string whence, long offset = 0) => base.seek(whence, offset);
-			protected override void Dispose(bool disposing) => base.Dispose(disposing);
-		} // class LuaMemoryTransaction
+						var r = Length - pos;
+						await stream.WriteAsync(buf, 0, blockSize < r ? blockSize : unchecked((int)r));
+					}
+
+					pos += blockSize;
+					blockIndex++;
+				}
+			} // proc CommitCoreAsync
+
+			protected override Task RollbackCoreAsync()
+			{
+				blocks.Clear();
+				return RollbackCoreAsync();
+			} // proc RollbackCoreAsync
+
+			protected override byte[] ReadBlock(int index)
+				=> index > 0 && index < blocks.Count ? blocks[index] : null;
+
+			protected override void WriteBlock(int index, byte[] block)
+			{
+				if (index < 0)
+					throw new ArgumentOutOfRangeException(nameof(index), index, "Index is negative.");
+
+				// reserve blocks
+				while (blocks.Count <= index)
+					blocks.Add(null);
+
+				// set block data
+				blocks[index] = block;
+			} // proc WriteBlock
+		} // class MemoryTransactionStream
+
+		#endregion
+
+		#region -- class DiskTransactionStream ----------------------------------------
+
+		private sealed class DiskTransactionStream : TransactionStream, IDETransactionAsync
+		{
+			private readonly FileInfo fileInfo;
+			private readonly FileInfo transactionFileInfo;
+			private readonly FileStream transactionStream;
+			private readonly List<long> blockOffsets = new List<long>();
+			
+			private int currentBlockIndex = -1;
+			private readonly byte[] currentBlock;
+
+			public DiskTransactionStream(Stream stream, FileInfo fileInfo, FileInfo transactionFileInfo)
+				: base(stream)
+			{
+				this.fileInfo = fileInfo;
+				this.transactionFileInfo = transactionFileInfo;
+
+				transactionStream = transactionFileInfo.Open(FileMode.CreateNew);
+
+				currentBlock = new byte[blockSize];
+			} // ctor
+
+			protected override async Task CommitCoreAsync(Stream stream)
+			{
+				// is the temp file the target file?
+				if (IsSequence(stream)) // move whole file
+				{
+					// close target
+					stream.Dispose();
+
+					// truncate file to correct size
+					transactionStream.SetLength(Length);
+					transactionStream.Dispose();
+
+					// move transaction file as file
+					if (File.Exists(fileInfo.FullName))
+						File.Delete(fileInfo.FullName);
+					File.Move(transactionFileInfo.FullName, fileInfo.FullName);
+				}
+				else // copy parts back
+				{
+					await CommitCoreAsync(stream);
+					transactionStream.Dispose();
+				}
+			} // proc CommitCoreAsync
+
+			private bool IsSequence(Stream stream)
+			{
+				// todo: access for delete?
+				if (transactionStream.Length < Length) // not all blocks in file
+					return false;
+
+				// check block order
+				var pos = 0L;
+				for (var i = 0; i < blockOffsets.Count; i++)
+				{
+					if (blockOffsets[i] != pos)
+						return false;
+					pos += blockSize;
+				}
+
+				return true;
+			} // func IsSequence
+
+			protected override async Task RollbackCoreAsync()
+			{
+				try
+				{
+					transactionStream.Dispose();
+
+					await DeleteFileSilentAsync(transactionFileInfo.FullName);
+				}
+				catch { }
+			} // proc RollbackCoreAsync
+
+			private long GetBlockOffset(int index)
+				=> index >= 0 && index < blockOffsets.Count ? blockOffsets[index] : -1L;
+
+			protected override byte[] ReadBlock(int index)
+			{
+				if (index == currentBlockIndex)
+					return currentBlock;
+
+				currentBlockIndex = index;
+				var ofs = GetBlockOffset(currentBlockIndex);
+				if (ofs < 0)
+					return null;
+
+				// get block from file
+				transactionStream.Seek((long)currentBlockIndex << blockBits, SeekOrigin.Begin);
+				transactionStream.Read(currentBlock, 0, blockSize);
+				return currentBlock;
+			} // func ReadBlock
+
+			protected override void WriteBlock(int index, byte[] block)
+			{
+				if (index < 0)
+					throw new ArgumentOutOfRangeException(nameof(index), index, "Index is negative.");
+
+				// reserve blocks
+				while (blockOffsets.Count <= index)
+					blockOffsets.Add(-1L);
+
+				// set block data
+				var ofs = GetBlockOffset(index);
+				if (ofs < 0) // write new block
+				{
+					ofs = transactionStream.Length;
+					blockOffsets[index] = ofs;
+				}
+
+				transactionStream.Seek(ofs, SeekOrigin.Begin);
+				transactionStream.Write(block, 0, blockSize);
+			} // proc WriteBlock
+		} // class MemoryTransactionStream
 
 		#endregion
 
 		/// <summary>Open a file in with write access. All write operations will persist
 		/// in memory and write to disk on commit.</summary>
 		/// <param name="fileName"></param>
-		/// <param name="encoding"></param>
 		/// <returns></returns>
-		public static Task<LuaFile> OpenInMemoryAsync(string fileName, Encoding encoding = null)
+		public static Task<Stream> OpenInMemoryAsync(string fileName)
 		{
-			throw new NotImplementedException("todo");
+			return Task.Run<Stream>(() => new MemoryTransactionStream(new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)));
 		} // func OpenInMemoryAsync
 
 		/// <summary>Open a file, all operation will be done in a copy of the file. On 
 		/// commit the source will be overwritten (needs more disk space).</summary>
 		/// <param name="fileName"></param>
-		/// <param name="encoding"></param>
 		/// <returns></returns>
-		public static Task<LuaFile> OpenCopyAsync(string fileName, Encoding encoding = null)
+		public static async Task<Stream> OpenCopyAsync(string fileName)
 		{
-			throw new NotImplementedException("todo");
+			var fileInfo = new FileInfo(fileName);
+			var transactionFileInfo = await CreateTempFileInfoAsync(fileInfo);
+			var stream = await Task.Run<Stream>(() => new FileStream(fileInfo.FullName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+			return new DiskTransactionStream(stream, fileInfo, transactionFileInfo);
 		} // func OpenCopyAsync
 
 		#endregion
