@@ -179,6 +179,11 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		bool FirstChildren<T>(Predicate<T> predicate, Action<T> action = null, bool recursive = false, bool @unsafe = false) where T : class;
 
+		/// <summary>Enter read access to this configuration item.</summary>
+		/// <param name="upgradeable"></param>
+		/// <returns></returns>
+		IDisposable EnterReadLock(bool upgradeable = false);
+
 		/// <summary></summary>
 		string Name { get; }
 		/// <summary></summary>
@@ -621,6 +626,11 @@ namespace TecWare.DE.Server
 		public int CompareTo(DEConfigItem other)
 			=> String.Compare(name, other.name, true);
 
+		/// <summary></summary>
+		/// <returns></returns>
+		public override string ToString()
+			=> GetType().Name;
+
 		#endregion
 
 		#region -- Locking ------------------------------------------------------------
@@ -709,7 +719,8 @@ namespace TecWare.DE.Server
 					xn == DEConfigurationConstants.xnLuaCronBatch ||
 					xn == DEConfigurationConstants.xnLuaCronGroup ||
 					xn == DEConfigurationConstants.xnLuaCronJob ||
-					xn == DEConfigurationConstants.xnLuaProcess ||
+					xn == DEConfigurationConstants.xnProcess ||
+					xn == DEConfigurationConstants.xnProxy ||
 					xn == DEConfigurationConstants.xnDirectoryListener ||
 					xn == DEConfigurationConstants.xnLuaConfigItem ||
 					xn == DEConfigurationConstants.xnLuaConfigLogItem ||
@@ -1147,9 +1158,12 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		internal async Task<bool> UnsafeProcessRequestAsync(IDEWebRequestScope r)
 		{
+			if (await OnProcessRequestAsync(r))
+				return true;
+
 			foreach (var w in from c in this.UnsafeChildren
-							  let cHttp = c as HttpWorker
-							  where cHttp != null && r.RelativeSubPath.StartsWith(cHttp.VirtualRoot, StringComparison.OrdinalIgnoreCase)
+							  let cHttp = c as IHttpWorker
+							  where cHttp != null && cHttp.VirtualRoot != null && r.RelativeSubPath.StartsWith(cHttp.VirtualRoot, StringComparison.OrdinalIgnoreCase)
 							  orderby cHttp.Priority descending
 							  select cHttp)
 			{
@@ -1170,7 +1184,8 @@ namespace TecWare.DE.Server
 					}
 				}
 			}
-			return await OnProcessRequestAsync(r);
+
+			return false;
 		} // func UnsafeProcessRequest
 
 		/// <summary>Wird aufgerufen, wenn eine Http-Anfrage am Knoten verarbeitet werden soll.</summary>

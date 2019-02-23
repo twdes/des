@@ -690,6 +690,53 @@ namespace TecWare.DE.Server
 				config.AddFirst(new XElement(xnLuaEngine));
 			if (config.Element(xnHttp) == null)
 				config.AddFirst(new XElement(xnHttp));
+
+			// force des-server
+			if (config.Elements(xnFiles).FirstOrDefault(x => String.Compare(x.GetAttribute("name", String.Empty), "des", StringComparison.OrdinalIgnoreCase) == 0) == null)
+			{
+				var currentAssembly = typeof(DEHttpServer).Assembly;
+				var baseLocation = Path.GetDirectoryName(currentAssembly.Location);
+				var alternativePaths = new string[]
+				{
+					Path.GetFullPath(Path.Combine(baseLocation, @"..\..\Resources\Http")),
+					Path.GetFullPath(Path.Combine(baseLocation, @"..\..\..\ServerWebUI"))
+				};
+
+				var xFiles = new XElement(xnResources,
+					new XAttribute("name", "des"),
+					new XAttribute("displayname", "Data Exchange Server - Http"),
+					new XAttribute("base", ""),
+					new XAttribute("assembly", currentAssembly.FullName),
+					new XAttribute("namespace", "TecWare.DE.Server.Resources.Http"),
+					new XAttribute("priority", 100)
+				);
+
+				if (Directory.Exists(alternativePaths[0]))
+				{
+					xFiles.Add(new XAttribute("nonePresentAlternativeExtensions", ".map .ts")); // exception for debug files
+					xFiles.Add(
+						alternativePaths.Select(c => new XElement(xnAlternativeRoot, c))
+					);
+				}
+
+				// add security
+				xFiles.Add(
+					new XElement(xnSecurityDef,
+						new XAttribute("filter", "des.html"),
+						SecuritySys
+					),
+					new XElement(xnSecurityDef,
+						new XAttribute("filter", "DEViewer.css"),
+						SecuritySys
+					),
+					new XElement(xnSecurityDef,
+						new XAttribute("filter", "DEViewer.js"),
+						SecuritySys
+					)
+				);
+
+				config.Add(xFiles);
+			}
 		} //  func ValidateConfig
 
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)

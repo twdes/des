@@ -156,4 +156,34 @@
 			</xs:complexContent>
 		</xs:complexType>
 	</xs:element>
+
+	<xs:element name="proxy" substitutionGroup="configItem">
+		<xs:annotation>
+			<xs:documentation>A proxy for object items.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.Server.ProxyItem</class>
+			</xs:appinfo>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="ConfigItemType">
+					<xs:attribute name="target" type="xs:string" use="required">
+						<xs:annotation>
+							<xs:documentation>Target for the proxy.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="base" type="VirtualSubPathType" use="optional">
+						<xs:annotation>
+							<xs:documentation>Virtuelle Url unter der die Dateien eingeordnet werden sollen.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="priority" type="xs:int" use="optional" default="100">
+						<xs:annotation>
+							<xs:documentation>Bestimmt Reihenfolge der Aufrufe</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
+	</xs:element>
 </xs:schema>

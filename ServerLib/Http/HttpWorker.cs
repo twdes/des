@@ -22,16 +22,33 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.IronLua;
-using TecWare.DE.Server.Configuration;
 using TecWare.DE.Stuff;
 using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server.Http
 {
+	#region -- interface IHttpWorker --------------------------------------------------
+
+	/// <summary>Do http-requests for a sub node.</summary>
+	public interface IHttpWorker : IDEConfigItem
+	{
+		/// <summary>Do sub request.</summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
+		Task<bool> RequestAsync(IDEWebRequestScope r);
+
+		/// <summary>Defines the root within the page, this root is relative to the parent node.</summary>
+		string VirtualRoot { get; }
+		/// <summary>Order the http-worker should be called.</summary>
+		int Priority { get; }
+	} // interface IHttpWorker
+
+	#endregion
+
 	#region -- class HttpWorker -------------------------------------------------------
 
 	/// <summary>Verarbeitet eine Http-Anfrage</summary>
-	public abstract class HttpWorker : DEConfigItem
+	public abstract class HttpWorker : DEConfigItem, IHttpWorker
 	{
 		private string virtualBase;
 		private int priority = 100;

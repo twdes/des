@@ -255,7 +255,7 @@ namespace TecWare.DE.Server
 			log.WriteLine();
 			log.WriteLine("UrlReferrer: {0}", context.Request.UrlReferrer);
 			log.WriteLine("UserAgent: {0}", context.Request.UserAgent);
-			log.WriteLine("UserHostAddress: {0}", context.Request.UserHostAddress);
+			log.WriteLine("UserHostAddress: {0} ({1})", context.Request.UserHostAddress, context.Request.RemoteEndPoint?.Address?.ToString());
 			log.WriteLine("Content-Type: {0}", InputContentType);
 			log.WriteLine();
 			log.WriteLine("Header:");
@@ -532,6 +532,8 @@ namespace TecWare.DE.Server
 		public IDEConfigItem CurrentNode => RelativeSubNode as IDEConfigItem;
 
 		#endregion
+
+		public HttpListenerContext Context => context;
 	} // class DEWebRequestScope
 
 	#endregion
@@ -964,57 +966,6 @@ namespace TecWare.DE.Server
 		#endregion
 
 		#region -- Configuration ------------------------------------------------------
-
-		protected override void ValidateConfig(XElement config)
-		{
-			base.ValidateConfig(config);
-
-			if (config.Elements(xnFiles).FirstOrDefault(x => String.Compare(x.GetAttribute("name", String.Empty), "des", StringComparison.OrdinalIgnoreCase) == 0) == null)
-			{
-				var currentAssembly = typeof(DEHttpServer).Assembly;
-				var baseLocation = Path.GetDirectoryName(currentAssembly.Location);
-				var alternativePaths = new string[]
-				{
-					Path.GetFullPath(Path.Combine(baseLocation, @"..\..\Resources\Http")),
-					Path.GetFullPath(Path.Combine(baseLocation, @"..\..\..\ServerWebUI"))
-				};
-
-				var xFiles = new XElement(xnResources,
-					new XAttribute("name", "des"),
-					new XAttribute("displayname", "Data Exchange Server - Http"),
-					new XAttribute("base", ""),
-					new XAttribute("assembly", currentAssembly.FullName),
-					new XAttribute("namespace", "TecWare.DE.Server.Resources.Http"),
-					new XAttribute("priority", 100)
-				);
-
-				if (Directory.Exists(alternativePaths[0]))
-				{
-					xFiles.Add(new XAttribute("nonePresentAlternativeExtensions", ".map .ts")); // exception for debug files
-					xFiles.Add(
-						alternativePaths.Select(c => new XElement(xnAlternativeRoot, c))
-					);
-				}
-
-				// add security
-				xFiles.Add(
-					new XElement(xnSecurityDef,
-						new XAttribute("filter", "des.html"),
-						SecuritySys
-					),
-					new XElement(xnSecurityDef,
-						new XAttribute("filter", "DEViewer.css"),
-						SecuritySys
-					),
-					new XElement(xnSecurityDef,
-						new XAttribute("filter", "DEViewer.js"),
-						SecuritySys
-					)
-				);
-
-				config.Add(xFiles);
-			}
-		} // proc ValidateConfig
 
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
 		{

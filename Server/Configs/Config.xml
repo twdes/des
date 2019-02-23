@@ -22,4 +22,6 @@
 	<files name="test" displayname="max" directory="test" script="cron">
 		<mimeDef filter="*.lua">text/x-lua</mimeDef>
 	</files>
+	
+	<proxy name="proxy" target="http://tecware-gmbh.de/"/>
 </des>
