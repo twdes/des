@@ -811,7 +811,7 @@ namespace TecWare.DE.Server
 			public PrefixPathTranslation(XElement x)
 				: base(x, false)
 			{
-				this.redirectPath = x.GetAttribute("path", "/");
+				redirectPath = x.GetAttribute("path", "/");
 				if (String.IsNullOrEmpty(redirectPath) || redirectPath[0] != '/')
 					throw new DEConfigurationException(x, "Invalid internal @path (must start with '/').");
 			} // ctor
@@ -886,14 +886,14 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private readonly HttpListener httpListener = new HttpListener();   // Zugriff auf den HttpListener
-		private readonly DEThread httpThreads;                    // Threads, die die Request behandeln
+		private readonly HttpListener httpListener = new HttpListener();	// Access to the HttpListener
+		private readonly DEThread httpThread;								// Thread, that process requests
 		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
 
 		private List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
 		private List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
 
-		private bool debugMode = false;                           // Sollen detailiert die Request-Protokolliert werden
+		private bool debugMode = false; // Print nearly all requests to the log
 
 		private HttpCacheItem[] cacheItems = new HttpCacheItem[256];
 		private CacheItemListController cacheItemController;
@@ -905,7 +905,7 @@ namespace TecWare.DE.Server
 		public DEHttpServer(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
-			httpThreads = new DEThread(this, "Http-Dispatcher", ExecuteHttpRequestAsyc, "Http");
+			httpThread = new DEThread(this, "Http-Dispatcher", ExecuteHttpRequestAsyc, "Http");
 
 			ClearHttpCache();
 
@@ -955,8 +955,8 @@ namespace TecWare.DE.Server
 
 				Procs.FreeAndNil(ref webSocketProtocols);
 				Procs.FreeAndNil(ref cacheItemController);
-				if (!httpThreads.IsDisposed)
-					httpThreads.Dispose();
+				if (!httpThread.IsDisposed)
+					httpThread.Dispose();
 				try { httpListener.Close(); }
 				catch { }
 			}
@@ -975,14 +975,26 @@ namespace TecWare.DE.Server
 			prefixPathTranslations.Clear();
 			prefixAuthentificationSchemes.Clear();
 
+			var defaultPrefix = (PrefixDefinition)null;
+
 			foreach (var x in config.ConfigNew.Elements())
 			{
 				try
 				{
 					if (x.Name == xnHttpPrefix)
-						AddPrefix(prefixPathTranslations, new PrefixPathTranslation(x));
+					{
+						var p = AddPrefix(prefixPathTranslations, new PrefixPathTranslation(x));
+						if (defaultPrefix == null)
+							defaultPrefix = p;
+						else if (p.Path == "/")
+							defaultPrefix = p;
+					}
 					else if (x.Name == xnHttpAccess)
-						AddPrefix(prefixAuthentificationSchemes, new PrefixAuthentificationScheme(x));
+					{
+						var p = AddPrefix(prefixAuthentificationSchemes, new PrefixAuthentificationScheme(x));
+						if (defaultPrefix == null)
+							defaultPrefix = p;
+					}
 					else if (x.Name == xnHttpMime) // Lade die Mime-Informationen
 					{
 						var name = x.GetAttribute("ext", String.Empty);
@@ -1032,24 +1044,22 @@ namespace TecWare.DE.Server
 						httpListener.Stop();
 					httpListener.Prefixes.Clear();
 
-					// re add prefixes
-					var first = true;
-					foreach (var c in prefixes)
+					// change default prefix
+					if (defaultPrefix != null)
 					{
-						if (first)
+						var defaultUriString = Regex.Replace(defaultPrefix.Prefix, @"\:\/\/[\*\+]", "://" + Environment.MachineName);
+						try
 						{
-							var defaultUriString = Regex.Replace(c, @"\:\/\/[\*\+]", "://" + Environment.MachineName);
-							try
-							{
-								defaultBaseUri = new Uri(defaultUriString, UriKind.Absolute);
-								first = false;
-							}
-							catch (UriFormatException)
-							{
-							}
+							defaultBaseUri = new Uri(defaultUriString, UriKind.Absolute);
 						}
-						httpListener.Prefixes.Add(c);
+						catch (UriFormatException)
+						{
+						}
 					}
+
+					// re add prefixes
+					foreach (var c in prefixes)
+						httpListener.Prefixes.Add(c);
 				}
 			}
 
@@ -1099,7 +1109,7 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc OnEndReadConfiguration
-
+		
 		#endregion
 
 		#region -- Web Sockets --------------------------------------------------------
@@ -1316,9 +1326,15 @@ namespace TecWare.DE.Server
 
 			// Find the prefix for a alternating path
 			var pathTranslation = FindPrefix(prefixPathTranslations, url, false);
-			var absolutePath = pathTranslation == null || pathTranslation.Prefix == null
-				? url.AbsolutePath
-				: pathTranslation.Path + url.AbsolutePath.Substring(pathTranslation.PrefixPath.Length);
+			if (pathTranslation == null) // no translation, no response
+			{
+				ctx.Response.StatusDescription = "Invalid prefix.";
+				ctx.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+				ctx.Response.Close();
+				return;
+			}
+
+			var absolutePath = pathTranslation.Path + url.AbsolutePath.Substring(pathTranslation.PrefixPath.Length);
 
 			var authentificationScheme = GetAuthenticationScheme(ctx.Request);
 
@@ -1483,7 +1499,7 @@ namespace TecWare.DE.Server
 			}
 		} // func ProcessRequestForConfigItemAsync
 
-		private static void AddPrefix<T>(List<T> prefixes, T add)
+		private static T AddPrefix<T>(List<T> prefixes, T add)
 			where T : PrefixDefinition
 		{
 			lock (prefixes)
@@ -1498,6 +1514,8 @@ namespace TecWare.DE.Server
 					prefixes.Insert(p, add);
 				}
 			}
+
+			return add;
 		} // func AddPrefix
 
 		private static T FindPrefix<T>(List<T> prefixes, Uri url, bool ignoreProtocol)
