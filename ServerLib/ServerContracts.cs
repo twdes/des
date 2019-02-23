@@ -52,6 +52,8 @@ namespace TecWare.DE.Server
 		string DisplayName { get; }
 		/// <summary>Identity of the user.</summary>
 		IIdentity Identity { get; }
+		/// <summary>Show all security tokens.</summary>
+		string[] SecurityTokens { get; }
 	} // interface IDEUser
 
 	#endregion

@@ -680,7 +680,7 @@ namespace TecWare.DE.Server
 							break;
 
 						default:
-							throw new HttpResponseException(System.Net.HttpStatusCode.InternalServerError, String.Format("Liste '{0}' nicht aufzählbar.", controller.Id));
+							throw new HttpResponseException(HttpStatusCode.InternalServerError, String.Format("Liste '{0}' nicht aufzählbar.", controller.Id));
 					}
 					xml.WriteEndElement();
 				}

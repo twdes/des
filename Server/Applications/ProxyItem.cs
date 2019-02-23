@@ -60,7 +60,7 @@ namespace TecWare.DE.Server
 		private async Task<bool> ProxyRequestAsync(HttpClient client, DEWebRequestScope r)
 		{
 			// form url
-			var sb = new StringBuilder("/");
+			var sb = new StringBuilder();
 			var first = true;
 			sb.Append(r.RelativeSubPath);
 			foreach (var parameterName in r.ParameterNames)

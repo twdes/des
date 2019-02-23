@@ -1057,8 +1057,9 @@ namespace TecWare.DE.Server
 			app.WriteLine();
 		} // proc WriteRow
 
-		private static void WriteTable(IEnumerable<DebugMemberValue[]> list)
+		private static int WriteTable(IEnumerable<DebugMemberValue[]> list)
 		{
+			var rowCount = 0;
 			var columns = (TableColumn[])null;
 			foreach (var r in list)
 			{
@@ -1076,7 +1077,9 @@ namespace TecWare.DE.Server
 				}
 
 				WriteRow(columns, r, (_, c) => _.FormatValue(c));
+				rowCount++;
 			}
+			return rowCount;
 		} // proc WriteTable
 
 		private static void WriteReturn(string indent, IEnumerable<DebugMemberValue> r)
@@ -1697,8 +1700,7 @@ namespace TecWare.DE.Server
 				return;
 
 			var totalCount = xItems.GetAttribute("tc", -1);
-			var count = xItems.GetAttribute("c", 0);
-
+			
 			// enumerate all sum elements
 			DebugMemberValue[] BuildRows(XElement x)
 			{
@@ -1708,7 +1710,7 @@ namespace TecWare.DE.Server
 				return row;
 			} // func BuildRows
 
-			WriteTable(
+			var count = WriteTable(
 				xItems.Elements(xElementName).Select(BuildRows)
 			);
 			if (totalCount >= 0 && (count == 0 || totalCount > count))

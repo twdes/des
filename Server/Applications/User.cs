@@ -190,9 +190,13 @@ namespace TecWare.DE.Server.Applications
 				return password.Compare(testPassword);
 			else
 			{
+				var passwordHash = Config.GetAttribute("passwordHash", null);
+				if (passwordHash == "*")
+					return true; // allow all passwords
+
 				try
 				{
-					var tmp = ProcsDE.PasswordCompare(testPassword, Config.GetAttribute("passwordHash", null));
+					var tmp = ProcsDE.PasswordCompare(testPassword, passwordHash);
 					if (!tmp)
 						Log.LogMsg(LogMsgType.Warning, String.Format("Autentification failed ({0}).", "Password"));
 					return tmp;
@@ -209,6 +213,7 @@ namespace TecWare.DE.Server.Applications
 
 		string IDEUser.DisplayName => userName;
 		IIdentity IDEUser.Identity => identity;
+		string[] IDEUser.SecurityTokens => securityTokens;
 
 		public override string Icon => "/images/user1.png";
 	} // class DEUser

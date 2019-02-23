@@ -116,6 +116,7 @@ namespace TecWare.DE.Server
 				xml.WriteProperty("@name", typeof(string));
 				xml.WriteProperty("@type", typeof(string));
 				xml.WriteProperty("@displayName", typeof(string));
+				xml.WriteProperty("@security", typeof(string));
 				xml.WriteEndType();
 			} // proc WriteType
 
@@ -128,6 +129,8 @@ namespace TecWare.DE.Server
 					xml.WriteAttributeProperty("name", user.Value.Identity.Name);
 					xml.WriteAttributeProperty("type", user.Value.Identity.AuthenticationType);
 					xml.WriteAttributeProperty("displayName", user.Value.DisplayName);
+					if (user.Value.SecurityTokens != null)
+						xml.WriteAttributeProperty("security", String.Join(";", user.Value.SecurityTokens));
 					xml.WriteEndProperty();
 				}
 			} // proc WriteItem
