@@ -112,17 +112,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="r">Request context.</param>
 		/// <returns><c>true</c>, if the request is processed.</returns>
 		public abstract Task<bool> RequestAsync(IDEWebRequestScope r);
-
-		/// <summary></summary>
-		/// <param name="r"></param>
-		/// <returns></returns>
-		protected override async Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
-		{
-			if (await base.OnProcessRequestAsync(r))
-				return true;
-			return await RequestAsync(r);
-		} // func OnProcessRequest
-
+		
 		/// <summary>Gibt die Wurzel innerhalb der virtuellen Seite, ab der diese Http-Worker gerufen werden soll.</summary>
 		public virtual string VirtualRoot => virtualBase;
 		/// <summary>Reihenfolge in der die Http-Worker abgerufen werden</summary>
