@@ -1469,6 +1469,8 @@ namespace TecWare.DE.Server
 						if (id == LogLineListId || id == PropertiesListId || id == ActionsListId || id == AttachedScriptsListId)
 							r.LogStop();
 					}
+					else if (actionName == "serverinfo")
+						r.LogStop();
 
 					await current.UnsafeInvokeHttpActionAsync(actionName, r);
 					return true;
