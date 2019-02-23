@@ -158,15 +158,9 @@ namespace TecWare.DE.Server.Applications
 		} // func AuthentificateAsync
 
 		private bool DemandToken(string securityToken)
-		{
-			RefreshSecurityTokens();
+			=> Array.BinarySearch(RefreshSecurityTokens(), securityToken.ToLower()) >= 0; // Is the token in list
 
-			// Is the token in list
-			lock (securityTokensLock)
-				return Array.BinarySearch(securityTokens, securityToken.ToLower()) >= 0;
-		} // func DemandToken
-
-		private void RefreshSecurityTokens()
+		private string[] RefreshSecurityTokens()
 		{
 			lock (securityTokensLock)
 			{
@@ -181,6 +175,7 @@ namespace TecWare.DE.Server.Applications
 					serverSecurityVersion = currentServerSecurityVersion;
 				}
 			}
+			return securityTokens;
 		} // proc RefreshSecurityTokens
 
 		private bool TestPassword(string testPassword)
@@ -213,7 +208,7 @@ namespace TecWare.DE.Server.Applications
 
 		string IDEUser.DisplayName => userName;
 		IIdentity IDEUser.Identity => identity;
-		string[] IDEUser.SecurityTokens => securityTokens;
+		string[] IDEUser.SecurityTokens => RefreshSecurityTokens();
 
 		public override string Icon => "/images/user1.png";
 	} // class DEUser
