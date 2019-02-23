@@ -544,7 +544,9 @@ namespace TecWare.DE.Server.Http
 						throw new ArgumentException(String.Format("Resource '{0}' not found.", resourceName));
 					return src;
 				},
-				assembly.FullName.Replace(" ", "") + "\\" + resourceName, contentType);
+				assembly.FullName.Replace(" ", "") + "\\" + resourceName, 
+				contentType
+			);
 		} // proc WriteResource
 
 		private static object CreateScript(IDEWebRequestScope context, ILuaLexer code, string scriptBase)
@@ -558,6 +560,18 @@ namespace TecWare.DE.Server.Http
 
 		private static string GetFileNameFromSource(Stream src)
 			=> src is FileStream fs ? fs.Name : null;
+
+		private static string GetFileNameFromCacheId(string cacheId)
+		{
+			if (String.IsNullOrEmpty(cacheId))
+				return null;
+
+			var idx = cacheId.LastIndexOf('\\');
+			if (idx == -1)
+				return cacheId;
+
+			return cacheId.Substring(idx);
+		} // func GetFileNameFromCacheId
 
 		/// <summary></summary>
 		/// <param name="context"></param>
@@ -593,7 +607,7 @@ namespace TecWare.DE.Server.Http
 					if (cacheItem)
 					{
 						var isText = contentType.StartsWith("text/");
-						var scriptBase = GetFileNameFromSource(src);
+						var scriptBase = GetFileNameFromSource(src) ?? GetFileNameFromCacheId(cacheId) ?? "dummy";
 						if (isLua)
 						{
 							using (var code = LuaLexer.Create(scriptBase, new StreamReader(src, defaultReadEncoding ?? Encoding.UTF8, true)))

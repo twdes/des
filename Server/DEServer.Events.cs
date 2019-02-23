@@ -587,7 +587,7 @@ namespace TecWare.DE.Server
 			// Suche den passenden Descriptor
 			var descriptor = controller.Descriptor;
 			if (descriptor == null)
-				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Liste '{0}' besitzt kein Format.", controller.Id));
+				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("List '{0}' has no format description.", controller.Id));
 
 			controller.OnBeforeList();
 
@@ -618,7 +618,7 @@ namespace TecWare.DE.Server
 					{
 						if (ii.IsGenericType)
 						{
-							Type genericType = ii.GetGenericTypeDefinition();
+							var genericType = ii.GetGenericTypeDefinition();
 							if (genericType == typeof(IList<>))
 							{
 								if (useInterface < ListEnumeratorType.ListTyped)

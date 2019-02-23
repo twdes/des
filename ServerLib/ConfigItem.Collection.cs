@@ -605,26 +605,10 @@ namespace TecWare.DE.Server
 	{
 		private readonly IDictionary<TKey, TItem> innerDictionary;
 
-		/// <summary></summary>
-		/// <param name="configItem"></param>
-		/// <param name="id"></param>
-		/// <param name="displayName"></param>
-		/// <param name="comparer"></param>
-		public DEDictionary(DEConfigItem configItem, string id, string displayName, IEqualityComparer<TKey> comparer = null)
-			: base(configItem, null, id, displayName)
+		private DEDictionary(DEConfigItem configItem, string id, string displayName, IDEListDescriptor listDescriptor, IDictionary<TKey, TItem> innerDictionary)
+			: base(configItem, listDescriptor, id, displayName)
 		{
-			this.innerDictionary = new Dictionary<TKey, TItem>(comparer ?? EqualityComparer<TKey>.Default);
-		} // ctor
-
-		/// <summary></summary>
-		/// <param name="configItem"></param>
-		/// <param name="id"></param>
-		/// <param name="displayName"></param>
-		/// <param name="comparer"></param>
-		public DEDictionary(DEConfigItem configItem, string id, string displayName, IComparer<TKey> comparer)
-			: base(configItem, null, id, displayName)
-		{
-			this.innerDictionary = new SortedDictionary<TKey, TItem>(comparer == null ? Comparer<TKey>.Default : comparer);
+			this.innerDictionary = innerDictionary;
 		} // ctor
 
 		/// <summary></summary>
@@ -698,28 +682,31 @@ namespace TecWare.DE.Server
 		void ICollection<KeyValuePair<TKey, TItem>>.CopyTo(KeyValuePair<TKey, TItem>[] array, int arrayIndex)
 		{
 			using (EnterReadLock())
-				((ICollection<KeyValuePair<TKey, TItem>>)innerDictionary).CopyTo(array, arrayIndex);
+				innerDictionary.CopyTo(array, arrayIndex);
 		} // func ICollection<KeyValuePair<TKey, TItem>>.CopyTo
 
 		bool ICollection<KeyValuePair<TKey, TItem>>.Remove(KeyValuePair<TKey, TItem> item)
 		{
 			using (EnterWriteLock())
-				return ((ICollection<KeyValuePair<TKey, TItem>>)innerDictionary).Remove(item);
+				return innerDictionary.Remove(item);
 		} // func ICollection<KeyValuePair<TKey, TItem>>.Remove
 
 		bool ICollection<KeyValuePair<TKey, TItem>>.Contains(KeyValuePair<TKey, TItem> item)
 		{
 			using (EnterReadLock())
-				return ((ICollection<KeyValuePair<TKey, TItem>>)innerDictionary).Contains(item);
+				return innerDictionary.Contains(item);
 		} // ICollection<KeyValuePair<TKey, TItem>>.Contains
 
-		ICollection<TKey> IDictionary<TKey, TItem>.Keys { get { throw new NotSupportedException(); } }
-		ICollection<TItem> IDictionary<TKey, TItem>.Values { get { throw new NotSupportedException(); } }
+		ICollection<TKey> IDictionary<TKey, TItem>.Keys => throw new NotSupportedException();
+		ICollection<TItem> IDictionary<TKey, TItem>.Values => throw new NotSupportedException();
 
-		IEnumerator IEnumerable.GetEnumerator() { return new DEEnumerator<KeyValuePair<TKey, TItem>>(this, innerDictionary); }
-		IEnumerator<KeyValuePair<TKey, TItem>> IEnumerable<KeyValuePair<TKey, TItem>>.GetEnumerator() { return new DEEnumerator<KeyValuePair<TKey, TItem>>(this, innerDictionary); }
+		IEnumerator IEnumerable.GetEnumerator()
+			=> new DEEnumerator<KeyValuePair<TKey, TItem>>(this, innerDictionary);
 
-		bool ICollection<KeyValuePair<TKey, TItem>>.IsReadOnly { get { return false; } }
+		IEnumerator<KeyValuePair<TKey, TItem>> IEnumerable<KeyValuePair<TKey, TItem>>.GetEnumerator()
+			=> new DEEnumerator<KeyValuePair<TKey, TItem>>(this, innerDictionary);
+
+		bool ICollection<KeyValuePair<TKey, TItem>>.IsReadOnly => false;
 
 		/// <summary></summary>
 		/// <param name="key"></param>
@@ -750,6 +737,26 @@ namespace TecWare.DE.Server
 
 		/// <summary></summary>
 		public override IEnumerable List => innerDictionary;
+
+		/// <summary></summary>
+		/// <param name="configItem"></param>
+		/// <param name="id"></param>
+		/// <param name="displayName"></param>
+		/// <param name="listDescriptor"></param>
+		/// <param name="comparer"></param>
+		/// <returns></returns>
+		public static DEDictionary<TKey, TItem> CreateDictionary(DEConfigItem configItem, string id, string displayName, IDEListDescriptor listDescriptor = null, IEqualityComparer<TKey> comparer = null)
+			=> new DEDictionary<TKey, TItem>(configItem, id, displayName, listDescriptor, new Dictionary<TKey, TItem>(comparer ?? EqualityComparer<TKey>.Default));
+
+		/// <summary></summary>
+		/// <param name="configItem"></param>
+		/// <param name="id"></param>
+		/// <param name="displayName"></param>
+		/// <param name="listDescriptor"></param>
+		/// <param name="comparer"></param>
+		/// <returns></returns>
+		public static DEDictionary<TKey, TItem> CreateSortedList(DEConfigItem configItem, string id, string displayName, IDEListDescriptor listDescriptor = null, IComparer<TKey> comparer = null)
+			=> new DEDictionary<TKey, TItem>(configItem, id, displayName, listDescriptor, new SortedDictionary<TKey, TItem>(comparer ?? Comparer<TKey>.Default));
 	} // class DEDictionary
 
 	#endregion

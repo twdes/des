@@ -105,12 +105,44 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class UserListDescriptor -------------------------------------------
+
+		private sealed class UserListDescriptor : IDEListDescriptor
+		{
+			public void WriteType(DEListTypeWriter xml)
+			{
+				xml.WriteStartType("u");
+				xml.WriteProperty("@id", typeof(string));
+				xml.WriteProperty("@name", typeof(string));
+				xml.WriteProperty("@type", typeof(string));
+				xml.WriteProperty("@displayName", typeof(string));
+				xml.WriteEndType();
+			} // proc WriteType
+
+			public void WriteItem(DEListItemWriter xml, object item)
+			{
+				if (item is KeyValuePair<string, IDEUser> user)
+				{
+					xml.WriteStartProperty("u");
+					xml.WriteAttributeProperty("id", user.Key);
+					xml.WriteAttributeProperty("name", user.Value.Identity.Name);
+					xml.WriteAttributeProperty("type", user.Value.Identity.AuthenticationType);
+					xml.WriteAttributeProperty("displayName", user.Value.DisplayName);
+					xml.WriteEndProperty();
+				}
+			} // proc WriteItem
+
+			public static IDEListDescriptor Default { get; } = new UserListDescriptor();
+		} // class UserListDescriptor
+
+		#endregion
+
 		private string logPath = null;                 // Pfad für sämtliche Log-Dateien
 		private SimpleConfigItemProperty<int> propertyLogCount = null; // Zeigt an wie viel Log-Dateien verwaltet werden
 
 		private volatile int securityGroupsVersion = 0;
 		private readonly Dictionary<string, string[]> securityGroups = new Dictionary<string, string[]>(); // Sicherheitsgruppen
-		private readonly Dictionary<string, IDEUser> users = new Dictionary<string, IDEUser>(StringComparer.OrdinalIgnoreCase); // Nutzer
+		private readonly DEDictionary<string, IDEUser> users; // Active users
 
 		private ResolveEventHandler resolveEventHandler;
 		private DEConfigurationService configuration;
@@ -140,8 +172,11 @@ namespace TecWare.DE.Server
 			this.configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
 			this.dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
 
+			this.users = DEDictionary<string, IDEUser>.CreateDictionary(this, "tw_users", "Active users", UserListDescriptor.Default, StringComparer.OrdinalIgnoreCase);
+
 			PublishItem(dumpFiles);
 			PublishItem(new DEConfigItemPublicAction("dump") { DisplayName = "Dump" });
+			PublishItem(users);
 		} // ctor
 
 		protected override void Dispose(bool disposing)
