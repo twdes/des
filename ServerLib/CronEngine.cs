@@ -19,6 +19,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Neo.IronLua;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Stuff;
 using TecWare.DE.Stuff;
@@ -170,6 +171,11 @@ namespace TecWare.DE.Server
 		#endregion
 
 		#region -- Http ---------------------------------------------------------------
+
+		/// <summary></summary>
+		[LuaMember("StartJob")]
+		public void LuaStartJob()
+			=> HttpStartAction();
 
 		[
 		DEConfigHttpAction("jobstart", SecurityToken = SecuritySys),

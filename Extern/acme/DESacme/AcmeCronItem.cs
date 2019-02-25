@@ -281,7 +281,7 @@ namespace TecWare.DE
 			} // func GenerateKeyAsync
 
 			public byte[] GetPfxContent()
-				=> state == AcmeState.Issued ? pfxContent : null;
+				=> pfxContent;
 
 			#endregion
 
@@ -359,7 +359,7 @@ namespace TecWare.DE
 
 			if (acmeUri == null)
 			{
-				const string msg = "Kein Automatic Certificate Management Service defined.";
+				const string msg = "No Automatic Certificate Management Service defined.";
 				if (type == LogMsgType.Error)
 					throw new ArgumentNullException(nameof(acmeUri), msg);
 				if (type == LogMsgType.Warning)
@@ -431,7 +431,7 @@ namespace TecWare.DE
 					if (lm.Certificates.Find(X509FindType.FindByThumbprint, pfx.Thumbprint, false) != null)
 					{
 						Log.Info("Install Certificate {0} in LocalMachine\\My", pfx.Thumbprint);
-						lm.Add(pfx);
+						lm.Add(pfx); // exported?
 					}
 					else
 						Log.Info("Certificate {0} already installed in LocalMachine\\My", pfx.Thumbprint);
@@ -464,9 +464,12 @@ namespace TecWare.DE
 					case AcmeState.Pending:
 						if (!GenerateAsync(state).AwaitTask())
 							this.GetService<IDECronEngine>(true).UpdateNextRuntime(this, DateTime.Now.AddMinutes(1));
+						else
+							state.SetValidAsync().AwaitTask();
 						break;
 					case AcmeState.Issued:
 						UpdateCertificateAsync(state, new X509Certificate2(state.GetPfxContent())).AwaitTask();
+						state.SetValidAsync().AwaitTask();
 						break;
 				}
 			}
@@ -499,7 +502,10 @@ namespace TecWare.DE
 		public void StartNewOrder()
 		{
 			if (TryGetState(LogMsgType.Error, out var state))
+			{
 				NewCertificateAsync(state, true).AwaitTask();
+				this.GetService<IDECronEngine>(true).UpdateNextRuntime(this, DateTime.Now.AddMinutes(1));
+			}
 		} // proc ImportAccountKey
 
 		/// <summary>Update certificates</summary>
@@ -508,12 +514,25 @@ namespace TecWare.DE
 		{
 			if (TryGetState(LogMsgType.Error, out var state))
 			{
-				if (state.State == AcmeState.Pending
-					|| state.GetPfxContent() == null)
+				if (state.GetPfxContent() == null)
 					throw new ArgumentNullException("pfx", "No certificate.");
 
 				// update
 				UpdateCertificateAsync(state, new X509Certificate2(state.GetPfxContent())).AwaitTask();
+			}
+		} // proc ImportAccountKey
+
+		/// <summary>Update certificates</summary>
+		[LuaMember]
+		public void WriteCertificate(string fileName, string password = null)
+		{
+			if (TryGetState(LogMsgType.Error, out var state))
+			{
+				if (state.GetPfxContent() == null)
+					throw new ArgumentNullException("pfx", "No certificate.");
+
+				// write file
+				File.WriteAllBytes(fileName, state.GetPfxContent());
 			}
 		} // proc ImportAccountKey
 
