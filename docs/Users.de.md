@@ -2,9 +2,20 @@
 
 Nutzerwaltung innerhalb des DEServers.
 
-Liste. tw_users
+Es können verschieden Nutzer existieren, ein Nutzer zeichnet sich durch die
+Implementierung von `IDEUser` und einer Registrierung mittels `IDEServer.RegisterUser`.
 
-# Passwords
+Es gibt zwei Standardnutzer.
 
-- EncodePassword
-- DecodePassword
+basic
+:   Nutzername und Passwort werden definiert und von außen kann er
+    durch Basic Authentification angesprochen werden. In der Konfiguration
+    kann er mittels `basicuser` definiert werden.
+
+ntml
+:   Dieser Nutzer kann innerhalb des AD definiert werden, und wird von
+    außen mittels NTLM authenitifizert. In der Konfiguration kann er mittels
+    `ntlmuser`definiert werden.
+
+Die registrierten Nutzer und ihre Rechte werden mit der Liste `tw_users`an der
+Wurzel abefragt.

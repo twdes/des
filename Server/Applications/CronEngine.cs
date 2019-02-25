@@ -383,18 +383,34 @@ namespace TecWare.DE.Server
 			}
 		} // proc SaveNextRuntime
 
-		private void UpdateNextRuntime(ICronJobItem job, DateTime next, bool save)
+		private void ClearNextRuntime(ICronJobItem job)
+		{
+			if (cronItemCache == null || job == null)
+				return;
+
+			lock (cronItemCacheLock)
+			{
+				var index = Array.FindIndex(cronItemCache, c => c.Job == job);
+				if (index >= 0)
+					cronItemCache[index].NextRun = null;
+			}
+		} // proc ClearNextRuntime
+
+		private void UpdateNextRuntime(ICronJobItem job, DateTime next, bool save, bool force)
 		{
 			if (cronItemCache == null)
 				return;
 
-			var index = Array.FindIndex(cronItemCache, c => c.Job == job);
-			if (index >= 0)
+			lock (cronItemCacheLock)
 			{
-				cronItemCache[index].NextRun = next;
-				job.NotifyNextRun(next);
-				if (save)
-					SaveNextRuntime();
+				var index = Array.FindIndex(cronItemCache, c => c.Job == job);
+				if (index >= 0 && (force || !cronItemCache[index].NextRun.HasValue))
+				{
+					cronItemCache[index].NextRun = next;
+					job.NotifyNextRun(next);
+					if (save)
+						SaveNextRuntime();
+				}
 			}
 		} // func UpdateNextRuntime
 
@@ -407,10 +423,10 @@ namespace TecWare.DE.Server
 			if (n < DateTime.Now)
 				throw new ArgumentOutOfRangeException(nameof(next), n, "Timestamp must not be in the past.");
 
-			UpdateNextRuntime(job, n, true);
+			UpdateNextRuntime(job, n, true, true);
 		} // proc UpdateNextRuntime
 
-		private string NextRuntimeFile => Path.ChangeExtension(this.LogFileName, "next");
+		private string NextRuntimeFile => Path.ChangeExtension(LogFileName, "next");
 
 		#endregion
 
@@ -470,6 +486,7 @@ namespace TecWare.DE.Server
 				}
 
 				Log.Info("jobstart: {0}", job.DisplayName);
+				ClearNextRuntime(job as ICronJobItem);
 				var currentJob = new CurrentRunningJob(this, job, cancellation);
 				currentJobs.Add(currentJob);
 				return currentJob.Task;
@@ -511,7 +528,7 @@ namespace TecWare.DE.Server
 
 					// calculate next runtime
 					if (jobBound != null && !jobBound.Bound.IsEmpty)
-						UpdateNextRuntime(jobBound, jobBound.Bound.GetNext(DateTime.Now), true);
+						UpdateNextRuntime(jobBound, jobBound.Bound.GetNext(DateTime.Now), true, false);
 				}
 			}
 		} // proc FinishJob
