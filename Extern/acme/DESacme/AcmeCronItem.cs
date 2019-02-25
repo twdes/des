@@ -14,12 +14,10 @@
 //
 #endregion
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -36,6 +34,8 @@ namespace TecWare.DE
 	/// <summary>Manage SSL-Certificates with the ACME protocol.</summary>
 	public class AcmeCronItem : CronJobItem
 	{
+		private const string csCertificate = "Certificate";
+
 		#region -- enum AcmeState -----------------------------------------------------
 
 		/// <summary>State of the current store.</summary>
@@ -58,7 +58,7 @@ namespace TecWare.DE
 			private readonly Uri acmeUri;
 			private readonly string commonName;
 			private readonly string fileName;
-			
+
 			private string accountKey = null;
 
 			private Uri orderUri = null;
@@ -317,6 +317,10 @@ namespace TecWare.DE
 
 		#endregion
 
+		private readonly SimpleConfigItemProperty<DateTime> certificateNotAfter;
+		private readonly SimpleConfigItemProperty<string> certificateThumbprint;
+		private readonly SimpleConfigItemProperty<string> certificateState;
+
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		/// <summary></summary>
@@ -325,13 +329,29 @@ namespace TecWare.DE
 		public AcmeCronItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
+			certificateNotAfter = new SimpleConfigItemProperty<DateTime>(this, "tw_acme_notafter", "NotAfter", csCertificate, "Not after date of the certificate.", "{0:G}", DateTime.MinValue);
+			certificateThumbprint = new SimpleConfigItemProperty<string>(this, "tw_acme_thumbprint", "Thumbprint", csCertificate, "Thumbprint of the certificate.", null, null);
+			certificateState = new SimpleConfigItemProperty<string>(this, "tw_acme_state", "State", csCertificate, "State of the certificate process.", null, null);
 		} // ctor
+
+		/// <summary></summary>
+		/// <param name="disposing"></param>
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+			{
+				certificateState.Dispose();
+				certificateThumbprint.Dispose();
+				certificateNotAfter.Dispose();
+			}
+			base.Dispose(disposing);
+		} // proc Dispose
 
 		#endregion
 
 		#region -- TryGetState --------------------------------------------------------
 
-		private static DateTime GetCurrentCertifcateNotAfter(string commonName)
+		private DateTime GetCurrentCertifcateNotAfter(string commonName)
 		{
 			var cert = ProcsDE.FindCertificate("store://lm/my/CN=" + commonName)
 				.OrderByDescending(c => c.NotAfter)
@@ -339,6 +359,9 @@ namespace TecWare.DE
 
 			if (cert == null)
 				return DateTime.MinValue;
+
+			certificateThumbprint.Value = cert.Thumbprint;
+			certificateNotAfter.Value = cert.NotAfter;
 
 			return cert.NotAfter;
 		} // func GetCurrentCertifcateNotAfter
@@ -387,7 +410,7 @@ namespace TecWare.DE
 
 		#region -- NewCertificate, Generate, Update -----------------------------------
 
-		private async Task NewCertificateAsync(AcmeStateStore state, bool force)
+		private async Task<bool> NewCertificateAsync(AcmeStateStore state, bool force)
 		{
 			var notAfter = force ? DateTime.MinValue : GetCurrentCertifcateNotAfter(state.CommonName);
 			if (notAfter < DateTime.Now
@@ -399,7 +422,11 @@ namespace TecWare.DE
 				await Task.Delay(1000);
 				// start validation process
 				await state.GetChallengeStateAsync();
+
+				return true;
 			}
+			else
+				return false;
 		} // proc NewCertificate
 
 		private async Task<bool> GenerateAsync(AcmeStateStore state)
@@ -477,19 +504,22 @@ namespace TecWare.DE
 
 		#endregion
 
-			#region -- OnRunJob -----------------------------------------------------------
+		#region -- OnRunJob -----------------------------------------------------------
 
-			/// <summary>Run job</summary>
-			/// <param name="cancellation"></param>
+		/// <summary>Run job</summary>
+		/// <param name="cancellation"></param>
 		protected override void OnRunJob(CancellationToken cancellation)
 		{
 			if (TryGetState(LogMsgType.Warning, out var state)) // get state file
 			{
+				if (certificateState != null)
+					certificateState.Value = state.State.ToString();
+
 				switch (state.State)
 				{
 					case AcmeState.Installed:
-						NewCertificateAsync(state, false).AwaitTask();
-						this.GetService<IDECronEngine>(true).UpdateNextRuntime(this, DateTime.Now.AddMinutes(1));
+						if (NewCertificateAsync(state, false).AwaitTask())
+							this.GetService<IDECronEngine>(true).UpdateNextRuntime(this, DateTime.Now.AddMinutes(1));
 						break;
 					case AcmeState.Pending:
 						if (!GenerateAsync(state).AwaitTask())
@@ -581,7 +611,7 @@ namespace TecWare.DE
 			{
 				return r.WriteTextAsync(state.KeyAuthz).ContinueWith(t => true);
 			}
-			
+
 			return base.OnProcessRequestAsync(r);
 		} // func OnProcessRequestAsync
 
