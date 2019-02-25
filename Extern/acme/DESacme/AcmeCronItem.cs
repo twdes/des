@@ -15,6 +15,7 @@
 #endregion
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
@@ -411,46 +412,75 @@ namespace TecWare.DE
 			}
 
 			// read certificate
-			var pfx = new X509Certificate2(await state.GenerateKeyAsync());
+			var pfxData = await state.GenerateKeyAsync();
 
 			// install certificate in store
-			await UpdateCertificateAsync(state, pfx);
-
+			await UpdateCertificateAsync(state, pfxData);
 			return true;
-		} // func ValidateStateAsync
+		} // func GenerateAsync
 
-		private async Task UpdateCertificateAsync(AcmeStateStore state, X509Certificate2 pfx)
+		private static async Task<string> ExecuteNetsh(bool throwException, string arguments)
 		{
-			// install certificate in store
-			await Task.Run(() =>
+			var psi = new ProcessStartInfo("netsh.exe", arguments)
 			{
-				using (var lm = new X509Store(StoreName.My, StoreLocation.LocalMachine))
+				UseShellExecute = false,
+				RedirectStandardOutput = true
+			};
+			using (var p = Process.Start(psi))
+			{
+				var txt = await p.StandardOutput.ReadToEndAsync();
+				if (p.ExitCode != 0 && throwException)
+					throw new Exception($"NETSH failed with: {p.ExitCode}");
+
+				return txt;
+			}
+		} // proc ExecuteNetsh
+
+		private async Task UpdateCertificateAsync(AcmeStateStore state, byte[] pfxData)
+		{
+			using (var log = Log.CreateScope(LogMsgType.Information, true, false))
+			{
+				log.WriteLine("Update SSL-Binding.");
+
+				// install certificate in store
+				var cert = await Task.Run(() =>
 				{
-					lm.Open(OpenFlags.ReadWrite);
-
-					if (lm.Certificates.Find(X509FindType.FindByThumbprint, pfx.Thumbprint, false) != null)
+					var pfx = new X509Certificate2(pfxData, (string)null, X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.Exportable);
+					using (var lm = new X509Store(StoreName.My, StoreLocation.LocalMachine))
 					{
-						Log.Info("Install Certificate {0} in LocalMachine\\My", pfx.Thumbprint);
-						lm.Add(pfx); // exported?
-					}
-					else
-						Log.Info("Certificate {0} already installed in LocalMachine\\My", pfx.Thumbprint);
-				}
-			});
+						lm.Open(OpenFlags.ReadWrite);
 
-			// register in http.sys
-			//Log.Info("Register Certificate {0} for endpoint {1}", pfx.Thumbprint);
-			//pfx.Thumbprint;
-			// netsh http del sslcert ipport=0.0.0.0:443 certhash={0}
-			// netsh http add sslcert ipport=0.0.0.0:443 certhash={0} appid="{$(New-Guid)}"
+						foreach (var c in lm.Certificates)
+						{
+							if (String.Compare(c.Thumbprint, pfx.Thumbprint, StringComparison.OrdinalIgnoreCase) == 0)
+							{
+								log.WriteLine("Certificate {0} already installed in LocalMachine\\My", pfx.Thumbprint);
+								return c;
+							}
+						}
+
+						log.WriteLine("Install Certificate {0} in LocalMachine\\My", pfx.Thumbprint);
+						lm.Add(pfx);
+						return pfx;
+					}
+				});
+
+				// register in http.sys
+				var port = 443;
+				log.WriteLine("Register Certificate {0} for endpoint {1}", cert.Thumbprint, port);
+				log.WriteLine("delete:");
+				log.WriteLine(await ExecuteNetsh(false, String.Format("http delete sslcert ipport=0.0.0.0:{0}", port)));
+				log.WriteLine("insert:");
+				log.WriteLine(await ExecuteNetsh(true, String.Format("http add sslcert ipport=0.0.0.0:{0} certhash={1} appid={{d5e8e8f8-3e7b-4ffa-8ec3-1860e24402e5}}", port, cert.Thumbprint)));
+			}
 		} // func InstallCertificateAsync
 
 		#endregion
 
-		#region -- OnRunJob -----------------------------------------------------------
+			#region -- OnRunJob -----------------------------------------------------------
 
-		/// <summary>Run job</summary>
-		/// <param name="cancellation"></param>
+			/// <summary>Run job</summary>
+			/// <param name="cancellation"></param>
 		protected override void OnRunJob(CancellationToken cancellation)
 		{
 			if (TryGetState(LogMsgType.Warning, out var state)) // get state file
@@ -468,7 +498,7 @@ namespace TecWare.DE
 							state.SetValidAsync().AwaitTask();
 						break;
 					case AcmeState.Issued:
-						UpdateCertificateAsync(state, new X509Certificate2(state.GetPfxContent())).AwaitTask();
+						UpdateCertificateAsync(state, state.GetPfxContent()).AwaitTask();
 						state.SetValidAsync().AwaitTask();
 						break;
 				}
@@ -518,7 +548,7 @@ namespace TecWare.DE
 					throw new ArgumentNullException("pfx", "No certificate.");
 
 				// update
-				UpdateCertificateAsync(state, new X509Certificate2(state.GetPfxContent())).AwaitTask();
+				UpdateCertificateAsync(state, state.GetPfxContent()).AwaitTask();
 			}
 		} // proc ImportAccountKey
 
