@@ -33,9 +33,12 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{075816AA-6B91-4BA9-AD94-08C7644E0E70}"
 	ProjectSection(SolutionItems) = preProject
 		docs\Env.IO.de.md = docs\Env.IO.de.md
+		docs\Passwords.de.md = docs\Passwords.de.md
 		docs\SecurityTokens.de.md = docs\SecurityTokens.de.md
 		docs\Users.de.md = docs\Users.de.md
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DESacme", "Extern\acme\DESacme\DESacme.csproj", "{9C2BC118-1D96-4B0D-AFCC-209D40580863}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,6 +74,10 @@ Global
 		{90AF6FC3-6FB1-4482-81A4-2C54FD2F83A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{90AF6FC3-6FB1-4482-81A4-2C54FD2F83A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{90AF6FC3-6FB1-4482-81A4-2C54FD2F83A2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9C2BC118-1D96-4B0D-AFCC-209D40580863}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9C2BC118-1D96-4B0D-AFCC-209D40580863}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9C2BC118-1D96-4B0D-AFCC-209D40580863}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9C2BC118-1D96-4B0D-AFCC-209D40580863}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -80,6 +87,7 @@ Global
 		{0496732B-0812-4E06-B7FE-212F2761EBAF} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 		{90AF6FC3-6FB1-4482-81A4-2C54FD2F83A2} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 		{075816AA-6B91-4BA9-AD94-08C7644E0E70} = {F472E4CF-2A58-4014-AD99-9E5EE1836B52}
+		{9C2BC118-1D96-4B0D-AFCC-209D40580863} = {19C46279-A2EA-4356-A0C7-4D172B97FD2E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EC1BED07-4FD3-47AF-8C62-1B75DCE120AC}

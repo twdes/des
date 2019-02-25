@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema id="DEMacme"
+           targetNamespace="http://tecware-gmbh.de/dev/des/2015/acme"
+           elementFormDefault="qualified"
+           xmlns="http://tecware-gmbh.de/dev/des/2014"
+           xmlns:xs="http://www.w3.org/2001/XMLSchema"
+					 xmlns:o="http://tecware-gmbh.de/dev/des/2015/acme">
+
+	<xs:import namespace="http://tecware-gmbh.de/dev/des/2014" />
+
+	<xs:element name="acme" substitutionGroup="configItem">
+		<xs:annotation>
+			<xs:documentation>Runs a ACME protocol to get ssl-certificates for the server.</xs:documentation>
+			<xs:appinfo>
+				<class>TecWare.DE.AcmeCronItem</class>
+			</xs:appinfo>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:complexContent>
+				<xs:extension base="CronJobItemType">
+					<xs:attribute name="commonName" type="xs:string" use="required">
+						<xs:annotation>
+							<xs:documentation>CommonName for the certificate.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="acme" type="xs:string" use="required">
+						<xs:annotation>
+							<xs:documentation>Automatic Certificate Management Environment</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:extension>
+			</xs:complexContent>
+		</xs:complexType>
+	</xs:element>
+</xs:schema>
