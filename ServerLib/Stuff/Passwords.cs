@@ -182,7 +182,7 @@ namespace TecWare.DE.Stuff
 				return passwordValue.CreateSecureString();
 		} // func DecodePassword
 
-		public static string EncodePassword(SecureString password, string passwordType)
+		public static string EncodePassword(SecureString password, string passwordType = null)
 		{
 			if (passwordType == null)
 				passwordType = "win64";
@@ -250,8 +250,8 @@ namespace TecWare.DE.Stuff
 
 			// create the SHA256 hash (Password + Salt)
 			var sha = SHA512.Create();
-			sha.TransformBlock(testPasswordBytes, 0, testPasswordBytes.Length, testPasswordBytes, 0);
-			sha.TransformFinalBlock(passwordHash, 2, 4);
+			sha.TransformBlock(testPasswordBytes, 0, testPasswordBytes.Length, testPasswordBytes, 0); // password unicode
+			sha.TransformFinalBlock(passwordHash, 2, 4); // salt
 
 			return Procs.CompareBytes(sha.Hash, 0, passwordHash, 6, sha.HashSize / 8);
 		} // func PasswordCompare

@@ -22,6 +22,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Security;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Text;
@@ -1257,13 +1258,63 @@ namespace TecWare.DE.Server
 				}
 			} // func LuaAwait
 
-			[LuaMember]
-			public string EncodePassword(string password, string passwordType)
-				=> Passwords.EncodePassword(password.CreateSecureString(), passwordType);
+			#region -- Password - Handling --------------------------------------------
 
+			private SecureString GetSecureString(object value, string parameterName)
+			{
+				switch(value)
+				{
+					case null:
+						return null;
+					case SecureString ss:
+						return ss;
+					case string s:
+						return s.CreateSecureString();
+					default:
+						throw new ArgumentException("String expected", parameterName);
+				}
+			} // func GetSecureString
+
+			/// <summary>Crypt a password.</summary>
+			/// <param name="password">Password to crypt. Can be a plain text string or a secure string.</param>
+			/// <param name="passwordType">Password type, (win64, win0x, usr64, usr0x or plain)</param>
+			/// <returns>Crypt string.</returns>
+			[LuaMember]
+			public string EncodePassword(object password, string passwordType = null)
+				=> Passwords.EncodePassword(GetSecureString(password, nameof(password)), passwordType);
+
+			/// <summary>Decrypt a password.</summary>
+			/// <param name="passwordValue">Crypt string to decode.</param>
+			/// <returns>Plain password as string.</returns>
 			[LuaMember]
 			public string DecodePassword(string passwordValue)
 				=> Passwords.DecodePassword(passwordValue).AsPlainText();
+
+			/// <summary>Decrypt a password.</summary>
+			/// <param name="passwordValue">Crypt string to decode.</param>
+			/// <returns>Plain password as string.</returns>
+			[LuaMember]
+			public SecureString DecodePasswordSecure(string passwordValue)
+				=> Passwords.DecodePassword(passwordValue);
+
+			/// <summary>Create a password hash.</summary>
+			/// <param name="password">Password to hash. Can be a plain text string or a secure string.</param>
+			/// <returns>The password-hash as base64.</returns>
+			[LuaMember]
+			public string EncodePasswordHash(object password)
+				=> Convert.ToBase64String(Passwords.HashPassword(GetSecureString(password, nameof(password))));
+
+			/// <summary>Compare a password with a password-hash.</summary>
+			/// <param name="password">Password as plain text.</param>
+			/// <param name="passwordHash">Secret hash value.</param>
+			/// <returns><c>true</c>, if secret and hash are equal.</returns>
+			[LuaMember]
+			public bool ComparePasswordHash(string password, string passwordHash)
+				=> Passwords.PasswordCompare(password, passwordHash);
+
+			#endregion
+
+			#region -- Scope - Handling -----------------------------------------------
 
 			/// <summary>Access the current scope.</summary>
 			/// <returns>Returns the current scope or throws an exception.</returns>
@@ -1290,6 +1341,8 @@ namespace TecWare.DE.Server
 			[LuaMember]
 			public object TryGetScopeService(object serviceType)
 				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, false), false);
+
+			#endregion
 
 			[LuaMember("format")]
 			private string LuaFormat(string text, params object[] args)
