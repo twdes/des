@@ -542,6 +542,16 @@ namespace TecWare.DE.Server.Configuration
 
 		private void MergeConfigTree(XElement xRoot, XElement xMerge, XFileAnnotation currentFileToken)
 		{
+			// merge value
+			var elementValueDefinition = GetValue(xMerge);
+			if (elementValueDefinition != null)
+			{
+				if (elementValueDefinition.IsList)
+					xRoot.Value = xRoot.Value + " " + xMerge.Value;
+				else
+					xRoot.Value = xMerge.Value;
+			}
+
 			// merge attributes
 			var attributeMerge = xMerge.FirstAttribute;
 			while (attributeMerge != null)
@@ -553,10 +563,10 @@ namespace TecWare.DE.Server.Configuration
 				}
 				else // attribute exists --> override or combine lists
 				{
-					var attributeDefinition = GetAttribute(attributeMerge);
-					if (attributeDefinition != null)
+					var valueDefinition = GetValue(attributeMerge);
+					if (valueDefinition != null)
 					{
-						if (attributeDefinition.IsList) // list detected
+						if (valueDefinition.IsList) // list detected
 							attributeRoot.Value = attributeRoot.Value + " " + attributeMerge.Value;
 						else
 						{
@@ -657,22 +667,22 @@ namespace TecWare.DE.Server.Configuration
 			var valueModified = ChangeConfigurationStringValue(context, currentValue, out newValue);
 
 			// first check for type converter
-			var attributeDefinition = GetAttribute(x);
-			if (attributeDefinition != null)
+			var valueDefinition = GetValue(x);
+			if (valueDefinition != null)
 			{
-				if (attributeDefinition.TypeName == "PathType")
+				if (valueDefinition.TypeName == "PathType")
 				{
 					newValue = ProcsDE.GetFileName(x, newValue);
 
 					valueModified |= true;
 				}
-				else if (attributeDefinition.TypeName == "PathArray")
+				else if (valueDefinition.TypeName == "PathArray")
 				{
 					newValue = Procs.JoinPaths(Procs.SplitPaths(newValue).Select(c => ProcsDE.GetFileName(x, c)));
 
 					valueModified |= true;
 				}
-				else if (attributeDefinition.TypeName == "CertificateType")
+				else if (valueDefinition.TypeName == "CertificateType")
 				{
 					if (String.IsNullOrEmpty(newValue) || !newValue.StartsWith("store://"))
 					{
@@ -833,34 +843,30 @@ namespace TecWare.DE.Server.Configuration
 			}
 			return null;
 		} // func FindConfigElement
-
-		private IDEConfigurationAttribute GetConfigurationAttribute(XObject x)
-		{
-			var element = x.Parent;
-			if (element == null)
-				return null;
-
-			// get the name
-			var xName = (XName)null;
-			if (x is XAttribute a)
-				xName = a.Name;
-			else if (x is XElement e)
-				xName = e.Name;
-			else
-				return null;
-
-			// find the element
-			var elementDefinition = GetConfigurationElement(element.Name);
-			if (elementDefinition == null)
-				return null;
-
-			return elementDefinition.GetAttributes().FirstOrDefault(c => c.Name == xName);
-		} // func GetConfigurationAttribute
-
+		
 		#endregion
 
-		public IDEConfigurationAttribute GetAttribute(XObject attribute) 
-			=> GetConfigurationAttribute(attribute);
+		public IDEConfigurationValue GetValue(XObject x)
+		{
+			if (x is XElement xElement) // value of this element
+			{
+				var elementDefinition = GetConfigurationElement(xElement.Name);
+				if (elementDefinition == null)
+					return null;
+
+				return elementDefinition.Value;
+			}
+			else if (x is XAttribute xAttribute)
+			{
+				var elementDefinition = GetConfigurationElement(xAttribute.Parent.Name);
+				if (elementDefinition == null)
+					return null;
+
+				return elementDefinition.GetAttributes().FirstOrDefault(c => c.Name == xAttribute.Name);
+			}
+			else
+				return null;
+		} // func GetValue
 
 		public IDEConfigurationElement this[XName name] => GetConfigurationElement(name);
 

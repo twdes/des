@@ -883,10 +883,6 @@ namespace TecWare.DE.Server
 			PublishItem(configAction);
 		} // proc LuaPublishAction
 
-		/// <summary>Access configuration lua friendly.</summary>
-		[LuaMember("Config")]
-		public LuaTable LuaConfig { get => ConfigNode.ToTable(); set { } }
-
 		/// <summary>Wird durch den List-Controller aufgerufen, wenn er zerstört wird.</summary>
 		/// <param name="controller"></param>
 		public void UnregisterList(IDEListController controller)

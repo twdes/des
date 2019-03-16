@@ -51,7 +51,7 @@ namespace TecWare.DE.Server
 
 			var a1 = n2.GetAttributes().FirstOrDefault(c => c.Name == "min");
 			Assert.IsNotNull(a1);
-			Assert.AreEqual(typeof(uint), a1.Type);
+			Assert.AreEqual(typeof(FileSize), a1.Type);
 			Assert.AreEqual("3670016", a1.DefaultValue);
 		}
 

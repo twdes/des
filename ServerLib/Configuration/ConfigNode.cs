@@ -30,99 +30,181 @@ namespace TecWare.DE.Server.Configuration
 	/// <summary>Configuration node, that read attributes and elements with support from the schema.</summary>
 	public sealed class XConfigNode : IPropertyEnumerableDictionary
 	{
+		#region -- class XConfigNodes -------------------------------------------------
+
+		private sealed class XConfigNodes : IEnumerable<XConfigNode>
+		{
+			private readonly XElement parentElement;
+			private readonly IDEConfigurationElement configurationElement;
+
+			public XConfigNodes(XElement parentElement, IDEConfigurationElement configurationElement)
+			{
+				this.parentElement = parentElement ?? throw new ArgumentNullException(nameof(parentElement));
+				this.configurationElement = configurationElement ?? throw new ArgumentNullException(nameof(configurationElement));
+			} // ctor
+
+			public IEnumerator<XConfigNode> GetEnumerator()
+				=> parentElement.Elements(configurationElement.Name).Select(x => new XConfigNode(configurationElement, x)).GetEnumerator();
+
+			IEnumerator IEnumerable.GetEnumerator()
+				=> GetEnumerator();
+		} // class XConfigNodes
+
+		#endregion
+
 		private readonly IDEConfigurationElement configurationElement;
-		private readonly IDEConfigurationAttribute[] attributes;
+		private readonly Lazy<Dictionary<string, IDEConfigurationAnnotated>> getElements;
 		private readonly XElement element;
 
 		private XConfigNode(IDEConfigurationElement configurationElement, XElement element)
 		{
-			this.configurationElement = configurationElement;
-			this.attributes = configurationElement.GetAttributes().ToArray();
+			this.configurationElement = configurationElement ?? throw new ArgumentNullException(nameof(configurationElement));
+			
+			getElements = new Lazy<Dictionary<string, IDEConfigurationAnnotated>>(() =>
+				{
+					var r = new Dictionary<string, IDEConfigurationAnnotated> (StringComparer.OrdinalIgnoreCase);
+
+					// value of the element
+					if (configurationElement.Value != null)
+						r[String.Empty] = null;
+
+					// sub attributes
+					foreach (var attr in configurationElement.GetAttributes())
+						r[attr.Name.LocalName] = attr;
+
+					// sub elements
+					foreach (var el in configurationElement.GetElements())
+						r[el.Name.LocalName] = el;
+					return r;
+				}
+			);
+
 			this.element = element;
 		} // ctor
+
+		private static object GetConfigurationValueSingle(IDEConfigurationValue attr, string value)
+		{
+			var type = attr.Type;
+			if (type == typeof(LuaType))
+			{
+				if (value == null)
+					value = attr.DefaultValue ?? "object";
+				return LuaType.GetType(value, false, false).Type;
+			}
+			else if (type == typeof(Encoding))
+			{
+				if (String.IsNullOrEmpty(value))
+					value = attr.DefaultValue;
+
+				if (String.IsNullOrEmpty(value))
+					return Encoding.Default;
+				else if (Int32.TryParse(value, out var codePage))
+					return Encoding.GetEncoding(codePage);
+				else
+					return Encoding.GetEncoding(value);
+			}
+			else if (type == typeof(CultureInfo))
+			{
+				return String.IsNullOrEmpty(value)
+					? CultureInfo.GetCultureInfo(attr.DefaultValue)
+					: CultureInfo.GetCultureInfo(value);
+			}
+			else if (type == typeof(DirectoryInfo))
+			{
+				return String.IsNullOrEmpty(value)
+					? null
+					: new DirectoryInfo(value);
+			}
+			else if (type == typeof(SecureString))
+			{
+				try
+				{
+					return Passwords.DecodePassword(value);
+				}
+				catch
+				{
+					return null;
+				}
+			}
+			else if (type == typeof(FileSize))
+			{
+				return FileSize.TryParse(value ?? attr.DefaultValue, out var fileSize)
+					? fileSize
+					: FileSize.Empty;
+			}
+			else
+			{
+				try
+				{
+					return Procs.ChangeType(value ?? attr.DefaultValue, type);
+				}
+				catch
+				{
+					return Procs.ChangeType(attr.DefaultValue, type);
+				}
+			}
+		} // func GetConfigurationValue
+
+		internal static object GetConfigurationValue(IDEConfigurationValue attr, string value)
+		{
+			var type = attr.Type;
+			if (attr.IsList)
+				return Procs.GetStrings(value).Select(v => GetConfigurationValueSingle(attr, v)).ToArray();
+			else
+				return GetConfigurationValueSingle(attr, value);
+		} // func GetAttributeValue
+
+		internal string GetAttributeValueCore(IDEConfigurationAttribute attr)
+		{
+			var value = attr.IsElement
+				? element?.Element(attr.Name)?.Value
+				: element?.Attribute(attr.Name)?.Value;
+
+			return value;
+		} // func GetAttributeValueCore
 		
+		private PropertyValue GetPropertyValue(IDEConfigurationAnnotated item)
+		{
+			switch (item)
+			{
+				case null:
+					return new PropertyValue("(Default)", configurationElement.Value.Type, GetConfigurationValue(configurationElement.Value, element?.Value));
+				case IDEConfigurationAttribute attr:
+					return new PropertyValue(attr.Name.LocalName, attr.IsList ? attr.Type.MakeArrayType() : attr.Type, GetConfigurationValue(attr, GetAttributeValueCore(attr)));
+				case IDEConfigurationElement el:
+					if (el.MinOccurs == 1 && el.MaxOccurs == 1)
+						return new PropertyValue(el.Name.LocalName, typeof(XConfigNode), new XConfigNode(el, element?.Element(el.Name)));
+					else
+						return new PropertyValue(el.Name.LocalName, typeof(IEnumerable<XConfigNode>), element != null ? new XConfigNodes(element, el) : null);
+				default:
+					return null;
+			}
+		} // func GetPropertyValue
+
 		/// <summary>Get a attribute value or default value.</summary>
 		/// <param name="name">Name of the attribute.</param>
 		/// <param name="value">Value of the property.</param>
 		/// <returns><c>true</c>, if the property is defined and has a value.</returns>
 		public bool TryGetProperty(string name, out object value)
 		{
-			var attribute = attributes.FirstOrDefault(c => String.Compare(c.Name.LocalName, name, StringComparison.OrdinalIgnoreCase) == 0);
-			if (attribute == null)
+			if (name != null && getElements.Value.TryGetValue(name, out var item))
 			{
-				value = null;
-				return false;
-			}
-
-			var attributeValue = element?.Attribute(attribute.Name)?.Value ?? attribute.DefaultValue;
-
-			var type = attribute.Type;
-			if (type == typeof(LuaType))
-			{
-				if (attributeValue == null)
-					attributeValue = "object";
-				value = LuaType.GetType(attributeValue, false, false).Type;
-				return true;
-			}
-			else if (type == typeof(Encoding))
-			{
-				if (String.IsNullOrEmpty(attributeValue))
-					attributeValue = attribute.DefaultValue;
-
-				if (String.IsNullOrEmpty(attributeValue))
-					value = Encoding.Default;
-				else if (Int32.TryParse(attributeValue, out var codePage))
-					value = Encoding.GetEncoding(codePage);
-				else
-					value = Encoding.GetEncoding(attributeValue);
-
-				return true;
-			}
-			else if (type == typeof(CultureInfo))
-			{
-				value = String.IsNullOrEmpty(attributeValue) ?
-					CultureInfo.GetCultureInfo(attribute.DefaultValue) :
-					CultureInfo.GetCultureInfo(attributeValue);
-				return true;
-			}
-			else if (type == typeof(DirectoryInfo))
-			{
-				value = String.IsNullOrEmpty(attributeValue)
-						? null
-						: new DirectoryInfo(attributeValue);
-				return true;
-			}
-			else if (type == typeof(SecureString))
-			{
-				try
+				var prop = GetPropertyValue(item);
+				if (prop != null)
 				{
-					value = Passwords.DecodePassword(attributeValue);
+					value = prop.Value;
+					return true;
 				}
-				catch
+				else
 				{
 					value = null;
 					return false;
 				}
-				return true;
-			}
-			else if (type == typeof(FileSize))
-			{
-				value = FileSize.TryParse(attributeValue, out var fileSize)
-					? fileSize
-					: FileSize.Empty;
-				return true;
 			}
 			else
 			{
-				try
-				{
-					value = Procs.ChangeType(attributeValue, type);
-				}
-				catch
-				{
-					value = Procs.ChangeType(attribute.DefaultValue, type);
-				}
-				return true;
+				value = null;
+				return false;
 			}
 		} // func TryGetProperty
 
@@ -130,11 +212,8 @@ namespace TecWare.DE.Server.Configuration
 		/// <returns></returns>
 		public IEnumerator<PropertyValue> GetEnumerator()
 		{
-			foreach (var attr in attributes)
-			{
-				if (TryGetProperty(attr.Name.LocalName, out var value))
-					yield return new PropertyValue(attr.Name.LocalName, attr.Type, value);
-			}
+			foreach (var attr in getElements.Value)
+				yield return GetPropertyValue(attr.Value);
 		} // func GetEnumerator
 
 		IEnumerator IEnumerable.GetEnumerator()
@@ -159,6 +238,8 @@ namespace TecWare.DE.Server.Configuration
 		public XName Name => element?.Name ?? configurationElement.Name;
 		/// <summary></summary>
 		public XElement Element => element;
+		/// <summary>Value of the configuration element.</summary>
+		public object Value => configurationElement.Value != null ? GetConfigurationValue(configurationElement.Value, element?.Value) : null;
 		/// <summary></summary>
 		public IDEConfigurationElement ConfigurationElement => configurationElement;
 

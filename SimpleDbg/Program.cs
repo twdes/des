@@ -1721,6 +1721,47 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- Config -------------------------------------------------------------
+
+		private static IEnumerable<DebugMemberValue> ParseConfiguration(XElement xParent)
+		{
+			foreach (var xAttr in xParent.Elements("attribute"))
+				yield return DebugMemberValue.Create(xAttr.GetAttribute("name", "<error>"), xAttr.GetAttribute("typename", ""), xAttr.Value);
+
+			foreach (var xElement in xParent.Elements("element"))
+			{
+				yield return DebugMemberValue.Create(
+					xElement.GetAttribute("name", "<error>"),
+					null,
+					ParseConfiguration(xElement).ToArray()
+				);
+			}
+		} // func ParseConfiguration
+
+		[InteractiveCommand("configRaw", HelpText = "Return configuration of the current node (raw).", ConnectionRequest = InteractiveCommandConnection.Http)]
+		private static async Task ConfigRawAsync()
+		{
+			var xReturn = await GetHttp().GetXmlAsync(MakeUri(
+				new PropertyValue("action", "config"),
+				new PropertyValue("raw", true)
+			));
+
+			app.WriteLine(xReturn.ToString(SaveOptions.None));
+		} //  func ConfigRawAsync
+
+		[InteractiveCommand("config", HelpText = "Print configuration of the current node.", ConnectionRequest = InteractiveCommandConnection.Http)]
+		private static async Task ConfigAsync(bool all = false)
+		{
+			var xReturn = await GetHttp().GetXmlAsync(MakeUri(
+				new PropertyValue("action", "config"),
+				new PropertyValue("all", all)
+			));
+
+			WriteReturn(String.Empty, ParseConfiguration(xReturn));
+		} //  func ConfigAsync
+
+		#endregion
+
 		#region -- Action -------------------------------------------------------------
 
 		[InteractiveCommand("action", HelpText = "Invoke a server action.", ConnectionRequest = InteractiveCommandConnection.Http)]
@@ -1732,8 +1773,9 @@ namespace TecWare.DE.Server
 			var xReturn = await GetHttp().GetXmlAsync(MakeUri(
 				new PropertyValue("action", action)
 			));
+
 			app.WriteLine(xReturn.Value ?? "Success.");
-		} //  func GetListAsync
+		} //  func ActionAsync
 
 		#endregion
 	} // class Program

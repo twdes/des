@@ -53,24 +53,34 @@ namespace TecWare.DE.Server.Configuration
 
 	#endregion
 
-	#region -- interface IDEConfigurationAttribute ------------------------------------
+	#region -- interface IDEConfigurationValue ----------------------------------------
 
-	/// <summary>Attribute description of an configuration element.</summary>
-	public interface IDEConfigurationAttribute : IDEConfigurationAnnotated
+	/// <summary>Description of a configuration value.</summary>
+	public interface IDEConfigurationValue
 	{
-		/// <summary>Name of the element.</summary>
-		XName Name { get; }
-		/// <summary>Simple type of the element.</summary>
-		Type Type { get; }
 		/// <summary>Xml-Type-Name</summary>
 		string TypeName { get; }
+		/// <summary>Simple type of the element.</summary>
+		Type Type { get; }
 		/// <summary>Returns the default of the attribute.</summary>
 		string DefaultValue { get; }
 
-		/// <summary>Is the attribute in element notation.</summary>
-		bool IsElement { get; }
 		/// <summary>Is the element a xml-list.</summary>
 		bool IsList { get; }
+	} // interface IDEConfigurationValue
+
+	#endregion
+
+	#region -- interface IDEConfigurationAttribute ------------------------------------
+
+	/// <summary>Attribute description of an configuration element.</summary>
+	public interface IDEConfigurationAttribute : IDEConfigurationAnnotated, IDEConfigurationValue
+	{
+		/// <summary>Name of the element.</summary>
+		XName Name { get; }
+		
+		/// <summary>Is the attribute in element notation.</summary>
+		bool IsElement { get; }
 		/// <summary>Is this attribute a primary key.</summary>
 		bool IsPrimaryKey { get; }
 		/// <summary>There can be one or more member</summary>
@@ -107,6 +117,10 @@ namespace TecWare.DE.Server.Configuration
 		Type ClassType { get; }
 		/// <summary>Type name of the content.</summary>
 		string TypeName { get; }
+
+		/// <summary>Has this element a default value.</summary>
+		IDEConfigurationValue Value { get; }
+
 		/// <summary>There can be one or more member</summary>
 		int MinOccurs { get; }
 		/// <summary>There can be one or more member</summary>
@@ -123,7 +137,7 @@ namespace TecWare.DE.Server.Configuration
 		/// <summary>Returns the definition for the current attribute.</summary>
 		/// <param name="attribute">element or attribute</param>
 		/// <returns></returns>
-		IDEConfigurationAttribute GetAttribute(XObject attribute);
+		IDEConfigurationValue GetValue(XObject attribute);
 
 		/// <summary>Path to the main configuration file.</summary>
 		string ConfigurationFile { get; }

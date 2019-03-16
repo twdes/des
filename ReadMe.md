@@ -38,7 +38,7 @@ Bei erfolgreicher Konfiguration des Dienstes kann der Status über http://localh
 Grundlegend werden folgende Technologien vorausgesetzt, es kann ja nach Konfiguration zusätzliches hinzukommen
 - Es handelt sich um einen Windows Service
 - .net Framework 4.6 (C#)
-- Lua für Scripting [NeoLua](http://https://github.com/neolithos/neolua)
+- Lua für Scripting [NeoLua](https://github.com/neolithos/neolua)
 - http WebServer [HttpSys](https://msdn.microsoft.com/en-us/library/windows/desktop/aa364510%28v=vs.85%29.aspx)
 
 ## Mitarbeit

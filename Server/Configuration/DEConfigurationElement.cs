@@ -146,44 +146,41 @@ namespace TecWare.DE.Server.Configuration
 			=> xmlName == null || String.IsNullOrEmpty(xmlName.Name)
 				? null
 				: XName.Get(xmlName.Name, xmlName.Namespace);
-	} // class DEConfigurationHelper
 
-	#endregion
-
-	#region -- class DEConfigurationBase<T> -------------------------------------------
-
-	internal class DEConfigurationBase<T> : IDEConfigurationAnnotated
-		where T : XmlSchemaAnnotated
-	{
-		private readonly T item;
-		private Lazy<string> getDocumentation;
-
-		public DEConfigurationBase(T item)
+		internal static string FindClassTypeString(XmlSchemaElement element, out XmlSchemaAppInfo appInfo)
 		{
-			this.item = item ?? throw new ArgumentNullException("item");
+			appInfo = element.Annotation?.Items.OfType<XmlSchemaAppInfo>().FirstOrDefault();
+			if (appInfo != null)
+				return appInfo.Markup.OfType<XmlElement>().Where(x => x.LocalName == "class").FirstOrDefault()?.InnerText;
+			return null;
+		} // func FindClassTypeString
 
-			this.getDocumentation = new Lazy<string>(() =>
+		internal static Type FindClassType(XmlSchemaElement element, IServiceProvider sp)
+		{
+			var typeString = FindClassTypeString(element, out var appInfo);
+			if (!String.IsNullOrEmpty(typeString))
+			{
+				try
 				{
-					var doc = item.Annotation?.Items.OfType<XmlSchemaDocumentation>().FirstOrDefault();
-					if (doc == null)
+					if (typeString.IndexOf(',') == -1) // this is relative type
 					{
-						var element = item as XmlSchemaElement;
-						if (element != null && element.ElementSchemaType != null)
-							doc = FindDocumentTag(element.ElementSchemaType);
+						var sourceUri = DEConfigItem.GetSourceUri(appInfo);
+						var posType = sourceUri.LastIndexOf(',');
+						if (posType != -1)
+							typeString = typeString + ", " + sourceUri.Substring(0, posType);
 					}
-					return doc == null ? null : GetXmlText(doc.Markup);
+
+					return Type.GetType(typeString, true, false);
 				}
-			);
-		} // ctor
+				catch (Exception e)
+				{
+					sp.LogProxy().Warn(new DEConfigurationException(appInfo, "Could not resolve type.", e)); // todo: exception mit position im schema
+				}
+			}
+			return null;
+		} // func FindClassType
 
-		private static XmlSchemaDocumentation FindDocumentTag(XmlSchemaType elementSchemaType)
-		{
-			return elementSchemaType == null ?
-				null :
-				elementSchemaType.Annotation?.Items.OfType<XmlSchemaDocumentation>().FirstOrDefault() ?? FindDocumentTag(elementSchemaType.BaseXmlSchemaType);
-		} // func FindDocumentTag
-
-		protected static IEnumerable<string> FindTypeNames(XmlSchemaType type)
+		internal static IEnumerable<string> FindTypeNames(XmlSchemaType type)
 		{
 			if (type == null)
 				yield break;
@@ -208,6 +205,41 @@ namespace TecWare.DE.Server.Configuration
 				}
 			}
 		} // func FindTypeNames
+	} // class DEConfigurationHelper
+
+	#endregion
+
+	#region -- class DEConfigurationBase<T> -------------------------------------------
+
+	internal class DEConfigurationBase<T> : IDEConfigurationAnnotated
+		where T : XmlSchemaAnnotated
+	{
+		private readonly T item;
+		private Lazy<string> getDocumentation;
+
+		public DEConfigurationBase(T item)
+		{
+			this.item = item ?? throw new ArgumentNullException("item");
+
+			getDocumentation = new Lazy<string>(() =>
+				{
+					var doc = item.Annotation?.Items.OfType<XmlSchemaDocumentation>().FirstOrDefault();
+					if (doc == null)
+					{
+						if (item is XmlSchemaElement element && element.ElementSchemaType != null)
+							doc = FindDocumentTag(element.ElementSchemaType);
+					}
+					return doc == null ? null : GetXmlText(doc.Markup);
+				}
+			);
+		} // ctor
+
+		private static XmlSchemaDocumentation FindDocumentTag(XmlSchemaType elementSchemaType)
+		{
+			return elementSchemaType == null ?
+				null :
+				elementSchemaType.Annotation?.Items.OfType<XmlSchemaDocumentation>().FirstOrDefault() ?? FindDocumentTag(elementSchemaType.BaseXmlSchemaType);
+		} // func FindDocumentTag
 
 		public string Documentation => getDocumentation.Value;
 		public T Item => item;
@@ -259,9 +291,9 @@ namespace TecWare.DE.Server.Configuration
 		internal DEConfigurationElementAttribute(XmlSchemaElement element)
 			: base(element)
 		{
-			this.typeName = new Lazy<string>(() => FindTypeNames(Item.ElementSchemaType).FirstOrDefault() ?? String.Empty);
-			this.type = new Lazy<Type>(() => GetTypeFromXmlType(TypeName, Item.ElementSchemaType.TypeCode));
-			this.isPrimaryKey = new Lazy<bool>(() => FindTypeNames(Item.ElementSchemaType).Contains("KeyType"));
+			typeName = new Lazy<string>(() => FindTypeNames(Item.ElementSchemaType).FirstOrDefault() ?? String.Empty);
+			type = new Lazy<Type>(() => GetTypeFromXmlType(TypeName, Item.ElementSchemaType.TypeCode));
+			isPrimaryKey = new Lazy<bool>(() => FindTypeNames(Item.ElementSchemaType).Contains("KeyType"));
 		} // ctor
 
 		public XName Name => GetXName(Item.QualifiedName);
@@ -280,6 +312,47 @@ namespace TecWare.DE.Server.Configuration
 
 	#endregion
 
+	#region -- class DEConfigurationElementValue --------------------------------------
+
+	/// <summary></summary>
+	internal class DEConfigurationElementValue : IDEConfigurationValue
+	{
+		private readonly XmlSchemaSimpleType schemaType;
+		private readonly Lazy<string> typeName;
+		private readonly Lazy<Type> type;
+
+		internal DEConfigurationElementValue(XmlSchemaSimpleType schemaType)
+		{
+			this.schemaType = schemaType ?? throw new ArgumentNullException(nameof(schemaType));
+
+			typeName = new Lazy<string>(() => FindTypeNames(schemaType).FirstOrDefault() ?? String.Empty);
+			type = new Lazy<Type>(() => GetTypeFromXmlType(TypeName, schemaType.TypeCode));
+		} // ctor
+
+		public bool IsList => GetListTypeVariation(schemaType);
+		public string TypeName => typeName.Value;
+		public Type Type => type.Value;
+		public string DefaultValue => null;
+	} // class DEConfigurationElementAttribute
+
+	#endregion
+
+	#region -- class DEMixedConfigurationValue ----------------------------------------
+
+	internal class DEMixedConfigurationValue : IDEConfigurationValue
+	{
+		private DEMixedConfigurationValue() { }
+
+		public string TypeName => "string";
+		public Type Type => typeof(string);
+		public string DefaultValue => null;
+		public bool IsList => false;
+
+		public static IDEConfigurationValue Default { get; } = new DEMixedConfigurationValue();
+	} // class DEMixedConfigurationValue
+
+	#endregion
+
 	#region -- class DEConfigurationElement -------------------------------------------
 
 	/// <summary></summary>
@@ -289,56 +362,36 @@ namespace TecWare.DE.Server.Configuration
 		private readonly Lazy<string> typeName;
 		private readonly Lazy<Type> getClassType;
 		private readonly Lazy<bool> getBrowsable;
+		private readonly Lazy<IDEConfigurationValue> getValue;
 
 		public DEConfigurationElement(IServiceProvider sp, XmlSchemaElement element)
 			: base(element)
 		{
 			this.sp = sp;
 
-			this.typeName = new Lazy<string>(() => FindTypeNames(Item.ElementSchemaType).FirstOrDefault() ?? String.Empty);
-			getClassType = new Lazy<Type>(() =>
-				{
-					var classType = (Type)null;
-					var appInfo = element.Annotation?.Items.OfType<XmlSchemaAppInfo>().FirstOrDefault();
-					if (appInfo != null)
-					{
-						var classTypeElement = appInfo.Markup.OfType<XmlElement>().Where(x => x.LocalName == "class").FirstOrDefault();
-						if (classTypeElement != null)
-						{
-							var typeString = classTypeElement.InnerText;
-							try
-							{
-								if (typeString.IndexOf(',') == -1) // this is relative type
-								{
-									var sourceUri = DEConfigItem.GetSourceUri(appInfo);
-									var posType = sourceUri.LastIndexOf(',');
-									if (posType != -1)
-										typeString = typeString + ", " + sourceUri.Substring(0, posType);
-								}
-
-								classType = Type.GetType(typeString, true, false);
-							}
-							catch (Exception e)
-							{
-								sp.LogProxy().Warn(new DEConfigurationException(appInfo, "Could not resolve type.", e)); // todo: exception mit position im schema
-							}
-						}
-					}
-					return classType;
-				}
-			);
+			typeName = new Lazy<string>(() => FindTypeNames(Item.ElementSchemaType).FirstOrDefault() ?? String.Empty);
+			getClassType = new Lazy<Type>(() => FindClassType(Item, sp));
 			getBrowsable = new Lazy<bool>(() =>
 				{
-					var appInfo = element.Annotation?.Items.OfType<XmlSchemaAppInfo>().FirstOrDefault();
+					var appInfo = Item.Annotation?.Items.OfType<XmlSchemaAppInfo>().FirstOrDefault();
 					if (appInfo != null)
 					{
 						var browsableElement = appInfo.Markup.OfType<XmlElement>().Where(x => x.LocalName == "browsable").FirstOrDefault();
-						return browsableElement.InnerText.ChangeType<bool>();
+						return browsableElement == null || browsableElement.InnerText == null || browsableElement.InnerText.ChangeType<bool>();
 					}
 					else
 						return true;
 				}
 			);
+			getValue = new Lazy<IDEConfigurationValue>(() =>
+			{
+				if (Item.ElementSchemaType.IsMixed)
+					return DEMixedConfigurationValue.Default;
+				else if (Item.ElementSchemaType.BaseXmlSchemaType is XmlSchemaSimpleType simpleType)
+					return new DEConfigurationElementValue(simpleType);
+				else
+					return null;
+			});
 		} // ctor
 
 		private IEnumerable<IDEConfigurationElement> GetElements(XmlSchemaObjectCollection items)
@@ -351,10 +404,15 @@ namespace TecWare.DE.Server.Configuration
 				switch (x)
 				{
 					case XmlSchemaElement element:
-						if (!(element.ElementSchemaType is XmlSchemaSimpleType))
+						if (!(element.ElementSchemaType is XmlSchemaSimpleType)
+							&& FindClassTypeString(element, out var appinfo) == null)
 						{
 							if (element.RefName != null && element.Name == null) // resolve reference
-								yield return sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
+							{
+								var el = sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
+								if (el.ClassType == null)
+									yield return el;
+							}
 							else
 								yield return new DEConfigurationElement(sp, element);
 						}
@@ -388,7 +446,7 @@ namespace TecWare.DE.Server.Configuration
 		{
 			if (type is XmlSchemaSimpleType)
 				return true;
-			else if (type is XmlSchemaComplexType ct)
+			else if (type is XmlSchemaComplexType ct && ct.AttributeUses.Count == 0)
 				return ct.ContentType == XmlSchemaContentType.TextOnly;
 			else
 				return false;
@@ -415,6 +473,8 @@ namespace TecWare.DE.Server.Configuration
 
 		public string TypeName => typeName.Value;
 		public Type ClassType => getClassType.Value;
+
+		public IDEConfigurationValue Value => getValue.Value;
 
 		public int MinOccurs => Item.MinOccurs == Decimal.MaxValue ? Int32.MaxValue : Decimal.ToInt32(Item.MinOccurs);
 		public int MaxOccurs => Item.MaxOccurs == Decimal.MaxValue ? Int32.MaxValue : Decimal.ToInt32(Item.MaxOccurs);

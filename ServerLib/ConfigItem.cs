@@ -14,6 +14,7 @@
 //
 #endregion
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -938,6 +939,10 @@ namespace TecWare.DE.Server
 		/// <summary>Zugriff auf die aktuelle Konfiguration</summary>
 		public XElement Config => currentConfig;
 
+		/// <summary>Access configuration lua friendly.</summary>
+		[LuaMember("Config")]
+		public LuaTable LuaConfig { get => ConfigNode.ToTable(); set { } }
+
 		#endregion
 
 		#region -- Validation Helper --------------------------------------------------
@@ -1001,77 +1006,71 @@ namespace TecWare.DE.Server
 
 		#region -- Http ---------------------------------------------------------------
 
-		private static void BuildAnnotatedAttribute(XElement annotatedConfig, IDEConfigurationAttribute attributeDefinition, string value)
+		private static XElement BuildAnnotatedAttribute(string name, string typeName, IDEConfigurationAnnotated documentation, object value, bool isDefault)
 		{
 			var property = new XElement("attribute");
 
-			property.SetAttributeValue("name", attributeDefinition.Name.LocalName);
-			property.SetAttributeValue("typename", attributeDefinition.TypeName);
-			property.SetAttributeValue("documentation", attributeDefinition.Documentation);
+			property.SetAttributeValue("name", name);
+			property.SetAttributeValue("typename", typeName);
+			property.SetAttributeValue("documentation", documentation?.Documentation);
 
-			if (value == null) // default property
+			property.SetAttributeValue("isDefault", isDefault);
+			if (value != null)
 			{
-				property.SetAttributeValue("isDefault", true);
-				if (attributeDefinition.DefaultValue != null)
-					property.Add(new XText(attributeDefinition.DefaultValue));
-			}
-			else // value property
-			{
-				property.SetAttributeValue("isDefault", false);
-				property.Add(new XText(Procs.ChangeType<string>(value)));
+				if (value is object[] arr)
+					property.Add(new XText(String.Join(" ", arr.Select(c => c.ChangeType<string>()))));
+				else
+					property.Add(new XText(Procs.ChangeType<string>(value)));
 			}
 
-			annotatedConfig.Add(property);
-		} // proc BuildAnnotatedAttribute
+			return property;
+		} // func BuildAnnotatedAttribute
 
-		private XElement BuildAnnotatedConfigNode(XName name, XElement config, bool viewAll)
+
+		private static XElement BuildAnnotatedAttribute(IDEConfigurationAttribute attributeDefinition, object value, bool isDefault)
+			=> BuildAnnotatedAttribute(attributeDefinition.Name.LocalName, attributeDefinition.TypeName, attributeDefinition, value, isDefault);
+
+		private XElement BuildAnnotatedConfigNode(XConfigNode configNode, bool viewAll)
 		{
 			var annotatedElement = new XElement("element");
-			var elementDefinition = Server.Configuration[name];
+			annotatedElement.SetAttributeValue("name", configNode.Name.LocalName);
+			annotatedElement.SetAttributeValue("documentation", configNode.ConfigurationElement.Documentation);
+			annotatedElement.SetAttributeValue("classType", configNode.ConfigurationElement.ClassType?.FullName);
 
-			annotatedElement.SetAttributeValue("name", name.LocalName);
-			if (elementDefinition != null)
+			// value of the element
+			if (configNode.ConfigurationElement.Value != null)
 			{
-				annotatedElement.SetAttributeValue("documentation", elementDefinition.Documentation);
-				if (elementDefinition.ClassType != null)
-					annotatedElement.SetAttributeValue("classType", elementDefinition.ClassType.FullName);
+				var value = configNode.Element?.Value;
+				annotatedElement.Add(BuildAnnotatedAttribute("(Default)", configNode.ConfigurationElement.TypeName, configNode.ConfigurationElement, XConfigNode.GetConfigurationValue(configNode.ConfigurationElement.Value, value), value == null));
+			}
 
-				// add attributes
-				foreach (var c in elementDefinition.GetAttributes())
+			// add attributes
+			foreach (var c in configNode.ConfigurationElement.GetAttributes())
+			{
+				var value = configNode.GetAttributeValueCore(c);
+				annotatedElement.Add(BuildAnnotatedAttribute(c, XConfigNode.GetConfigurationValue(c, value), value == null));
+			}
+
+			// add elements
+			foreach (var c in configNode.ConfigurationElement.GetElements())
+			{
+				Debug.Print(c.Name.LocalName);
+				if (viewAll || c.IsBrowsable)
 				{
-
-					var attribute = config?.Attribute(c.Name);
-					if (attribute != null || c.MaxOccurs == 1)
+					if (c.MaxOccurs == 1)
 					{
-						BuildAnnotatedAttribute(annotatedElement, c, attribute == null ? config?.Element(c.Name)?.Value : attribute.Value);
+						var xNode = configNode.Element?.Element(c.Name);
+						if (c.MinOccurs < 1 || xNode != null)
+							annotatedElement.Add(BuildAnnotatedConfigNode(XConfigNode.Create(c, xNode), viewAll));
 					}
-					else if (config != null)
+					else if (configNode.Element != null)
 					{
-						foreach (var element in config.Elements(c.Name))
-						{
-							if (element.Value != null)
-								BuildAnnotatedAttribute(annotatedElement, c, element.Value);
-						}
-					}
-				}
-
-				// add elements
-				foreach (var c in elementDefinition.GetElements())
-				{
-					if (c.ClassType == null && (viewAll || c.IsBrowsable))
-					{
-						if (c.MaxOccurs == 1)
-						{
-							annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, config?.Element(c.Name), viewAll));
-						}
-						else if (config != null)
-						{
-							foreach (var x in config.Elements(c.Name))
-								annotatedElement.Add(BuildAnnotatedConfigNode(c.Name, x, viewAll));
-						}
+						foreach (var x in configNode.Element.Elements(c.Name))
+							annotatedElement.Add(BuildAnnotatedConfigNode(XConfigNode.Create(c, x), viewAll));
 					}
 				}
 			}
+
 			return annotatedElement;
 		} // proc BuildAnnotatedConfigNode
 
@@ -1085,7 +1084,7 @@ namespace TecWare.DE.Server
 			if (raw || config == null)
 				return config;
 			else
-				return BuildAnnotatedConfigNode(config.Name, config, all);
+				return BuildAnnotatedConfigNode(ConfigNode, all);
 		} // func HttpConfigAction
 
 		#endregion
@@ -1095,7 +1094,7 @@ namespace TecWare.DE.Server
 		internal async Task UnsafeInvokeHttpActionAsync(string action, IDEWebRequestScope r)
 		{
 			// execute the exceion within the thread pool
-			var (err, returnValue) =  await Task.Run(() => InvokeAction(action, r));
+			var (err, returnValue) = await Task.Run(() => InvokeAction(action, r));
 			if (!err)
 				await r.RollbackAsync();
 
