@@ -1050,6 +1050,8 @@ namespace TecWare.DE.Server
 				try
 				{
 					buf = Encoding.UTF8.GetBytes(xAnswer.ToString(SaveOptions.None));
+					if (buf.Length > 1 << 20)
+						throw new ArgumentOutOfRangeException("Answer to big.");
 				}
 				catch (Exception e)
 				{
