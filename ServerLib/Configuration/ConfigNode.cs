@@ -308,10 +308,49 @@ namespace TecWare.DE.Server.Configuration
 
 		/// <summary></summary>
 		/// <param name="binder"></param>
+		/// <param name="indexes"></param>
+		/// <param name="result"></param>
+		/// <returns></returns>
+		public override bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object result)
+		{
+			if (binder.CallInfo.ArgumentCount == 1)
+			{
+				switch(indexes[0])
+				{
+					case string memberName:
+						return TryGetProperty(memberName, out result);
+					default:
+						return base.TryGetIndex(binder, indexes, out result);
+				}
+			}
+			else
+				return base.TryGetIndex(binder, indexes, out result);
+		} // func TryGetIndex
+
+		/// <summary></summary>
+		/// <param name="binder"></param>
 		/// <param name="result"></param>
 		/// <returns></returns>
 		public override bool TryGetMember(GetMemberBinder binder, out object result)
-			=> TryGetProperty(binder.Name, out result) || base.TryGetMember(binder, out result);
+		{
+			if (String.Compare(binder.Name, nameof(Name), binder.IgnoreCase) == 0)
+			{
+				result = Name.LocalName;
+				return true;
+			}
+			else if (String.Compare(binder.Name, nameof(Element), binder.IgnoreCase) == 0)
+			{
+				result = Element;
+				return true;
+			}
+			else if (String.Compare(binder.Name, nameof(Value), binder.IgnoreCase) == 0)
+			{
+				result = Value;
+				return true;
+			}
+			else
+				return TryGetProperty(binder.Name, out result) || base.TryGetMember(binder, out result);
+		} // func TryGetMember
 
 		/// <summary>Return keys.</summary>
 		/// <returns></returns>
