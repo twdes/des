@@ -41,8 +41,8 @@ namespace TecWare.DE.Server.Configuration
 
 			public XConfigNodes(XElement parentElement, IDEConfigurationElement configurationElement)
 			{
-				if( parentElement == null)
-					 throw new ArgumentNullException(nameof(parentElement));
+				if (parentElement == null)
+					throw new ArgumentNullException(nameof(parentElement));
 
 				this.configurationElement = configurationElement ?? throw new ArgumentNullException(nameof(configurationElement));
 				elements = parentElement.Elements(configurationElement.Name).Select(x => new XConfigNode(configurationElement, x)).ToArray();
@@ -80,26 +80,6 @@ namespace TecWare.DE.Server.Configuration
 				return result != null;
 			} // func TryFindMember
 
-			public override bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object result)
-			{
-				if (binder.CallInfo.ArgumentCount == 1)
-				{
-					switch (indexes[0])
-					{
-						case string memberName when TryFindMember(memberName, out var configNode):
-							result = configNode;
-							return true;
-						case int idx when idx >= 0 && idx < elements.Length:
-							result = this[idx];
-							return true;
-						default:
-							return base.TryGetIndex(binder, indexes, out result);
-					}
-				}
-				else
-					return base.TryGetIndex(binder, indexes, out result);
-			} // func TryGetIndex
-
 			public override bool TryGetMember(GetMemberBinder binder, out object result)
 			{
 				if (primaryKey == null)
@@ -109,17 +89,13 @@ namespace TecWare.DE.Server.Configuration
 					result = configNode;
 					return true;
 				}
-				else if (String.Compare(binder.Name, nameof(Count), StringComparison.OrdinalIgnoreCase) == 0)
-				{
-					result = Count;
-					return true;
-				}
 				else
 					return base.TryGetMember(binder, out result);
 			} // func TryGetMember
 
 			public int Count => elements.Length;
-			public XConfigNode this[int index] => elements[index];
+			public XConfigNode this[int index] => index >= 0 && index < elements.Length ? elements[index] : null;
+			public XConfigNode this[string member] => primaryKey != null && TryFindMember(member, out var res) ? res : null;
 		} // class XConfigNodes
 
 		#endregion
@@ -131,10 +107,10 @@ namespace TecWare.DE.Server.Configuration
 		private XConfigNode(IDEConfigurationElement configurationElement, XElement element)
 		{
 			this.configurationElement = configurationElement ?? throw new ArgumentNullException(nameof(configurationElement));
-			
+
 			getElements = new Lazy<Dictionary<string, IDEConfigurationAnnotated>>(() =>
 				{
-					var r = new Dictionary<string, IDEConfigurationAnnotated> (StringComparer.OrdinalIgnoreCase);
+					var r = new Dictionary<string, IDEConfigurationAnnotated>(StringComparer.OrdinalIgnoreCase);
 
 					// value of the element
 					if (configurationElement.Value != null)
@@ -234,7 +210,7 @@ namespace TecWare.DE.Server.Configuration
 
 			return value;
 		} // func GetAttributeValueCore
-		
+
 		private PropertyValue GetPropertyValue(IDEConfigurationAnnotated item)
 		{
 			switch (item)
@@ -315,7 +291,7 @@ namespace TecWare.DE.Server.Configuration
 		{
 			if (binder.CallInfo.ArgumentCount == 1)
 			{
-				switch(indexes[0])
+				switch (indexes[0])
 				{
 					case string memberName:
 						return TryGetProperty(memberName, out result);
@@ -332,29 +308,11 @@ namespace TecWare.DE.Server.Configuration
 		/// <param name="result"></param>
 		/// <returns></returns>
 		public override bool TryGetMember(GetMemberBinder binder, out object result)
-		{
-			if (String.Compare(binder.Name, nameof(Name), binder.IgnoreCase) == 0)
-			{
-				result = Name.LocalName;
-				return true;
-			}
-			else if (String.Compare(binder.Name, nameof(Element), binder.IgnoreCase) == 0)
-			{
-				result = Element;
-				return true;
-			}
-			else if (String.Compare(binder.Name, nameof(Value), binder.IgnoreCase) == 0)
-			{
-				result = Value;
-				return true;
-			}
-			else
-				return TryGetProperty(binder.Name, out result) || base.TryGetMember(binder, out result);
-		} // func TryGetMember
+			=> TryGetProperty(binder.Name, out result) || base.TryGetMember(binder, out result);
 
 		/// <summary>Return keys.</summary>
 		/// <returns></returns>
-		public override IEnumerable<string> GetDynamicMemberNames() 
+		public override IEnumerable<string> GetDynamicMemberNames()
 			=> getElements.Value.Keys;
 
 		/// <summary></summary>
