@@ -941,7 +941,7 @@ namespace TecWare.DE.Server
 
 		/// <summary>Access configuration lua friendly.</summary>
 		[LuaMember("Config")]
-		public LuaTable LuaConfig { get => ConfigNode.ToTable(); set { } }
+		public dynamic LuaConfig { get => ConfigNode; set { } }
 
 		#endregion
 

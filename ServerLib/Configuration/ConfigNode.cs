@@ -16,6 +16,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Dynamic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -28,26 +29,33 @@ using TecWare.DE.Stuff;
 namespace TecWare.DE.Server.Configuration
 {
 	/// <summary>Configuration node, that read attributes and elements with support from the schema.</summary>
-	public sealed class XConfigNode : IPropertyEnumerableDictionary
+	public sealed class XConfigNode : DynamicObject, IPropertyEnumerableDictionary
 	{
 		#region -- class XConfigNodes -------------------------------------------------
 
-		private sealed class XConfigNodes : IEnumerable<XConfigNode>
+		private sealed class XConfigNodes : IReadOnlyList<XConfigNode>
 		{
-			private readonly XElement parentElement;
+			private readonly XConfigNode[] elements;
 			private readonly IDEConfigurationElement configurationElement;
 
 			public XConfigNodes(XElement parentElement, IDEConfigurationElement configurationElement)
 			{
-				this.parentElement = parentElement ?? throw new ArgumentNullException(nameof(parentElement));
+				if( parentElement == null)
+					 throw new ArgumentNullException(nameof(parentElement));
+
 				this.configurationElement = configurationElement ?? throw new ArgumentNullException(nameof(configurationElement));
+
+				elements = parentElement.Elements(configurationElement.Name).Select(x => new XConfigNode(configurationElement, x)).ToArray();
 			} // ctor
 
 			public IEnumerator<XConfigNode> GetEnumerator()
-				=> parentElement.Elements(configurationElement.Name).Select(x => new XConfigNode(configurationElement, x)).GetEnumerator();
+				=> elements.Cast<XConfigNode>().GetEnumerator();
 
 			IEnumerator IEnumerable.GetEnumerator()
-				=> GetEnumerator();
+				=> elements.GetEnumerator();
+
+			public int Count => elements.Length;
+			public XConfigNode this[int index] => elements[index];
 		} // class XConfigNodes
 
 		#endregion
@@ -233,6 +241,18 @@ namespace TecWare.DE.Server.Configuration
 			=> TryGetProperty(name, out var value)
 				? value
 				: throw new ArgumentException(String.Format("@{0} is not defined.", name));
+
+		/// <summary></summary>
+		/// <param name="binder"></param>
+		/// <param name="result"></param>
+		/// <returns></returns>
+		public override bool TryGetMember(GetMemberBinder binder, out object result)
+			=> TryGetProperty(binder.Name, out result) || base.TryGetMember(binder, out result);
+
+		/// <summary>Return keys.</summary>
+		/// <returns></returns>
+		public override IEnumerable<string> GetDynamicMemberNames() 
+			=> base.GetDynamicMemberNames();
 
 		/// <summary></summary>
 		public XName Name => element?.Name ?? configurationElement.Name;
