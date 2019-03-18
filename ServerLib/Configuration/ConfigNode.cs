@@ -33,9 +33,10 @@ namespace TecWare.DE.Server.Configuration
 	{
 		#region -- class XConfigNodes -------------------------------------------------
 
-		private sealed class XConfigNodes : IReadOnlyList<XConfigNode>
+		private sealed class XConfigNodes : DynamicObject, IReadOnlyList<XConfigNode>
 		{
 			private readonly XConfigNode[] elements;
+			private readonly IDEConfigurationAttribute primaryKey;
 			private readonly IDEConfigurationElement configurationElement;
 
 			public XConfigNodes(XElement parentElement, IDEConfigurationElement configurationElement)
@@ -44,8 +45,8 @@ namespace TecWare.DE.Server.Configuration
 					 throw new ArgumentNullException(nameof(parentElement));
 
 				this.configurationElement = configurationElement ?? throw new ArgumentNullException(nameof(configurationElement));
-
 				elements = parentElement.Elements(configurationElement.Name).Select(x => new XConfigNode(configurationElement, x)).ToArray();
+				primaryKey = configurationElement.GetAttributes().FirstOrDefault(a => a.IsPrimaryKey);
 			} // ctor
 
 			public IEnumerator<XConfigNode> GetEnumerator()
@@ -53,6 +54,69 @@ namespace TecWare.DE.Server.Configuration
 
 			IEnumerator IEnumerable.GetEnumerator()
 				=> elements.GetEnumerator();
+
+			private string GetPrimaryKeyValue(XConfigNode c)
+			{
+				var value = GetConfigurationValue(primaryKey, c.GetAttributeValueCore(primaryKey));
+				return value?.ChangeType<string>();
+			}  // func GetPrimaryKeyValue
+
+			private IEnumerable<string> GetCurrentMembers()
+			{
+				foreach (var c in elements)
+				{
+					var value = GetPrimaryKeyValue(c);
+					if (value != null)
+						yield return value;
+				}
+			} // func  GetCurrentMembers
+
+			public override IEnumerable<string> GetDynamicMemberNames()
+				=> primaryKey == null ? Array.Empty<string>() : GetCurrentMembers();
+
+			private bool TryFindMember(string memberName, out XConfigNode result)
+			{
+				result = elements.FirstOrDefault(x => String.Compare(memberName, GetPrimaryKeyValue(x), StringComparison.OrdinalIgnoreCase) == 0);
+				return result != null;
+			} // func TryFindMember
+
+			public override bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object result)
+			{
+				if (binder.CallInfo.ArgumentCount == 1)
+				{
+					switch (indexes[0])
+					{
+						case string memberName when TryFindMember(memberName, out var configNode):
+							result = configNode;
+							return true;
+						case int idx when idx >= 0 && idx < elements.Length:
+							result = this[idx];
+							return true;
+						default:
+							return base.TryGetIndex(binder, indexes, out result);
+					}
+				}
+				else
+					return base.TryGetIndex(binder, indexes, out result);
+			} // func TryGetIndex
+
+			public override bool TryGetMember(GetMemberBinder binder, out object result)
+			{
+				if (primaryKey == null)
+					return base.TryGetMember(binder, out result);
+				else if (TryFindMember(binder.Name, out var configNode))
+				{
+					result = configNode;
+					return true;
+				}
+				else if (String.Compare(binder.Name, nameof(Count), StringComparison.OrdinalIgnoreCase) == 0)
+				{
+					result = Count;
+					return true;
+				}
+				else
+					return base.TryGetMember(binder, out result);
+			} // func TryGetMember
 
 			public int Count => elements.Length;
 			public XConfigNode this[int index] => elements[index];
@@ -252,7 +316,7 @@ namespace TecWare.DE.Server.Configuration
 		/// <summary>Return keys.</summary>
 		/// <returns></returns>
 		public override IEnumerable<string> GetDynamicMemberNames() 
-			=> base.GetDynamicMemberNames();
+			=> getElements.Value.Keys;
 
 		/// <summary></summary>
 		public XName Name => element?.Name ?? configurationElement.Name;

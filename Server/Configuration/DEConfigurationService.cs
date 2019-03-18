@@ -59,12 +59,12 @@ namespace TecWare.DE.Server.Configuration
 		private readonly IDEServerResolver resolver;
 
 		private readonly string configurationFile;
-		private PropertyDictionary configurationProperties;
+		private readonly PropertyDictionary configurationProperties;
 
 		private DateTime configurationStamp; // max timestamp of the known configuration files
 		private Dictionary<string, DateTime> knownConfigurationFiles = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
-		private XmlNameTable nameTable; // name table
+		private readonly XmlNameTable nameTable; // name table
 		private XmlSchemaSet schema; // complete schema
 		private List<SchemaAssemblyDefinition> assemblySchemas = new List<SchemaAssemblyDefinition>(); // mapping schema to assembly
 
@@ -316,6 +316,10 @@ namespace TecWare.DE.Server.Configuration
 				throw;
 			}
 
+			// debug configuration
+			if (configurationProperties.GetProperty("OutputTemp", false))
+				doc.Save(Path.Combine(Path.GetTempPath(), "des.xml"));
+
 			return doc.Root;
 		} // func ParseConfiguration
 
@@ -508,7 +512,7 @@ namespace TecWare.DE.Server.Configuration
 		{
 			var rootElement = this[xRoot.Name];
 			var addElement = rootElement != null ? this[xAdd.Name] : null;
-			var childElements = rootElement?.GetElements().ToArray();
+			var childElements = rootElement?.GetElements(true).ToArray();
 			var childInsertIndex = childElements != null
 				? Array.FindIndex(childElements, c => addElement?.IsName(c.Name) ?? c.Name == xAdd.Name)
 				: -1;

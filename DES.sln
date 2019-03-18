@@ -32,13 +32,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{F472E4
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{075816AA-6B91-4BA9-AD94-08C7644E0E70}"
 	ProjectSection(SolutionItems) = preProject
+		docs\Configuration.de.md = docs\Configuration.de.md
 		docs\Env.IO.de.md = docs\Env.IO.de.md
 		docs\Passwords.de.md = docs\Passwords.de.md
 		docs\SecurityTokens.de.md = docs\SecurityTokens.de.md
 		docs\Users.de.md = docs\Users.de.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DESacme", "Extern\acme\DESacme\DESacme.csproj", "{9C2BC118-1D96-4B0D-AFCC-209D40580863}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DESacme", "Extern\acme\DESacme\DESacme.csproj", "{9C2BC118-1D96-4B0D-AFCC-209D40580863}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -394,7 +394,10 @@ namespace TecWare.DE.Server.Configuration
 			});
 		} // ctor
 
-		private IEnumerable<IDEConfigurationElement> GetElements(XmlSchemaObjectCollection items)
+		public override string ToString() 
+			=> typeName.Value ?? "ConfigurationElement";
+
+		private IEnumerable<IDEConfigurationElement> GetElements(XmlSchemaObjectCollection items, bool includeClassNodes)
 		{
 			if (items == null)
 				yield break;
@@ -405,12 +408,12 @@ namespace TecWare.DE.Server.Configuration
 				{
 					case XmlSchemaElement element:
 						if (!(element.ElementSchemaType is XmlSchemaSimpleType)
-							&& FindClassTypeString(element, out var appinfo) == null)
+							&& (includeClassNodes || FindClassTypeString(element, out var appinfo) == null))
 						{
 							if (element.RefName != null && element.Name == null) // resolve reference
 							{
 								var el = sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
-								if (el.ClassType == null)
+								if (includeClassNodes || el.ClassType == null)
 									yield return el;
 							}
 							else
@@ -418,24 +421,24 @@ namespace TecWare.DE.Server.Configuration
 						}
 						break;
 					case XmlSchemaSequence seq:
-						foreach (var c in GetElements(seq.Items))
+						foreach (var c in GetElements(seq.Items, includeClassNodes))
 							yield return c;
 						break;
 					case XmlSchemaChoice choice:
-						foreach (var c in GetElements(choice.Items))
+						foreach (var c in GetElements(choice.Items, includeClassNodes))
 							yield return c;
 						break;
 					case XmlSchemaAll all:
-						foreach (var c in GetElements(all.Items))
+						foreach (var c in GetElements(all.Items, includeClassNodes))
 							yield return c;
 						break;
 				}
 			}
 		} // func GetElements
 
-		public IEnumerable<IDEConfigurationElement> GetElements()
+		public IEnumerable<IDEConfigurationElement> GetElements(bool includeClassNodes)
 			=> Item.ElementSchemaType is XmlSchemaComplexType complexType
-				? GetElements(GetSubSequences(complexType))
+				? GetElements(GetSubSequences(complexType), includeClassNodes)
 				: Array.Empty<IDEConfigurationElement>();
 
 		public bool IsName(XName other)
