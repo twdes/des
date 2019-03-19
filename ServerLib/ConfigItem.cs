@@ -1040,7 +1040,7 @@ namespace TecWare.DE.Server
 			// value of the element
 			if (configNode.ConfigurationElement.Value != null)
 			{
-				var value = configNode.Element?.Value;
+				var value = configNode.Data?.Value;
 				annotatedElement.Add(BuildAnnotatedAttribute("(Default)", configNode.ConfigurationElement.TypeName, configNode.ConfigurationElement, XConfigNode.GetConfigurationValue(configNode.ConfigurationElement.Value, value), value == null));
 			}
 
@@ -1059,13 +1059,13 @@ namespace TecWare.DE.Server
 				{
 					if (c.MaxOccurs == 1)
 					{
-						var xNode = configNode.Element?.Element(c.Name);
+						var xNode = configNode.Data?.Element(c.Name);
 						if (c.MinOccurs < 1 || xNode != null)
 							annotatedElement.Add(BuildAnnotatedConfigNode(XConfigNode.Create(c, xNode), viewAll));
 					}
-					else if (configNode.Element != null)
+					else if (configNode.Data != null)
 					{
-						foreach (var x in configNode.Element.Elements(c.Name))
+						foreach (var x in configNode.Data.Elements(c.Name))
 							annotatedElement.Add(BuildAnnotatedConfigNode(XConfigNode.Create(c, x), viewAll));
 					}
 				}

@@ -1538,7 +1538,7 @@ namespace TecWare.DE.Server
 			var i = 0;
 			var scriptRemove = (from s in scripts where s is LuaFileBasedScript select (LuaFileBasedScript)s).ToArray();
 
-			foreach (var cur in XConfigNode.GetElements(Server.Configuration, config.ConfigNew))
+			foreach (var cur in XConfigNode.Create(Server.Configuration, config.ConfigNew).Elements(xnLuaScript, xnLuaTestScript))
 			{
 				try
 				{

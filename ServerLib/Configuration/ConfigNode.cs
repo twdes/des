@@ -74,28 +74,26 @@ namespace TecWare.DE.Server.Configuration
 			public override IEnumerable<string> GetDynamicMemberNames()
 				=> primaryKey == null ? Array.Empty<string>() : GetCurrentMembers();
 
-			private bool TryFindMember(string memberName, out XConfigNode result)
+			private XConfigNode GetMember(string memberName)
 			{
-				result = elements.FirstOrDefault(x => String.Compare(memberName, GetPrimaryKeyValue(x), StringComparison.OrdinalIgnoreCase) == 0);
-				return result != null;
+				return elements.FirstOrDefault(x => String.Compare(memberName, GetPrimaryKeyValue(x), StringComparison.OrdinalIgnoreCase) == 0)
+					?? new XConfigNode(configurationElement, null);
 			} // func TryFindMember
 
 			public override bool TryGetMember(GetMemberBinder binder, out object result)
 			{
 				if (primaryKey == null)
 					return base.TryGetMember(binder, out result);
-				else if (TryFindMember(binder.Name, out var configNode))
+				else
 				{
-					result = configNode;
+					result = GetMember(binder.Name);
 					return true;
 				}
-				else
-					return base.TryGetMember(binder, out result);
 			} // func TryGetMember
 
 			public int Count => elements.Length;
 			public XConfigNode this[int index] => index >= 0 && index < elements.Length ? elements[index] : null;
-			public XConfigNode this[string member] => primaryKey != null && TryFindMember(member, out var res) ? res : null;
+			public XConfigNode this[string member] => primaryKey != null ? GetMember(member) : null;
 		} // class XConfigNodes
 
 		#endregion
@@ -256,6 +254,9 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func TryGetProperty
 
+		private IDEConfigurationElement GetElementDefinition(XName name)
+			=> getElements.Value.Values.OfType<IDEConfigurationElement>().FirstOrDefault(cur => cur.Name == name);
+
 		/// <summary>Returns all attributes as properties.</summary>
 		/// <returns></returns>
 		public IEnumerator<PropertyValue> GetEnumerator()
@@ -266,6 +267,70 @@ namespace TecWare.DE.Server.Configuration
 
 		IEnumerator IEnumerable.GetEnumerator()
 			=> GetEnumerator();
+
+		/// <summary>Return a specific element or the default representation.</summary>
+		/// <param name="name"></param>
+		/// <param name="throwException"></param>
+		/// <returns></returns>
+		public XConfigNode Element(XName name, bool throwException = true)
+		{
+			var elementConfiguration = GetElementDefinition(name);
+			if (elementConfiguration == null)
+			{
+				if (throwException)
+					throw new ArgumentOutOfRangeException($"'{name}' is not defined on {Name}.");
+				else
+					return null;
+			}
+
+			return new XConfigNode(elementConfiguration, element?.Element(name));
+		} // func Element
+
+		/// <summary>Returns all elements of the current node with a specific name or names.</summary>
+		/// <param name="names">List of names to select.</param>
+		/// <returns></returns>
+		public IEnumerable<XConfigNode> Elements(params XName[] names)
+		{
+			if (element != null)
+			{
+				var comparer = (from n in names
+								let ce = GetElementDefinition(n)
+								where ce != null
+								select ce).ToArray();
+
+				if (comparer.Length == 0)
+				{
+					if (element != null)
+					{
+						foreach (var attr in getElements.Value.Values.OfType<IDEConfigurationElement>())
+							yield return new XConfigNode(attr, element.Element(attr.Name));
+					}
+				}
+				else if (comparer.Length == 1)
+				{
+					var name = comparer[0].Name;
+					var configurationElement = comparer[0];
+					if (configurationElement != null)
+					{
+						foreach (var x in element.Elements(name))
+							yield return new XConfigNode(configurationElement, x);
+					}
+				}
+				else
+				{
+					var idx = -1;
+					foreach (var x in element.Elements())
+					{
+						idx = idx >= 0 && comparer[idx].Name == x.Name
+							? idx
+							: Array.FindIndex(comparer, c => c.Name == x.Name);
+
+						if (idx >= 0)
+							yield return new XConfigNode(comparer[idx], x);
+					}
+				}
+			}
+		} // func Elements
 
 		/// <summary></summary>
 		/// <typeparam name="T"></typeparam>
@@ -294,19 +359,21 @@ namespace TecWare.DE.Server.Configuration
 		public override IEnumerable<string> GetDynamicMemberNames()
 			=> getElements.Value.Keys;
 
-		/// <summary></summary>
+		/// <summary>Contains this value only default values.</summary>
+		public bool IsDefault => element == null;
+		/// <summary>Elementname of this configuration node.</summary>
 		public XName Name => element?.Name ?? configurationElement.Name;
-		/// <summary></summary>
-		public XElement Element => element;
+		/// <summary>Raw content of this configuration node.</summary>
+		public XElement Data => element;
 		/// <summary>Value of the configuration element.</summary>
 		public object Value => configurationElement.Value != null ? GetConfigurationValue(configurationElement.Value, element?.Value) : null;
-		/// <summary></summary>
+		/// <summary>Description of this configuration element.</summary>
 		public IDEConfigurationElement ConfigurationElement => configurationElement;
 
 		/// <summary>Return member by name</summary>
 		/// <param name="memberName"></param>
 		/// <returns></returns>
-		public object this[string memberName]=>TryGetProperty(memberName, out var value) ? value:  null;
+		public object this[string memberName] => TryGetProperty(memberName, out var value) ? value : null;
 
 		// -- Static ----------------------------------------------------------
 
@@ -320,8 +387,8 @@ namespace TecWare.DE.Server.Configuration
 		} // proc CheckConfigurationElement
 
 		/// <summary>Create XConfigNode reader.</summary>
-		/// <param name="configurationElement"></param>
-		/// <param name="element"></param>
+		/// <param name="configurationElement">Configuration element</param>
+		/// <param name="element">Xml element</param>
 		/// <returns></returns>
 		public static XConfigNode Create(IDEConfigurationElement configurationElement, XElement element)
 		{
@@ -333,9 +400,9 @@ namespace TecWare.DE.Server.Configuration
 			return new XConfigNode(configurationElement, element);
 		} // func Create
 
-		/// <summary></summary>
-		/// <param name="configurationService"></param>
-		/// <param name="element"></param>
+		/// <summary>Create a configuration node for this element.</summary>
+		/// <param name="configurationService">Configuration service</param>
+		/// <param name="element">Xml element</param>
 		/// <returns></returns>
 		public static XConfigNode Create(IDEConfigurationService configurationService, XElement element)
 		{
@@ -344,53 +411,5 @@ namespace TecWare.DE.Server.Configuration
 
 			return Create(GetConfigurationElement(configurationService, element.Name), element);
 		} // func Create
-
-		/// <summary></summary>
-		/// <param name="configurationService"></param>
-		/// <param name="baseElement"></param>
-		/// <param name="name"></param>
-		/// <returns></returns>
-		public static XConfigNode GetElement(IDEConfigurationService configurationService, XElement baseElement, XName name)
-			=> new XConfigNode(
-				GetConfigurationElement(configurationService, name),
-				baseElement?.Element(name)
-			);
-
-		/// <summary></summary>
-		/// <param name="configurationService"></param>
-		/// <param name="baseElement"></param>
-		/// <returns></returns>
-		public static IEnumerable<XConfigNode> GetElements(IDEConfigurationService configurationService, XElement baseElement)
-		{
-			IDEConfigurationElement lastConfigurationElement = null;
-			foreach (var cur in baseElement.Elements())
-			{
-				if (lastConfigurationElement == null
-					|| !lastConfigurationElement.IsName(cur.Name))
-				{
-					var tmp = configurationService[cur.Name];
-					if (tmp == null)
-						break;
-					lastConfigurationElement = tmp;
-				}
-
-				yield return new XConfigNode(lastConfigurationElement, cur);
-			}
-		} // func GetElements
-
-		/// <summary></summary>
-		/// <param name="configurationService"></param>
-		/// <param name="baseElement"></param>
-		/// <param name="name"></param>
-		/// <returns></returns>
-		public static IEnumerable<XConfigNode> GetElements(IDEConfigurationService configurationService, XElement baseElement, XName name)
-		{
-			var configurationElement = GetConfigurationElement(configurationService, name);
-			if (baseElement != null)
-			{
-				foreach (var cur in baseElement.Elements(name))
-					yield return new XConfigNode(configurationElement, cur);
-			}
-		} // func GetElements
 	} // class XConfigNode
 }
