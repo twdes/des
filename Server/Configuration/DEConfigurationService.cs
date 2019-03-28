@@ -552,8 +552,6 @@ namespace TecWare.DE.Server.Configuration
 			{
 				if (elementValueDefinition.IsList)
 					xRoot.Value = xRoot.Value + " " + xMerge.Value;
-				else
-					xRoot.Value = xMerge.Value;
 			}
 
 			// merge attributes
