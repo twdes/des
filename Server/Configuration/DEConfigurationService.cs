@@ -508,13 +508,16 @@ namespace TecWare.DE.Server.Configuration
 			MergeConfigTree(xPI.Document.Root, xDoc.Root, fileToken);
 		} // proc MergeConfigTree
 
+		private static bool IsSameConfigurationElement(XElement x, IDEConfigurationElement element, XName compareName)
+			=> element?.IsName(compareName) ?? x.Name == compareName;
+
 		private XElement MergeConfigTreeFindInsertBefore(XElement xRoot, XElement xAdd)
 		{
 			var rootElement = this[xRoot.Name];
 			var addElement = rootElement != null ? this[xAdd.Name] : null;
 			var childElements = rootElement?.GetElements(true).ToArray();
 			var childInsertIndex = childElements != null
-				? Array.FindIndex(childElements, c => addElement?.IsName(c.Name) ?? c.Name == xAdd.Name)
+				? Array.FindIndex(childElements, c => IsSameConfigurationElement(xAdd, addElement, c.Name))
 				: -1;
 
 			var xLastName = (XName)null;
@@ -522,15 +525,15 @@ namespace TecWare.DE.Server.Configuration
 			var startInsertAfter = false;
 			foreach (var xInsert in xRoot.Elements())
 			{
-				if (xInsert.Name != xLastName) // new name
+				if (xInsert.Name != xLastName) // check for a new xname
 				{
-					if (startInsertAfter)
+					if (startInsertAfter) // startInsertAfter - mode is set, return current element, to insert before
 						return xInsert;
-					if (xInsert.Name == xAdd.Name)
+					if (IsSameConfigurationElement(xAdd, addElement, xInsert.Name)) // check if this is the same name or substition group
 						startInsertAfter = true;
 					else if (childInsertIndex >= 0)
 					{
-						var tmp = Array.FindIndex(childElements, lastChildIndex, c => c.Name == xInsert.Name);
+						var tmp = Array.FindIndex(childElements, lastChildIndex, c => IsSameConfigurationElement(xInsert, this[xInsert.Name], c.Name));
 						if (tmp > lastChildIndex)
 						{
 							lastChildIndex = tmp;
