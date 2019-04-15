@@ -710,7 +710,7 @@ namespace TecWare.DE.Server
 					{
 						s.Push((xItem, indent, path));
 						x = xItem.FirstNode;
-						indent = "    ";
+						indent += "    ";
 						path = newPath;
 					}
 				}
@@ -731,11 +731,11 @@ namespace TecWare.DE.Server
 			if (maxLevel > 1)
 			{
 				// print formatted list
-				foreach (var c in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
+				foreach (var (path, name, displayName) in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
 				{
 					app.WriteLine(
 						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
-						new string[] { c.path, " : ", c.displayName }
+						new string[] { path, " : ", displayName }
 					);
 				}
 			}

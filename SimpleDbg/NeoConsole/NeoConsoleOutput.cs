@@ -267,11 +267,8 @@ namespace Neo.Console
 				throw new Win32Exception();
 		} // proc SetCursor
 
-		public void SetCursorPosition(int left, int top)
-		{
-			if (!SetConsoleCursorPosition(DangerousGetHandle, CreateCoord(left, top)))
-				throw new Win32Exception();
-		} // proc SetCursorPosition
+		public bool SetCursorPosition(int left, int top)
+			=> SetConsoleCursorPosition(DangerousGetHandle, CreateCoord(left, top));
 
 		public void SetColor(ConsoleColor foreground, ConsoleColor background)
 		{
