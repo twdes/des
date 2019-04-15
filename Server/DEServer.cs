@@ -1397,6 +1397,9 @@ namespace TecWare.DE.Server
 				}
 			} // func SafeIO
 
+			private static string GetFullFileName(object file)
+				=> file is FileSystemInfo fsi ? fsi.FullName : file as string;
+
 			/// <summary>Open a lua file handle for a file. The file will be added to the current scope. Files they 
 			/// are open for write, the changes to the file will be added to the transaction.</summary>
 			/// <param name="filename">Name of the file to open or create.</param>
@@ -1415,17 +1418,17 @@ namespace TecWare.DE.Server
 			/// <param name="encoding">Char encoding for the text access.</param>
 			/// <returns><see cref="LuaFile"/>-Handle.</returns>
 			[LuaMember("open")]
-			public LuaResult Open(string filename, string mode = "r", Encoding encoding = null)
+			public LuaResult Open(object filename, string mode = "r", Encoding encoding = null)
 			{
 				try
 				{
 					var forWrite = mode.IndexOfAny(new char[] { '+', 'w' }) > 0;
 					var forTrans = mode.IndexOf('t') >= 0;
 					if (forTrans && forWrite)
-						return new LuaResult(OpenRaw(filename, mode.IndexOf('m') >= 0));
+						return new LuaResult(OpenRaw(GetFullFileName(filename), mode.IndexOf('m') >= 0));
 					else // only read, no transaction
 					{
-						var file = LuaFileStream.OpenFile(filename, mode, encoding ?? Encoding.UTF8);
+						var file = LuaFileStream.OpenFile(GetFullFileName(filename), mode, encoding ?? Encoding.UTF8);
 						DEScope.GetScopeService<IDECommonScope>(forTrans)?.RegisterDispose(file);
 						return new LuaResult(file);
 					}
@@ -1441,11 +1444,11 @@ namespace TecWare.DE.Server
 			/// <param name="inMemory">Transaktion log is only written in memory.</param>
 			/// <returns>A <see cref="Stream"/> that supports transactions.</returns>
 			[LuaMember("openraw")]
-			public Stream OpenRaw(string filename, bool inMemory)
+			public Stream OpenRaw(object filename, bool inMemory)
 			{
 				var stream = inMemory
-					? DEFile.OpenInMemoryAsync(filename).AwaitTask()
-					: DEFile.OpenCopyAsync(filename).AwaitTask();
+					? DEFile.OpenInMemoryAsync(GetFullFileName(filename)).AwaitTask()
+					: DEFile.OpenCopyAsync(GetFullFileName(filename)).AwaitTask();
 
 				DEScope.GetScopeService<IDECommonScope>(true).RegisterDispose(stream);
 
@@ -1470,11 +1473,14 @@ namespace TecWare.DE.Server
 			/// <param name="throwException"></param>
 			/// <returns></returns>
 			[LuaMember("delete")]
-			public static LuaResult DeleteFile(string fileName, bool throwException = true)
+			public static LuaResult DeleteFile(object fileName, bool throwException = true)
 			{
 				if (throwException)
 				{
-					DEFile.DeleteAsync(fileName).AwaitTask();
+					if (fileName is FileInfo fi)
+						DEFile.DeleteAsync(fi).AwaitTask();
+					else
+						DEFile.DeleteAsync(GetFullFileName(fileName)).AwaitTask();
 					return new LuaResult(true);
 				}
 				else
@@ -1525,15 +1531,16 @@ namespace TecWare.DE.Server
 			/// <param name="targetExists"></param>
 			/// <returns></returns>
 			[LuaMember("copy")]
-			public static LuaResult CopyFile(string sourceFileName, string destinationName, bool throwException, object targetExists)
+			public static LuaResult CopyFile(object sourceFileName, object destinationName, bool throwException = true, object targetExists = null)
 			{
 				if (throwException)
 				{
-					var fi = DEFile.CopyAsync(sourceFileName, destinationName,
-						GetTargetExists(targetExists, throwException),
-						null
-					).AwaitTask();
-					return new LuaResult(true, fi);
+					var onExists = GetTargetExists(targetExists, throwException);
+					var destinationFileName = sourceFileName is FileInfo fiSourceFile && destinationName is FileSystemInfo fsiDestination
+						? DEFile.MoveAsync(fiSourceFile, fsiDestination, onExists, null).AwaitTask().FullName
+						: DEFile.MoveAsync(GetFullFileName(sourceFileName), GetFullFileName(destinationName), onExists, null).AwaitTask();
+
+					return new LuaResult(true, destinationFileName);
 				}
 				else
 					return SafeIO(() => CopyFile(sourceFileName, destinationName, true, targetExists));
@@ -1546,15 +1553,16 @@ namespace TecWare.DE.Server
 			/// <param name="targetExists"></param>
 			/// <returns></returns>
 			[LuaMember("move")]
-			public static LuaResult MoveFile(string sourceFileName, string destinationName, bool throwException, object targetExists)
+			public static LuaResult MoveFile(object sourceFileName, object destinationName, bool throwException = true, object targetExists = null)
 			{
 				if (throwException)
 				{
-					var fi = DEFile.MoveAsync(sourceFileName, destinationName,
-						GetTargetExists(targetExists, throwException),
-						null
-					).AwaitTask();
-					return new LuaResult(true, fi);
+					var onExists = GetTargetExists(targetExists, throwException);
+					var destinationFileName = sourceFileName is FileInfo fiSourceFile && destinationName is FileSystemInfo fsiDestination
+							? DEFile.MoveAsync(fiSourceFile, fsiDestination, onExists, null).AwaitTask().FullName
+							: DEFile.MoveAsync(GetFullFileName(sourceFileName), GetFullFileName(destinationName), onExists, null).AwaitTask();
+
+					return new LuaResult(true, destinationFileName);
 				}
 				else
 					return SafeIO(() => MoveFile(sourceFileName, destinationName, true, targetExists));
