@@ -1457,7 +1457,13 @@ namespace TecWare.DE.Server
 			/// <returns><see cref="LuaFile"/>-Handle.</returns>
 			[LuaMember("tmpfilenew")]
 			public LuaFile OpenTemp(Encoding encoding)
-				=> LuaTempFile.Create(Path.GetTempFileName(), encoding ?? Encoding.UTF8);
+			{
+				var file = LuaTempFile.Create(Path.GetTempFileName(), encoding ?? Encoding.UTF8);
+
+				DEScope.GetScopeService<IDECommonScope>(true).RegisterDispose(file);
+
+				return file;
+			} // func OpenTemp
 
 			/// <summary>Delete a file within a transaction.</summary>
 			/// <param name="fileName"></param>

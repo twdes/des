@@ -19,3 +19,7 @@ ntml
 
 Die registrierten Nutzer und ihre Rechte werden mit der Liste `tw_users`an der
 Wurzel abefragt.
+
+## Rechte
+
+Ein Nutzer hat immer das Recht `desUser`.
