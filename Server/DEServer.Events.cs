@@ -217,9 +217,9 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private int sendedRevision = 0;		// Last revision sent to the client (any)
-		private int currentRevision = 1;	// Current revision
-		private readonly Dictionary<string, FiredEvent> propertyChanged = new Dictionary<string, FiredEvent>();	// List of all fired events, sorted by rev.
+		private int sendedRevision = 0;     // Last revision sent to the client (any)
+		private int currentRevision = 1;    // Current revision
+		private readonly Dictionary<string, FiredEvent> propertyChanged = new Dictionary<string, FiredEvent>(); // List of all fired events, sorted by rev.
 		private readonly DEList<EventSession> eventSessions;                                                    // List with webSockets, they request events
 		private bool eventSessionsClosing = false;
 
@@ -270,7 +270,7 @@ namespace TecWare.DE.Server
 					ev.Reset(currentRevision, values);
 				else
 					propertyChanged[key] = ev = new FiredEvent(currentRevision, configPath, eventId, index, values);
-				
+
 				// web socket event handling
 				FireEventOnSocket(configPath, securityToken ?? item.SecurityToken, eventId, ev.GetEvent());
 			}
@@ -396,7 +396,7 @@ namespace TecWare.DE.Server
 		{
 			// prepare line
 			var eventLine = FormatEventLine(xEvent);
-			
+
 			using (eventSessions.EnterReadLock())
 			{
 				// a call to notify can cause a remove of this session, this will be done in a different thread
@@ -506,7 +506,7 @@ namespace TecWare.DE.Server
 				if (count > 0)
 				{
 					var end = startAt + count;
-					for (int i = startAt; i < end; i++)
+					for (var i = startAt; i < end; i++)
 						descriptor.WriteItem(new DEListItemWriter(xml), (T)list[i]);
 				}
 			} // proc WriteList
@@ -518,7 +518,7 @@ namespace TecWare.DE.Server
 				if (count > 0)
 				{
 					var end = startAt + count;
-					for (int i = startAt; i < end; i++)
+					for (var i = startAt; i < end; i++)
 						descriptor.WriteItem(new DEListItemWriter(xml), (T)list[i]);
 				}
 			} // proc WriteList

@@ -515,9 +515,11 @@ namespace TecWare.DE.Server.Configuration
 		{
 			var rootElement = this[xRoot.Name];
 			var addElement = rootElement != null ? this[xAdd.Name] : null;
-			var childElements = rootElement?.GetElements(true).ToArray();
+			var childElements = rootElement is DEConfigurationElement ce
+				? DEConfigurationHelper.GetAllSchemaElements(ce.Item).Select(c => DEConfigurationHelper.GetXName(c.QualifiedName)).ToArray()
+				: Array.Empty<XName>();
 			var childInsertIndex = childElements != null
-				? Array.FindIndex(childElements, c => IsSameConfigurationElement(xAdd, addElement, c.Name))
+				? Array.FindIndex(childElements, c => IsSameConfigurationElement(xAdd, addElement, c))
 				: -1;
 
 			var xLastName = (XName)null;
@@ -533,7 +535,7 @@ namespace TecWare.DE.Server.Configuration
 						startInsertAfter = true;
 					else if (childInsertIndex >= 0)
 					{
-						var tmp = Array.FindIndex(childElements, lastChildIndex, c => IsSameConfigurationElement(xInsert, this[xInsert.Name], c.Name));
+						var tmp = Array.FindIndex(childElements, lastChildIndex, c => IsSameConfigurationElement(xInsert, this[xInsert.Name], c));
 						if (tmp > lastChildIndex)
 						{
 							lastChildIndex = tmp;

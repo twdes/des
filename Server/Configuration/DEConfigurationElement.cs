@@ -142,6 +142,43 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func GetSubSequences
 
+		internal static IEnumerable<XmlSchemaElement> GetAllSchemaElements(XmlSchemaElement item)
+		{
+			return item.ElementSchemaType is XmlSchemaComplexType complexType
+				? GetAllSchemaElements(GetSubSequences(complexType))
+				: Array.Empty<XmlSchemaElement>();
+		} // func GetAllSchemaElements
+
+		internal static IEnumerable<XmlSchemaElement> GetAllSchemaElements(XmlSchemaObjectCollection items)
+		{
+			
+
+			if (items == null)
+				yield break;
+
+			foreach (var x in items)
+			{
+				switch (x)
+				{
+					case XmlSchemaElement element:
+						yield return element;
+						break;
+					case XmlSchemaSequence seq:
+						foreach (var c in GetAllSchemaElements(seq.Items))
+							yield return c;
+						break;
+					case XmlSchemaChoice choice:
+						foreach (var c in GetAllSchemaElements(choice.Items))
+							yield return c;
+						break;
+					case XmlSchemaAll all:
+						foreach (var c in GetAllSchemaElements(all.Items))
+							yield return c;
+						break;
+				}
+			}
+		} // func GetAllSchemaElements
+
 		public static XName GetXName(XmlQualifiedName xmlName)
 			=> xmlName == null || String.IsNullOrEmpty(xmlName.Name)
 				? null
@@ -397,49 +434,24 @@ namespace TecWare.DE.Server.Configuration
 		public override string ToString() 
 			=> typeName.Value ?? "ConfigurationElement";
 
-		private IEnumerable<IDEConfigurationElement> GetElements(XmlSchemaObjectCollection items, bool includeClassNodes)
+		public IEnumerable<IDEConfigurationElement> GetElements()
 		{
-			if (items == null)
-				yield break;
-
-			foreach (var x in items)
+			foreach (var element in GetAllSchemaElements(Item))
 			{
-				switch (x)
+				if (!(element.ElementSchemaType is XmlSchemaSimpleType)
+					&& FindClassTypeString(element, out var appinfo) == null)
 				{
-					case XmlSchemaElement element:
-						if (!(element.ElementSchemaType is XmlSchemaSimpleType)
-							&& (includeClassNodes || FindClassTypeString(element, out var appinfo) == null))
-						{
-							if (element.RefName != null && element.Name == null) // resolve reference
-							{
-								var el = sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
-								if (includeClassNodes || el.ClassType == null)
-									yield return el;
-							}
-							else
-								yield return new DEConfigurationElement(sp, element);
-						}
-						break;
-					case XmlSchemaSequence seq:
-						foreach (var c in GetElements(seq.Items, includeClassNodes))
-							yield return c;
-						break;
-					case XmlSchemaChoice choice:
-						foreach (var c in GetElements(choice.Items, includeClassNodes))
-							yield return c;
-						break;
-					case XmlSchemaAll all:
-						foreach (var c in GetElements(all.Items, includeClassNodes))
-							yield return c;
-						break;
+					if (element.RefName != null && element.Name == null) // resolve reference
+					{
+						var el = sp.GetService<DEConfigurationService>(typeof(IDEConfigurationService), true)[GetXName(element.QualifiedName)];
+						if (el.ClassType == null)
+							yield return el;
+					}
+					else
+						yield return new DEConfigurationElement(sp, element);
 				}
 			}
-		} // func GetElements
-
-		public IEnumerable<IDEConfigurationElement> GetElements(bool includeClassNodes)
-			=> Item.ElementSchemaType is XmlSchemaComplexType complexType
-				? GetElements(GetSubSequences(complexType), includeClassNodes)
-				: Array.Empty<IDEConfigurationElement>();
+		} // func GetElement
 
 		public bool IsName(XName other)
 			=> other == Name

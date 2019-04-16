@@ -111,7 +111,7 @@ namespace TecWare.DE.Server.Configuration
 		IEnumerable<IDEConfigurationAttribute> GetAttributes();
 		/// <summary>Enumerates the elements.</summary>
 		/// <returns></returns>
-		IEnumerable<IDEConfigurationElement> GetElements(bool includeClassNodes = false);
+		IEnumerable<IDEConfigurationElement> GetElements();
 
 		/// <summary>Class Type</summary>
 		Type ClassType { get; }
