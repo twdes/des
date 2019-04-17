@@ -159,6 +159,7 @@ namespace TecWare.DE.Server.Configuration
 
 		private class ParseContext : LuaPropertiesTable
 		{
+			private readonly Lua lua = new Lua();
 			private readonly string basePath;
 			private readonly Dictionary<string, DateTime> collectedFiles = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
@@ -251,7 +252,10 @@ namespace TecWare.DE.Server.Configuration
 				=> new DEConfigurationStackException(currentFrame, x, message, innerException);
 
 			public bool IsDefined(string expr)
-			 => currentFrame.GetMemberValue(expr) != null;
+			{
+				var chunk = lua.CompileChunk("return " + expr + ";", "expr", null);
+				return new LuaResult(chunk.Run(currentFrame)).ToBoolean();
+			} // func IsDefined
 
 			public ParseFrame CurrentFrame => currentFrame;
 			public Dictionary<string, DateTime> CollectedFiles => collectedFiles;
@@ -441,7 +445,16 @@ namespace TecWare.DE.Server.Configuration
 		private void ParseConfigurationPI(ParseContext context, XProcessingInstruction xPI)
 		{
 			if (xPI.Target == "des-begin") // start a block
-				context.CurrentFrame.IsDeleteNodes = !context.IsDefined(xPI.Data);
+			{
+				try
+				{
+					context.CurrentFrame.IsDeleteNodes = !context.IsDefined(xPI.Data);
+				}
+				catch (Exception e)
+				{
+					throw context.CreateConfigException(xPI, $"Could execute expression: {xPI.Data}.", e);
+				}
+			}
 			else if (xPI.Target == "des-end")
 				context.CurrentFrame.IsDeleteNodes = false;
 			else if (!context.CurrentFrame.IsDeleteNodes)
