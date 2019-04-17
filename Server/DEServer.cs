@@ -1537,8 +1537,8 @@ namespace TecWare.DE.Server
 				{
 					var onExists = GetTargetExists(targetExists, throwException);
 					var destinationFileName = sourceFileName is FileInfo fiSourceFile && destinationName is FileSystemInfo fsiDestination
-						? DEFile.MoveAsync(fiSourceFile, fsiDestination, onExists, null).AwaitTask().FullName
-						: DEFile.MoveAsync(GetFullFileName(sourceFileName), GetFullFileName(destinationName), onExists, null).AwaitTask();
+						? DEFile.CopyAsync(fiSourceFile, fsiDestination, onExists, null).AwaitTask().FullName
+						: DEFile.CopyAsync(GetFullFileName(sourceFileName), GetFullFileName(destinationName), onExists, null).AwaitTask();
 
 					return new LuaResult(true, destinationFileName);
 				}
