@@ -461,7 +461,8 @@ namespace TecWare.DE.Server.Configuration
 			{
 				if (xPI.Target.StartsWith("des-var-"))
 				{
-					context.CurrentFrame.SetMemberValue(xPI.Target.Substring(8), xPI.Data.Trim());
+					var varName = xPI.Target.Substring(8);
+					context.CurrentFrame.SetMemberValue(varName, Lua.RtReadValue(xPI.Data));
 				}
 				else if (xPI.Target == "des-include")
 				{
