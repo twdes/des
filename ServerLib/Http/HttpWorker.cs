@@ -127,7 +127,7 @@ namespace TecWare.DE.Server.Http
 	public class HttpFileWorker : HttpWorker
 	{
 		private static readonly XName xnMimeDef = MainNamespace + "mimeDef";
-		private string directoryBase;
+		private DirectoryInfo directoryBase;
 		private bool allowListing = false;
 		private Encoding defaultReadEncoding = Encoding.UTF8;
 
@@ -147,14 +147,14 @@ namespace TecWare.DE.Server.Http
 
 			var cfg = ConfigNode;
 
-			directoryBase = cfg.GetAttribute<string>("directory");
+			directoryBase = cfg.GetAttribute<DirectoryInfo>("directory");
 			allowListing = cfg.GetAttribute<bool>("allowListing");
 			defaultReadEncoding = cfg.GetAttribute<Encoding>("encoding");
 		} // proc OnEndReadConfiguration
 
 		[LuaMember]
 		private IEnumerable<FileInfo> ListFiles()
-			=> new DirectoryInfo(directoryBase).EnumerateFiles("*", SearchOption.TopDirectoryOnly);
+			=> directoryBase.EnumerateFiles("*", SearchOption.TopDirectoryOnly);
 
 		[LuaMember]
 		private string GetListName()
@@ -167,10 +167,10 @@ namespace TecWare.DE.Server.Http
 		{
 			// create the full file name
 			var useIndex = false;
-			var fileName = Path.GetFullPath(Path.Combine(directoryBase, ProcsDE.GetLocalPath(r.RelativeSubPath)));
+			var fileName = Path.GetFullPath(Path.Combine(directoryBase.FullName, ProcsDE.GetLocalPath(r.RelativeSubPath)));
 
 			// Check for a directory escape
-			if (!fileName.StartsWith(directoryBase, StringComparison.OrdinalIgnoreCase))
+			if (!fileName.StartsWith(directoryBase.FullName, StringComparison.OrdinalIgnoreCase))
 				return false;
 
 			// is the filename a directory, add index.html
@@ -204,7 +204,9 @@ namespace TecWare.DE.Server.Http
 			else
 				return false;
 		} // func Request
-		
+
+		/// <summary>Base directory</summary>
+		public DirectoryInfo DirectoryBase => directoryBase;
 		/// <summary></summary>
 		public override string Icon => "/images/http.file16.png";
 	} // class HttpFileWorker
