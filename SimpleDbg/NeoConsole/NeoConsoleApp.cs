@@ -301,17 +301,46 @@ namespace Neo.Console
 
 	public class ConsoleFocusableOverlay : ConsoleOverlay
 	{
+		private bool cursorIsInvalidate = false;
 		private int cursorLeft = 0;
 		private int cursorTop = 0;
 		private int cursorVisible = 25;
 
 		protected void SetCursor(int newLeft, int newTop, int newVisible)
 		{
-			this.cursorLeft = newLeft;
-			this.cursorTop = newTop;
-			this.cursorVisible = newVisible;
+			if (cursorLeft != newLeft)
+			{
+				cursorLeft = newLeft;
+				InvalidateCursor();
+			}
+			if (cursorTop != newTop)
+			{
+				cursorTop = newTop;
+				InvalidateCursor();
+			}
+			if (cursorVisible != newVisible)
+			{
+				cursorVisible = newVisible;
+				InvalidateCursor();
+			}
+
 			Invalidate();
 		} // pproc SetCursor
+
+		/// <summary>Reset the cursor, and make the cursor visible.</summary>
+		public void InvalidateCursor() 
+			=> cursorIsInvalidate = true;
+
+		internal bool ResetInvalidateCursor()
+		{
+			if (cursorIsInvalidate)
+			{
+				cursorIsInvalidate = false;
+				return true;
+			}
+			else
+				return false;
+		} // func ResetInvalidateCursor
 
 		public void Activate()
 			=> Application.ActivateOverlay(this);
@@ -1014,6 +1043,8 @@ namespace Neo.Console
 											currentLineIndex--;
 										Invalidate();
 									}
+
+									InvalidateCursor();
 									return true;
 								case ConsoleKey.DownArrow:
 									if (currentLineIndex < lines.Count - 1)
@@ -1023,30 +1054,38 @@ namespace Neo.Console
 									}
 									else if (currentLineIndex >= lines.Count)
 										currentLineIndex = lines.Count - 1;
+
+									InvalidateCursor();
 									return true;
 								case ConsoleKey.LeftArrow:
 									if ((keyDown.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
 									{
 										MoveCursorByToken(CurrentLine.Content, true);
+										InvalidateCursor();
 										return true;
 									}
 									else if (currentLineOffset > 0)
 										currentLineOffset--;
 									else
 										currentLineOffset = 0;
+
 									Invalidate();
+									InvalidateCursor();
 									return true;
 								case ConsoleKey.RightArrow:
 									if ((keyDown.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
 									{
 										MoveCursorByToken(CurrentLine.Content, false);
+										InvalidateCursor();
 										return true;
 									}
 									else if (currentLineOffset < CurrentLine.ContentLength)
 										currentLineOffset++;
 									else
 										currentLineOffset = CurrentLine.ContentLength;
+
 									Invalidate();
+									InvalidateCursor();
 									return true;
 									#endregion
 							}
@@ -1947,13 +1986,18 @@ namespace Neo.Console
 					var activeOverlay = ActiveOverlay;
 					if (activeOverlay != null)
 					{
-						OnRenderCursor(
-							activeOverlay.ActualLeft + activeOverlay.CursorLeft,
-							activeOverlay.ActualTop + activeOverlay.CursorTop,
-							activeOverlay.CursorSize,
-							activeOverlay.CursorSize > 0,
-							out afterWindow
-						);
+						if (activeOverlay.ResetInvalidateCursor())
+						{
+							OnRenderCursor(
+								activeOverlay.ActualLeft + activeOverlay.CursorLeft,
+								activeOverlay.ActualTop + activeOverlay.CursorTop,
+								activeOverlay.CursorSize,
+								activeOverlay.CursorSize > 0,
+								out afterWindow
+						  );
+						}
+						else
+							afterWindow = window;
 					}
 					else
 						OnRenderCursor(output.CursorLeft, output.CursorTop, output.CursorSize, output.CursorVisible, out afterWindow);

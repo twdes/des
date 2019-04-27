@@ -74,6 +74,11 @@
 						<xs:documentation>Name of the current node, that needs to be unique within the system.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
+				<xs:attribute name="displayname" type="xs:string" use="optional" >
+					<xs:annotation>
+						<xs:documentation>Displayname of the configuration node.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
 				<xs:attribute name="icon" type="xs:string" use="optional">
 					<xs:annotation>
 						<xs:documentation>Uri to the icon of the node.</xs:documentation>
