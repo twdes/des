@@ -1461,9 +1461,9 @@ namespace TecWare.DE.Server
 		#region -- SendVariables ------------------------------------------------------
 
 		[InteractiveCommand("members", Short = "m", HelpText = "Lists the current available global variables.", ConnectionRequest = InteractiveCommandConnection.Debug)]
-		private static async Task VariablesAsync()
+		private static async Task VariablesAsync(string p = null, int l = -1)
 		{
-			WriteReturn(String.Empty, await GetDebug().MembersAsync(String.Empty));
+			WriteReturn(String.Empty, await GetDebug().MembersAsync(p, l));
 		} // proc VariablesAsync
 
 		#endregion

@@ -841,7 +841,7 @@ namespace TecWare.DE.Server
 				}
 			} // func GetValueSafe
 
-			private XElement CreateMember(Stack<object> values, object member, Func<object> getValue, Type type = null)
+			private XElement CreateMember(Stack<object> values, object member, Func<object> getValue, Type type = null, int maxLevel = Int32.MaxValue)
 			{
 				bool TryGetTypedEnumerable(Type valueType, out Type enumerableType)
 				{
@@ -873,20 +873,33 @@ namespace TecWare.DE.Server
 					}
 					else if (value is LuaTable t)
 					{
-						x.Add(new XAttribute("ct", "table"));
-						foreach (var key in ((IDictionary<object, object>)t).Keys)
-							x.Add(CreateMember(values, key, () => t[key]));
+						if (values.Count >= maxLevel)
+							x.Add(new XText("(table)"));
+						else
+						{
+							x.Add(new XAttribute("ct", "table"));
+							foreach (var key in ((IDictionary<object, object>)t).Keys)
+								x.Add(CreateMember(values, key, () => t[key]));
+						}
 					}
 					else if (value is IDataRow row)
 					{
-						x.Add(new XAttribute("ct", "row"));
+						if (values.Count >= maxLevel)
+							x.Add(new XText("(row)"));
+						else
+						{
+							x.Add(new XAttribute("ct", "row"));
 
-						for (var i = 0; i < row.Columns.Count; i++)
-							x.Add(CreateMember(values, row.Columns[i].Name, () => row[i], row.Columns[i].DataType));
+							for (var i = 0; i < row.Columns.Count; i++)
+								x.Add(CreateMember(values, row.Columns[i].Name, () => row[i], row.Columns[i].DataType));
+						}
 					}
 					else if (value is IEnumerable<IDataRow> rows)
 					{
-						CreateRowEnumerable(rows, x);
+						if (values.Count >= maxLevel)
+							x.Add(new XText("(IEnumerable<IDataRow>)"));
+						else
+							CreateRowEnumerable(rows, x);
 					}
 					else if (values.Count == 1 && TryGetTypedEnumerable(value.GetType(), out var enumerableType))
 					{
@@ -1335,12 +1348,47 @@ namespace TecWare.DE.Server
 
 			#region -- GlobalVars -----------------------------------------------------
 
+			private object GetMemberFromPath(string memberPath)
+			{
+				if (String.IsNullOrEmpty(memberPath))
+					return currentItem;
+				else
+				{
+					if (memberPath[0] != '[')
+						memberPath = "." + memberPath;
+					try
+					{
+						var func = engine.Lua.CreateLambda<Func<LuaTable,object>>("member", "return c" + memberPath, "c");
+						var r = func(currentItem);
+						if (r == null)
+							throw new ArgumentNullException("r", $"'{memberPath}' has no result.");
+						return r;
+					}
+					catch (Exception e)
+					{
+						return new LuaTable { ["$exception"] = $"[{e.GetType().Name}] {e.Message}" };
+					}
+				}
+			} // func GetMemberFromPath
+
 			private XElement GetMember(XElement xMessage)
 			{
 				var xAnswer = new XElement("return");
 
-				foreach (var c in currentItem)
-					xAnswer.Add(CreateMember(new Stack<object>(), c.Key, () => c.Value));
+				var memberPath = xMessage.GetAttribute("p", null);
+				var memberLevel = xMessage.GetAttribute("l", memberPath == null ? 4 : 0);
+
+				var members = GetMemberFromPath(memberPath);
+				if (members != null)
+				{
+					if (members is LuaTable t)
+					{
+						foreach (var c in t)
+							xAnswer.Add(CreateMember(new Stack<object>(), c.Key, () => c.Value, maxLevel: memberLevel));
+					}
+					else
+						xAnswer.Add(CreateMember(new Stack<object>(), "$0", () => members, maxLevel: memberLevel));
+				}
 
 				return xAnswer;
 			} // func GlobalVars
