@@ -526,7 +526,7 @@ namespace TecWare.DE.Server
 					errors =>
 					{
 						// print help
-						var help = CommandLine.Text.HelpText.AutoBuild(r);
+						var help = HelpText.AutoBuild(r);
 						help.Copyright = typeof(DEServer).Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright;
 
 						if (errors.FirstOrDefault(e => e is HelpVerbRequestedError) != null)
