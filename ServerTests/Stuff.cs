@@ -221,12 +221,12 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void XmlRemoveInvalidChars()
 		{
-			Assert.AreEqual(ProcsDE.RemoveInvalidXmlChars(null), null);
-			Assert.AreEqual(ProcsDE.RemoveInvalidXmlChars(String.Empty), String.Empty);
-			Assert.AreEqual(ProcsDE.RemoveInvalidXmlChars("String.Empty"), "String.Empty");
-			Assert.AreEqual(XmlConvert.VerifyXmlChars(ProcsDE.RemoveInvalidXmlChars("String\x1A.Empty")), "String.Empty");
-			Assert.AreEqual(XmlConvert.VerifyXmlChars(ProcsDE.RemoveInvalidXmlChars("\x001AEmp\x001Aty\x001A")), "Empty");
-			Assert.AreEqual(XmlConvert.VerifyXmlChars(ProcsDE.RemoveInvalidXmlChars("String\x001AEmp\x10000ty")), "StringEmp\x10000ty");
+			Assert.AreEqual(Procs.RemoveInvalidXmlChars(null), null);
+			Assert.AreEqual(Procs.RemoveInvalidXmlChars(String.Empty), String.Empty);
+			Assert.AreEqual(Procs.RemoveInvalidXmlChars("String.Empty"), "String.Empty");
+			Assert.AreEqual(XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("String\x1A.Empty")), "String.Empty");
+			Assert.AreEqual(XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("\x001AEmp\x001Aty\x001A")), "Empty");
+			Assert.AreEqual(XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("String\x001AEmp\x10000ty")), "StringEmp\x10000ty");
 		}
 
 	}

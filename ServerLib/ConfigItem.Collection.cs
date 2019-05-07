@@ -199,9 +199,9 @@ namespace TecWare.DE.Server
 				return;
 
 			if (value.IndexOfAny(isCDateEmitChar) >= 0) // check for specials
-				xml.WriteCData(ProcsDE.RemoveInvalidXmlChars(value, '?'));
+				xml.WriteCData(Procs.RemoveInvalidXmlChars(value, '?'));
 			else
-				xml.WriteValue(ProcsDE.RemoveInvalidXmlChars(value, '?'));
+				xml.WriteValue(Procs.RemoveInvalidXmlChars(value, '?'));
 		} // proc WriteValue
 
 		/// <summary>Write the end of an property.</summary>
@@ -225,7 +225,7 @@ namespace TecWare.DE.Server
 		{
 			var value = _value.ChangeType<string>();
 			if (value != null)
-				xml.WriteAttributeString(propertyName, ProcsDE.RemoveInvalidXmlChars(value, '?'));
+				xml.WriteAttributeString(propertyName, Procs.RemoveInvalidXmlChars(value, '?'));
 		} // proc WriteAttributeProperty
 	} // class DEListItemWriter
 

@@ -784,23 +784,7 @@ namespace TecWare.DE.Server
 			#endregion
 
 			#region -- CreateException, CreateMember ----------------------------------
-
-			private static string RemoveInvalidXmlChars(string value)
-			{
-				var sb = new StringBuilder(value.Length);
-
-				for (var i = 0; i < value.Length; i++)
-				{
-					var c = value[i];
-					if (XmlConvert.IsXmlChar(c))
-						sb.Append(c);
-					else
-						sb.Append(' ');
-				}
-
-				return sb.ToString();
-			} // func RemoveInvalidXmlChars
-
+			
 			private XElement CreateException(XElement x, Exception e)
 			{
 				if (e is AggregateException aggE)
@@ -813,14 +797,14 @@ namespace TecWare.DE.Server
 							x.Add(CreateException(new XElement("innerException"), enumerator.Current));
 					}
 					else
-						x.Add(new XAttribute("message", RemoveInvalidXmlChars(e.Message)));
+						x.Add(new XAttribute("message", Procs.RemoveInvalidXmlChars(e.Message)));
 				}
 				else
 				{
-					x.Add(new XAttribute("message", RemoveInvalidXmlChars(e.Message)));
+					x.Add(new XAttribute("message", Procs.RemoveInvalidXmlChars(e.Message)));
 					x.Add(new XAttribute("type", LuaType.GetType(e.GetType()).AliasOrFullName));
 					var data = LuaExceptionData.GetData(e);
-					x.Add(new XElement("stackTrace", RemoveInvalidXmlChars(data == null ? e.StackTrace : data.StackTrace)));
+					x.Add(new XElement("stackTrace", Procs.RemoveInvalidXmlChars(data == null ? e.StackTrace : data.StackTrace)));
 
 					if (e.InnerException != null)
 						x.Add(CreateException(new XElement("innerException"), e.InnerException));
@@ -906,7 +890,7 @@ namespace TecWare.DE.Server
 						CreateTypedEnumerable((System.Collections.IEnumerable)value, enumerableType, x);
 					}
 					else
-						x.Add(new XText(RemoveInvalidXmlChars(Procs.ChangeType<string>(value))));
+						x.Add(new XText(Procs.RemoveInvalidXmlChars(Procs.ChangeType<string>(value), ' ')));
 
 					return x;
 				}
@@ -953,7 +937,7 @@ namespace TecWare.DE.Server
 					{
 						var v = r[i];
 						if (v != null)
-							xRow.Add(new XElement(columnNames[i], RemoveInvalidXmlChars(v.ChangeType<string>())));
+							xRow.Add(new XElement(columnNames[i], Procs.RemoveInvalidXmlChars(v.ChangeType<string>())));
 					}
 
 					rowCount++;
