@@ -223,10 +223,14 @@ namespace Neo.Console
 				return unchecked((int)written);
 			}
 		} // func WriteConsole
-		
+
 		#endregion
 
 		#region -- Cursor -------------------------------------------------------------
+
+		private int lastCursorLeft = -1;
+		private int lastCursorTop = -1;
+		private int lastCursorSize = -1;
 
 		private void GetConsoleCursorInfo(out ConsoleCursorInfo cursorInfo)
 		{
@@ -275,6 +279,29 @@ namespace Neo.Console
 			if (!SetConsoleTextAttribute(DangerousGetHandle, GetCharAttributes(foreground, background)))
 				throw new Win32Exception();
 		} // proc SetColor
+
+		/// <summary>Is the cursor position changed.</summary>
+		/// <returns></returns>
+		public bool ResetInvalidateCursor()
+		{
+			GetConsoleCursorInfo(out var cursorInfo);
+			GetConsoleScreenBufferInfo(out var bufferInfo);
+
+			var isVisible = lastCursorSize > 0;
+			if (cursorInfo.bVisible != isVisible
+				|| cursorInfo.dwSize != lastCursorSize
+				|| bufferInfo.dwCursorPosition.X != lastCursorLeft
+				|| bufferInfo.dwCursorPosition.Y != lastCursorTop)
+			{
+				lastCursorSize = cursorInfo.bVisible ? unchecked((int)cursorInfo.dwSize) : 0;
+				lastCursorLeft = bufferInfo.dwCursorPosition.X;
+				lastCursorTop = bufferInfo.dwCursorPosition.Y;
+
+				return true;
+			}
+			else
+				return false;
+		} // func ResetInvalidateCursor
 
 		/// <summary>Size of Cursor between 1..100</summary>
 		public int CursorSize

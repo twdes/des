@@ -1986,7 +1986,7 @@ namespace Neo.Console
 					var activeOverlay = ActiveOverlay;
 					if (activeOverlay != null)
 					{
-						if (activeOverlay.ResetInvalidateCursor())
+						if (activeOverlay.ResetInvalidateCursor() | output.ResetInvalidateCursor())
 						{
 							OnRenderCursor(
 								activeOverlay.ActualLeft + activeOverlay.CursorLeft,
@@ -1999,8 +1999,10 @@ namespace Neo.Console
 						else
 							afterWindow = window;
 					}
-					else
+					else if (output.ResetInvalidateCursor())
 						OnRenderCursor(output.CursorLeft, output.CursorTop, output.CursorSize, output.CursorVisible, out afterWindow);
+					else
+						afterWindow = window;
 				}
 				while (afterWindow.Left != window.Left || afterWindow.Top != window.Top);
 			}
