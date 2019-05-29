@@ -415,6 +415,7 @@ namespace TecWare.DE.Server.IO
 			protected const int blockSize = 1 << blockBits; // 64k
 			protected const int blockMask = blockSize - 1;
 
+			private readonly bool isNewStream;
 			private readonly Stream stream;
 			private long position = 0;
 			private long length = 0;
@@ -423,9 +424,10 @@ namespace TecWare.DE.Server.IO
 
 			#region -- Ctor/Dtor ------------------------------------------------------
 
-			public TransactionStream(Stream stream)
+			public TransactionStream(Stream stream, bool isNewStream)
 			{
 				this.stream = stream ?? throw new ArgumentNullException(nameof(stream));
+				this.isNewStream = isNewStream;
 				position = stream.Position;
 				length = stream.Length;
 
@@ -456,7 +458,7 @@ namespace TecWare.DE.Server.IO
 				=> CommitAsync().AwaitTask();
 
 			public void Rollback()
-				=> CommitAsync().AwaitTask();
+				=> RollbackAsync().AwaitTask();
 
 			protected virtual async Task CommitCoreAsync(Stream stream)
 			{
@@ -492,6 +494,10 @@ namespace TecWare.DE.Server.IO
 
 				await RollbackCoreAsync();
 				stream.Dispose();
+
+				if (isNewStream && stream is FileStream fs)
+					await DeleteFileSilentAsync(fs.Name);
+
 				commited = false;
 			} // proc Rollback
 
@@ -623,8 +629,8 @@ namespace TecWare.DE.Server.IO
 		{
 			private readonly List<byte[]> blocks = new List<byte[]>();
 
-			public MemoryTransactionStream(Stream stream)
-				: base(stream)
+			public MemoryTransactionStream(FileStream stream, bool isNew)
+				: base(stream, isNew)
 			{
 			} // ctor
 
@@ -692,8 +698,8 @@ namespace TecWare.DE.Server.IO
 			private int currentBlockIndex = -1;
 			private readonly byte[] currentBlock;
 
-			public DiskTransactionStream(Stream stream, FileInfo fileInfo, FileInfo transactionFileInfo)
-				: base(stream)
+			public DiskTransactionStream(FileStream stream, bool isNew, FileInfo fileInfo, FileInfo transactionFileInfo)
+				: base(stream, isNew)
 			{
 				this.fileInfo = fileInfo;
 				this.transactionFileInfo = transactionFileInfo;
@@ -722,14 +728,16 @@ namespace TecWare.DE.Server.IO
 				}
 				else // copy parts back
 				{
-					await CommitCoreAsync(stream);
+					await base.CommitCoreAsync(stream);
 					transactionStream.Dispose();
+
+					// delete transaction
+					File.Delete(transactionFileInfo.FullName);
 				}
 			} // proc CommitCoreAsync
 
 			private bool IsSequence(Stream stream)
 			{
-				// todo: access for delete?
 				if (transactionStream.Length < Length) // not all blocks in file
 					return false;
 
@@ -799,13 +807,24 @@ namespace TecWare.DE.Server.IO
 
 		#endregion
 
+		private static (FileStream stream, bool isNew) CreateOrOpenFile(string fileName)
+		{
+			var fileMode = File.Exists(fileName) ? FileMode.Open : FileMode.Create;
+			return (new FileStream(fileName, fileMode, FileAccess.ReadWrite, FileShare.None), fileMode != FileMode.Open);
+		} // func CreateOrOpenFile
+
 		/// <summary>Open a file in with write access. All write operations will persist
 		/// in memory and write to disk on commit.</summary>
 		/// <param name="fileName"></param>
 		/// <returns></returns>
 		public static Task<Stream> OpenInMemoryAsync(string fileName)
 		{
-			return Task.Run<Stream>(() => new MemoryTransactionStream(new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)));
+			return Task.Run<Stream>(() =>
+				{
+					var (s, n) = CreateOrOpenFile(fileName);
+					return new MemoryTransactionStream(s, n);
+				}
+			);
 		} // func OpenInMemoryAsync
 
 		/// <summary>Open a file, all operation will be done in a copy of the file. On 
@@ -816,8 +835,8 @@ namespace TecWare.DE.Server.IO
 		{
 			var fileInfo = new FileInfo(fileName);
 			var transactionFileInfo = await CreateTempFileInfoAsync(fileInfo);
-			var stream = await Task.Run<Stream>(() => new FileStream(fileInfo.FullName, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
-			return new DiskTransactionStream(stream, fileInfo, transactionFileInfo);
+			var (stream, isNew) = await Task.Run<(FileStream, bool)>(() => CreateOrOpenFile(fileInfo.FullName));
+			return new DiskTransactionStream(stream, isNew, fileInfo, transactionFileInfo);
 		} // func OpenCopyAsync
 
 		#endregion
