@@ -575,12 +575,14 @@ namespace TecWare.DE.Server.IO
 					}
 
 					// copy content
-					Array.Copy(buffer, offset, block, b.Ofs, b.Len);
+					var c = Math.Min(b.Len, count);
+					Array.Copy(buffer, offset, block, b.Ofs, c);
 					// write block change
 					WriteBlock(b.Index, block);
 
-					offset += b.Len;
-					position += b.Len;
+					count -= c;
+					offset += c;
+					position += c;
 					if (position > length)
 						length = position;
 				}
