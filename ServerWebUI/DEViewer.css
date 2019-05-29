@@ -192,6 +192,7 @@ span.actionButton:hover {
     max-height: 15em;
     overflow-x: auto;
     overflow-y: auto;
+	user-select: all;
 }
 
 
