@@ -1276,7 +1276,7 @@ namespace TecWare.DE.Server
 					HttpListenerContext ctx = null;
 					try
 					{
-						ctx = await httpListener.GetContextAsync();
+						ctx = await Task.Run(() => httpListener.GetContext()); // await httpListener.GetContextAsync();
 					}
 					catch (HttpListenerException e)
 					{
@@ -1286,7 +1286,7 @@ namespace TecWare.DE.Server
 					if (ctx != null)
 					{
 						// post message, and wait for more
-						await ProcessRequestAsync(ctx); //.GetAwaiter();
+						ProcessRequestAsync(ctx).GetAwaiter();
 					}
 				}
 				else
