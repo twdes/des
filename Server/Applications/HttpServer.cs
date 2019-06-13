@@ -1286,7 +1286,7 @@ namespace TecWare.DE.Server
 					if (ctx != null)
 					{
 						// post message, and wait for more
-						ProcessRequestAsync(ctx).GetAwaiter();
+						await ProcessRequestAsync(ctx); //.GetAwaiter();
 					}
 				}
 				else
