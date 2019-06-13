@@ -1403,6 +1403,8 @@ namespace TecWare.DE.Server
 					{
 						ProcessResponeOnException(ctx, e, context);
 					}
+
+					await context.DisposeAsync();
 				}
 			}
 		} // proc ProcessRequest

@@ -379,6 +379,7 @@ namespace TecWare.DE.Server
 		private bool userOwner;
 
 		private bool? isCommitted = null;
+		private bool isDisposed = false;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
@@ -417,6 +418,10 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public async Task DisposeAsync()
 		{
+			if (isDisposed)
+				return;
+			isDisposed = true;
+
 			if (!isCommitted.HasValue)
 				await RollbackAsync();
 
