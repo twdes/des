@@ -691,9 +691,9 @@ namespace TecWare.DE.Server
 
 			// forece the lua engine and the http server
 			if (config.Element(xnLuaEngine) == null)
-				config.AddFirst(new XElement(xnLuaEngine));
+				config.AddFirst(new XElement(xnLuaEngine)); // fixme: wrong position
 			if (config.Element(xnHttp) == null)
-				config.AddFirst(new XElement(xnHttp));
+				config.AddFirst(new XElement(xnHttp)); // fixme: wrong position
 
 			// force des-server
 			if (config.Elements(xnFiles).FirstOrDefault(x => String.Compare(x.GetAttribute("name", String.Empty), "des", StringComparison.OrdinalIgnoreCase) == 0) == null)

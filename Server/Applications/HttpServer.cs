@@ -1084,15 +1084,8 @@ namespace TecWare.DE.Server
 
 				try
 				{
-					// no prefixes set, set the default
-					if (httpListener.Prefixes.Count == 0)
-					{
-						defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
-						httpListener.Prefixes.Add(defaultBaseUri.OriginalString);
-					}
-
 					// Start the listener
-					if (!httpListener.IsListening)
+					if (httpListener.Prefixes.Count > 0 && !httpListener.IsListening)
 					{
 						msg.AppendLine("Http-Server start failed.");
 						foreach (var p in httpListener.Prefixes)
@@ -1101,6 +1094,8 @@ namespace TecWare.DE.Server
 
 						httpListener.Start();
 					}
+					else
+						Server.LogMsg(EventLogEntryType.Error, "No prefixes defined (des/http/prefix is missing).");
 				}
 				catch (Exception e)
 				{
@@ -1109,7 +1104,15 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc OnEndReadConfiguration
-		
+
+		protected override void ValidateConfig(XElement config)
+		{
+			base.ValidateConfig(config);
+
+			if (!config.Elements(xnHttpPrefix).Any())
+				config.AddFirst(new XElement(xnHttpPrefix, new XAttribute("path", "/"), "http://localhost:8080/"));
+		} // proc ValidateConfig
+
 		#endregion
 
 		#region -- Web Sockets --------------------------------------------------------
