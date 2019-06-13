@@ -203,7 +203,7 @@ namespace TecWare.DE.Server
 				try
 				{
 					if (logData.Length + lineData.Length > MaximumSize)
-						TruncateLog(logData.Length - MinimumSize); // truncate the log file, calculate the new size
+						TruncateLog(MinimumSize); // truncate the log file, calculate the new size
 
 					// set the position to the end and mark the offset
 					logData.Seek(0, SeekOrigin.End);
@@ -265,17 +265,17 @@ namespace TecWare.DE.Server
 				LinesAdded?.Invoke(this, EventArgs.Empty);
 		} // proc CreateLogLineCache
 
-		private void TruncateLog(long removeBytes)
+		private void TruncateLog(long newSize)
 		{
 			// search for the line position (es wird 32 Zeilenweise entfernt)
-			var indexRemove = linesOffsetCache.BinarySearch(removeBytes);
+			var indexRemove = linesOffsetCache.BinarySearch(newSize);
 			if (indexRemove == -1) // before first
 				indexRemove = 0;
 			else if (indexRemove < -1) // within a block
 				indexRemove = ~indexRemove - 1; // not lower the minimum
 
 			// correct the remove byte to the line ending
-			removeBytes = indexRemove < linesOffsetCache.Count ? linesOffsetCache[indexRemove] : logData.Length;
+			var removeBytes = indexRemove < linesOffsetCache.Count ? linesOffsetCache[indexRemove] : logData.Length;
 
 			// copy the log data to the start of the file
 			var readPos = removeBytes;
