@@ -241,7 +241,7 @@
 						<xs:documentation>Definiert Berechtigungen für den Zugriff auf den Server. Es werden Security-Tokens zu einer Gruppe zusammengefasst, was wiederrum einen Security-Token ergibt.</xs:documentation>
 					</xs:annotation>
 					<xs:complexType mixed="true">
-						<xs:attribute name="name" type="xs:string" use="required">
+						<xs:attribute name="name" type="KeyType" use="required">
 							<xs:annotation>
 								<xs:documentation>Bezeichnung der Gruppe.</xs:documentation>
 							</xs:annotation>
