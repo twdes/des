@@ -1397,7 +1397,10 @@ namespace TecWare.DE.Server
 				}
 			} // func SafeIO
 
-			private static string GetFullFileName(object file)
+			/// <summary>Get filename from an object.</summary>
+			/// <param name="file"></param>
+			/// <returns></returns>
+			public static string GetFullFileName(object file)
 				=> file is FileSystemInfo fsi ? fsi.FullName : file as string;
 
 			/// <summary>Open a lua file handle for a file. The file will be added to the current scope. Files they 
