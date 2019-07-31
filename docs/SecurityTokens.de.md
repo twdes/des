@@ -1,4 +1,4 @@
-# SecurityTokens
+﻿# SecurityTokens
 
 Mit SecurityTokens wird ein System für die Rechtezuordnung bereitgestellt. An jeden 
 Knoten können entsprechende Tokens hinterlegt werden, die ein Nutzer besitzen muss

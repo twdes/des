@@ -1,22 +1,22 @@
-# Passwords
+ï»¿# Passwords
 
-Passwörter können in 3 verschiedenen formen in der Konfiguration abgelegt werden.
+PasswÃ¶rter kÃ¶nnen in 3 verschiedenen formen in der Konfiguration abgelegt werden.
 
 +----------+------------------------------------------+
 | Prefix   | Beschreibung                             |
 +----------+------------------------------------------+
-| `win0x`  | Das Password wird verschlüsselt und kann |
+| `win0x`  | Das Password wird verschlÃ¼sselt und kann |
 |          | nur von der lokalen Maschine wieder      |
-| `win64`  | entschlüsselt werden.                    |
+| `win64`  | entschlÃ¼sselt werden.                    |
 +----------+------------------------------------------+
-| `usr0x`  | Das Password wird verschlüsselt und kann |
+| `usr0x`  | Das Password wird verschlÃ¼sselt und kann |
 |          | nur von dem aktuellen Nutzer wieder      |
-| `usr64`  | entschlüsselt werden.                    |
+| `usr64`  | entschlÃ¼sselt werden.                    |
 +----------+------------------------------------------+
 | `plain`  | Das Passwort wird in klartext verwendet. |
 +----------+------------------------------------------+
 
-Das `0x` und `64` stehen für die Kodierung der Bytefolge. Einmal Hexadezimal bzw. Base64.
+Das `0x` und `64` stehen fÃ¼r die Kodierung der Bytefolge. Einmal Hexadezimal bzw. Base64.
 
 Die Hexadezimalkodierung kann optional das prefix `0x` haben.
 
@@ -32,9 +32,9 @@ Es gibt die zwei funktionen zum en/decodieren des Passwortes.
 return DecodePassword("win0x:" + password);
 ```
 
-## Passwörte via Powershell erzeugen
+## PasswÃ¶rte via Powershell erzeugen
 
-Ein "lokal Machine"-Passwort kann über die Powershell generiert werden.
+Ein "lokal Machine"-Passwort kann Ã¼ber die Powershell generiert werden.
 
 ```PS
  "win0x:" + (ConvertFrom-SecureString -SecureString (Read-Host -AsSecureString -Prompt "Passwort"))
@@ -42,8 +42,8 @@ Ein "lokal Machine"-Passwort kann über die Powershell generiert werden.
 
 # Passwort-Hash
 
-Bei einem Passwort-Hash wird nur die Prüfsumme des Passwortes abgelegt. D.h.
-es können nur Passwörter dagegen geprüft werden.
+Bei einem Passwort-Hash wird nur die PrÃ¼fsumme des Passwortes abgelegt. D.h.
+es kÃ¶nnen nur PasswÃ¶rter dagegen geprÃ¼ft werden.
 
 Der Hash kann ein Hex-Byte folge sein (prefix `0x`) oder Base64 enkodiert.
 

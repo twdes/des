@@ -1,4 +1,4 @@
-# Konfiguration
+﻿# Konfiguration
 
 ## Lua
 
@@ -14,7 +14,7 @@ Es gibt zwei *actions*, die die Konfiguration anzeigen.
 : Formatierter Inhalt mit inclusive Defaultwerte.
 
 `configRaw`
-: Xml-Pres�ntation des Knotens
+: Xml-Presäntation des Knotens
 
 
 ## Fehlersuche

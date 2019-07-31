@@ -183,7 +183,7 @@ namespace TecWare.DE.Server.Http
 				}
 				else
 				{
-					fileName = Path.Combine(fileName, "Index.html");
+					fileName = Path.Combine(fileName, ConfigNode.GetAttribute<string>("indexPage"));
 					useIndex = true;
 				}
 			}

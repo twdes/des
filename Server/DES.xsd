@@ -93,6 +93,11 @@
 						<xs:documentation>Allow listing of containing files.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
+				<xs:attribute name="indexPage" type="xs:string" use="optional" default="Index.html">
+					<xs:annotation>
+						<xs:documentation>Set the default page.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
 				<xs:attribute name="encoding" type="EncodingType" use="optional" default="utf-8">
 					<xs:annotation>
 						<xs:documentation>Default encoding to open text files.</xs:documentation>
