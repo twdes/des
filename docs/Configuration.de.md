@@ -14,7 +14,7 @@ Es gibt zwei *actions*, die die Konfiguration anzeigen.
 : Formatierter Inhalt mit inclusive Defaultwerte.
 
 `configRaw`
-: Xml-Presäntation des Knotens
+: Xml-Präsentation des Knotens
 
 
 ## Fehlersuche

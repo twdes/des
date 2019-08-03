@@ -31,3 +31,6 @@ move(source, dest, throwException, targetExists)
 
 delete(file, throwException)
 :   Löscht eine Datei innerhalb einer Transaktion.
+
+fileExists(file)
+:   Prüft ob die Datei existiert.
