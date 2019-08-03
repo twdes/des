@@ -74,13 +74,18 @@ namespace TecWare.DE.Server.Applications
 			{
 				lock (userLock)
 				{
-					return serviceType == typeof(WindowsImpersonationContext) && identity is WindowsIdentity windowsIdentity
-						? windowsIdentity.Impersonate()
-						: null;
+					if (serviceType == typeof(WindowsImpersonationContext) && identity is WindowsIdentity windowsIdentity)
+						return windowsIdentity.Impersonate();
+					else if (serviceType == typeof(IDEUser))
+						return user;
+					else
+						return null;
 				}
 			} // func GetService
 
 			public IIdentity Identity => identity;
+
+			public IDEUser Info => user;
 		} // class UserContext
 
 		#endregion
@@ -205,6 +210,9 @@ namespace TecWare.DE.Server.Applications
 		} // func TestPassword
 
 		#endregion
+
+		bool IPropertyReadOnlyDictionary.TryGetProperty(string name, out object value)
+			=> Members.TryGetValue(name, out value);
 
 		string IDEUser.DisplayName => userName;
 		IIdentity IDEUser.Identity => identity;

@@ -34,6 +34,8 @@ namespace TecWare.DE.Server
 	/// GetService erfragt werden.</summary>
 	public interface IDEAuthentificatedUser : IServiceProvider, IPrincipal, IDisposable
 	{
+		/// <summary>Return user info</summary>
+		IDEUser Info { get; }
 	} // interface IDEAuthentificatedUser
 
 	#endregion
@@ -41,7 +43,7 @@ namespace TecWare.DE.Server
 	#region -- interface IDEUser ------------------------------------------------------
 
 	/// <summary>User that is registered in the main server..</summary>
-	public interface IDEUser
+	public interface IDEUser : IPropertyReadOnlyDictionary
 	{
 		/// <summary>Creates a authentificated user.</summary>
 		/// <param name="identity">Incoming identity from the user, to check security.</param>
