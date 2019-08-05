@@ -313,7 +313,7 @@ namespace TecWare.DE.Server
 		/// <param name="value"></param>
 		/// <returns></returns>
 		[LuaMember(nameof(RegisterProperty))]
-		public IDEConfigItemProperty RegisterProperty<T>(string name, string displayName, string category, string description, string format, T value)
+		public SimpleConfigItemProperty<T> RegisterProperty<T>(string name, string displayName, string category, string description, string format, T value)
 			=> new SimpleConfigItemProperty<T>(this, name, displayName ?? name, category ?? "Misc", description, format, value);
 
 		/// <summary></summary>

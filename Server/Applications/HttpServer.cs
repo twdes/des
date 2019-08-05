@@ -108,7 +108,10 @@ namespace TecWare.DE.Server
 			=> new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, message);
 
 		#endregion
-		
+
+		public Uri GetOrigin(Uri relativeUri)
+			=> new Uri(request.Url, relativeUri);
+
 		/// <summary>Parameter names</summary>
 		public string[] ParameterNames => queryString.Value.AllKeys;
 		/// <summary>Header names</summary>
@@ -118,6 +121,12 @@ namespace TecWare.DE.Server
 		public override CultureInfo CultureInfo => clientCultureInfo.Value;
 		/// <summary>Request path, absolute</summary>
 		public string AbsolutePath => absolutePath;
+
+		/// <summary>Is this a local request.</summary>
+		public bool IsLocal => request.IsLocal;
+		/// <summary>Orgination of the request.</summary>
+		public IPEndPoint RemoteEndPoint => request.RemoteEndPoint;
+		
 		/// <summary>Access to the http server</summary>
 		public IDEHttpServer Http => http;
 	} // class DECommonContext
@@ -168,10 +177,6 @@ namespace TecWare.DE.Server
 
 		/// <summary>Returns the websocket</summary>
 		public WebSocket WebSocket => webSocketContext.WebSocket;
-
-		public bool IsLocal => context.Request.IsLocal;
-
-		public IPEndPoint RemoteEndPoint => context.Request.RemoteEndPoint;
 	} // class DEWebSocketContext
 
 	#endregion
@@ -521,10 +526,9 @@ namespace TecWare.DE.Server
 					return null;
 
 				var pos = RelativeSubPath.IndexOf('/');
-				if (pos == -1)
-					return RelativeSubPath;
-				else
-					return RelativeSubPath.Substring(0, pos);
+				return pos == -1
+					? RelativeSubPath
+					: RelativeSubPath.Substring(0, pos);
 			}
 		} // prop RelativePathName
 

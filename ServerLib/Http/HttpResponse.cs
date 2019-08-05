@@ -97,6 +97,18 @@ namespace TecWare.DE.Server.Http
 	/// <summary></summary>
 	public interface IDEWebScope : IDECommonScope
 	{
+		/// <summary>Get a web uri, that can be used by the remote client.</summary>
+		/// <param name="relativeUri"></param>
+		Uri GetOrigin(Uri relativeUri);
+
+		/// <summary>Is this a local request.</summary>
+		bool IsLocal { get; }
+
+		/// <summary>Orgination of the request.</summary>
+		IPEndPoint RemoteEndPoint { get; }
+		/// <summary>Get the full request path.</summary>
+		string AbsolutePath { get; }
+
 		/// <summary>Access to the http server.</summary>
 		IDEHttpServer Http { get; }
 	} // interface IDEWebScope
@@ -110,14 +122,6 @@ namespace TecWare.DE.Server.Http
 	{
 		/// <summary>Access to the websocket.</summary>
 		WebSocket WebSocket { get; }
-
-		/// <summary>Is this a local request.</summary>
-		bool IsLocal { get; }
-		/// <summary>Orgination of the request.</summary>
-		IPEndPoint RemoteEndPoint { get; }
-
-		/// <summary>The full request path.</summary>
-		string AbsolutePath { get; }
 	} // interface IDEWebSocketScope
 
 	#endregion
@@ -191,6 +195,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="statusCode"></param>
 		/// <param name="statusDescription"></param>
 		void SetStatus(HttpStatusCode statusCode, string statusDescription);
+
 		/// <summary>Is there a call of GetOutputStream, GetOutputTextWriter or Redirect.</summary>
 		bool IsOutputStarted { get; }
 
@@ -206,8 +211,6 @@ namespace TecWare.DE.Server.Http
 		string RelativeSubPath { get; }
 		/// <summary>Name of the current path position.</summary>
 		string RelativeSubName { get; }
-		/// <summary>Get the full request path.</summary>
-		string AbsolutePath { get; }
 	} // interface IDEWebRequestScope
 
 	#endregion
