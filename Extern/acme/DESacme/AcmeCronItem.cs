@@ -34,7 +34,7 @@ namespace TecWare.DE
 	/// <summary>Manage SSL-Certificates with the ACME protocol.</summary>
 	public class AcmeCronItem : CronJobItem
 	{
-		private const string csCertificate = "Certificate";
+		private const string CertificateCategory = "Certificate";
 
 		#region -- enum AcmeState -----------------------------------------------------
 
@@ -329,9 +329,9 @@ namespace TecWare.DE
 		public AcmeCronItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
-			certificateNotAfter = new SimpleConfigItemProperty<DateTime>(this, "tw_acme_notafter", "NotAfter", csCertificate, "Not after date of the certificate.", "{0:G}", DateTime.MinValue);
-			certificateThumbprint = new SimpleConfigItemProperty<string>(this, "tw_acme_thumbprint", "Thumbprint", csCertificate, "Thumbprint of the certificate.", null, null);
-			certificateState = new SimpleConfigItemProperty<string>(this, "tw_acme_state", "State", csCertificate, "State of the certificate process.", null, null);
+			certificateNotAfter = new SimpleConfigItemProperty<DateTime>(this, "tw_acme_notafter", "NotAfter", CertificateCategory, "Not after date of the certificate.", "{0:G}", DateTime.MinValue);
+			certificateThumbprint = new SimpleConfigItemProperty<string>(this, "tw_acme_thumbprint", "Thumbprint", CertificateCategory, "Thumbprint of the certificate.", null, null);
+			certificateState = new SimpleConfigItemProperty<string>(this, "tw_acme_state", "State", CertificateCategory, "State of the certificate process.", null, null);
 		} // ctor
 
 		/// <summary></summary>
@@ -417,6 +417,7 @@ namespace TecWare.DE
 				|| notAfter.AddDays(-10) < DateTime.Now)
 			{
 				// create a new order
+				Log.Info("Start new Order.");
 				await state.NewOrderAsync();
 				// wait one second
 				await Task.Delay(1000);
@@ -439,6 +440,7 @@ namespace TecWare.DE
 			}
 
 			// read certificate
+			Log.Info("Generate key.");
 			var pfxData = await state.GenerateKeyAsync();
 
 			// install certificate in store
@@ -500,7 +502,7 @@ namespace TecWare.DE
 				log.WriteLine("insert:");
 				log.WriteLine(await ExecuteNetsh(true, String.Format("http add sslcert ipport=0.0.0.0:{0} certhash={1} appid={{d5e8e8f8-3e7b-4ffa-8ec3-1860e24402e5}}", port, cert.Thumbprint)));
 			}
-		} // func InstallCertificateAsync
+		} // func UpdateCertificateAsync
 
 		#endregion
 

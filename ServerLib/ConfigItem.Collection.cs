@@ -1054,7 +1054,8 @@ namespace TecWare.DE.Server
 		/// <param name="tw"></param>
 		/// <returns></returns>
 		public static XmlWriterSettings GetSettings(TextWriter tw)
-			=> new XmlWriterSettings
+		{
+			return new XmlWriterSettings
 			{
 				CloseOutput = true,
 				CheckCharacters = true,
@@ -1065,6 +1066,7 @@ namespace TecWare.DE.Server
 				NewLineHandling = NewLineHandling.Entitize,
 				NewLineOnAttributes = false
 			};
+		} // func GetSettings
 
 		/// <summary>Create a list descriptor for the givven type.</summary>
 		/// <param name="itemType"></param>
