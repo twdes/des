@@ -66,6 +66,10 @@
       <Project>{67528843-e631-4c05-b6e8-514cc8bec7b6}</Project>
       <Name>DESCore</Name>
     </ProjectReference>
+    <ProjectReference Include="..\Extern\odette\DEModette.Core\DEModette.Core.csproj">
+      <Project>{f258336f-f547-446d-a22b-447508ade9d1}</Project>
+      <Name>DEModette.Core</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Extern\odette\DEModette\DEModette.csproj">
       <Project>{72eed527-236e-4124-b360-54b25f0f9105}</Project>
       <Name>DEModette</Name>

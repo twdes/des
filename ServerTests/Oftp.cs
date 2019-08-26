@@ -118,8 +118,8 @@ namespace TecWare.DE.Server
 
 			while (true)
 			{
-				var eos = OdetteFtp.FillFromStreamInternalAsync(reader, allowCompressing, buffer).Result;
-				OdetteFtp.WriteToStreamInternalAsync(writer, buffer, eos.dataLength).Wait();
+				var eos = OdetteFtpCore.FillFromStreamInternalAsync(reader, allowCompressing, buffer).Result;
+				OdetteFtpCore.WriteToStreamInternalAsync(writer, buffer, eos.dataLength).Wait();
 				if (eos.endOfStream)
 					break;
 			}
@@ -146,7 +146,7 @@ namespace TecWare.DE.Server
 				Header(4, false, true), (byte)'W', (byte)'e', (byte)'l', (byte)'t'
 			};
 
-			Assert.IsTrue(OdetteFtp.WriteToStreamInternalAsync(writer, buf, buf.Length).Result, "eor not reached.");
+			Assert.IsTrue(OdetteFtpCore.WriteToStreamInternalAsync(writer, buf, buf.Length).Result, "eor not reached.");
 
 			writer.AssertData(
 				new byte[][]
