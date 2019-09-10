@@ -32,6 +32,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 using System.Xml.Linq;
 using TecWare.DE.Networking;
 using TecWare.DE.Server.Configuration;
@@ -59,11 +60,13 @@ namespace TecWare.DE.Server
 			: base(http, httpAuthentification)
 		{
 			this.http = http;
-			this.queryString = new Lazy<NameValueCollection>(() => request.QueryString);
 			this.request = request;
 			this.absolutePath = absolutePath;
 
-			this.clientCultureInfo = new Lazy<CultureInfo>(() =>
+			// fix: request.QueryString uses wrong encoding
+			queryString = new Lazy<NameValueCollection>(() => HttpUtility.ParseQueryString(request.Url.Query, Encoding.UTF8));
+
+			clientCultureInfo = new Lazy<CultureInfo>(() =>
 			{
 				try
 				{
@@ -84,7 +87,7 @@ namespace TecWare.DE.Server
 
 		#region -- TryGetProperty -----------------------------------------------------
 
-		private bool TryGetNameValueKeyIgnoreCase(NameValueCollection list, string name, out string value)
+		private bool TryGetNameValueKeyIgnoreCase(NameValueCollection list, string name, out object value)
 		{
 			value = list[name];
 			if (value == null)
@@ -98,12 +101,9 @@ namespace TecWare.DE.Server
 
 		public override bool TryGetProperty(string name, out object value)
 		{
-			if (TryGetNameValueKeyIgnoreCase(queryString.Value, name, out var rawValue)
-				|| TryGetNameValueKeyIgnoreCase(request.Headers, name, out rawValue))
-			{
-				value = Uri.UnescapeDataString(rawValue);
+			if (TryGetNameValueKeyIgnoreCase(queryString.Value, name, out value)
+				|| TryGetNameValueKeyIgnoreCase(request.Headers, name, out value))
 				return true;
-			}
 			return base.TryGetProperty(name, out value);
 		} // func TryGetProperty
 
@@ -1375,7 +1375,7 @@ namespace TecWare.DE.Server
 						// Start logging
 						if (debugMode)
 							context.LogStart();
-						
+				
 						// start to find the endpoint
 						if (context.TryEnterSubPath(Server, String.Empty))
 						{
