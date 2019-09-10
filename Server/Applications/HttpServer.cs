@@ -84,7 +84,7 @@ namespace TecWare.DE.Server
 
 		#region -- TryGetProperty -----------------------------------------------------
 
-		private bool TryGetNameValueKeyIgnoreCase(NameValueCollection list, string name, out object value)
+		private bool TryGetNameValueKeyIgnoreCase(NameValueCollection list, string name, out string value)
 		{
 			value = list[name];
 			if (value == null)
@@ -98,9 +98,12 @@ namespace TecWare.DE.Server
 
 		public override bool TryGetProperty(string name, out object value)
 		{
-			if (TryGetNameValueKeyIgnoreCase(queryString.Value, name, out value)
-				|| TryGetNameValueKeyIgnoreCase(request.Headers, name, out value))
+			if (TryGetNameValueKeyIgnoreCase(queryString.Value, name, out var rawValue)
+				|| TryGetNameValueKeyIgnoreCase(request.Headers, name, out rawValue))
+			{
+				value = Uri.UnescapeDataString(rawValue);
 				return true;
+			}
 			return base.TryGetProperty(name, out value);
 		} // func TryGetProperty
 
