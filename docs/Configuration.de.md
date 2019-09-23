@@ -21,4 +21,8 @@ Es gibt zwei *actions*, die die Konfiguration anzeigen.
 
 Im Fehlerfall wird die erzeugte Konfiguration unter `%temp%\des.xml` abgelegt.
 
-Damit die Konfiguration immer geschrieben wird, die Eigenschaft `OutputTemp` auf `true` setzen.
+Damit die Konfiguration immer geschrieben wird, die Eigenschaft `OutputTemp` in der Kommandozeile auf `true` setzen.
+
+```cmd
+DEServer.exe run -c cfg\Kunde.xml -v OutputTemp=true
+```
