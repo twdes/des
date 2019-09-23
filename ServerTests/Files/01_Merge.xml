@@ -9,4 +9,7 @@
 	<configLogItem name="test3">
 		<files name="test" directory="."/>
 	</configLogItem>
+	<configLogItem name="test4">
+		<?des-remove?>
+	</configLogItem>
 </fragment>

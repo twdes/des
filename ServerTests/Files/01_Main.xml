@@ -12,5 +12,8 @@
 	<configLogItem name="test3" displayname="test element order">
 		<log min="1024" max="4096" />
 	</configLogItem>
+	<configLogItem name="test4" displayname="ttttt">
+		<variable type="byte" name="t">a</variable>
+	</configLogItem>
 	<?des-merge 01_Merge.xml?>
 </des>

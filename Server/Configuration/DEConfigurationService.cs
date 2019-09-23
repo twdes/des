@@ -34,6 +34,8 @@ namespace TecWare.DE.Server.Configuration
 
 	internal sealed class DEConfigurationService : IDEConfigurationService
 	{
+		private readonly static XName xnDeleteMeAttribute = XName.Get("removeme", "__configurationservice__");
+
 		#region -- struct SchemaAssemblyDefinition ------------------------------------
 
 		private struct SchemaAssemblyDefinition
@@ -292,8 +294,9 @@ namespace TecWare.DE.Server.Configuration
 				ParseConfiguration(context, doc, new XFileAnnotation());
 				context.PopFrame(frame);
 
-				// remove all parse frames
-				RemoveFileAnnotations(doc.Root);
+				// remove all elements, that marked for deletion
+				// and remove all parse frames
+				RemoveFileNodesAndAnnotations(doc.Root);
 
 				// update configuration info
 				knownConfigurationFiles = context.CollectedFiles;
@@ -327,14 +330,29 @@ namespace TecWare.DE.Server.Configuration
 			return doc.Root;
 		} // func ParseConfiguration
 
-		private void RemoveFileAnnotations(XElement cur)
+		private void RemoveFileNodesAndAnnotations(XElement cur)
 		{
 			foreach (var a in cur.Attributes())
 				a.RemoveAnnotations<XFileAnnotation>();
 
-			foreach (var c in cur.Elements())
-				RemoveFileAnnotations(c);
-		} // func RemoveFileAnnotations
+			var x = cur.FirstNode;
+			while (x != null)
+			{
+				XNode deleteMe = null;
+
+				if (x is XElement xe)
+				{
+					if (xe.GetAttribute(xnDeleteMeAttribute, false))
+						deleteMe = x;
+					else
+						RemoveFileNodesAndAnnotations(xe);
+				}
+				x = x.NextNode;
+
+				if (deleteMe != null)
+					deleteMe.Remove();
+			}
+		} // func RemoveFileNodesAndAnnotations
 
 		private void ValidationEvent(object sender, ValidationEventArgs e)
 		{
@@ -381,7 +399,7 @@ namespace TecWare.DE.Server.Configuration
 						ParseConfiguration(context, xCur, fileToken);
 						context.PopFrame(newFrame);
 
-						// Load assemblies -> they preprocessor needs them
+						#region -- Load assemblies -> they preprocessor needs them --
 						if (xCur.Name == xnServer)
 						{
 							foreach (var cur in xCur.Elements())
@@ -425,18 +443,19 @@ namespace TecWare.DE.Server.Configuration
 								}
 							}
 						}
+						#endregion
 					}
-					else if (c is XText xText)
+					else if (c is XText xText) // replace values in text elements
 					{
 						if (ChangeConfigurationValue(context, xText, xText.Value, out value))
 							xText.Value = value;
 					}
 				}
 
-				// Nächster Knoten
+				// next node
 				c = c.NextNode;
 
-				// Lösche den Knoten, sonst würde Next nicht funktionieren
+				// remove the node after next, in the other case next has null
 				if (deleteMe != null)
 					deleteMe.Remove();
 			}
@@ -456,7 +475,9 @@ namespace TecWare.DE.Server.Configuration
 				}
 			}
 			else if (xPI.Target == "des-end")
+			{
 				context.CurrentFrame.IsDeleteNodes = false;
+			}
 			else if (!context.CurrentFrame.IsDeleteNodes)
 			{
 				if (xPI.Target.StartsWith("des-var-"))
@@ -472,8 +493,20 @@ namespace TecWare.DE.Server.Configuration
 				{
 					MergeConfigTree(context, xPI);
 				}
+				else if (xPI.Target == "des-remove-me")
+				{
+					RemoveConfigElement(context, xPI);
+				}
 			}
 		} // proc ParseConfiguration
+
+		private void RemoveConfigElement(ParseContext context, XProcessingInstruction xPI)
+		{
+			if (String.Compare(xPI.Data, Boolean.FalseString, StringComparison.OrdinalIgnoreCase) == 0)
+				xPI.Parent.SetAttributeValue(xnDeleteMeAttribute, null);
+			else
+				xPI.Parent.SetAttributeValue(xnDeleteMeAttribute, true);
+		} // proc RemoveConfigElement
 
 		private void IncludeConfigTree(ParseContext context, XProcessingInstruction xPI)
 		{
@@ -563,24 +596,26 @@ namespace TecWare.DE.Server.Configuration
 			return null;
 		} // func MergeConfigTreeFindInsertBefore
 
-		private void MergeConfigTree(XElement xRoot, XElement xMerge, XFileAnnotation currentFileToken)
+		private void MergeConfigTree(XElement xTarget, XElement xMerge, XFileAnnotation currentFileToken)
 		{
 			// merge value
 			var elementValueDefinition = GetValue(xMerge);
 			if (elementValueDefinition != null)
 			{
-				if (elementValueDefinition.IsList)
-					xRoot.Value = xRoot.Value + " " + xMerge.Value;
+				if (elementValueDefinition.IsList) // merge list values
+					xTarget.Value = xTarget.Value + " " + xMerge.Value;
+				else // override a single value
+					xTarget.Value = xMerge.Value;
 			}
 
 			// merge attributes
 			var attributeMerge = xMerge.FirstAttribute;
 			while (attributeMerge != null)
 			{
-				var attributeRoot = xRoot.Attribute(attributeMerge.Name);
+				var attributeRoot = xTarget.Attribute(attributeMerge.Name);
 				if (attributeRoot == null) // attribute does not exists --> insert
 				{
-					xRoot.SetAttributeValue(attributeMerge.Name, attributeMerge.Value);
+					xTarget.SetAttributeValue(attributeMerge.Name, attributeMerge.Value);
 				}
 				else // attribute exists --> override or combine lists
 				{
@@ -609,16 +644,16 @@ namespace TecWare.DE.Server.Configuration
 
 				if (xCurNodeMerge is XElement xCurMerge)
 				{
-					var xCurRoot = FindConfigTreeElement(xRoot, xCurMerge);
+					var xCurRoot = FindConfigTreeElement(xTarget, xCurMerge);
 					if (xCurRoot == null) // node is not present -> include
 					{
 						Procs.XCopyAnnotations(xCurMerge, xCurMerge);
 						xCurMerge.Remove();
 
 						// find the xsd insert position
-						var xInsertBefore = xRoot.HasElements ? MergeConfigTreeFindInsertBefore(xRoot, xCurMerge) : null;
+						var xInsertBefore = xTarget.HasElements ? MergeConfigTreeFindInsertBefore(xTarget, xCurMerge) : null;
 						if (xInsertBefore == null)
-							xRoot.Add(xCurMerge);
+							xTarget.Add(xCurMerge);
 						else
 							xInsertBefore.AddBeforeSelf(xCurMerge);
 					}
