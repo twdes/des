@@ -502,7 +502,7 @@ namespace TecWare.DE.Server
 		private readonly DEList<IDEConfigItemProperty> properties;  // Eigenschaften, dieses Knotens
 
 		private ReaderWriterLockSlim lockConfig;    // Lese/Schreibsperre für die Konfiguration
-		private List<DEConfigItem> subItems;        // Konfigurationseinträge unter diesem Knoten
+		private readonly List<DEConfigItem> subItems; // Konfigurationseinträge unter diesem Knoten
 		private XElement currentConfig = null;      // Zugriff auf den Konfigurationsknoten, darf nur lesend zugegriffen werden, und es dürfen keine Referenzen gespeichert werden
 		private Lazy<XConfigNode> configNodeLazy = null; // return lazy configuration description
 		private DEConfigItemState state;            // Aktueller Status des Konfigurationsknotens
@@ -514,19 +514,19 @@ namespace TecWare.DE.Server
 		/// <param name="name"></param>
 		public DEConfigItem(IServiceProvider sp, string name)
 		{
-			this.lockConfig = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
-			this.subItems = new List<DEConfigItem>();
+			lockConfig = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+			subItems = new List<DEConfigItem>();
 
-			this.server = new Lazy<IDEServer>(() => this.GetService<IDEServer>(true), true);
-			this.log = new Lazy<LoggerProxy>(() => this.LogProxy(name), true);
+			server = new Lazy<IDEServer>(() => this.GetService<IDEServer>(true), true);
+			log = new Lazy<LoggerProxy>(() => this.LogProxy(name), true);
 
-			this.sp = sp ?? throw new ArgumentNullException("sp");
-			this.name = name;
-			this.state = DEConfigItemState.Initializing;
+			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
+			this.name = name ?? throw new ArgumentNullException(nameof(name));
+			state = DEConfigItemState.Initializing;
 
-			this.scripts = new DEList<ILuaAttachedScript>(this, AttachedScriptsListId, "Attached Scripts");
-			this.actions = new ConfigActionDictionary(this);
-			PublishItem(this.properties = new DEList<IDEConfigItemProperty>(this, PropertiesListId, "Properties"));
+			PublishItem(scripts = new DEList<ILuaAttachedScript>(this, AttachedScriptsListId, "Attached Scripts"));
+			actions = new ConfigActionDictionary(this); // actions know a different way to listed in the client
+			PublishItem(properties = new DEList<IDEConfigItemProperty>(this, PropertiesListId, "Properties"));
 
 			InitTypeProperties();
 
@@ -542,8 +542,8 @@ namespace TecWare.DE.Server
 		/// <summary></summary>
 		public void Dispose()
 		{
-			GC.SuppressFinalize(this);
 			Dispose(true);
+			GC.SuppressFinalize(this);
 		} // proc Dispose
 
 		/// <summary></summary>

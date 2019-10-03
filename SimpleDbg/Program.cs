@@ -90,8 +90,8 @@ namespace TecWare.DE.Server
 	{
 		private static readonly Regex commandSyntax = new Regex(@"\:(?<cmd>\w+)(?:\s+(?<args>(?:\`[^\`]*\`)|(?:[^\s]*)))*", RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-		private static ConsoleApplication app = ConsoleApplication.Current;
-		private static SimpleDebugCommandHistory commandHistory = new SimpleDebugCommandHistory();
+		private static readonly ConsoleApplication app = ConsoleApplication.Current;
+		private static readonly SimpleDebugCommandHistory commandHistory = new SimpleDebugCommandHistory();
 
 		private static DebugRunScriptResult lastScriptResult = null;
 		private static DebugSocketException lastRemoteException = null;
@@ -255,8 +255,25 @@ namespace TecWare.DE.Server
 
 		private static void App_ConsoleKeyUp(object sender, ConsoleKeyUpEventArgs e)
 		{
-			if (e.Modifiers == 0 && e.Key == ConsoleKey.F2)
-				BeginTask(SelectUseNodeAsync());
+			try
+			{
+				if (e.Modifiers == 0)
+				{
+					switch (e.Key)
+					{
+						case ConsoleKey.F1:
+							ToggleActivity();
+							break;
+						case ConsoleKey.F2:
+							BeginTask(SelectUseNodeAsync());
+							break;
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				app.WriteError(ex);
+			}
 		} // event App_ConsoleKeyUp
 
 		#endregion
@@ -271,6 +288,7 @@ namespace TecWare.DE.Server
 		private static DebugSocket debugSocket = null;
 		private static DEHttpEventSocket eventSocket = null;
 		private static ConnectionStateOverlay connectionStateOverlay = null;
+		private static ActivityOverlay activityOverlay = null;
 		private static string currentUsePath = "/"; // current use path
 
 		private static void BeginConnection(Uri uri, ICredentials credentials)
@@ -393,6 +411,11 @@ namespace TecWare.DE.Server
 			{
 				if (newHttp != http)
 				{
+					if (activityOverlay != null)
+					{
+						activityOverlay.Application = null;
+						activityOverlay = null;
+					}
 					http?.Dispose();
 					debugSocket?.Dispose();
 					eventSocket?.Dispose();
@@ -405,6 +428,11 @@ namespace TecWare.DE.Server
 				StartSocket(eventSocket = http != null ? new ConsoleEventSocket(app, http) : null, cancellationToken);
 
 				SetConnectionState(ConnectionState.ConnectedHttp, true);
+				if (eventSocket != null)
+				{
+					activityOverlay = new ActivityOverlay(http, 5);
+					eventSocket.Notify += activityOverlay.EventReceived;
+				}
 			}
 		} // proc SetHttpConnection
 
@@ -476,10 +504,27 @@ namespace TecWare.DE.Server
 			connectionStateOverlay.SetPath(path);
 		} // proc PostNewUsePath
 
-		private static string MakeUri(params PropertyValue[] args)
+		public static void ToggleActivity()
+		{
+			if (activityOverlay == null)
+				return;
+
+			if (activityOverlay.Application == null)
+			{
+				activityOverlay.Application = app;
+				app.ReservedBottomRowCount = activityOverlay.Height;
+			}
+			else
+			{
+				activityOverlay.Application = null;
+				app.ReservedBottomRowCount = 0;
+			}
+		} // proc ToggleActivity
+
+		public static string MakeUri(params PropertyValue[] args)
 			=> MakeUri(CurrentUsePath, args);
 
-		private static string MakeUri(string usePath, params PropertyValue[] args)
+		public static string MakeUri(string usePath, params PropertyValue[] args)
 		{
 			// build use path
 			if (String.IsNullOrEmpty(usePath))
@@ -1645,7 +1690,7 @@ namespace TecWare.DE.Server
 		#region -- ListGet ------------------------------------------------------------
 
 		[InteractiveCommand("listget", HelpText = "Get a server list.", ConnectionRequest = InteractiveCommandConnection.Http)]
-		private static async Task ListGetAsync(string list = null)
+		internal static async Task ListGetAsync(string list = null)
 		{
 			if (String.IsNullOrEmpty(list))
 				throw new ArgumentNullException(nameof(list));
@@ -1656,7 +1701,6 @@ namespace TecWare.DE.Server
 				new PropertyValue("desc", true),
 				new PropertyValue("count", 100)
 			), rootName: "list");
-
 
 			// parse type
 			var xType = xList.Element("typedef");

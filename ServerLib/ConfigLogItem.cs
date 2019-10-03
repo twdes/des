@@ -127,7 +127,7 @@ namespace TecWare.DE.Server
 		private bool isDisposed = false;
 
 		private int logLineCount = 0;                           // Is the current count of log lines
-		private List<long> linesOffsetCache = new List<long>(); // Offset of line >> 5 (32)
+		private readonly List<long> linesOffsetCache = new List<long>(); // Offset of line >> 5 (32)
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
@@ -256,7 +256,6 @@ namespace TecWare.DE.Server
 				catch (Exception e)
 				{
 					Debug.Print(e.GetMessageString());
-
 					ResetLog(true);
 				}
 			}
@@ -280,11 +279,10 @@ namespace TecWare.DE.Server
 			// copy the log data to the start of the file
 			var readPos = removeBytes;
 			var writePos = 0;
-			var readed = 0;
 			while (logData.Length > readPos)
 			{
 				logData.Seek(readPos, SeekOrigin.Begin);
-				readed = logData.Read(logFileBuffer, 0, logFileBuffer.Length);
+				var readed = logData.Read(logFileBuffer, 0, logFileBuffer.Length);
 				logData.Seek(writePos, SeekOrigin.Begin);
 				logData.Write(logFileBuffer, 0, readed);
 
@@ -450,9 +448,7 @@ namespace TecWare.DE.Server
 				xml.WriteEndProperty();
 			} // proc WriteItem
 
-			private static readonly LogLineDescriptor logLineDescriptor = new LogLineDescriptor();
-
-			public static LogLineDescriptor Instance => logLineDescriptor;
+			public static LogLineDescriptor Instance { get; } = new LogLineDescriptor();
 		} // class LogLineDescriptor
 
 		#endregion
@@ -461,11 +457,11 @@ namespace TecWare.DE.Server
 
 		private sealed class LogLineController : IDEListController
 		{
-			private DEConfigLogItem configItem;
+			private readonly DEConfigLogItem configItem;
 
 			public LogLineController(DEConfigLogItem configItem)
 			{
-				this.configItem = configItem;
+				this.configItem = configItem ?? throw new ArgumentNullException(nameof(configItem));
 			} // ctor
 
 			public void Dispose()
@@ -485,8 +481,8 @@ namespace TecWare.DE.Server
 
 			public string Id => LogLineListId;
 			public string DisplayName => LogCategory;
-			public string SecurityToken => DEConfigItem.SecuritySys;
-			public System.Collections.IEnumerable List => configItem.logFile;
+			public string SecurityToken => SecuritySys;
+			public IEnumerable List => configItem.logFile;
 			public IDEListDescriptor Descriptor => LogLineDescriptor.Instance;
 		} // class LogLineController
 
@@ -553,6 +549,7 @@ namespace TecWare.DE.Server
 		#endregion
 
 		private DELogFile logFile = null;
+		private readonly IDEListController logListController;
 		private readonly Lazy<string> logFileName;
 
 		private readonly List<LogMessageScopeFrame> scopes = new List<LogMessageScopeFrame>();
@@ -565,9 +562,9 @@ namespace TecWare.DE.Server
 		public DEConfigLogItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
-			this.logFileName = new Lazy<string>(() => Path.Combine(Server.LogPath, GetFullLogName()));
+			logFileName = new Lazy<string>(() => Path.Combine(Server.LogPath, GetFullLogName()));
 
-			RegisterList(LogLineListId, new LogLineController(this), true);
+			RegisterList(LogLineListId, logListController = new LogLineController(this), true);
 		} // ctor
 
 		/// <summary></summary>
@@ -576,7 +573,9 @@ namespace TecWare.DE.Server
 		{
 			if (disposing)
 			{
-				Procs.FreeAndNil(ref logFile);
+				logListController?.Dispose();
+				logFile?.Dispose();
+				logFile = null;
 				ConfigLogItemCount--;
 			}
 			base.Dispose(disposing);
@@ -705,20 +704,28 @@ namespace TecWare.DE.Server
 
 		#region -- Http Schnittstelle -------------------------------------------------
 
-		/// <summary></summary>
+		/// <summary>Is called if a log line is added.</summary>
 		protected virtual void OnLinesAdded()
 		{
-			FireSysEvent(LogLineListId, null, new XElement("lines", new XAttribute("lineCount", LogLineCount)));
+			FireSysEvent(LogLineListId, null,
+				new XElement("lines", 
+					new XAttribute("lineCount", LogLineCount)
+				)
+			);
 			OnPropertyChanged(nameof(LogLineCount));
 			OnPropertyChanged(nameof(LogFileSize));
 		} // proc OnLinesAdded
 
 #if DEBUG
+		/// <summary>Spam log with message for test proposes.</summary>
+		/// <param name="spam"></param>
+		/// <param name="lines"></param>
+		/// <returns></returns>
 		[
 		DEConfigHttpAction("spam", IsSafeCall = true),
 		Description("Erzeugt im aktuellen Log die angegebene Anzahl von Meldungen.")
 		]
-		private XElement HttpSpamLog(string spam = "SPAM", int lines = 1024)
+		public XElement HttpSpamLog(string spam = "SPAM", int lines = 1024)
 		{
 			while (lines-- > 0)
 				Log.Info("{0} {1}" + new string('-', 100), spam, lines);

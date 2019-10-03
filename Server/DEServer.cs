@@ -195,6 +195,8 @@ namespace TecWare.DE.Server
 
 				queue.Dispose(); // Stop main thread queue
 				DoneConfiguration(); // close configuration
+
+				propertyMemory?.Dispose();
 			}
 
 			base.Dispose(disposing);
@@ -257,7 +259,7 @@ namespace TecWare.DE.Server
 
 		#region -- ServerInfo Member - Http -------------------------------------------
 
-		private SimpleConfigItemProperty<long> propertyMemory = null;
+		private SimpleConfigItemProperty<FileSize> propertyMemory = null;
 		private long lastMemory = 0;
 
 		private void InitServerInfo()
@@ -266,7 +268,7 @@ namespace TecWare.DE.Server
 			RegisterProperty(new SimpleConfigItemProperty<string>(this, "tw_base_version", "Version", ServerCategory, "Versioninformation des Servers.", null, GetServerFileVersion()));
 
 			// Speichereigenschaften
-			RegisterProperty(propertyMemory = new SimpleConfigItemProperty<long>(this, "tw_base_gc", "Speicher", ServerCategory, "Aktuell größe des verwalteten Heaps.", "FILESIZE", 0));
+			RegisterProperty(propertyMemory = new SimpleConfigItemProperty<FileSize>(this, "tw_base_gc", "Speicher", ServerCategory, "Aktuell größe des verwalteten Heaps.", "{0:XiB}", 0));
 
 			// Angaben zum Netzwerk
 			var hostName = Dns.GetHostName();

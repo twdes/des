@@ -87,10 +87,13 @@ namespace TecWare.DE.Server
 		bool AutoRun { get; set; }
 
 		/// <summary>Id of the script.</summary>
+		[DEListTypeProperty("@id")]	
 		string ScriptId { get; }
 		/// <summary>Is the script ready to run.</summary>
+		[DEListTypeProperty("@compiled")]
 		bool IsCompiled { get; }
 		/// <summary>Is the script changed since the last run..</summary>
+		[DEListTypeProperty("@needtorun")]
 		bool NeedToRun { get; }
 	} // interface ILuaAttachedScript
 

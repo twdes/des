@@ -897,12 +897,12 @@ namespace TecWare.DE.Server
 		private readonly DEThread httpThread;								// Thread, that process requests
 		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
 
-		private List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
-		private List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
+		private readonly List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
+		private readonly List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
 
 		private bool debugMode = false; // Print nearly all requests to the log
 
-		private HttpCacheItem[] cacheItems = new HttpCacheItem[256];
+		private readonly HttpCacheItem[] cacheItems = new HttpCacheItem[256];
 		private CacheItemListController cacheItemController;
 
 		private DEList<IDEWebSocketProtocol> webSocketProtocols;

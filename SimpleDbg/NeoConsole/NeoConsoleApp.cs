@@ -136,19 +136,25 @@ namespace Neo.Console
 				Application.Write(Content);
 		} // proc WriteToConsole
 
+		private void AddOverlay()
+		{
+			application.AddOverlay(this);
+			OnAdded();
+			if (IsVisible)
+				Invalidate();
+		} // proc AddOverlay
+
 		private void RemoveOverlay()
 		{
 			if (IsVisible)
 				Invalidate();
 			application.RemoveOverlay(this);
+			OnRemoved();
 		} // proc RemoveOverlay
 
-		private void AddOverlay()
-		{
-			application.AddOverlay(this);
-			if (IsVisible)
-				Invalidate();
-		} // proc AddOverlay
+		protected virtual void OnAdded() { }
+
+		protected virtual void OnRemoved() { }
 
 		public ConsoleApplication Application
 		{
@@ -362,7 +368,7 @@ namespace Neo.Console
 	{
 		private readonly TaskCompletionSource<bool> dialogResult;
 
-		public ConsoleDialogOverlay()
+		protected ConsoleDialogOverlay()
 		{
 			dialogResult = new TaskCompletionSource<bool>();
 			SetCursor(0, 0, 0);
@@ -777,8 +783,6 @@ namespace Neo.Console
 
 		#endregion
 
-		private static readonly char[] whiteSpaces = new char[] { ' ', '\t', '\u00a0', '\u0085' };
-
 		private readonly IConsoleReadLineManager manager;
 		private readonly TaskCompletionSource<string> commandAccepted;
 
@@ -1065,7 +1069,12 @@ namespace Neo.Console
 										return true;
 									}
 									else if (currentLineOffset > 0)
-										currentLineOffset--;
+									{
+										if (currentLineOffset < CurrentLine.ContentLength)
+											currentLineOffset--;
+										else
+											currentLineOffset = CurrentLine.ContentLength - 1;
+									}
 									else
 										currentLineOffset = 0;
 

@@ -90,7 +90,7 @@ namespace TecWare.DE.Server
 	/// nicht Zeitkritischer aufgaben an.</summary>
 	public interface IDEServerQueue
 	{
-		/// <summary>Registers a method, that will be processed during idle of the queuue thread.</summary>
+		/// <summary>Registers a method, that will be processed during idle of the queue thread.</summary>
 		/// <param name="action">Action to run.</param>
 		/// <param name="timebetween">Time between the calls, this time is not guaranteed. If the queue thread is under heavy presure it will take longer.</param>
 		void RegisterIdle(Action action, int timebetween = 1000);
@@ -98,12 +98,12 @@ namespace TecWare.DE.Server
 		/// <param name="action"></param>
 		/// <param name="eventType"></param>
 		void RegisterEvent(Action action, DEServerEvent eventType);
-		/// <summary></summary>
-		/// <param name="action"></param>
-		/// <param name="timeEllapsed"></param>
-		void RegisterCommand(Action action, int timeEllapsed = 0);
-		/// <summary>Removes a command/idle/shutdown action.</summary>
-		/// <param name="action"></param>
+		/// <summary>Execute the command in the queue thread.</summary>
+		/// <param name="action">Command to execute</param>
+		/// <param name="timeElapsed">Wait before executed in milliseconds</param>
+		void RegisterCommand(Action action, int timeElapsed = 0);
+		/// <summary>Removes a command/idle/event action.</summary>
+		/// <param name="action">Command/idle/evetn to cancel</param>
 		void CancelCommand(Action action);
 
 		/// <summary>Returns the factory for the queue thread. Every task gets executed in a single thread.</summary>
@@ -537,6 +537,9 @@ namespace TecWare.DE.Server
 			var r = base.GetService(serviceType);
 			if (r != null)
 				return r;
+
+			if (serviceType == typeof(IDEAuthentificatedUser))
+				return user;
 
 			// second check user service
 			r = user?.GetService(serviceType);

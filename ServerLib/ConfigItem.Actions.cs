@@ -86,13 +86,15 @@ namespace TecWare.DE.Server
 				return null;
 		} // proc Invoke
 
-		/// <summary></summary>
+		/// <summary>Method name of the action.</summary>
+		public string Name => methodDescription.Name;
+		/// <summary>Description of the action.</summary>
 		public string Description => description;
-		/// <summary></summary>
+		/// <summary>Method description of the action.</summary>
 		public MethodInfo MethodDescription => methodDescription;
-		/// <summary></summary>
+		/// <summary>Security token, that can call the action.</summary>
 		public string SecurityToken => securityToken;
-		/// <summary></summary>
+		/// <summary>Is this action called in the safe mode.</summary>
 		public bool IsSafeCall => isSafeCall;
 
 		/// <summary></summary>

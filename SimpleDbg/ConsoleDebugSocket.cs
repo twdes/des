@@ -27,14 +27,12 @@ namespace TecWare.DE.Server
 	internal sealed class ConsoleDebugSocket : DebugSocket
 	{
 		private readonly ConsoleApplication app;
-		private readonly Stopwatch startUp;
 
 		public ConsoleDebugSocket(ConsoleApplication app, DEHttpClient http)
 			: base(http)
 		{
 			this.app = app ?? throw new ArgumentNullException(nameof(app));
 
-			startUp = Stopwatch.StartNew();
 			DefaultTimeout = 0;
 		} // ctor
 

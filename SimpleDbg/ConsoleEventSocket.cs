@@ -17,6 +17,7 @@ using System;
 using System.Threading.Tasks;
 using Neo.Console;
 using TecWare.DE.Networking;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
@@ -55,11 +56,6 @@ namespace TecWare.DE.Server
 			app.WriteError(e);
 			return base.OnConnectionFailureAsync(e);
 		} // func OnConnectionFailureAsync
-
-		protected override void OnNotify(DEHttpSocketEventArgs e)
-		{
-			base.OnNotify(e);
-		} // proc OnNotify
 	} // class ConsoleEventSocket
 
 	#endregion
