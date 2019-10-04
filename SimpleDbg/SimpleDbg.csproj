@@ -53,6 +53,7 @@
     <Compile Include="ConsoleDebugSocket.cs" />
     <Compile Include="ConsoleEventSocket.cs" />
     <Compile Include="ConsoleView.cs" />
+    <Compile Include="Data\Log.cs" />
     <Compile Include="NeoConsole\NativeMethods.cs" />
     <Compile Include="NeoConsole\NeoConsole.cs" />
     <Compile Include="NeoConsole\NeoConsoleApp.cs" />
@@ -60,6 +61,10 @@
     <Compile Include="NeoConsole\NeoConsoleOutput.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UI\ActivityOverlay.cs" />
+    <Compile Include="UI\ConnectionStateOverlay.cs" />
+    <Compile Include="UI\ReadLine.cs" />
+    <Compile Include="UI\SelectListOverlay.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Server\des.licenseheader">

@@ -29,6 +29,7 @@ using CommandLine.Text;
 using Neo.Console;
 using Neo.IronLua;
 using TecWare.DE.Networking;
+using TecWare.DE.Server.UI;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -612,11 +613,7 @@ namespace TecWare.DE.Server
 		} // proc RunCommandAsync
 
 		private static void BeginTask(Task task)
-		{
-			task.ContinueWith(
-				t => app.WriteError(t.Exception), TaskContinuationOptions.OnlyOnFaulted
-			);
-		} // proc BeginTask
+			=> task.Silent(e => app.WriteError(e));
 
 		#endregion
 
@@ -896,66 +893,47 @@ namespace TecWare.DE.Server
 
 		#region -- WriteReturn --------------------------------------------------------
 
-		#region -- class TableColumn --------------------------------------------------
+		#region -- class DebugMemberColumn --------------------------------------------
 
-		private sealed class TableColumn
+		private sealed class DebugMemberColumn : TableColumn
 		{
-			private const string nullValue = "-NULL-";
-			private const string errValue = "-ERR-";
-
-			private readonly string name;
-			private readonly string type;
-			private int width;
 			private readonly Func<DebugMemberValue, string> formatValue;
 
-			public TableColumn(DebugMemberValue mv)
+			private DebugMemberColumn(DebugMemberValue mv, int width, TypeCode typeCode)
+				: base(mv.Name, mv.TypeName, null, width)
 			{
-				name = mv.Name;
-				type = mv.TypeName;
-
-				var tc = mv.Type != null ? Type.GetTypeCode(mv.Type) : TypeCode.Object;
-				switch (tc)
+				switch (typeCode)
 				{
 					case TypeCode.SByte:
-						width = 10;
 						formatValue = Int8Value;
 						break;
 					case TypeCode.Byte:
-						width = 10;
 						formatValue = UInt8Value;
 						break;
 					case TypeCode.Int16:
-						width = 10;
 						formatValue = Int16Value;
 						break;
 					case TypeCode.UInt16:
-						width = 10;
 						formatValue = UInt16Value;
 						break;
 					case TypeCode.Int32:
-						width = 10;
 						formatValue = Int32Value;
 						break;
 					case TypeCode.UInt32:
-						width = 10;
 						formatValue = UInt32Value;
 						break;
 					case TypeCode.Int64:
-						width = 10;
 						formatValue = Int64Value;
 						break;
 					case TypeCode.UInt64:
-						width = 10;
 						formatValue = UInt64Value;
 						break;
 
 					case TypeCode.Boolean:
-						width = 5;
 						formatValue = BooleanValue;
 						break;
 
 					default:
-						width = -1;
 						formatValue = ToStringValue;
 						break;
 				}
@@ -969,10 +947,10 @@ namespace TecWare.DE.Server
 
 			private string FormatInteger(long? n)
 			{
-				var s = n.HasValue ? n.ToString() : nullValue;
-				return s.Length > width
-					? errValue
-					: s.PadLeft(width);
+				var s = n.HasValue ? n.ToString() : NullValue;
+				return s.Length > Width
+					? ErrorValue
+					: s.PadLeft(Width);
 			} // func FormatInteger
 
 			private string Int8Value(DebugMemberValue mv)
@@ -1000,128 +978,32 @@ namespace TecWare.DE.Server
 				=> FormatInteger(mv.Value == null ? null : new long?(unchecked((long)(ulong)mv.Value)));
 
 			private string BooleanValue(DebugMemberValue mv)
-				=> mv.Value == null ? nullValue : ((bool)mv.Value ? "true" : "false");
+				=> mv.Value == null ? NullValue : ((bool)mv.Value ? "true" : "false");
 
-			public bool IsVariable => width < 0;
+			protected override string FormatValueCore(object value)
+				=> formatValue((DebugMemberValue)value);
 
-			public string Name => name;
-			public string TypeName => type;
-
-			public int Width { get => width; set => width = value; }
-		} // class TableColumn
+			public static TableColumn Create(DebugMemberValue mv)
+			{
+				var tc = Type.GetTypeCode(GetDefaultType(mv.TypeName));
+				return new DebugMemberColumn(mv, GetDefaultWidth(tc), tc);
+			} // func Create
+		} // class DebugMemberColumn
 
 		#endregion
-
-		private static void WriteTableMeasureColumns(DebugMemberValue[] sampleRow, out TableColumn[] columns)
-		{
-			var maxWidth = Console.WindowWidth - 1;
-			const int minColWith = 10;
-			var variableColumns = 0;
-			var fixedWidth = 0;
-			var columnsList = new List<TableColumn>(sampleRow.Length);
-
-			for (var i = 0; i < sampleRow.Length; i++)
-			{
-				columnsList.Add(new TableColumn(sampleRow[i]));
-				if (columnsList[i].IsVariable)
-					variableColumns++;
-				else
-					fixedWidth += columnsList[i].Width + 1;
-			}
-
-			// calc variable column with
-			if (variableColumns > 0)
-			{
-				var variableWidth = maxWidth - fixedWidth;
-				if (variableWidth > 0)
-				{
-					var varColumnWidth = (variableWidth / variableColumns) - 1;
-					if (varColumnWidth < minColWith)
-						varColumnWidth = minColWith;
-					foreach (var c in columnsList)
-					{
-						if (c.IsVariable)
-							c.Width = varColumnWidth;
-					}
-				}
-				else
-				{
-					foreach (var c in columnsList)
-					{
-						if (c.IsVariable)
-							c.Width = 10;
-					}
-				}
-			}
-
-			// clear invisible columns
-			var currentWidth = 0;
-			for (var i = 0; i < columnsList.Count; i++)
-			{
-				var col = columnsList[i];
-				if (currentWidth < maxWidth)
-				{
-					var newCurrentWidth = currentWidth + col.Width + 1;
-					if (newCurrentWidth > maxWidth)
-						col.Width = maxWidth - currentWidth;
-
-					currentWidth = newCurrentWidth;
-				}
-				else
-				{
-					columnsList.RemoveRange(i, columnsList.Count - i);
-					break;
-				}
-			}
-			columns = columnsList.ToArray();
-		} // proc WriteTableMeasureColumns
-
-		private static string TableStringPad(string value, int maxWidth)
-		{
-			if (String.IsNullOrEmpty(value))
-				return new string(' ', maxWidth);
-			else if (value.Length > maxWidth)
-			{
-				return maxWidth < 10
-					? value.Substring(0, maxWidth)
-					: value.Substring(0, maxWidth - 3) + "...";
-			}
-			else
-				return value.PadRight(maxWidth);
-		} // func TableStringPad
-
-		private static void WriteRow<T>(TableColumn[] columns, T[] values, Func<TableColumn, T, string> getValue)
-		{
-			for (var i = 0; i < columns.Length; i++)
-			{
-				if (i > 0)
-					app.Write(" ");
-				var col = columns[i];
-				app.Write(TableStringPad(getValue(col, values[i]), col.Width));
-			}
-			app.WriteLine();
-		} // proc WriteRow
 
 		private static int WriteTable(IEnumerable<DebugMemberValue[]> list)
 		{
 			var rowCount = 0;
-			var columns = (TableColumn[])null;
+			var table = (ConsoleTable)null;
 			foreach (var r in list)
 			{
-				if (columns == null)
+				if (table == null)
 				{
-					WriteTableMeasureColumns(r, out columns);
-
-					// header
-					WriteRow(columns, columns, (_, c) => c.Name);
-					// type
-					using (app.Color(ConsoleColor.DarkGray))
-						WriteRow(columns, columns, (_, c) => c.TypeName);
-					// sep
-					WriteRow(columns, columns, (_, c) => new string('-', c.Width));
+					table = ConsoleTable.Create(app, Console.WindowWidth, r.Select(DebugMemberColumn.Create))
+						.WriteHeader(true);
 				}
-
-				WriteRow(columns, r, (_, c) => _.FormatValue(c));
+				table.Write(r);
 				rowCount++;
 			}
 			return rowCount;
@@ -1689,6 +1571,77 @@ namespace TecWare.DE.Server
 
 		#region -- ListGet ------------------------------------------------------------
 
+		#region -- class ListGetTableColumn -------------------------------------------
+
+		private abstract class ListGetTableColumn : TableColumn
+		{
+			private readonly Type type;
+
+			public ListGetTableColumn(string name, string typeName, Type type, int width)
+				: base(name, typeName, type, width)
+			{
+				this.type = type;
+			} // ctor
+
+			protected abstract string GetRawValue(XElement x);
+
+			protected sealed override string FormatValueCore(object value)
+				=> base.FormatValueCore(Procs.ChangeType(GetRawValue((XElement)value), type));
+		} // class ListGetTableColumn
+
+		#endregion
+
+		#region -- class ListGetAttributeTableColumn ----------------------------------
+
+		private sealed class ListGetAttributeTableColumn : ListGetTableColumn
+		{
+			private readonly XName xAttribute;
+
+			public ListGetAttributeTableColumn(string name, string typeName, XName xAttribute, int width)
+				: base(name, typeName, GetDefaultType(typeName), width)
+			{
+				this.xAttribute = xAttribute ?? throw new ArgumentNullException(nameof(xAttribute));
+			} // ctor
+
+			protected override string GetRawValue(XElement x)
+				=> x.Attribute(xAttribute)?.Value;
+		} // class ListGetAttributeTableColumn
+
+		#endregion
+
+		#region -- class ListGetAttributeTableColumn ----------------------------------
+
+		private sealed class ListGetElementTableColumn : ListGetTableColumn
+		{
+			private readonly XName xElementName;
+
+			public ListGetElementTableColumn(string name, string typeName, XName xElementName)
+				:base(name, typeName, GetDefaultType(typeName), 0)
+			{
+				this.xElementName = xElementName ?? throw new ArgumentNullException(nameof(xElementName));
+			} // ctor
+
+			protected override string GetRawValue(XElement x)
+				=> x.Element(xElementName)?.Value;
+		} // class ListGetElementTableColumn
+
+		#endregion
+
+		#region -- class ListGetAttributeTableColumn ----------------------------------
+
+		private sealed class ListGetValueTableColumn : ListGetTableColumn
+		{
+			public ListGetValueTableColumn(string typeName)
+				: base(".", typeName, GetDefaultType(typeName), 0)
+			{
+			}
+
+			protected override string GetRawValue(XElement x)
+				=> x.Value;
+		} // class ListGetValueTableColumn
+
+		#endregion
+
 		[InteractiveCommand("listget", HelpText = "Get a server list.", ConnectionRequest = InteractiveCommandConnection.Http)]
 		internal static async Task ListGetAsync(string list = null)
 		{
@@ -1709,54 +1662,53 @@ namespace TecWare.DE.Server
 
 			var xTypeDesc = xType.Elements().First();
 			var xElementName = xTypeDesc.Name;
-			var columns = new List<Func<XElement, DebugMemberValue>>();
-
-			DebugMemberValue CreateAttribute(XElement x, string displayName, string typeName, XName attributeName)
-				=> DebugMemberValue.Create(displayName, typeName, x.Attribute(attributeName)?.Value);
-
-			DebugMemberValue CreateElement(XElement x, string displayName, string typeName, XName elementName)
-				=> DebugMemberValue.Create(displayName, typeName, x.Element(elementName)?.Value);
-
-			DebugMemberValue CreateValue(XElement x, string displayName, string typeName)
-				=> DebugMemberValue.Create(displayName, typeName, x.Value);
-
-			foreach (var xCol in xTypeDesc.Elements())
-			{
-				if (xCol.Name == "attribute")
-				{
-					var attrName = xCol.Attribute("name")?.Value;
-					var typeName = xCol.Attribute("type")?.Value;
-					columns.Add(x => CreateAttribute(x, attrName, typeName, attrName));
-				}
-				else if (xCol.Name == "element")
-				{
-					var elementName = xCol.Attribute("name")?.Value;
-					var typeName = xCol.Attribute("type")?.Value;
-					if (elementName == null)
-						columns.Add(x => CreateValue(x, ".", typeName));
-					else
-						columns.Add(x => CreateElement(x, elementName, typeName, xElementName.Namespace + elementName));
-				}
-			}
 
 			var xItems = xList.Element("items");
 			if (xItems == null)
 				return;
 
 			var totalCount = xItems.GetAttribute("tc", -1);
-			
-			// enumerate all sum elements
-			DebugMemberValue[] BuildRows(XElement x)
-			{
-				var row = new DebugMemberValue[columns.Count];
-				for (var i = 0; i < row.Length; i++)
-					row[i] = columns[i](x);
-				return row;
-			} // func BuildRows
 
-			var count = WriteTable(
-				xItems.Elements(xElementName).Select(BuildRows)
-			);
+			#region -- create table description --
+
+			TableColumn CreateListGetTableColumn(XElement xCol)
+			{
+				if (xCol.Name == "attribute")
+				{
+					var attrName = xCol.Attribute("name")?.Value;
+					var typeName = xCol.Attribute("type")?.Value;
+
+					return new ListGetAttributeTableColumn(attrName, typeName, attrName, 
+						attrName == "typ" && list == "tw_lines" ? 3 : 0
+					);
+				}
+				else if (xCol.Name == "element")
+				{
+					var elementName = xCol.Attribute("name")?.Value;
+					var typeName = xCol.Attribute("type")?.Value;
+					if (elementName == null)
+						return new ListGetValueTableColumn(typeName);
+					else
+						return new ListGetElementTableColumn(elementName, typeName, xElementName.Namespace + elementName);
+				}
+				else
+					return null;
+			} // func CreateListGetTableColumn
+
+			var table = ConsoleTable.Create(app, Console.WindowWidth,
+				xTypeDesc.Elements().Select(CreateListGetTableColumn).Where(c => c != null)
+			).WriteHeader();
+
+			#endregion
+
+			// print columns
+			var count = 0;
+			foreach (var x in xItems.Elements(xElementName))
+			{
+				table.WriteCore((col, _) => col.FormatValue(x));
+				count++;
+			}
+
 			if (totalCount >= 0 && (count == 0 || totalCount > count))
 				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} from {totalCount:N0}" }, true);
 			else if (count >= 0)
