@@ -99,6 +99,10 @@ namespace TecWare.DE.Server
 			{
 				return FormatValueCore(value);
 			}
+			catch (FormatException)
+			{
+				return value?.ToString() ?? NullValue;
+			}
 			catch
 			{
 				return ErrorValue;

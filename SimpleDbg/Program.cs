@@ -1586,7 +1586,17 @@ namespace TecWare.DE.Server
 			protected abstract string GetRawValue(XElement x);
 
 			protected sealed override string FormatValueCore(object value)
-				=> base.FormatValueCore(Procs.ChangeType(GetRawValue((XElement)value), type));
+			{
+				var rawValue = GetRawValue((XElement)value);
+				try
+				{
+					return base.FormatValueCore(Procs.ChangeType(rawValue, type));
+				}
+				catch (FormatException)
+				{
+					return rawValue;
+				}
+			} // func FormatValueCore
 		} // class ListGetTableColumn
 
 		#endregion
