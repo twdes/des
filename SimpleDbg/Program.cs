@@ -882,7 +882,10 @@ namespace TecWare.DE.Server
 				orderby c.path
 				select new KeyValuePair<object, string>(c.path, c.name)
 				)
-			);
+			)
+			{ 
+				Title = "Use" 
+			};
 			selectList.Activate();
 			selectList.SelectedValue = CurrentUsePath;
 			if (await selectList.DialogResult)

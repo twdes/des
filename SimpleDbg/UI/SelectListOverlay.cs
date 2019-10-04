@@ -15,57 +15,183 @@
 #endregion
 using Neo.Console;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.UI
 {
-	#region -- class SelectListOverlay ------------------------------------------------
+	#region -- class ListDialogBase ---------------------------------------------------
 
-	internal sealed class SelectListOverlay : ConsoleDialogOverlay
+	internal abstract class ListDialogBase : ConsoleDialogOverlay
 	{
-		private readonly KeyValuePair<object, string>[] values;
+		private readonly IEnumerable source;
+
+		private string title = String.Empty;
+
+		private int firstLineIndex = 0;
 		private int selectedIndex = -1;
-		private string title;
 
-		public SelectListOverlay(ConsoleApplication app, IEnumerable<KeyValuePair<object, string>> values)
+		public ListDialogBase(ConsoleApplication app, IEnumerable source)
 		{
-			this.values = values.ToArray() ?? throw new ArgumentNullException(nameof(values));
+			this.source = source ?? throw new ArgumentNullException(nameof(source));
 
-			Application = app ?? throw new ArgumentNullException(nameof(values));
+			Application = app ?? throw new ArgumentNullException(nameof(app));
+		} // ctor
 
+		protected void ResizeToContent()
+		{
+			// calculate window size
+			var maxWidth = 10;
+			var maxHeight = 0;
+
+			foreach (var c in source)
+			{
+				var width = (FormatLine(c)?.Length ?? 0) + 2;
+				if (width > maxWidth)
+					maxWidth = width;
+				maxHeight++;
+			}
+
+			var app = Application;
 			var windowWidth = app.WindowRight - app.WindowLeft + 1;
 			var windowHeight = app.WindowBottom - app.WindowTop + 1;
-
-			var maxWidth = this.values.Max(GetLineLength) + 2;
-			var maxHeight = this.values.Length + 1;
 
 			Position = ConsoleOverlayPosition.Window;
 			Resize(
 				Math.Min(windowWidth, maxWidth),
-				Math.Min(windowHeight, maxHeight)
+				Math.Min(windowHeight, maxHeight + 1)
 			);
 
 			Left = (windowWidth - Width) / 2;
 			Top = (windowHeight - Height) / 2;
-		} // ctor
+		} // proc ResizeToContent
+
+		protected virtual int GetCount()
+			=> source is IList l ? l.Count : -1;
+
+		protected virtual object GetLine(int index)
+			=> source is IList list ? list[index] : GetLines(index, 1).OfType<object>().FirstOrDefault();
+
+		protected virtual IEnumerable GetLines(int startAt, int count)
+		{
+			if (source is IList list)
+			{
+				for (var i = 0; i < count; i++)
+				{
+					var idx = i + startAt;
+					if (idx >= list.Count)
+						yield break;
+					else
+						yield return list[idx];
+				}
+			}
+			else
+			{
+				var e = source.GetEnumerator();
+				try
+				{
+					var idx = 0;
+					while (idx < firstLineIndex)
+					{
+						if (!e.MoveNext())
+							yield break;
+					}
+
+					var endAt = startAt + count;
+					while (idx < endAt)
+					{
+						if (e.MoveNext())
+							yield return e.Current;
+						else
+							yield break;
+					}
+				}
+				finally
+				{
+					if (e is IDisposable d)
+						d.Dispose();
+				}
+			}
+		} // func GetLines
+
+		protected virtual object GetSelectedValue(object line)
+			=> line;
+
+		protected virtual string FormatLine(object line)
+			=> line?.ToString().GetFirstLine();
+
+		protected virtual void RenderLine(object line, int left, int top, int right, bool selected)
+		{
+			var content = TableColumn.TableStringPad(FormatLine(line), right - left + 1);
+			Content.Write(left, top, content, null,
+				selected ? ForegroundHighlightColor : ForegroundColor,
+				selected ? BackgroundHighlightColor : BackgroundColor
+			);
+		} // proc RenderLine
+
+		protected void RenderList(int left, int top, int right, int bottom)
+		{
+			var y = top;
+			var idx = firstLineIndex;
+			foreach (var cur in GetLines(firstLineIndex, bottom - top + 1))
+			{
+				RenderLine(cur, left, y, right, selectedIndex == idx);
+				idx++;
+				y++;
+			}
+
+			// clear rest
+			Content.Fill(left, y, right, bottom, ' ', ForegroundColor, BackgroundColor);
+		} // proc RenderList
 
 		protected override void OnRender()
 		{
-			RenderTitle("Use");
+			if (Content == null)
+				return;
 
-			for (var i = 0; i < values.Length; i++)
+			// render title
+			var top = 0;
+			if (!String.IsNullOrEmpty(title))
 			{
-				var top = i + 1;
-				Content.Set(0, top, ' ', background: BackgroundColor);
-				var foregroundColor = i == selectedIndex ? ConsoleColor.Black : ForegroundColor;
-				var backgroundColor = i == selectedIndex ? ConsoleColor.Cyan : BackgroundColor;
-				var (endLeft, _) = Content.Write(1, top, values[i].Value, foreground: foregroundColor, background: backgroundColor);
-				if (endLeft < Width)
-					Content.Fill(endLeft, top, Width - 2, top, ' ', background: backgroundColor);
-				Content.Set(Width - 1, top, ' ', background: BackgroundColor);
+				RenderTitle(title);
+				top = 1;
 			}
+
+			// render list full size
+			RenderList(1, top, Content.Width - 2, Content.Height - top);
+
+			// render frame
+			var leftSite = Content.Width - 1;
+			Content.Fill(0, top, 0, Content.Height - 1, ' ', ForegroundColor, BackgroundColor);
+			Content.Fill(leftSite, top, leftSite, Content.Height - 1, ' ', ForegroundColor, BackgroundColor);
 		} // proc OnRender
+
+		private void SelectValue(object key)
+		{
+			var idx = 0;
+			foreach (var c in source)
+			{
+				if (Equals(key, GetSelectedValue(c)))
+					SelectIndex(idx);
+				idx++;
+			}
+		} // proc SelectValue
+   
+		public void SelectIndex(int newIndex, bool allowInvalidIndex = true)
+		{
+			if (newIndex == -1 && allowInvalidIndex)
+			{
+				selectedIndex = -1;
+				Invalidate();
+			}
+			else if (newIndex >= 0 && newIndex < GetCount() && newIndex != selectedIndex)
+			{
+				selectedIndex = newIndex;
+				Invalidate();
+			}
+		} // proc SelectIndex
 
 		public override bool OnHandleEvent(EventArgs e)
 		{
@@ -77,40 +203,13 @@ namespace TecWare.DE.Server.UI
 						SelectIndex(selectedIndex + 1);
 						return true;
 					case ConsoleKey.UpArrow:
-						SelectIndex(selectedIndex - 1);
+						SelectIndex(selectedIndex - 1, false);
 						return true;
 				}
 			}
 
 			return base.OnHandleEvent(e);
 		} // func OnHandleEvent
-
-		private void SelectValue(object key)
-			=> SelectIndex(Array.FindIndex(values, v => Equals(v.Key, key)));
-
-		public void SelectIndex(int newIndex)
-		{
-			if (newIndex == -1)
-			{
-				selectedIndex = -1;
-				Invalidate();
-			}
-			else if (newIndex >= 0 && newIndex < values.Length && newIndex != selectedIndex)
-			{
-				selectedIndex = newIndex;
-				Invalidate();
-			}
-		} // proc SelectIndex
-
-		protected override void OnAccept()
-		{
-			if (selectedIndex == -1)
-				return;
-			base.OnAccept();
-		} // proc OnAccept
-
-		private static int GetLineLength(KeyValuePair<object, string> p)
-			=> p.Value?.Length ?? 0;
 
 		public string Title
 		{
@@ -123,13 +222,44 @@ namespace TecWare.DE.Server.UI
 					Invalidate();
 				}
 			}
-		} // proc Title
+		} // prop Title
+
+		public int SelectedIndex => selectedIndex;
 
 		public object SelectedValue
 		{
-			get => selectedIndex >= 0 && selectedIndex < values.Length ? values[selectedIndex].Key : null;
+			get => GetSelectedValue(GetLine(selectedIndex));
 			set => SelectValue(value);
 		} // prop SelectedValue
+
+		public ConsoleColor BackgroundHighlightColor { get; set; } = ConsoleColor.Cyan;
+		public ConsoleColor ForegroundHighlightColor { get; set; } = ConsoleColor.Black;
+	} // class ListDialogBase
+
+	#endregion
+
+	#region -- class SelectListOverlay ------------------------------------------------
+
+	internal sealed class SelectListOverlay : ListDialogBase
+	{
+		public SelectListOverlay(ConsoleApplication app, IEnumerable<KeyValuePair<object, string>> values)
+			: base(app, values.ToArray())
+		{
+			ResizeToContent();
+		} // ctor
+
+		protected override object GetSelectedValue(object line)
+			=> ((KeyValuePair<object, string>)line).Key;
+
+		protected override string FormatLine(object line)
+			=> ((KeyValuePair<object, string>)line).Value.GetFirstLine();
+
+		protected override void OnAccept()
+		{
+			if (SelectedIndex == -1)
+				return;
+			base.OnAccept();
+		} // proc OnAccept
 	} // class SelectUseOverlay 
 
 	#endregion
