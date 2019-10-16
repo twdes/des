@@ -64,7 +64,7 @@
     <Compile Include="UI\ActivityOverlay.cs" />
     <Compile Include="UI\ConnectionStateOverlay.cs" />
     <Compile Include="UI\ReadLine.cs" />
-    <Compile Include="UI\SelectListOverlay.cs" />
+    <Compile Include="UI\SelectListDialog.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Server\des.licenseheader">

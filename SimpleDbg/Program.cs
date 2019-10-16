@@ -268,6 +268,11 @@ namespace TecWare.DE.Server
 						case ConsoleKey.F2:
 							BeginTask(SelectUseNodeAsync());
 							break;
+#if DEBUG
+						case ConsoleKey.F9:
+							BeginTask(ShowLogFileAsync(""));
+							break;
+#endif
 					}
 				}
 			}
@@ -762,7 +767,7 @@ namespace TecWare.DE.Server
 		} // func GetFormattedList
 
 		[InteractiveCommand("list", HelpText = "Lists the current nodes.", ConnectionRequest = InteractiveCommandConnection.Http)]
-		private static async Task SendListAsync(
+		public static async Task SendListAsync(
 			[Description("true to get all sub nodes of the current node.")]
 			bool recursive = false
 		)
@@ -829,7 +834,7 @@ namespace TecWare.DE.Server
 		} // func SendListAsync
 
 		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.", ConnectionRequest = InteractiveCommandConnection.Http | InteractiveCommandConnection.Debug)]
-		private static async Task UseNodeAsync(
+		public static async Task UseNodeAsync(
 			[Description("absolute or relative path, if this parameter is empty. The current path is returned.")]
 			string node = null
 		)
@@ -876,7 +881,7 @@ namespace TecWare.DE.Server
 
 		private static async Task SelectUseNodeAsync()
 		{
-			var selectList = new SelectListOverlay(app,
+			var selectList = new SelectListDialog(app,
 				(new KeyValuePair<object, string>[] { new KeyValuePair<object, string>("/", "/") }).Concat(
 				from c in GetFormattedList(await GetListInfoAsync("/", 1000, false), "/", String.Empty, 1000)
 				orderby c.path
@@ -1656,7 +1661,7 @@ namespace TecWare.DE.Server
 		#endregion
 
 		[InteractiveCommand("listget", HelpText = "Get a server list.", ConnectionRequest = InteractiveCommandConnection.Http)]
-		internal static async Task ListGetAsync(string list = null)
+		public static async Task ListGetAsync(string list = null)
 		{
 			if (String.IsNullOrEmpty(list))
 				throw new ArgumentNullException(nameof(list));
@@ -1727,6 +1732,14 @@ namespace TecWare.DE.Server
 			else if (count >= 0)
 				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} lines" }, true);
 		} //  func ListGetAsync
+
+		private static async Task ShowLogFileAsync(string fileName)
+		{
+			var lines = new List<Data.LogLine>();
+			var l = new LogViewDialog(app, lines) { Title = "Log" };
+			l.Activate();
+			await l.DialogResult;
+		} // proc ShowLogFileAsync
 
 		#endregion
 

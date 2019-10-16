@@ -525,7 +525,7 @@ namespace TecWare.DE.Server
 			state = DEConfigItemState.Initializing;
 
 			PublishItem(scripts = new DEList<ILuaAttachedScript>(this, AttachedScriptsListId, "Attached Scripts"));
-			actions = new ConfigActionDictionary(this); // actions know a different way to listed in the client
+			actions = new ConfigActionDictionary(this);
 			PublishItem(properties = new DEList<IDEConfigItemProperty>(this, PropertiesListId, "Properties"));
 
 			InitTypeProperties();

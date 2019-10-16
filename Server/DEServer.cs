@@ -282,12 +282,7 @@ namespace TecWare.DE.Server
 				i++;
 			}
 
-			Queue.RegisterIdle(() =>
-				{
-					var tmp = 0;
-					IdleMemoryViewerRefreshValue(false, ref tmp);
-				}, 3000
-			);
+			Queue.RegisterIdle(() => IdleMemoryViewerRefreshValue(false), 3000);
 		} // proc InitServerInfo
 
 		private string GetServerFileVersion()
@@ -296,7 +291,7 @@ namespace TecWare.DE.Server
 			return attrVersion == null ? "0.0.0.0" : attrVersion.Version;
 		} // func GetServerFileVersion
 
-		private void IdleMemoryViewerRefreshValue(bool collect, ref int iLuaMemory)
+		private void IdleMemoryViewerRefreshValue(bool collect)
 		{
 			// GC Speicher
 			var newMemory = GC.GetTotalMemory(collect);
@@ -340,7 +335,7 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("serverinfo", SecurityToken = SecuritySys),
 		Description("Gibt die Information über den Server zurück.")
 		]
-		private XElement GetServerInfoData(bool simple = false)
+		public XElement GetServerInfoData(bool simple = false)
 		{
 			var xData = new XElement("serverinfo");
 
@@ -413,51 +408,51 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("process", SecurityToken = SecuritySys),
 		Description("Gibt Informationen zum Process zurück. Mittels Typ kann man die Rückgabe einschränken (1=speicher,2=zeit,3=beides). Collect bewirkt das der GC aufgerufen wird.")
 		]
-		private XElement HttpProcessAction(int typ = 3, bool collect = false)
+		public XElement HttpProcessAction(int typ = 3, bool collect = false)
 		{
 			// Speicherinformationen des GC
-			var luaMemory = 0;
 			if ((typ & 1) == 1 && collect)
 			{
 				GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
-				IdleMemoryViewerRefreshValue(true, ref luaMemory);
+				IdleMemoryViewerRefreshValue(true);
 			}
 
 			// Speicherinformation des Processes
-			using (var p = Process.GetCurrentProcess())
+			using var p = Process.GetCurrentProcess();
+
+			// Rückgabe zusammensetzen
+			var r = new XElement("process");
+			if ((typ & 1) != 0)
 			{
-				// Rückgabe zusammensetzen
-				var r = new XElement("process");
-				if ((typ & 1) != 0)
-				{
-					var count = 0;
-					lock (propertyChanged)
-						count = propertyChanged.Count;
-					r.Add(
-						new XElement("gc_generation", GC.MaxGeneration),
-						new XElement("gc_memory", propertyMemory.Value),
-						new XElement("srv_properties", count),
-						new XElement("mem_paged", p.PagedMemorySize64),
-						new XElement("mem_sys_paged", p.PagedSystemMemorySize64),
-						new XElement("mem_sys_nonpaged", p.NonpagedSystemMemorySize64),
-						new XElement("mem_peak_paged", p.PeakPagedMemorySize64),
-						new XElement("mem_private", p.PrivateMemorySize64),
-						new XElement("mem_virtual", p.VirtualMemorySize64),
-						new XElement("mem_peak_virtual", p.PeakVirtualMemorySize64),
-						new XElement("mem_workingset", p.WorkingSet64),
-						new XElement("mem_peak_workingset", p.PeakWorkingSet64),
-						new XElement("mem_handles", p.HandleCount)
-						);
-				}
-				if ((typ & 2) != 0)
-					r.Add(
-						new XElement("time_start", p.StartTime.ToString("G")),
-						new XElement("time_total", p.TotalProcessorTime.ToString()),
-						new XElement("time_user", p.UserProcessorTime.ToString()),
-						new XElement("time_priv", p.PrivilegedProcessorTime.ToString())
-						);
-				return r;
+				var count = 0;
+				lock (propertyChanged)
+					count = propertyChanged.Count;
+				r.Add(
+					new XElement("gc_generation", GC.MaxGeneration),
+					new XElement("gc_memory", propertyMemory.Value),
+					new XElement("srv_properties", count),
+					new XElement("mem_paged", p.PagedMemorySize64),
+					new XElement("mem_sys_paged", p.PagedSystemMemorySize64),
+					new XElement("mem_sys_nonpaged", p.NonpagedSystemMemorySize64),
+					new XElement("mem_peak_paged", p.PeakPagedMemorySize64),
+					new XElement("mem_private", p.PrivateMemorySize64),
+					new XElement("mem_virtual", p.VirtualMemorySize64),
+					new XElement("mem_peak_virtual", p.PeakVirtualMemorySize64),
+					new XElement("mem_workingset", p.WorkingSet64),
+					new XElement("mem_peak_workingset", p.PeakWorkingSet64),
+					new XElement("mem_handles", p.HandleCount)
+					);
 			}
+			if ((typ & 2) != 0)
+			{
+				r.Add(
+					new XElement("time_start", p.StartTime.ToString("G")),
+					new XElement("time_total", p.TotalProcessorTime.ToString()),
+					new XElement("time_user", p.UserProcessorTime.ToString()),
+					new XElement("time_priv", p.PrivilegedProcessorTime.ToString())
+				);
+			}
+			return r;
 		} // proc HttpProcessAction
 
 		#endregion
@@ -470,7 +465,7 @@ namespace TecWare.DE.Server
 		DEConfigHttpAction("dump", IsSafeCall = true, SecurityToken = SecuritySys),
 		Description("Dumps the current state of the process in a local file.")
 		]
-		private XElement HttpDumpAction(bool mini = false)
+		public XElement HttpDumpAction(bool mini = false)
 		{
 			// check for the procdump.exe
 			var procDump = Config.Element(xnServer)?.GetAttribute("procdump", String.Empty);
@@ -501,29 +496,28 @@ namespace TecWare.DE.Server
 				UseShellExecute = false,
 				RedirectStandardOutput = true
 			};
-			using (var p = Process.Start(psi))
-			{
-				if (!p.WaitForExit(5 * 60 + 1000))
-					p.Kill();
 
-				var outputText = p.StandardOutput.ReadToEnd();
+			using var p = Process.Start(psi);
+			if (!p.WaitForExit(5 * 60 + 1000))
+				p.Kill();
 
-				return SetStatusAttributes(
-					new XElement("return",
-						new XAttribute("id", fi.Id),
-						new XAttribute("exitcode", p.ExitCode)
-					),
-					p.ExitCode > 0 ? DEHttpReturnState.Ok : DEHttpReturnState.Error,
-					outputText
-				);
-			}
+			var outputText = p.StandardOutput.ReadToEnd();
+
+			return SetStatusAttributes(
+				new XElement("return",
+					new XAttribute("id", fi.Id),
+					new XAttribute("exitcode", p.ExitCode)
+				),
+				p.ExitCode > 0 ? DEHttpReturnState.Ok : DEHttpReturnState.Error,
+				outputText
+			);
 		} // proc HttpDumpAction
 
 		[
 		DEConfigHttpAction("dumpload", SecurityToken = SecuritySys),
 		Description("Sends the dump to the client.")
 		]
-		private void HttpDumpLoadAction(IDEWebRequestScope r, int id = -1)
+		public void HttpDumpLoadAction(IDEWebRequestScope r, int id = -1)
 		{
 			// get the dump file
 			DumpFileInfo di = null;

@@ -455,16 +455,16 @@ namespace TecWare.DE.Server
 #endif
 			});
 
+			var parser = new Parser(s =>
+			{
+				s.CaseSensitive = false;
+				s.IgnoreUnknownArguments = false;
+				s.HelpWriter = null;
+				s.ParsingCulture = CultureInfo.InvariantCulture;
+			});
+
 			try
 			{
-				var parser = new Parser(s =>
-				{
-					s.CaseSensitive = false;
-					s.IgnoreUnknownArguments = false;
-					s.HelpWriter = null;
-					s.ParsingCulture = CultureInfo.InvariantCulture;
-				});
-
 				// work with arguments
 				var r = parser.ParseArguments(args, new Type[] { typeof(RunOptions), typeof(RegisterOptions), typeof(UnregisterOptions) });
 				r.MapResult<RunOptions, RegisterOptions, UnregisterOptions, bool>(
@@ -562,6 +562,10 @@ namespace TecWare.DE.Server
 				if (readlineAtTheEnd)
 					Console.ReadLine();
 #endif
+			}
+			finally
+			{
+				parser.Dispose();
 			}
 		} // proc Main
 

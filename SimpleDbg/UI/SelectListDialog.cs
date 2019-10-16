@@ -18,6 +18,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using TecWare.DE.Server.Data;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.UI
@@ -160,7 +161,7 @@ namespace TecWare.DE.Server.UI
 			}
 
 			// render list full size
-			RenderList(1, top, Content.Width - 2, Content.Height - top);
+			RenderList(1, top, Content.Width - 2, Content.Height - 1);
 
 			// render frame
 			var leftSite = Content.Width - 1;
@@ -232,17 +233,46 @@ namespace TecWare.DE.Server.UI
 			set => SelectValue(value);
 		} // prop SelectedValue
 
+		protected IEnumerable Source => source;
+
 		public ConsoleColor BackgroundHighlightColor { get; set; } = ConsoleColor.Cyan;
 		public ConsoleColor ForegroundHighlightColor { get; set; } = ConsoleColor.Black;
 	} // class ListDialogBase
 
 	#endregion
 
-	#region -- class SelectListOverlay ------------------------------------------------
+	#region -- class LogViewDialog ----------------------------------------------------
 
-	internal sealed class SelectListOverlay : ListDialogBase
+	internal sealed class LogViewDialog : ListDialogBase
 	{
-		public SelectListOverlay(ConsoleApplication app, IEnumerable<KeyValuePair<object, string>> values)
+		public LogViewDialog(ConsoleApplication app, IReadOnlyList<LogLine> lines)
+			: base(app, lines)
+		{
+			Resize(app.WindowRight - 3, app.WindowBottom - 1);
+			Left = 2;
+			Top = 1;
+			Position = ConsoleOverlayPosition.Window;
+		} // ctor
+
+		protected override object GetLine(int index)
+			=> Lines[index];
+
+		protected override int GetCount()
+			=> Lines.Count;
+
+		protected override string FormatLine(object line) 
+			=> base.FormatLine(line);
+
+		private IReadOnlyList<LogLine> Lines => (IReadOnlyList<LogLine>)base.Source;
+	} // class LogViewDialog
+
+	#endregion
+
+	#region -- class SelectListDialog -------------------------------------------------
+
+	internal sealed class SelectListDialog : ListDialogBase
+	{
+		public SelectListDialog(ConsoleApplication app, IEnumerable<KeyValuePair<object, string>> values)
 			: base(app, values.ToArray())
 		{
 			ResizeToContent();
@@ -260,7 +290,7 @@ namespace TecWare.DE.Server.UI
 				return;
 			base.OnAccept();
 		} // proc OnAccept
-	} // class SelectUseOverlay 
+	} // class SelectListDialog 
 
 	#endregion
 }

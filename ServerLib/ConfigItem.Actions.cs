@@ -346,11 +346,8 @@ namespace TecWare.DE.Server
 			{
 				foreach (var c in table)
 				{
-					string sAction = c.Key as string;
-					if (sAction == null || actions.Contains(sAction))
-						continue;
-
-					actions[sAction] = CompileLuaAction(sAction, c.Value as LuaTable);
+					if (c.Key is string actionId && !actions.Contains(actionId))
+						actions[actionId] = CompileLuaAction(actionId, c.Value as LuaTable);
 				}
 			}
 		} // proc CollectActions
