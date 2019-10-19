@@ -328,7 +328,8 @@ namespace TecWare.DE.Server
 				attrTitle.Title,
 				attrVersion == null ? assembly.GetName().Version.ToString() : attrVersion.Version,
 				attrCopy.Copyright,
-				imagePath);
+				imagePath
+			);
 		} // func GetServerInfoAssembly
 
 		[
@@ -391,9 +392,11 @@ namespace TecWare.DE.Server
 				// get description for loaded assemblies
 				foreach (var asmCur in AppDomain.CurrentDomain.GetAssemblies())
 				{
-					var attrDesc = asmCur.GetCustomAttribute<DescriptionAttribute>();
-					if (attrDesc != null)
-						xAssemblies.Add(GetServerInfoAssembly(asmCur, "/?action=resource&image=" + attrDesc.Description + "," + asmCur.FullName.Replace(" ", "")));
+					var attrInfo = asmCur.GetCustomAttribute<DEModulInfoAttribute>();
+					var attrDesc = asmCur.GetCustomAttribute<DescriptionAttribute>(); // old variant
+					var imageResource = attrInfo?.Image ?? attrDesc.Description;
+					if (imageResource != null)
+						xAssemblies.Add(GetServerInfoAssembly(asmCur, "/?action=resource&image=" + imageResource + "," + asmCur.FullName.Replace(" ", "")));
 				}
 			}
 
@@ -538,6 +541,42 @@ namespace TecWare.DE.Server
 			r.SetAttachment(fi.Name)
 				.WriteFile(fi.FullName, MimeTypes.Application.OctetStream + ";gzip");
 		} // HttpDumpLoadAction
+
+		#endregion
+
+		#region -- HttpResource -------------------------------------------------------
+
+		[DEConfigHttpAction("resource", SecurityToken = SecuritySys)]
+		public void HttpResource(IDEWebRequestScope r, string image)
+		{
+			if (String.IsNullOrEmpty(image))
+			{
+				r.SetStatus(HttpStatusCode.BadRequest, "Missing parameter");
+				return;
+			}
+
+			var p = image.IndexOf(',');
+			if (p == -1)
+			{
+				r.SetStatus(HttpStatusCode.BadRequest, "Wrong parameter");
+				return;
+			}
+
+			// search only loaded assemblies
+			var assemblyName = new AssemblyName(image.Substring(p + 1));
+			var imageName = image.Substring(0, p);
+			var asm = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == assemblyName.Name);
+			var src = asm?.GetManifestResourceStream(imageName);
+			if (src == null)
+			{
+				r.SetStatus(HttpStatusCode.NotFound, "Image not found.");
+				return;
+			}
+
+			// output content, do not cache, client should cache
+			r.SetLastModified(File.GetLastWriteTimeUtc(asm.Location));
+			r.WriteStream(src, MimeTypeMapping.GetMimeTypeFromExtension(Path.GetExtension(imageName)));
+		} // void HttpResource
 
 		#endregion
 

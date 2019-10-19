@@ -176,7 +176,7 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- IDEDebugContext --------------------------------------------------------
+	#region -- interface IDEDebugContext ----------------------------------------------
 
 	/// <summary>This service is registered, if this command was invoked from an debug session.</summary>
 	public interface IDEDebugContext
@@ -754,6 +754,26 @@ namespace TecWare.DE.Server
 		/// <summary>Is the scope committed (<c>null</c> if the scope is active)</summary>
 		public bool? IsCommited => isCommitted;
 	} // class DETransactionContext
+
+	#endregion
+
+	#region -- class DEModulInfoAttribute ---------------------------------------------
+
+	/// <summary>Marks a assembly as Data Exchange Server modul.</summary>
+	[AttributeUsage(AttributeTargets.Assembly)]
+	public sealed class DEModulInfoAttribute : Attribute
+	{
+		/// <summary></summary>
+		/// <param name="imageResource"></param>
+		/// <param name="type"></param>
+		public DEModulInfoAttribute(string imageResource, Type type = null)
+		{
+			Image = type != null ? type.Namespace + "." + imageResource : imageResource;
+		} // ctor
+
+		/// <summary>Image name</summary>
+		public string Image { get; }
+	} // class DEModulInfoAttribute
 
 	#endregion
 

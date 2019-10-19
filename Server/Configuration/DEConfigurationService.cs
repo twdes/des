@@ -13,6 +13,7 @@
 // specific language governing permissions and limitations under the Licence.
 //
 #endregion
+using Neo.IronLua;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,8 +24,6 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.Schema;
-using Neo.IronLua;
-using TecWare.DE.Server.Stuff;
 using TecWare.DE.Stuff;
 using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
@@ -67,10 +66,10 @@ namespace TecWare.DE.Server.Configuration
 		private Dictionary<string, DateTime> knownConfigurationFiles = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
 		private readonly XmlNameTable nameTable; // name table
-		private XmlSchemaSet schema; // complete schema
-		private List<SchemaAssemblyDefinition> assemblySchemas = new List<SchemaAssemblyDefinition>(); // mapping schema to assembly
+		private readonly XmlSchemaSet schema; // complete schema
+		private readonly List<SchemaAssemblyDefinition> assemblySchemas = new List<SchemaAssemblyDefinition>(); // mapping schema to assembly
 
-		private Dictionary<XName, IDEConfigurationElement> elementResolveCache = new Dictionary<XName, IDEConfigurationElement>();
+		private readonly Dictionary<XName, IDEConfigurationElement> elementResolveCache = new Dictionary<XName, IDEConfigurationElement>();
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
@@ -368,8 +367,6 @@ namespace TecWare.DE.Server.Configuration
 			while (c != null)
 			{
 				var deleteMe = (XNode)null;
-				var value = (string)null;
-
 				if (c is XComment)
 					deleteMe = c;
 				else if (c is XProcessingInstruction)
@@ -379,6 +376,7 @@ namespace TecWare.DE.Server.Configuration
 				}
 				else
 				{
+					string value;
 					if (context.CurrentFrame.IsDeleteNodes)
 						deleteMe = c;
 					else if (c is XElement xCur)
