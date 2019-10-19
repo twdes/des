@@ -556,6 +556,25 @@ namespace TecWare.DE.Server.Configuration
 		private static bool IsSameConfigurationElement(XElement x, IDEConfigurationElement element, XName compareName)
 			=> element?.IsName(compareName) ?? x.Name == compareName;
 
+		private int FindInChildElements(XName[] childElements, int offset, XElement xInsert)
+		{
+			var element = this[xInsert.Name];
+			var substitionIndex = -1;
+
+			for (var i = offset; i < childElements.Length; i++)
+			{
+				if (element != null)
+				{
+					if (element.IsName(childElements[i]))
+						substitionIndex = i;
+				}
+				else if (childElements[i] == xInsert.Name)
+					return i;
+			}
+
+			return substitionIndex;
+		} // func FindInChildElements
+
 		private XElement MergeConfigTreeFindInsertBefore(XElement xRoot, XElement xAdd)
 		{
 			var rootElement = this[xRoot.Name];
@@ -580,7 +599,7 @@ namespace TecWare.DE.Server.Configuration
 						startInsertAfter = true;
 					else if (childInsertIndex >= 0)
 					{
-						var tmp = Array.FindIndex(childElements, lastChildIndex, c => IsSameConfigurationElement(xInsert, this[xInsert.Name], c));
+						var tmp = FindInChildElements(childElements, lastChildIndex, xInsert);
 						if (tmp > lastChildIndex)
 						{
 							lastChildIndex = tmp;
