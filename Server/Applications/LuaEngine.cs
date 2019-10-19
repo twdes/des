@@ -1329,12 +1329,27 @@ namespace TecWare.DE.Server
 
 			#region -- Recompile ------------------------------------------------------
 
-			private async Task<XElement> RecompileAsync(XElement xMesage)
+			private async Task<XElement> RecompileAsync(XElement xMessage)
 			{
 				var r = await Task.Run(() =>
 					{
-						using (CreateDebugScope())
-							return engine.Recompile().ToArray();
+						// use a different scope for compile
+						// we do not want to change the current debug scope
+						using (var scope = CreateDebugScope())
+						using (scope.Use())
+						{
+							// invoke pre-compile script
+							CallMemberDirect("OnBeforeCompile", new object[] { xMessage }, ignoreNilFunction: true);
+
+							// recompile scripts
+							var r = engine.Recompile().ToArray();
+
+							// after compile
+							CallMemberDirect("OnAfterCompile", new object[] { xMessage }, ignoreNilFunction: true);
+
+							scope.CommitAsync().Wait();
+							return r;
+						}
 					}
 				);
 				return new XElement("return",
