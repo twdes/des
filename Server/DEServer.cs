@@ -394,7 +394,7 @@ namespace TecWare.DE.Server
 				{
 					var attrInfo = asmCur.GetCustomAttribute<DEModulInfoAttribute>();
 					var attrDesc = asmCur.GetCustomAttribute<DescriptionAttribute>(); // old variant
-					var imageResource = attrInfo?.Image ?? attrDesc.Description;
+					var imageResource = attrInfo?.Image ?? attrDesc?.Description;
 					if (imageResource != null)
 						xAssemblies.Add(GetServerInfoAssembly(asmCur, "/?action=resource&image=" + imageResource + "," + asmCur.FullName.Replace(" ", "")));
 				}
