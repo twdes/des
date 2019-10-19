@@ -20,6 +20,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -888,8 +889,8 @@ namespace TecWare.DE.Server
 				select new KeyValuePair<object, string>(c.path, c.name)
 				)
 			)
-			{ 
-				Title = "Use" 
+			{
+				Title = "Use"
 			};
 			selectList.Activate();
 			selectList.SelectedValue = CurrentUsePath;
@@ -1605,6 +1606,37 @@ namespace TecWare.DE.Server
 					return rawValue;
 				}
 			} // func FormatValueCore
+
+			public static TableColumn Create(XElement xTypeDescription, XElement xCol)
+			{
+				if (xCol.Name == "attribute")
+				{
+					var attrName = xCol.Attribute("name")?.Value;
+					var typeName = xCol.Attribute("type")?.Value;
+
+					return new ListGetAttributeTableColumn(attrName, typeName, attrName,
+						attrName == "typ" && xTypeDescription.Name == "line" ? 3 : 0
+					);
+				}
+				else if (xCol.Name == "element")
+				{
+					var elementName = xCol.Attribute("name")?.Value;
+					var typeName = xCol.Attribute("type")?.Value;
+					var isArray = typeName.EndsWith("[]");
+					var xSubType = xTypeDescription.Parent.Element(isArray ? typeName.Substring(0, typeName.Length - 2) : typeName);
+					if (xSubType != null)
+						return new ListGetElementTypeTableColumn(elementName, xTypeDescription.Name.Namespace + elementName, xSubType, isArray);
+					else if (elementName == null)
+						return new ListGetValueTableColumn(typeName);
+					else
+						return new ListGetElementTableColumn(elementName, typeName, xTypeDescription.Name.Namespace + elementName);
+				}
+				else
+					return null;
+			} // func Create
+
+			public static IEnumerable<TableColumn> Create(XElement xTypeDescription)
+				=> xTypeDescription.Elements().Select(c => Create(xTypeDescription, c)).Where(c => c != null);
 		} // class ListGetTableColumn
 
 		#endregion
@@ -1634,7 +1666,7 @@ namespace TecWare.DE.Server
 			private readonly XName xElementName;
 
 			public ListGetElementTableColumn(string name, string typeName, XName xElementName)
-				:base(name, typeName, GetDefaultType(typeName), 0)
+				: base(name, typeName, GetDefaultType(typeName), 0)
 			{
 				this.xElementName = xElementName ?? throw new ArgumentNullException(nameof(xElementName));
 			} // ctor
@@ -1660,6 +1692,72 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class ListGetElementTypeTableColumn --------------------------------
+
+		private sealed class ListGetElementTypeTableColumn : ListGetTableColumn
+		{
+			private readonly XName xElementName;
+			private readonly bool isArray;
+			private readonly XName xTypeElementName;
+			private readonly TableColumn[] columns;
+
+			public ListGetElementTypeTableColumn(string name, XName xElementName, XElement xType, bool isArray)
+				: base(name, xType.Name.LocalName + (isArray ? "[]" : String.Empty), typeof(string), -1)
+			{
+				this.xElementName = xElementName ?? throw new ArgumentNullException(nameof(xElementName));
+				this.isArray = isArray;
+				columns = Create(xType ?? throw new ArgumentNullException(nameof(xType))).ToArray();
+				xTypeElementName = xType.Name;
+			} // ctor
+
+			private void FormatValueShort(StringBuilder sb, XElement x)
+			{
+				sb.Append('[');
+
+				var first = true;
+				foreach (var t in columns)
+				{
+					if (first)
+						first = false;
+					else
+						sb.Append(',');
+
+					sb.Append('"').Append(t.Name).Append("\":");
+					sb.Append('"').Append(t.FormatValue(x)).Append('"');
+				}
+
+				sb.Append(']');
+			} // proc FormatValueShort
+
+			protected override string GetRawValue(XElement x)
+			{
+				var sb = new StringBuilder();
+				if (isArray)
+				{
+					var rowCount = 0;
+					foreach (var cur in x.Element(xElementName).Elements(xTypeElementName))
+					{
+						if (rowCount >= 10)
+							break;
+						else if (rowCount > 0)
+							sb.Append(",");
+
+						FormatValueShort(sb, cur);
+
+						rowCount++;
+					}
+
+					if (rowCount == 0)
+						sb.Append(NullValue);
+				}
+				else
+					FormatValueShort(sb, x.Element(xElementName).Element(xTypeElementName));
+				return sb.ToString();
+			} // func GetRawValue
+		} // class ListGetElementTypeTableColumn
+
+		#endregion
+
 		[InteractiveCommand("listget", HelpText = "Get a server list.", ConnectionRequest = InteractiveCommandConnection.Http)]
 		public static async Task ListGetAsync(string list = null)
 		{
@@ -1678,46 +1776,25 @@ namespace TecWare.DE.Server
 			if (xType == null)
 				return;
 
-			var xTypeDesc = xType.Elements().First();
-			var xElementName = xTypeDesc.Name;
-
+			// get items
 			var xItems = xList.Element("items");
 			if (xItems == null)
 				return;
 
+			// get first root element
+			var xFirstElement = xItems.Elements().FirstOrDefault();
+			if (xFirstElement == null)
+				return;
+
+			// get type of the first element
+			var xElementName = xFirstElement.Name;
+			var xTypeDesc = xType.Element(xElementName);
+			if (xTypeDesc == null)
+				throw new ArgumentNullException($"Type '{xElementName.LocalName}' definition is missing.");
+
 			var totalCount = xItems.GetAttribute("tc", -1);
-
-			#region -- create table description --
-
-			TableColumn CreateListGetTableColumn(XElement xCol)
-			{
-				if (xCol.Name == "attribute")
-				{
-					var attrName = xCol.Attribute("name")?.Value;
-					var typeName = xCol.Attribute("type")?.Value;
-
-					return new ListGetAttributeTableColumn(attrName, typeName, attrName, 
-						attrName == "typ" && list == "tw_lines" ? 3 : 0
-					);
-				}
-				else if (xCol.Name == "element")
-				{
-					var elementName = xCol.Attribute("name")?.Value;
-					var typeName = xCol.Attribute("type")?.Value;
-					if (elementName == null)
-						return new ListGetValueTableColumn(typeName);
-					else
-						return new ListGetElementTableColumn(elementName, typeName, xElementName.Namespace + elementName);
-				}
-				else
-					return null;
-			} // func CreateListGetTableColumn
-
-			var table = ConsoleTable.Create(app, Console.WindowWidth,
-				xTypeDesc.Elements().Select(CreateListGetTableColumn).Where(c => c != null)
-			).WriteHeader();
-
-			#endregion
+			var table = ConsoleTable.Create(app, Console.WindowWidth, ListGetTableColumn.Create(xTypeDesc))
+				.WriteHeader();
 
 			// print columns
 			var count = 0;
