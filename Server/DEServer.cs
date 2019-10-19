@@ -565,7 +565,11 @@ namespace TecWare.DE.Server
 			// search only loaded assemblies
 			var assemblyName = new AssemblyName(image.Substring(p + 1));
 			var imageName = image.Substring(0, p);
-			var asm = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == assemblyName.Name);
+			var asm = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a =>
+			{
+				var curName = a.GetName();
+				return curName.Name == assemblyName.Name && curName.Version == assemblyName.Version;
+			});
 			var src = asm?.GetManifestResourceStream(imageName);
 			if (src == null)
 			{
@@ -1119,6 +1123,7 @@ namespace TecWare.DE.Server
 					{
 						var fi = new FileInfo(Path.Combine(searchPaths[i], fileName.Name + assemblyExtensions[j]));
 						if (fi.Exists)
+						{
 							try
 							{
 								var testName = AssemblyName.GetAssemblyName(fi.FullName);
@@ -1129,6 +1134,7 @@ namespace TecWare.DE.Server
 							{
 								Log.Warn(String.Format("Assembly '{0}' not loaded.", fi.FullName), e);
 							}
+						}
 					}
 				}
 			}
