@@ -337,7 +337,7 @@ namespace TecWare.DE.Server
 		/// <param name="sp"></param>
 		/// <param name="name"></param>
 		/// <param name="categoryName"></param>
-		public DEThreadBase(IServiceProvider sp, string name, string categoryName = ThreadCategory)
+		protected DEThreadBase(IServiceProvider sp, string name, string categoryName = ThreadCategory)
 		{
 			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
 

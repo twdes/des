@@ -827,14 +827,14 @@ namespace TecWare.DE.Server
 
 			private XElement CreateMember(Stack<object> values, object member, Func<object> getValue, Type type = null, int maxLevel = Int32.MaxValue)
 			{
-				bool TryGetTypedEnumerable(Type valueType, out Type enumerableType)
+				static bool TryGetTypedEnumerable(Type valueType, out Type enumerableType)
 				{
 					enumerableType = valueType.GetInterfaces().FirstOrDefault(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IEnumerable<>));
 					if (enumerableType == null)
 						return false;
 
 					enumerableType = enumerableType.GetGenericArguments()[0];
-					return Type.GetTypeCode(enumerableType) == TypeCode.Object;
+					return true;
 				} // func TryGetTypedEnumerable
 
 				var value = GetValueSafe(getValue);
@@ -887,7 +887,25 @@ namespace TecWare.DE.Server
 					}
 					else if (values.Count == 1 && TryGetTypedEnumerable(value.GetType(), out var enumerableType))
 					{
-						CreateTypedEnumerable((System.Collections.IEnumerable)value, enumerableType, x);
+						if (Type.GetTypeCode(enumerableType) == TypeCode.Object)
+							CreateTypedEnumerable((System.Collections.IEnumerable)value, enumerableType, x);
+						else // return array as table
+						{
+							if (values.Count >= maxLevel)
+								x.Add(new XText($"({LuaType.GetType(enumerableType).AliasOrFullName}[])"));
+							else
+							{
+								x.Add(new XAttribute("ct", "table"));
+								var rowCount = 0;
+								foreach (var v in (System.Collections.IEnumerable)value)
+								{
+									if (rowCount >= 10)
+										break;
+
+									x.Add(CreateMember(values, rowCount++, () => v));
+								}
+							}
+						}
 					}
 					else
 						x.Add(new XText(Procs.RemoveInvalidXmlChars(Procs.ChangeType<string>(value), ' ')));
@@ -948,7 +966,7 @@ namespace TecWare.DE.Server
 			{
 				// create the column descriptions
 				var columns = new List<Tuple<string, string, Type, Func<object, object>>>();
-				
+
 				foreach (var m in type.GetMembers(BindingFlags.Public | BindingFlags.Instance | BindingFlags.GetField | BindingFlags.GetProperty))
 				{
 					if (m is FieldInfo fi)
@@ -960,7 +978,7 @@ namespace TecWare.DE.Server
 							fi.GetValue
 						));
 					}
-					else if(m is PropertyInfo pi)
+					else if (m is PropertyInfo pi)
 					{
 						columns.Add(new Tuple<string, string, Type, Func<object, object>>(
 							"c" + columns.Count.ToString(),
