@@ -546,7 +546,7 @@ namespace TecWare.DE.Server.Configuration
 			if (xDoc.Root.Name != xnFragment)
 				throw context.CreateConfigException(xDoc.Root, "<fragment> expected.");
 
-			ParseConfiguration(context, xDoc.Root, fileToken);
+			ParseConfiguration(context, xDoc, fileToken);
 			context.PopFrame(newFrame);
 
 			// merge the parsed nodes
