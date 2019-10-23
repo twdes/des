@@ -1615,9 +1615,20 @@ namespace TecWare.DE.Server
 					return SafeIO(() => MoveFile(sourceFileName, destinationName, true, targetExists));
 			} // func MoveFile
 
+			/// <summary>Test if the file exists</summary>
+			/// <param name="fileName"></param>
+			/// <returns></returns>
 			[LuaMember("fileExists")]
 			public static LuaResult Exists(object fileName)
 				=> new LuaResult(fileName is FileInfo fi ? fi.Exists : File.Exists(fileName.ToString()));
+
+			/// <summary>Run a process and redirect output.</summary>
+			/// <param name="program"></param>
+			/// <param name="mode"></param>
+			/// <returns></returns>
+			[LuaMember("popen")]
+			public static LuaFile OpenProcess(string program, string mode = "r")
+				=> new LuaFilePackage().popen(program, mode);
 		} // func DELuaIO
 
 		#endregion
