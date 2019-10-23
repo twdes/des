@@ -139,13 +139,13 @@ namespace TecWare.DE.Server.Http
 		/// <param name="action"></param>
 		void Log(Action<LogMessageScopeProxy> action);
 
-		/// <summary></summary>
-		/// <param name="sp"></param>
-		/// <param name="subPath"></param>
-		/// <returns></returns>
+		/// <summary>Change into a virtual directory.</summary>
+		/// <param name="sp">Service provider, that represents the sub-path.</param>
+		/// <param name="subPath">Virtual sub-path, should not start with a slash.</param>
+		/// <returns><c>true</c>, if the subpath was entered.</returns>
 		bool TryEnterSubPath(IServiceProvider sp, string subPath);
-		/// <summary></summary>
-		/// <param name="sp"></param>
+		/// <summary>Exit the sub-path.</summary>
+		/// <param name="sp">Service provider, that represents the sub-path.</param>
 		void ExitSubPath(IServiceProvider sp);
 
 		/// <summary>Mime-types they are accepted from the client.</summary>

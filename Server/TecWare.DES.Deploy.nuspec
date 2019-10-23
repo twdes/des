@@ -6,6 +6,7 @@
 		<title>TecWare.DES.Deploy</title>
 		<authors>TecWare</authors>
 		<owners>TecWare</owners>
+		<license type="expression">EUPLv1.2</license>
 		<projectUrl>https://github.com/twdes/des</projectUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
 		<description>Deployment package for the data exchange server.</description>

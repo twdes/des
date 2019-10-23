@@ -433,13 +433,18 @@ namespace TecWare.DE.Server
 		#region -- Relative Path ----------------------------------------------------------
 
 		/// <summary>Change into a virtual directory.</summary>
-		/// <param name="subPath">Virtual subPath, should not start with a slash.</param>
+		/// <param name="sp">Service provider, that represents the sub-path.</param>
+		/// <param name="subPath">Virtual sub-path, should not start with a slash.</param>
+		/// <returns><c>true</c>, if the subpath was entered.</returns>
 		public bool TryEnterSubPath(IServiceProvider sp, string subPath)
 		{
-			if (sp == null || subPath == null)
-				throw new ArgumentNullException();
+			if (sp == null)
+				throw new ArgumentNullException(nameof(sp));
+			if (subPath == null)
+				throw new ArgumentNullException(nameof(subPath));
+
 			if (subPath.Length > 0 && subPath[0] == '/')
-				throw new ArgumentException("Invalid subPath.", "subPath");
+				throw new ArgumentException("Invalid subPath.", nameof(subPath));
 
 			// check the path position
 			if (subPath.Length > 0 && !RelativeSubPath.StartsWith(subPath, StringComparison.OrdinalIgnoreCase))
@@ -467,20 +472,21 @@ namespace TecWare.DE.Server
 			return true;
 		} // proc TryEnterSubPath
 
-		/// <summary>Setzt den relativen Bezug zurück.</summary>
+		/// <summary>Exit the sub-path.</summary>
+		/// <param name="sp">Service provider, that represents the sub-path.</param>
 		public void ExitSubPath(IServiceProvider sp)
 		{
 			if (relativeStack.Count > 0)
 			{
 				var f = relativeStack.Peek();
 				if (f.Item != sp)
-					throw new ArgumentException("Invalid Stack.");
+					throw new ArgumentException("Invalid Stack.", nameof(sp));
 
 				relativeStack.Pop();
 				RelativeCacheClear();
 			}
 			else
-				throw new ArgumentException("Invalid Stack.");
+				throw new ArgumentException("Invalid Stack.", nameof(sp));
 		} // proc ExitSubPath
 
 		private void RelativeCacheClear()
