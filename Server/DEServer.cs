@@ -148,11 +148,11 @@ namespace TecWare.DE.Server
 		private readonly Dictionary<string, string[]> securityGroups = new Dictionary<string, string[]>(); // Sicherheitsgruppen
 		private readonly DEDictionary<string, IDEUser> users; // Active users
 
-		private ResolveEventHandler resolveEventHandler;
+		private readonly ResolveEventHandler resolveEventHandler;
 		private DEConfigurationService configuration;
 		private DEQueueScheduler queue = null;
 
-		private DEList<DumpFileInfo> dumpFiles;
+		private readonly DEList<DumpFileInfo> dumpFiles;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
@@ -164,19 +164,19 @@ namespace TecWare.DE.Server
 			Current = this;
 
 			// register resolver
-			this.resolveEventHandler = (sender, e) => ResolveAssembly(e.Name, e.RequestingAssembly);
+			resolveEventHandler = (sender, e) => ResolveAssembly(e.Name, e.RequestingAssembly);
 			AddAssemblyPath(".");
 			AddAssemblyPath(Path.GetDirectoryName(GetType().Assembly.Location));
 			AppDomain.CurrentDomain.AssemblyResolve += resolveEventHandler;
 
 			// register session list
-			this.eventSessions = new DEList<EventSession>(this, "tw_eventsessions", "Event sessions");
+			eventSessions = new DEList<EventSession>(this, "tw_eventsessions", "Event sessions");
 
 			// create configurations service
-			this.configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
-			this.dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
+			configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
+			dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
 
-			this.users = DEDictionary<string, IDEUser>.CreateDictionary(this, "tw_users", "Active users", UserListDescriptor.Default, StringComparer.OrdinalIgnoreCase);
+			users = DEDictionary<string, IDEUser>.CreateDictionary(this, "tw_users", "Active users", UserListDescriptor.Default, StringComparer.OrdinalIgnoreCase);
 
 			PublishItem(dumpFiles);
 			PublishItem(new DEConfigItemPublicAction("dump") { DisplayName = "Dump" });
@@ -197,6 +197,9 @@ namespace TecWare.DE.Server
 				DoneConfiguration(); // close configuration
 
 				propertyMemory?.Dispose();
+				users?.Dispose();			
+				dumpFiles?.Dispose();
+				propertyLogCount?.Dispose();
 			}
 
 			base.Dispose(disposing);
