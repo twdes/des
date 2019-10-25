@@ -1265,16 +1265,24 @@ namespace TecWare.DE.Server
 				{
 					var scheme = prefixScheme.Scheme;
 
-					// select the best for the remote host (currenlty we try to use the highest sec level)
-					if ((scheme & AuthenticationSchemes.Ntlm) != 0)
-						scheme = AuthenticationSchemes.Ntlm;
-					else if ((scheme & AuthenticationSchemes.Negotiate) != 0)
-						scheme = AuthenticationSchemes.Negotiate;
-					else if ((scheme & AuthenticationSchemes.Digest) != 0)
-						scheme = AuthenticationSchemes.Digest;
-					else if ((scheme & AuthenticationSchemes.Basic) != 0)
+					// set the requested scheme
+					if ((scheme & AuthenticationSchemes.Basic) == AuthenticationSchemes.Basic && allowMultipleAuthentification == "basic")
 						scheme = AuthenticationSchemes.Basic;
-				
+					else if ((scheme & AuthenticationSchemes.Ntlm) == AuthenticationSchemes.Ntlm && allowMultipleAuthentification == "ntml")
+						scheme = AuthenticationSchemes.Ntlm;
+					else
+					{
+						// select the best for the remote host (currently we try to use the highest sec level)
+						if ((scheme & AuthenticationSchemes.Ntlm) != 0)
+							scheme = AuthenticationSchemes.Ntlm;
+						else if ((scheme & AuthenticationSchemes.Negotiate) != 0)
+							scheme = AuthenticationSchemes.Negotiate;
+						else if ((scheme & AuthenticationSchemes.Digest) != 0)
+							scheme = AuthenticationSchemes.Digest;
+						else if ((scheme & AuthenticationSchemes.Basic) != 0)
+							scheme = AuthenticationSchemes.Basic;
+					}
+
 					return prefixScheme == null ? AuthenticationSchemes.Anonymous : scheme;
 				}
 			}
