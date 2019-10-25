@@ -266,6 +266,8 @@ namespace TecWare.DE.Server.Configuration
 
 		#region -- class XFileAnnotation ----------------------------------------------
 
+		/// <summary></summary>
+		/// <remarks>This annotation marks process elements.</remarks>
 		public class XFileAnnotation { }
 
 		#endregion
@@ -331,6 +333,7 @@ namespace TecWare.DE.Server.Configuration
 
 		private void RemoveFileNodesAndAnnotations(XElement cur)
 		{
+			cur.RemoveAnnotations<XFileAnnotation>();
 			foreach (var a in cur.Attributes())
 				a.RemoveAnnotations<XFileAnnotation>();
 
@@ -371,7 +374,7 @@ namespace TecWare.DE.Server.Configuration
 					deleteMe = c;
 				else if (c is XProcessingInstruction)
 				{
-					ParseConfigurationPI(context, (XProcessingInstruction)c);
+					ParseConfigurationPI(context, (XProcessingInstruction)c, fileToken);
 					deleteMe = c;
 				}
 				else
@@ -459,7 +462,7 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // proc ParseConfiguration
 
-		private void ParseConfigurationPI(ParseContext context, XProcessingInstruction xPI)
+		private void ParseConfigurationPI(ParseContext context, XProcessingInstruction xPI, XFileAnnotation currentFileToken)
 		{
 			if (xPI.Target == "des-begin") // start a block
 			{
@@ -485,11 +488,11 @@ namespace TecWare.DE.Server.Configuration
 				}
 				else if (xPI.Target == "des-include")
 				{
-					IncludeConfigTree(context, xPI);
+					IncludeConfigTree(context, xPI, currentFileToken);
 				}
 				else if (xPI.Target == "des-merge")
 				{
-					MergeConfigTree(context, xPI);
+					MergeConfigTree(context, xPI, currentFileToken);
 				}
 				else if (xPI.Target == "des-remove-me")
 				{
@@ -506,7 +509,7 @@ namespace TecWare.DE.Server.Configuration
 				xPI.Parent.SetAttributeValue(xnDeleteMeAttribute, true);
 		} // proc RemoveConfigElement
 
-		private void IncludeConfigTree(ParseContext context, XProcessingInstruction xPI)
+		private void IncludeConfigTree(ParseContext context, XProcessingInstruction xPI, XFileAnnotation currentFileToken)
 		{
 			if (xPI.Parent == null)
 				throw context.CreateConfigException(xPI, "It is not allowed to include to a root element.");
@@ -514,14 +517,16 @@ namespace TecWare.DE.Server.Configuration
 			var xInc = context.LoadFile(xPI, xPI.Data).Root;
 			if (xInc.Name == xnInclude)
 			{
-				XNode xLast = xPI;
-
 				// Copy the baseuri annotation
 				var copy = new List<XElement>();
 				foreach (var xSrc in xInc.Elements())
 				{
 					Procs.XCopyAnnotations(xSrc, xSrc);
 					copy.Add(xSrc);
+
+					// mark node
+					xSrc.AddAnnotation(currentFileToken);
+					// todo: mark attributes
 				}
 
 				// Remove all elements from the source, that not get internal copied.
@@ -532,11 +537,13 @@ namespace TecWare.DE.Server.Configuration
 			{
 				Procs.XCopyAnnotations(xInc, xInc);
 				xInc.Remove();
+				xInc.AddAnnotation(currentFileToken);
+				// todo: mark attributes
 				xPI.AddAfterSelf(xInc);
 			}
 		} // proc IncludeConfigTree
 
-		private void MergeConfigTree(ParseContext context, XProcessingInstruction xPI)
+		private void MergeConfigTree(ParseContext context, XProcessingInstruction xPI, XFileAnnotation currentFileToken)
 		{
 			var xDoc = context.LoadFile(xPI, xPI.Data);
 
@@ -550,7 +557,7 @@ namespace TecWare.DE.Server.Configuration
 			context.PopFrame(newFrame);
 
 			// merge the parsed nodes
-			MergeConfigTree(xPI.Document.Root, xDoc.Root, fileToken);
+			MergeConfigTree(xPI.Document.Root, xDoc.Root, currentFileToken);
 		} // proc MergeConfigTree
 
 		private static bool IsSameConfigurationElement(XElement x, IDEConfigurationElement element, XName compareName)
@@ -615,13 +622,23 @@ namespace TecWare.DE.Server.Configuration
 
 		private void MergeConfigTree(XElement xTarget, XElement xMerge, XFileAnnotation currentFileToken)
 		{
+			static bool IsOverrideAble(XObject x)
+			{
+				// check for annotation, that marks the base file content, we do not want to override base definitions.
+				// - all processed definitions have the currentFileToken annotation => override
+				// - null values should not override, because they are not processed yet => no override
+				// - imported values => override
+				return x.Annotation<XFileAnnotation>() != null;
+				//return a != null && a != currentFileToken;
+			} // func IsOverrideAble
+
 			// merge value
 			var elementValueDefinition = GetValue(xMerge);
 			if (elementValueDefinition != null)
 			{
 				if (elementValueDefinition.IsList) // merge list values
 					xTarget.Value = xTarget.Value + " " + xMerge.Value;
-				else // override a single value
+				else if (IsOverrideAble(xTarget))
 					xTarget.Value = xMerge.Value;
 			}
 
@@ -641,12 +658,8 @@ namespace TecWare.DE.Server.Configuration
 					{
 						if (valueDefinition.IsList) // list detected
 							attributeRoot.Value = attributeRoot.Value + " " + attributeMerge.Value;
-						else
-						{
-							var a = attributeRoot.Annotation<XFileAnnotation>();
-							if (a != null && a != currentFileToken) // check for annotation, that marks the base file content
-								attributeRoot.Value = attributeMerge.Value;
-						}
+						else if (IsOverrideAble(attributeRoot))
+							attributeRoot.Value = attributeMerge.Value;
 					}
 				}
 

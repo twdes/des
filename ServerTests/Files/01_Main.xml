@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <des xmlns="http://tecware-gmbh.de/dev/des/2014" version="330">
 	<server logpath="log" />
-	<http />
 	<luaengine />
+	<http displayname="aaaa" />
 
 	<configLogItem name="test1" displayname="test hidden">
 		<log min="1024" max="4096" />

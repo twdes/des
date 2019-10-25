@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <?des-var-Test "test3"?>
 <fragment xmlns="http://tecware-gmbh.de/dev/des/2014">
+	<http displayname="bbb" />
 	<configLogItem name="test1" displayname="test 1" icon="neu">
 		<log min="4096" max="8128" />
 	</configLogItem>
