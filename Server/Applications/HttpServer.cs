@@ -390,18 +390,17 @@ namespace TecWare.DE.Server
 
 			Uri uri;
 			bool externRedirect;
-			if (url[0] == '/') // absulute uri
+			if (url[0] == '/') // absolute same server
 			{
 				uri = new Uri(new Uri(context.Request.Url.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped), UriKind.Absolute), url);
 				externRedirect = false;
 			}
-			else if(url.StartsWith("http://")
-				|| url.StartsWith("https://")) // relative redirect
+			else if (url.IndexOf("://") < 10) // external server
 			{
 				uri = new Uri(url, UriKind.Absolute);
 				externRedirect = true;
 			}
-			else
+			else // relative redirect
 			{
 				uri = new Uri(context.Request.Url, url);
 				externRedirect = false;
