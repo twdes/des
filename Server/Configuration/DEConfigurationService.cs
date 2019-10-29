@@ -384,6 +384,10 @@ namespace TecWare.DE.Server.Configuration
 						deleteMe = c;
 					else if (c is XElement xCur)
 					{
+						// annotate
+						if (xCur.Annotation<XFileAnnotation>() == null)
+							xCur.AddAnnotation(fileToken);
+
 						// Replace values in attributes
 						foreach (var attr in xCur.Attributes())
 						{
@@ -525,8 +529,14 @@ namespace TecWare.DE.Server.Configuration
 					copy.Add(xSrc);
 
 					// mark node
-					xSrc.AddAnnotation(currentFileToken);
-					// todo: mark attributes
+					if (xSrc.Annotation<XFileAnnotation>() == null)
+						xSrc.AddAnnotation(currentFileToken);
+					// mark attributes
+					foreach (var xAttr in xSrc.Attributes())
+					{
+						if (xAttr.Annotation<XFileAnnotation>() == null)
+							xAttr.AddAnnotation(currentFileToken);
+					}
 				}
 
 				// Remove all elements from the source, that not get internal copied.
