@@ -322,6 +322,7 @@ namespace TecWare.DE.Server
 		{
 			var attrTitle = assembly.GetCustomAttribute<AssemblyTitleAttribute>();
 			var attrVersion = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>();
+			var attrVersion2 = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
 			var attrCopy = assembly.GetCustomAttribute<AssemblyCopyrightAttribute>();
 
 			if (!String.IsNullOrEmpty(imagePath))
@@ -331,7 +332,7 @@ namespace TecWare.DE.Server
 				assembly.GetName().Name,
 				assembly.FullName,
 				attrTitle.Title,
-				attrVersion == null ? assembly.GetName().Version.ToString() : attrVersion.Version,
+				attrVersion2?.InformationalVersion ?? attrVersion?.Version ?? assembly.GetName().Version.ToString(),
 				attrCopy.Copyright,
 				imagePath
 			);
