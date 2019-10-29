@@ -21,6 +21,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Security;
 using System.Security.Principal;
@@ -28,6 +29,7 @@ using System.ServiceProcess;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;
@@ -1633,7 +1635,155 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class DELuaHttp ----------------------------------------------------
+
+		public sealed class DELuaHttp : LuaTable
+		{
+			#region -- GetWebRequestScope ---------------------------------------------
+
+			private static IDEWebRequestScope CheckContextArgument(IDEWebRequestScope r)
+				=> r ?? throw new ArgumentNullException(nameof(r), $"In the current context {nameof(IDEWebRequestScope)} is missing.");
+
+			[LuaMember]
+			public static IDEWebRequestScope GetWebRequestScope() 
+				=> CheckContextArgument(DEScope.GetScopeService<IDEWebRequestScope>(true));
+
+			#endregion
+
+			#region -- Text Reader/Writer ---------------------------------------------
+
+			[LuaMember]
+			public static TextWriter CreateTextWriter(string mimeType = MimeTypes.Text.Plain)
+			{
+				var r = GetWebRequestScope();
+				return r.GetOutputTextWriter(mimeType, r.Http.DefaultEncoding);
+			} // func CreateTextReader
+
+			[LuaMember]
+			public static void SetText(string content, string mimeType = MimeTypes.Text.Plain)
+			{
+				using var tw = CreateTextWriter(mimeType);
+				tw.Write(content);
+			} // proc SetText
+
+			[LuaMember]
+			public static TextReader CreateTextReader()
+			{
+				var r = GetWebRequestScope();
+				return r.GetInputTextReader();
+			} // func CreateTextReader
+
+			[LuaMember]
+			public static string GetText()
+			{
+				using var tr = CreateTextReader();
+				return tr.ReadToEnd();
+			} // func GetText
+
+			#endregion
+
+			#region -- Xml Reader/Writer ----------------------------------------------
+
+			/// <summary>Creates a XmlWriter for the output stream</summary>
+			/// <returns></returns>
+			[LuaMember]
+			public static XmlWriter CreateXmlWriter()
+				=> XmlWriter.Create(CreateTextWriter(MimeTypes.Text.Xml), Procs.XmlWriterSettings);
+
+			/// <summary>Writes the XElement in the output stream.</summary>
+			/// <param name="x"></param>
+			[LuaMember]
+			public static void WriteXml(XElement x)
+			{
+				using var xml = CreateXmlWriter();
+				x.WriteTo(xml);
+			} // proc WriteXml
+
+			/// <summary>Creates a XmlReader for the input stream.</summary>
+			/// <returns></returns>
+			[LuaMember]
+			public static XmlReader CreateXmlReader()
+				=> XmlReader.Create(CreateTextReader(), Procs.XmlReaderSettings);
+
+			/// <summary>Gets the input stream as an XElement.</summary>
+			/// <returns></returns>
+			[LuaMember]
+			public static XElement GetXml()
+			{
+				using var xml = CreateXmlReader();
+				return XElement.Load(xml);
+			} // proc WriteXml
+
+			#endregion
+
+			#region -- Table Reader/Writer --------------------------------------------
+
+			/// <summary>Write the table in the output stream.</summary>
+			/// <param name="t"></param>
+			[LuaMember]
+			public static void WriteTable(LuaTable t)
+			{
+				var r = GetWebRequestScope();
+				r.WriteLuaTable(t);
+			} // proc WriteTable
+
+			/// <summary>Gets the input stream as an lua-table.</summary>
+			/// <returns></returns>
+			[LuaMember]
+			public static LuaTable GetTable()
+			{
+				var r = GetWebRequestScope();
+				if (MediaTypeHeaderValue.TryParse(r.InputContentType, out var contentType))
+				{
+					if (contentType.MediaType == MimeTypes.Text.Xml)
+						return Procs.CreateLuaTable(GetXml());
+					else if (contentType.MediaType == MimeTypes.Text.Lson)
+					{
+						using var tr = CreateTextReader();
+						return FromLson(tr);
+					}
+					else if(contentType.MediaType == MimeTypes.Text.Json)
+					{
+						using var tr = CreateTextReader();
+						return FromJson(tr);
+					}
+					else
+						throw new ArgumentOutOfRangeException(nameof(r.InputContentType), r.InputContentType, "InputContentType is neither xml nor lson.");
+				}
+				else
+					throw new ArgumentException("InputContentType is missing.", nameof(r.InputContentType));
+			} // func GetTable
+
+			#endregion
+
+			#region -- Error, SetStatus -----------------------------------------------
+
+			/// <summary>Raise <see cref="HttpResponseException"/>.</summary>
+			/// <param name="code"></param>
+			/// <param name="text"></param>
+			[LuaMember]
+			public void Error(HttpStatusCode code, string text = null, Exception innerException = null)
+				=> throw new HttpResponseException(code, text, innerException);
+
+			[LuaMember]
+			public void SetStatus(HttpStatusCode code, string text = null)
+				=> GetWebRequestScope().SetStatus(code, text);
+
+			#endregion
+
+			#region -- Client ---------------------------------------------------------
+
+			[LuaMember]
+			public DEHttpClient CreateClient(string baseUri)
+				=> DEHttpClient.Create(new Uri(baseUri, UriKind.Absolute));
+
+			#endregion
+		} // class DELuaHttp
+
+		#endregion
+
 		private LuaGlobal luaRuntime = null;
+		private readonly DELuaHttp luaHttp = new DELuaHttp();
 
 		/// <summary>Obsolete</summary>
 		/// <param name="target"></param>
@@ -1665,6 +1815,9 @@ namespace TecWare.DE.Server
 		/// <summary>Basic lua runtime methods.</summary>
 		[LuaMember("Basic")]
 		public LuaTable LuaRuntime { get => luaRuntime; set { } }
+		/// <summary>Library for easy creation of http-results or requests.</summary>
+		[LuaMember]
+		public LuaTable Http { get => luaHttp; set { } }
 
 		#endregion
 
