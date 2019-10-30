@@ -369,7 +369,7 @@ namespace TecWare.DE.Server
 
 		public TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength = -1)
 		{
-			encoding = encoding ?? Http.DefaultEncoding;
+			encoding ??= Http.DefaultEncoding;
 		
 			// add encoding to the content type
 			contentType = contentType + "; charset=" + encoding.WebName;
@@ -395,15 +395,19 @@ namespace TecWare.DE.Server
 				uri = new Uri(new Uri(context.Request.Url.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped), UriKind.Absolute), url);
 				externRedirect = false;
 			}
-			else if (url.IndexOf("://") < 10) // external server
+			else
 			{
-				uri = new Uri(url, UriKind.Absolute);
-				externRedirect = true;
-			}
-			else // relative redirect
-			{
-				uri = new Uri(context.Request.Url, url);
-				externRedirect = false;
+				var p = url.IndexOf("://");
+				if (p > 0 && p < 10) // external server
+				{
+					uri = new Uri(url, UriKind.Absolute);
+					externRedirect = true;
+				}
+				else // relative redirect
+				{
+					uri = new Uri(context.Request.Url, url);
+					externRedirect = false;
+				}
 			}
 
 			context.Response.Headers[HttpResponseHeader.Location] = 
@@ -1204,7 +1208,7 @@ namespace TecWare.DE.Server
 			if (String.IsNullOrEmpty(cacheId))
 				return false;
 			if (!(data is string) && !(data is byte[]) && !(data is ILuaScript))
-				throw new ArgumentException("data muss string, byte[] oder ein script sein.", "data");
+				throw new ArgumentException("data muss string, byte[] oder ein script sein.", nameof(data));
 
 			lock (cacheItems)
 			{
