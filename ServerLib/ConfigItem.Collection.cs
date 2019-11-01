@@ -327,6 +327,9 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public IDisposable EnterReadLock()
 		{
+			if (listLock == null)
+				return null;
+
 			if (listLock.IsWriteLockHeld)
 				return null;
 			else

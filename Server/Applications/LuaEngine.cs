@@ -836,6 +836,14 @@ namespace TecWare.DE.Server
 					enumerableType = enumerableType.GetGenericArguments()[0];
 					return true;
 				} // func TryGetTypedEnumerable
+				
+				static XText GetTextMember(object value)
+				{
+					var t = Procs.ChangeType<string>(value);
+					if (t.Length > 1024)
+						t = t.Substring(0, 1021) + "...";
+					return new XText(Procs.RemoveInvalidXmlChars(t, ' '));
+				} // func GetTextMember
 
 				var value = GetValueSafe(getValue);
 				var valueExists = values.Contains(value, ReferenceEqualImplementation.Instance);
@@ -865,6 +873,18 @@ namespace TecWare.DE.Server
 							foreach (var key in ((IDictionary<object, object>)t).Keys)
 								x.Add(CreateMember(values, key, () => t[key]));
 						}
+					}
+					else if (value is string s)
+					{
+						x.Add(GetTextMember(s));
+					}
+					else if (value is byte[] b)
+					{
+						x.Add(new XText(
+							b.Length > 300
+								? Procs.ConvertToString(b, 0, 300) + "..."
+								: Procs.ConvertToString(b)
+						));
 					}
 					else if (value is IDataRow row)
 					{
@@ -908,7 +928,7 @@ namespace TecWare.DE.Server
 						}
 					}
 					else
-						x.Add(new XText(Procs.RemoveInvalidXmlChars(Procs.ChangeType<string>(value), ' ')));
+						x.Add(GetTextMember(value));
 
 					return x;
 				}
@@ -917,7 +937,7 @@ namespace TecWare.DE.Server
 					values.Pop();
 				}
 			} // func CreateMember
-			
+
 			private static void CreateRowEnumerable(IEnumerable<IDataRow> rows, XElement x)
 			{
 				x.Add(new XAttribute("ct", "rows"));
