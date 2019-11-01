@@ -1463,6 +1463,10 @@ namespace TecWare.DE.Server
 				}
 			}
 
+			// set utf8 encoded version of the message
+			ctx.Response.AddHeader("x-reason-utf8", Convert.ToBase64String(Encoding.UTF8.GetBytes(ex.Message)));
+
+			// set status
 			ctx.Response.StatusCode = httpEx != null ? (int)httpEx.StatusCode : (int)HttpStatusCode.InternalServerError;
 			ctx.Response.StatusDescription = Procs.FilterHttpStatusDescription(ex.Message);
 			ctx.Response.Close();
