@@ -399,8 +399,9 @@ namespace TecWare.DE.Server
 			this.user = user;
 			this.userOwner = user == null;
 			this.useAuthentification = useAuthentification;
-			this.allowGroups = allowGroups == "*" || allowGroups == null ? allowAllGroups : (Procs.GetStrings(allowGroups, true) ?? restrictAllGroups);
-			this.allowGroups = sp.GetService<IDEServer>(true).BuildSecurityTokens(allowGroups);
+			this.allowGroups = allowGroups == "*" || allowGroups == null
+				? allowAllGroups 
+				: (sp.GetService<IDEServer>(true).BuildSecurityTokens(Procs.GetStrings(allowGroups, true)) ?? restrictAllGroups);
 		} // ctor
 
 		/// <summary></summary>
