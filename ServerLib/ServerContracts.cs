@@ -305,6 +305,9 @@ namespace TecWare.DE.Server
 	/// <summary>Scope with transaction model and a user based service provider.</summary>
 	public class DECommonScope : DEScope, IDECommonScope
 	{
+		private static readonly string[] restrictAllGroups = new string[] { String.Empty };
+		private static readonly string[] allowAllGroups = Array.Empty<string>();
+
 		#region -- struct GlobalKey ---------------------------------------------------
 
 		private struct GlobalKey : IEquatable<GlobalKey>
@@ -377,6 +380,7 @@ namespace TecWare.DE.Server
 		private readonly IServiceProvider sp;
 		private readonly IDEServer server;
 		private readonly bool useAuthentification;
+		private readonly string[] allowGroups;
 		private IDEAuthentificatedUser user = null;
 		private bool userOwner;
 
@@ -385,7 +389,7 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
-		private DECommonScope(IServiceProvider sp, IDEAuthentificatedUser user, bool useAuthentification)
+		private DECommonScope(IServiceProvider sp, IDEAuthentificatedUser user, bool useAuthentification, string allowGroups)
 		{
 			this.sp = sp ?? throw new ArgumentNullException(nameof(sp));
 			this.server = sp.GetService<IDEServer>(true);
@@ -393,21 +397,24 @@ namespace TecWare.DE.Server
 			this.user = user;
 			this.userOwner = user == null;
 			this.useAuthentification = useAuthentification;
+			this.allowGroups = allowGroups == "*" ? allowAllGroups : (Procs.GetStrings(allowGroups, true) ?? restrictAllGroups);
+			this.allowGroups = sp.GetService<IDEServer>(true).BuildSecurityTokens(allowGroups);
 		} // ctor
 
 		/// <summary></summary>
 		/// <param name="sp"></param>
 		/// <param name="user"></param>
 		public DECommonScope(IServiceProvider sp, IDEAuthentificatedUser user)
-			: this(sp, user, user != null)
+			: this(sp, user, user != null, null)
 		{
 		} // ctor
 
 		/// <summary></summary>
 		/// <param name="sp"></param>
 		/// <param name="useAuthentification"></param>
-		public DECommonScope(IServiceProvider sp, bool useAuthentification)
-			: this(sp, null, useAuthentification)
+		/// <param name="allowGroups"></param>
+		public DECommonScope(IServiceProvider sp, bool useAuthentification, string allowGroups)
+			: this(sp, null, useAuthentification, allowGroups)
 		{
 		} // ctor
 
@@ -465,7 +472,7 @@ namespace TecWare.DE.Server
 
 				user = await server.AuthentificateUserAsync(authentificateUser);
 				if (user == null)
-					throw CreateAuthorizationException(String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Name));
+					throw CreateAuthorizationException(false, String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Name));
 				userOwner = true;
 			}
 		} // proc AuthentificateUser
@@ -482,7 +489,7 @@ namespace TecWare.DE.Server
 			where T : class
 		{
 			if (user == null)
-				throw CreateAuthorizationException("Authorization expected.");
+				throw CreateAuthorizationException(false, "Authorization expected.");
 
 			if (user is T r)
 				return r;
@@ -498,11 +505,20 @@ namespace TecWare.DE.Server
 		/// <param name="securityToken">Security token.</param>
 		public void DemandToken(string securityToken)
 		{
-			if (!useAuthentification || String.IsNullOrEmpty(securityToken))
+			if (String.IsNullOrEmpty(securityToken))
+				return; // no security token -> public
+
+			// is this token allowed in the current context
+			if (allowGroups == restrictAllGroups
+				|| allowGroups != allowAllGroups && !Array.Exists(allowGroups, c => String.Compare(c, securityToken, StringComparison.OrdinalIgnoreCase) == 0))
+				throw CreateAuthorizationException(true, "Access is restricted.");
+
+			// is http authentification active
+			if (!useAuthentification)
 				return;
 
 			if (!TryDemandToken(securityToken))
-				throw CreateAuthorizationException(String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityToken));
+				throw CreateAuthorizationException(false, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityToken));
 		} // proc DemandToken
 
 		/// <summary>Check for the given token, if the user can access it.</summary>
@@ -519,10 +535,14 @@ namespace TecWare.DE.Server
 		} // proc TryDemandToken
 
 		/// <summary>Create an authorization exception in the current context.</summary>
+		/// <param name="isTokenRestricted"><c>true</c>, the token is not allowed under the current context. <c>false</c>, the user has no right on the token.</param>
 		/// <param name="message">Message of this exception</param>
 		/// <returns></returns>
-		public virtual Exception CreateAuthorizationException(string message)
+		public virtual Exception CreateAuthorizationException(bool isTokenRestricted, string message)
 			=> new ArgumentException(message);
+
+		Exception IDECommonScope.CreateAuthorizationException(string message)
+			=> CreateAuthorizationException(false, message);
 
 		#endregion
 

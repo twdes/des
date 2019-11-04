@@ -60,7 +60,7 @@ namespace TecWare.DE.Server
 
 			private void Execute()
 			{
-				using (var scope = new DECommonScope(job as IServiceProvider ?? parent, false))
+				using (var scope = new DECommonScope(job as IServiceProvider ?? parent, false, null))
 					job.RunJob(cancellationTokenSource.Token);
 			} // proc Execute
 

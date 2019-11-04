@@ -56,8 +56,8 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
-		protected DECommonWebScope(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification)
-			: base(http, httpAuthentification)
+		protected DECommonWebScope(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification, string allowGroups)
+			: base(http, httpAuthentification, allowGroups)
 		{
 			this.http = http;
 			this.request = request;
@@ -107,8 +107,8 @@ namespace TecWare.DE.Server
 			return base.TryGetProperty(name, out value);
 		} // func TryGetProperty
 
-		public override Exception CreateAuthorizationException(string message)
-			=> new HttpResponseException(User == null ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, message);
+		public override Exception CreateAuthorizationException(bool isRestrictedToken, string message)
+			=> new HttpResponseException(User == null && !isRestrictedToken ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, message);
 
 		#endregion
 
@@ -146,8 +146,8 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
-			: base(http, context.Request, absolutePath, httpAuthentification)
+		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, string allowGroups)
+			: base(http, context.Request, absolutePath, httpAuthentification, allowGroups)
 		{
 			this.context = context ?? throw new ArgumentNullException(nameof(context));
 		} // ctor
@@ -216,8 +216,8 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
-		public DEWebRequestScope(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification)
-			: base(http, context.Request, absolutePath, httpAuthentification)
+		public DEWebRequestScope(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, string allowGroups)
+			: base(http, context.Request, absolutePath, httpAuthentification, allowGroups)
 		{
 			this.context = context;
 
@@ -649,7 +649,7 @@ namespace TecWare.DE.Server
 
 		private sealed class CacheItemListController : IDEListController
 		{
-			private DEHttpServer item;
+			private readonly DEHttpServer item;
 
 			public CacheItemListController(DEHttpServer item)
 			{
@@ -830,9 +830,14 @@ namespace TecWare.DE.Server
 				redirectPath = x.GetAttribute("path", "/");
 				if (String.IsNullOrEmpty(redirectPath) || redirectPath[0] != '/')
 					throw new DEConfigurationException(x, "Invalid internal @path (must start with '/').");
+
+				AllowGroups = x.GetAttribute("allowGroups", "*");
+				IsHttpDebugOn = x.GetAttribute("debugOn", false);
 			} // ctor
 
 			public string Path => redirectPath;
+			public string AllowGroups { get; }
+			public bool IsHttpDebugOn { get; }
 		} // class PrefixPathTranslation
 
 		#endregion
@@ -854,26 +859,15 @@ namespace TecWare.DE.Server
 				var schemeValue = AuthenticationSchemes.None;
 				foreach (var cur in v.Split(new char[] { ' ', ';', ',' }, StringSplitOptions.RemoveEmptyEntries))
 				{
-					switch (cur)
+					schemeValue |= cur switch
 					{
-						case "ntlm":
-							schemeValue |= AuthenticationSchemes.Ntlm;
-							break;
-						case "digest":
-							schemeValue |= AuthenticationSchemes.Digest;
-							break;
-						case "basic":
-							schemeValue |= AuthenticationSchemes.Basic;
-							break;
-						case "negotiate":
-							schemeValue |= AuthenticationSchemes.Negotiate;
-							break;
-						case "none":
-							schemeValue |= AuthenticationSchemes.Anonymous;
-							break;
-						default:
-							throw new DEConfigurationException(x, $"Unknown authentification scheme ({v}).");
-					}
+						"ntlm" => AuthenticationSchemes.Ntlm,
+						"digest" => AuthenticationSchemes.Digest,
+						"basic" => AuthenticationSchemes.Basic,
+						"negotiate" => AuthenticationSchemes.Negotiate,
+						"none" => AuthenticationSchemes.Anonymous,
+						_ => throw new DEConfigurationException(x, $"Unknown authentification scheme ({v})."),
+					};
 				}
 
 				this.scheme = schemeValue;
@@ -1318,7 +1312,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc ExecuteHttpRequest
 
-		private async Task ProcessAcceptWebSocketAsync(HttpListenerContext ctx, string absolutePath, AuthenticationSchemes authentificationScheme)
+		private async Task ProcessAcceptWebSocketAsync(HttpListenerContext ctx, string absolutePath, PrefixPathTranslation pathTranslation, AuthenticationSchemes authentificationScheme)
 		{
 			// search for the websocket endpoint
 			var subProtocol = GetWebSocketProtocol(absolutePath, Procs.ParseMultiValueHeader(ctx.Request.Headers["Sec-WebSocket-Protocol"]).ToArray());
@@ -1330,7 +1324,7 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				using (var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
+				using (var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous, pathTranslation.AllowGroups))
 				{
 					// start authentification
 					await context.AuthentificateUserAsync(ctx.User?.Identity);
@@ -1369,7 +1363,7 @@ namespace TecWare.DE.Server
 			{
 				try
 				{
-					await ProcessAcceptWebSocketAsync(ctx, absolutePath, authentificationScheme);
+					await ProcessAcceptWebSocketAsync(ctx, absolutePath, pathTranslation, authentificationScheme);
 				}
 				catch (AggregateException e)
 				{
@@ -1382,54 +1376,52 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				using (var context = new DEWebRequestScope(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous))
+				using var context = new DEWebRequestScope(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous, pathTranslation.AllowGroups);
+				try
 				{
-					try
-					{
-						// authentificate user
-						await context.AuthentificateUserAsync(ctx.User?.Identity);
+					// authentificate user
+					await context.AuthentificateUserAsync(ctx.User?.Identity);
 
-						// Start logging
-						if (debugMode)
-							context.LogStart();
-				
-						// start to find the endpoint
-						if (context.TryEnterSubPath(Server, String.Empty))
+					// Start logging
+					if (debugMode || pathTranslation.IsHttpDebugOn)
+						context.LogStart();
+
+					// start to find the endpoint
+					if (context.TryEnterSubPath(Server, String.Empty))
+					{
+						try
 						{
-							try
+							// try to map a node
+							if (!await ProcessRequestForConfigItemAsync(context, (DEConfigItem)Server))
 							{
-								// try to map a node
-								if (!await ProcessRequestForConfigItemAsync(context, (DEConfigItem)Server))
+								// Search all http worker nodes
+								using (EnterReadLock())
 								{
-									// Search all http worker nodes
-									using (EnterReadLock())
-									{
-										if (!await UnsafeProcessRequestAsync(context))
-											throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
-									}
+									if (!await UnsafeProcessRequestAsync(context))
+										throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
 								}
 							}
-							finally
-							{
-								context.ExitSubPath(Server);
-							}
 						}
-
-						// check the return value
-						if (!context.IsOutputStarted && ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
-							throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
-
-						// commit all is fine!
-						if (!context.IsCommited.HasValue)
-							await context.CommitAsync();
-					}
-					catch (Exception e)
-					{
-						ProcessResponeOnException(ctx, e, context);
+						finally
+						{
+							context.ExitSubPath(Server);
+						}
 					}
 
-					await context.DisposeAsync();
+					// check the return value
+					if (!context.IsOutputStarted && ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
+						throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
+
+					// commit all is fine!
+					if (!context.IsCommited.HasValue)
+						await context.CommitAsync();
 				}
+				catch (Exception e)
+				{
+					ProcessResponeOnException(ctx, e, context);
+				}
+
+				await context.DisposeAsync();
 			}
 		} // proc ProcessRequest
 

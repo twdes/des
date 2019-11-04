@@ -301,8 +301,8 @@ namespace TecWare.DE.Server
 		/// <summary></summary>
 		public void Dispose()
 		{
-			GC.SuppressFinalize(this);
 			Dispose(true);
+			GC.SuppressFinalize(this);
 		} // proc Dispose
 
 		/// <summary></summary>
@@ -436,7 +436,7 @@ namespace TecWare.DE.Server
 	/// <summary>Liste mit speziellen Eigenschaften:
 	/// - Schreibzugriff sperrt liste, multiples Lesen ist möglich.
 	/// - Erzeugt einen Zugriff im Log</summary>
-	public sealed class DEList<T> : DEListControllerBase, IList<T>, IDisposable
+	public sealed class DEList<T> : DEListControllerBase, IList<T>
 	{
 		private readonly List<T> innerList = new List<T>();
 
@@ -604,7 +604,7 @@ namespace TecWare.DE.Server
 	#region -- class DEDictionary<TKey, TItem> ----------------------------------------
 
 	/// <summary>Dictionary implementation for safe access.</summary>
-	public sealed class DEDictionary<TKey, TItem> : DEListControllerBase, IDictionary<TKey, TItem>, IDisposable
+	public sealed class DEDictionary<TKey, TItem> : DEListControllerBase, IDictionary<TKey, TItem>
 	{
 		private readonly IDictionary<TKey, TItem> innerDictionary;
 

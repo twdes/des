@@ -291,6 +291,19 @@
 											<xs:documentation>Configuration path, with is the mapping desitination.</xs:documentation>
 										</xs:annotation>
 									</xs:attribute>
+									<xs:attribute name="allowGroups" use="optional" default="*">
+										<xs:annotation>
+											<xs:documentation>Security groups, that can be access trough this prefix.</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:list itemType="xs:string" />
+										</xs:simpleType>
+									</xs:attribute>
+									<xs:attribute name="debugOn" type="xs:boolean" use="optional" default="false">
+										<xs:annotation>
+											<xs:documentation>Debug all traffic over this path.</xs:documentation>
+										</xs:annotation>
+									</xs:attribute>
 								</xs:complexType>
 							</xs:element>
 

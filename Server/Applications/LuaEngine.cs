@@ -1486,7 +1486,7 @@ namespace TecWare.DE.Server
 
 			private DECommonScope CreateDebugScope()
 			{
-				var scope = new DECommonScope(engine, false);
+				var scope = new DECommonScope(engine, false, null);
 				scope.RegisterService(typeof(IDEDebugContext), this);
 				return scope;
 			} // proc CreateDebugScope
@@ -1496,7 +1496,7 @@ namespace TecWare.DE.Server
 				DECommonScope newScope;
 				if (user == null)
 				{
-					newScope = new DECommonScope(engine, userIdentity != null);
+					newScope = new DECommonScope(engine, userIdentity != null, null);
 					if (userIdentity != null)
 						await newScope.AuthentificateUserAsync(userIdentity);
 				}

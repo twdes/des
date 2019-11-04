@@ -812,8 +812,8 @@ namespace TecWare.DE.Server
 							lock (securityGroups)
 							{
 								securityGroups[name] = securityGroups.TryGetValue(name, out var tmp)
-									? CombineSecurityTokens(tmp, SplitSecurityGroup(cur.Value))
-									: SplitSecurityGroup(cur.Value);
+									? CombineSecurityTokens(tmp, Procs.GetStrings(cur.Value))
+									: Procs.GetStrings(cur.Value);
 							}
 						}
 					}
@@ -980,7 +980,7 @@ namespace TecWare.DE.Server
 
 		public async Task<DECommonScope> CreateCommonScopeAsync(IIdentity user = null)
 		{
-			var scope = new DECommonScope(this, user != null);
+			var scope = new DECommonScope(this, user != null, null);
 			if (user != null)
 				await scope.AuthentificateUserAsync(user);
 			return scope;
@@ -996,7 +996,7 @@ namespace TecWare.DE.Server
 			if (securityTokens != null)
 			{
 				foreach (var t in securityTokens)
-					BuildSecurityTokens(tokens, SplitSecurityGroup(t), true);
+					BuildSecurityTokens(tokens, Procs.GetStrings(t), true);
 			}
 			return tokens.ToArray();
 		} // func BuildSecurityTokens
@@ -1035,14 +1035,6 @@ namespace TecWare.DE.Server
 				}
 			}
 		} // proc BuildSecurityTokens
-
-		private string[] SplitSecurityGroup(string securityTokens)
-		{
-			if (String.IsNullOrEmpty(securityTokens))
-				return Array.Empty<string>();
-
-			return securityTokens.Split(new char[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
-		} // func SplitSecurityGroup
 
 		public int SecurityGroupsVersion => securityGroupsVersion;
 
