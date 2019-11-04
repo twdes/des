@@ -399,6 +399,12 @@ namespace TecWare.DE.Server
 			}
 		} // proc HttpConnectionAsync
 
+		private static bool IsSameHost(string hostName)
+		{
+			return String.Compare(Environment.MachineName, hostName, StringComparison.OrdinalIgnoreCase) == 0
+				|| String.Compare(Dns.GetHostName(), hostName, StringComparison.OrdinalIgnoreCase) == 0;
+		} // func IsSameHost
+
 		private static bool CanOpenDebug(Uri baseAddress, string debugAllowed)
 		{
 			switch (debugAllowed)
@@ -406,7 +412,7 @@ namespace TecWare.DE.Server
 				case "remote":
 					return true;
 				case "local":
-					return baseAddress.IsLoopback;
+					return baseAddress.IsLoopback || IsSameHost(baseAddress.Host);
 				default:
 					return false;
 			}
@@ -429,7 +435,7 @@ namespace TecWare.DE.Server
 				}
 				http = newHttp;
 				if (newHttp != null && !openDebug)
-					app.WriteWarning("Debugging is not active");
+					app.WriteWarning("Debugging is not active.");
 
 				StartSocket(debugSocket = http != null && openDebug ? new ConsoleDebugSocket(app, http) : null, cancellationToken);
 				StartSocket(eventSocket = http != null ? new ConsoleEventSocket(app, http) : null, cancellationToken);
