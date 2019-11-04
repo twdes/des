@@ -1607,6 +1607,10 @@ namespace TecWare.DE.Server
 					Procs.FreeAndNil(ref propertyScriptCount);
 
 					this.GetService<IServiceContainer>(false)?.RemoveService(typeof(IDELuaEngine));
+
+					globals.Dispose();
+					scripts.Dispose();
+					lua.Dispose();
 				}
 			}
 			finally
@@ -1810,8 +1814,8 @@ namespace TecWare.DE.Server
 					return;
 			}
 
-			using (var session = new LuaDebugSession(this, webSocket, CancellationToken.None))
-				await session.ExecuteAsync();
+			using var session = new LuaDebugSession(this, webSocket, CancellationToken.None);
+			await session.ExecuteAsync();
 		} // func ExecuteWebSocketAsync
 
 		string IDEWebSocketProtocol.BasePath => String.Empty;
