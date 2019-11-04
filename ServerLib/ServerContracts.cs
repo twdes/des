@@ -381,7 +381,9 @@ namespace TecWare.DE.Server
 		private readonly IDEServer server;
 		private readonly bool useAuthentification;
 		private readonly string[] allowGroups;
-		private IDEAuthentificatedUser user = null;
+#pragma warning disable IDE0069 // Disposable fields should be disposed
+		private IDEAuthentificatedUser user = null; // is disposed async
+#pragma warning restore IDE0069 // Disposable fields should be disposed
 		private bool userOwner;
 
 		private bool? isCommitted = null;
@@ -397,7 +399,7 @@ namespace TecWare.DE.Server
 			this.user = user;
 			this.userOwner = user == null;
 			this.useAuthentification = useAuthentification;
-			this.allowGroups = allowGroups == "*" ? allowAllGroups : (Procs.GetStrings(allowGroups, true) ?? restrictAllGroups);
+			this.allowGroups = allowGroups == "*" || allowGroups == null ? allowAllGroups : (Procs.GetStrings(allowGroups, true) ?? restrictAllGroups);
 			this.allowGroups = sp.GetService<IDEServer>(true).BuildSecurityTokens(allowGroups);
 		} // ctor
 
@@ -501,16 +503,22 @@ namespace TecWare.DE.Server
 
 		#region -- Security -----------------------------------------------------------
 
+		private bool IsTokenRestricted(string securityToken)
+		{
+			return allowGroups == restrictAllGroups
+				|| allowGroups != allowAllGroups && !Array.Exists(allowGroups, c => String.Compare(c, securityToken, StringComparison.OrdinalIgnoreCase) == 0);
+		} // func IsTokenRestricted
+
 		/// <summary>Check for the given token, if the user can access it.</summary>
 		/// <param name="securityToken">Security token.</param>
 		public void DemandToken(string securityToken)
 		{
+			// no security token -> public
 			if (String.IsNullOrEmpty(securityToken))
-				return; // no security token -> public
+				return;
 
 			// is this token allowed in the current context
-			if (allowGroups == restrictAllGroups
-				|| allowGroups != allowAllGroups && !Array.Exists(allowGroups, c => String.Compare(c, securityToken, StringComparison.OrdinalIgnoreCase) == 0))
+			if (IsTokenRestricted(securityToken))
 				throw CreateAuthorizationException(true, "Access is restricted.");
 
 			// is http authentification active
@@ -526,9 +534,16 @@ namespace TecWare.DE.Server
 		/// <returns><c>true</c>, if the token is granted.</returns>
 		public bool TryDemandToken(string securityToken)
 		{
-			if (!useAuthentification)
-				return true;
+			// no security token -> public
 			if (String.IsNullOrEmpty(securityToken))
+				return true;
+			
+			// is this token allowed in the current context
+			if (IsTokenRestricted(securityToken))
+				return false;
+
+			// is http authentification active
+			if (!useAuthentification)
 				return true;
 
 			return User != null && User.IsInRole(securityToken);
