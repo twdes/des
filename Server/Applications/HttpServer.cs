@@ -1270,10 +1270,8 @@ namespace TecWare.DE.Server
 					else
 					{
 						// select the best for the remote host (currently we try to use the highest sec level)
-						if ((scheme & AuthenticationSchemes.Ntlm) != 0)
-							scheme = AuthenticationSchemes.Ntlm | AuthenticationSchemes.Negotiate;
-						else if ((scheme & AuthenticationSchemes.Negotiate) != 0)
-							scheme = AuthenticationSchemes.Negotiate;
+						if ((scheme & AuthenticationSchemes.IntegratedWindowsAuthentication) != 0)
+							scheme &= AuthenticationSchemes.IntegratedWindowsAuthentication;
 						else if ((scheme & AuthenticationSchemes.Digest) != 0)
 							scheme = AuthenticationSchemes.Digest;
 						else if ((scheme & AuthenticationSchemes.Basic) != 0)
