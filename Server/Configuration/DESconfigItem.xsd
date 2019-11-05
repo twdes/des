@@ -23,13 +23,10 @@
 				<xs:documentation>Displayname of the service node.</xs:documentation>
 			</xs:annotation>
 		</xs:attribute>
-		<xs:attribute name="security" use="optional">
+		<xs:attribute name="security" type="xs:string" use="optional">
 			<xs:annotation>
 				<xs:documentation>Security token, that is asked from the user to enter the service node.</xs:documentation>
 			</xs:annotation>
-			<xs:simpleType>
-				<xs:list itemType="xs:string"/>
-			</xs:simpleType>
 		</xs:attribute>
 		<xs:attribute name="script" type="ScriptList" use="optional">
 			<xs:annotation>

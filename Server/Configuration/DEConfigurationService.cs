@@ -647,7 +647,7 @@ namespace TecWare.DE.Server.Configuration
 			if (elementValueDefinition != null)
 			{
 				if (elementValueDefinition.IsList) // merge list values
-					xTarget.Value = xTarget.Value + " " + xMerge.Value;
+					xTarget.Value = Procs.JoinStrings(xTarget.Value, xMerge.Value);
 				else if (IsOverrideAble(xTarget))
 					xTarget.Value = xMerge.Value;
 			}
@@ -667,7 +667,7 @@ namespace TecWare.DE.Server.Configuration
 					if (valueDefinition != null)
 					{
 						if (valueDefinition.IsList) // list detected
-							attributeRoot.Value = attributeRoot.Value + " " + attributeMerge.Value;
+							attributeRoot.Value = Procs.JoinStrings(attributeRoot.Value, attributeMerge.Value);
 						else if (IsOverrideAble(attributeRoot))
 							attributeRoot.Value = attributeMerge.Value;
 					}
