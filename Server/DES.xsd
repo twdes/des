@@ -93,6 +93,11 @@
 						<xs:documentation>Allow listing of containing files.</xs:documentation>
 					</xs:annotation>
 				</xs:attribute>
+				<xs:attribute name="filter" type="xs:string" use="optional" default="*">
+					<xs:annotation>
+						<xs:documentation>Filter pattern for files.</xs:documentation>
+					</xs:annotation>
+				</xs:attribute>
 				<xs:attribute name="indexPage" type="xs:string" use="optional" default="Index.html">
 					<xs:annotation>
 						<xs:documentation>Set the default page.</xs:documentation>

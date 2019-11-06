@@ -15,7 +15,7 @@
             </tr>
         </thead>
         <tbody>
-            <% foreach fi in ListFiles() do %>
+            <% foreach fi in ListFiles(Context.RelativeSubPath) do %>
             <tr>
                 <td><a href="<% print(fi.Name); %>"><% print(fi.Name); %></a></td>
                 <td><% print(fi.Length); %></td>

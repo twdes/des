@@ -56,7 +56,7 @@ namespace TecWare.DE.Server.Http
 		/// <summary></summary>
 		/// <param name="sp"></param>
 		/// <param name="sName"></param>
-		public HttpWorker(IServiceProvider sp, string sName)
+		protected HttpWorker(IServiceProvider sp, string sName)
 			: base(sp, sName)
 		{
 		} // ctor
@@ -126,9 +126,9 @@ namespace TecWare.DE.Server.Http
 	/// <summary>Liefert Dateien aus</summary>
 	public class HttpFileWorker : HttpWorker
 	{
-		private static readonly XName xnMimeDef = MainNamespace + "mimeDef";
 		private DirectoryInfo directoryBase;
 		private bool allowListing = false;
+		private string filterPattern = "*";
 		private Encoding defaultReadEncoding = Encoding.UTF8;
 
 		/// <summary></summary>
@@ -149,15 +149,26 @@ namespace TecWare.DE.Server.Http
 
 			directoryBase = cfg.GetAttribute<DirectoryInfo>("directory");
 			allowListing = cfg.GetAttribute<bool>("allowListing");
+			filterPattern = cfg.GetAttribute<string>("filter");
 			defaultReadEncoding = cfg.GetAttribute<Encoding>("encoding");
 		} // proc OnEndReadConfiguration
 
+		/// <summary>Return all fiels from the base directory</summary>
+		/// <returns></returns>
 		[LuaMember]
-		private IEnumerable<FileInfo> ListFiles()
-			=> directoryBase.EnumerateFiles("*", SearchOption.TopDirectoryOnly);
-
+		public IEnumerable<FileInfo> ListFiles(string relativePath = null)
+		{
+			var directory = new DirectoryInfo(Path.GetFullPath(Path.Combine(directoryBase.FullName, ProcsDE.GetLocalPath(relativePath))));
+			if (directory.Exists)
+				return directory.EnumerateFiles(filterPattern, SearchOption.TopDirectoryOnly);
+			else
+				return Array.Empty<FileInfo>();
+		} // func ListFiles
+		
+		/// <summary>Return the item name</summary>
+		/// <returns></returns>
 		[LuaMember]
-		private string GetListName()
+		public string GetListName()
 			=> Name;
 
 		/// <summary></summary>
@@ -165,12 +176,18 @@ namespace TecWare.DE.Server.Http
 		/// <returns></returns>
 		public override async Task<bool> RequestAsync(IDEWebRequestScope r)
 		{
+			if (String.IsNullOrEmpty(filterPattern))
+				return false;
+
 			// create the full file name
 			var useIndex = false;
-			var fileName = Path.GetFullPath(Path.Combine(directoryBase.FullName, ProcsDE.GetLocalPath(r.RelativeSubPath)));
+			var fullDirectoryName = this.directoryBase.FullName;
+			var fileName = Path.GetFullPath(Path.Combine(fullDirectoryName, ProcsDE.GetLocalPath(r.RelativeSubPath)));
+			var directoryBaseOffset = fullDirectoryName[fullDirectoryName.Length-1] == Path.DirectorySeparatorChar ? fullDirectoryName.Length - 1 : fullDirectoryName.Length;
 
 			// Check for a directory escape
-			if (!fileName.StartsWith(directoryBase.FullName, StringComparison.OrdinalIgnoreCase))
+			if (!fileName.StartsWith(directoryBase.FullName, StringComparison.OrdinalIgnoreCase) 
+				|| (fileName.Length > directoryBaseOffset && fileName[directoryBaseOffset] != Path.DirectorySeparatorChar))
 				return false;
 
 			// is the filename a directory, add index.html
@@ -186,6 +203,11 @@ namespace TecWare.DE.Server.Http
 					fileName = Path.Combine(fileName, ConfigNode.GetAttribute<string>("indexPage"));
 					useIndex = true;
 				}
+			}
+			else if (filterPattern != "*") // check for filter pattern
+			{
+				if (!Procs.IsFilterEqual(Path.GetFileName(fileName), filterPattern))
+					return false; // pattern does not fit
 			}
 
 			if (File.Exists(fileName))
