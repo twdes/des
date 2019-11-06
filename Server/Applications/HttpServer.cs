@@ -28,6 +28,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
 using System.Reflection;
+using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -208,7 +209,7 @@ namespace TecWare.DE.Server
 		private readonly HttpListenerContext context;
 		private LogMessageScopeProxy log = null;
 
-		private Stack<RelativeFrame> relativeStack = new Stack<RelativeFrame>();
+		private readonly Stack<RelativeFrame> relativeStack = new Stack<RelativeFrame>();
 		private string currentRelativeSubPath = null;
 		private IServiceProvider currentRelativeSubNode = null;
 
@@ -1325,7 +1326,7 @@ namespace TecWare.DE.Server
 				using (var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous, pathTranslation.AllowGroups))
 				{
 					// start authentification
-					await context.AuthentificateUserAsync(ctx.User?.Identity);
+					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
 
 					// authentificate the user
 					context.DemandToken(subProtocol.SecurityToken);
@@ -1378,7 +1379,7 @@ namespace TecWare.DE.Server
 				try
 				{
 					// authentificate user
-					await context.AuthentificateUserAsync(ctx.User?.Identity);
+					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
 
 					// Start logging
 					if (debugMode || pathTranslation.IsHttpDebugOn)
@@ -1422,6 +1423,24 @@ namespace TecWare.DE.Server
 				await context.DisposeAsync();
 			}
 		} // proc ProcessRequest
+
+		private IIdentity FixUserEncoding(HttpListenerContext ctx, IIdentity identity)
+		{
+			// fix: HttpListener convert all string 8bit wise, but the authentification header is utf8 encoded.
+			if (identity is HttpListenerBasicIdentity)
+			{
+				var auth = ctx.Request.Headers["Authorization"];
+				if (auth != null && auth.StartsWith("Basic "))
+				{
+					var user = Encoding.UTF8.GetString(Convert.FromBase64String(auth.Substring(6)));
+					var p = user.IndexOf(':');
+					if (p >= 0)
+						return new HttpListenerBasicIdentity(user.Substring(0, p), user.Substring(p + 1));
+				}
+			}
+
+			return identity;
+		} // func FixUserEncoding
 
 		private void ProcessResponeOnException(HttpListenerContext ctx, Exception e, DEWebRequestScope r)
 		{
