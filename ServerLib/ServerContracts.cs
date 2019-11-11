@@ -790,7 +790,7 @@ namespace TecWare.DE.Server
 		
 		/// <summary>Is the scope committed (<c>null</c> if the scope is active)</summary>
 		public bool? IsCommited => isCommitted;
-	} // class DETransactionContext
+	} // class DECommonScope
 
 	#endregion
 

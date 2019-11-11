@@ -1397,7 +1397,7 @@ namespace TecWare.DE.Server
 								using (EnterReadLock())
 								{
 									if (!await UnsafeProcessRequestAsync(context))
-										throw new HttpResponseException(HttpStatusCode.BadRequest, "Not processed");
+										throw new HttpResponseException(HttpStatusCode.NotFound, "Requested resource not found.");
 								}
 							}
 						}

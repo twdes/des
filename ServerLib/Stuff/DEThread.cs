@@ -281,7 +281,11 @@ namespace TecWare.DE.Server
 			while (currentScope != null)
 			{
 				if (!currentScope.Scope.IsDisposed)
+				{
 					r = currentScope.Scope.GetService(serviceType);
+					if (r != null)
+						break;
+				}
 				currentScope = currentScope.ParentScopeContext;
 			}
 
