@@ -85,6 +85,16 @@ namespace Neo.Console
 				throw new Win32Exception();
 		} // proc SetBufferSize
 
+		public void Scroll(int scrollX, int scrollY)
+		{
+			GetConsoleScreenBufferInfo(out var bufferInfo);
+			var fill = new CharInfo { Char = ' ', Attributes = bufferInfo.wAttributes };
+			var scroll = CreateSmallRect(-scrollX, -scrollY, Width - 1, Height - 1);
+			var dst = CreateCoord(0, 0);
+			ScrollConsoleScreenBuffer(DangerousGetHandle, ref scroll, IntPtr.Zero, dst, ref fill);
+			SetCursorPosition(bufferInfo.dwCursorPosition.X + scrollX, bufferInfo.dwCursorPosition.Y + scrollY);
+		} // proc Scroll
+
 		public int Width
 		{
 			get
@@ -145,12 +155,13 @@ namespace Neo.Console
 
 			// create target buffer
 			var b = new CharBuffer(right - left + 1, bottom - top + 1);
-			ReadBufferIntern(left, top, readRight, readBottom, b, 0, 0, out var destinationRight, out var destinationBottom);
+			ReadBufferIntern(left, top, readRight, readBottom, b, 0, 0, out _, out _);
 
+			// missing in buffer
 			if (readRight < right)
-				b.Fill(readRight - left, 0, Width-1, b.Height - 1, ' ');
+				b.Fill(readRight - left + 1, 0, b.Width - 1, b.Height - 1, ' ');
 			if (readBottom < bottom)
-				b.Fill(0, readBottom - top, Width - 1, Height - 1, ' ');
+				b.Fill(0, readBottom - top + 1, b.Width - 1, b.Height - 1, ' ');
 
 			return b;
 		} // func ReadBuffer

@@ -1559,6 +1559,7 @@ namespace Neo.Console
 		private readonly ConsoleOutputBuffer output; // active output buffer for the console
 		private readonly ConsoleOutputBuffer activeOutput; // active output buffer, for the window
 		private readonly ConsoleInputBuffer input; // active input buffer
+		private int reservedBottomRowCount = 0;
 
 		private readonly Stack<Action> eventQueue = new Stack<Action>(); // other events that join in the main thread
 		private readonly ManualResetEventSlim eventQueueFilled = new ManualResetEventSlim(false); // marks that events in queue
@@ -1583,7 +1584,7 @@ namespace Neo.Console
 			//	0x0040 // ENABLE_QUICK_EDIT_MODE
 			//);
 
-			this.activeOutput.TrySetConsoleMode(mode); 
+			this.activeOutput.TrySetConsoleMode(mode);
 			this.output = activeOutput.Copy(); // create buffer the console content
 
 			lastWindow = activeOutput.GetWindow();
@@ -1943,7 +1944,16 @@ namespace Neo.Console
 			r.Activate();
 
 			return taskComplete.Task.ContinueWith(
-				t => { r.WriteToConsole(); r.Application = null; return t.Result; }, TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously
+				t =>
+				{
+					using (r)
+					{
+						r.WriteToConsole();
+						r.Application = null;
+						return t.Result;
+					}
+				},
+				TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously
 			);
 		} // func ReadSecureStringAsync
 
@@ -1962,22 +1972,37 @@ namespace Neo.Console
 
 		#region -- OnRender -----------------------------------------------------------
 
-		private bool isInvalidate = false;
+		#region -- enum InvalidateFlag ------------------------------------------------
 
-		internal void Invalidate()
+		[Flags]
+		private enum InvalidateFlag
 		{
-			isInvalidate = true;
+			None = 0,
+			InvalidateRender = 1,
+			InvalidateCursor = 2
+		} // enum InvalidateFlag
+
+		#endregion
+
+		private InvalidateFlag invalidateFlags = InvalidateFlag.None;
+
+		internal void Invalidate(bool forceCursorRender = false)
+		{
+			invalidateFlags = InvalidateFlag.InvalidateRender;
+			if (forceCursorRender)
+				invalidateFlags |= InvalidateFlag.InvalidateCursor;
 			eventQueueFilled.Set();
 		} // proc Invalidate
 
 		private void OnRender()
 		{
+			var isCursorInvalidate = (invalidateFlags & InvalidateFlag.InvalidateCursor) != 0;
 			try
 			{
 				SmallRect window;
-				SmallRect afterWindow;
 				do
 				{
+					var isDirty = false;
 					window = activeOutput.GetWindow();
 
 					// read background console
@@ -1995,48 +2020,68 @@ namespace Neo.Console
 					var activeOverlay = ActiveOverlay;
 					if (activeOverlay != null)
 					{
-						if (activeOverlay.ResetInvalidateCursor() | output.ResetInvalidateCursor())
+						if (isCursorInvalidate | activeOverlay.ResetInvalidateCursor() | output.ResetInvalidateCursor())
 						{
-							OnRenderCursor(
+							isDirty = OnRenderCursor(
 								activeOverlay.ActualLeft + activeOverlay.CursorLeft,
 								activeOverlay.ActualTop + activeOverlay.CursorTop,
 								activeOverlay.CursorSize,
 								activeOverlay.CursorSize > 0,
-								out afterWindow
+								ref window
 						  );
 						}
-						else
-							afterWindow = window;
 					}
-					else if (output.ResetInvalidateCursor())
-						OnRenderCursor(output.CursorLeft, output.CursorTop, output.CursorSize, output.CursorVisible, out afterWindow);
-					else
-						afterWindow = window;
+					else if (isCursorInvalidate | output.ResetInvalidateCursor())
+					{
+						isDirty = OnRenderCursor(
+							output.CursorLeft,
+							output.CursorTop,
+							output.CursorSize,
+							output.CursorVisible,
+							ref window
+						);
+					}
+
+					isCursorInvalidate = false;
+					if (!isDirty)
+						break;
 				}
-				while (afterWindow.Left != window.Left || afterWindow.Top != window.Top);
+				while (true);
 			}
 			finally
 			{
-				isInvalidate = false;
+				invalidateFlags = InvalidateFlag.None;
 			}
 		} // proc OnRender
 
-		private void OnRenderCursor(int left, int top, int cursorSize, bool cursorVisible, out SmallRect window)
+		private bool OnRenderCursor(int left, int top, int cursorSize, bool cursorVisible, ref SmallRect window)
 		{
 			activeOutput.SetCursorPosition(left, top);
 			activeOutput.SetCursor(cursorSize, cursorVisible);
 
 			// get new window
-			window = activeOutput.GetWindow();
+			var afterWindow = activeOutput.GetWindow();
 			//var topRow = window.Top - top - ReservedTopRowCount;
 			//if (topRow > 0)
 			//	activeOutput.SetWindow(left, top - topRow);
-			var bottomRow = top - window.Bottom + ReservedBottomRowCount;
-			if (bottomRow > 0)
+			var bottomRow = top + ReservedBottomRowCount;
+			if (bottomRow > afterWindow.Bottom)
 			{
-				activeOutput.ResizeWindow(0, bottomRow, 0, bottomRow);
-				window = activeOutput.GetWindow();
+				if (bottomRow >= activeOutput.Height) // we a hidden the buffer end
+				{
+					var scrollY = activeOutput.Height - bottomRow - 1;
+					activeOutput.Scroll(0, scrollY);
+					output.Scroll(0, scrollY);
+				}
+				else// move window down, to make bottom rows visible
+				{
+					var scrollY = bottomRow - afterWindow.Bottom;
+					activeOutput.ResizeWindow(0, scrollY, 0, scrollY);
+				}
+				return true;
 			}
+			else
+				return afterWindow.Left != window.Left || afterWindow.Top != window.Top;
 		} // proc OnRenderCursor
 
 		#endregion
@@ -2196,7 +2241,7 @@ namespace Neo.Console
 				OnIdleUnsafe();
 
 			// render screen
-			if (isInvalidate)
+			if (invalidateFlags != InvalidateFlag.None)
 				OnRender();
 		} // proc DoEventsUnsafe
 
@@ -2229,7 +2274,7 @@ namespace Neo.Console
 			{
 				DoEventsUnsafe(testEvent != WaitHandle.WaitTimeout);
 
-				if (continueLoop || isInvalidate)
+				if (continueLoop || invalidateFlags != InvalidateFlag.None)
 					testEvent = WaitHandle.WaitAny(waitHandles, 400);
 			}
 
@@ -2250,7 +2295,18 @@ namespace Neo.Console
 		} // prop ActiveOverlay
 
 		//public int ReservedTopRowCount { get; set; } = 0;
-		public int ReservedBottomRowCount { get; set; } = 0;
+		public int ReservedBottomRowCount
+		{
+			get => reservedBottomRowCount;
+			set
+			{
+				if (reservedBottomRowCount != value)
+				{
+					reservedBottomRowCount = value;
+					Invalidate(true);
+				}
+			}
+		} // proc ReservedBottomRowCount
 
 		static ConsoleApplication()
 		{
