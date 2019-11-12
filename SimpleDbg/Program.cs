@@ -1818,8 +1818,12 @@ namespace TecWare.DE.Server
 
 		private static async Task ShowLogFileAsync(string fileName)
 		{
-			var lines = new List<Data.LogLine>();
-			var l = new LogViewDialog(app, lines) { Title = "Log" };
+			//var lines = new List<Data.LogLine>();
+			//var l = new LogViewDialog(app, lines) { Title = "Log" };
+			var d = new KeyValuePair<object, string>[1000];
+			for (var i = 0; i < d.Length; i++)
+				d[i] = new KeyValuePair<object, string>(i + 1, $"Zeile {i}");
+			var l = new SelectListDialog(app, d) { Title = "Test" };
 			l.Activate();
 			await l.DialogResult;
 		} // proc ShowLogFileAsync

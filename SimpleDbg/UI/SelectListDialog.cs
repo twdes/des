@@ -57,12 +57,12 @@ namespace TecWare.DE.Server.UI
 
 			var app = Application;
 			var windowWidth = app.WindowRight - app.WindowLeft + 1;
-			var windowHeight = app.WindowBottom - app.WindowTop + 1;
+			var windowHeight = app.WindowBottom - app.WindowTop - app.ReservedBottomRowCount + 1;
 
 			Position = ConsoleOverlayPosition.Window;
 			Resize(
-				Math.Min(windowWidth, maxWidth),
-				Math.Min(windowHeight, maxHeight + 1)
+				Math.Min(windowWidth - 4, maxWidth),
+				Math.Min(windowHeight - 2, maxHeight + 1)
 			);
 
 			Left = (windowWidth - Width) / 2;

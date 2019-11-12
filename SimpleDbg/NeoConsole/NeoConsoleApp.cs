@@ -410,8 +410,10 @@ namespace Neo.Console
 					return true;
 				}
 				else
-					return base.OnHandleEvent(e);
+					return true;
 			}
+			else if (e is ConsoleKeyDownEventArgs)
+				return true;
 			else
 				return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
@@ -1778,7 +1780,7 @@ namespace Neo.Console
 
 			var insertAt = 0;
 			var insertZ = overlay.ZOrder;
-			while (insertAt < overlays.Count && insertZ > overlays[insertAt].ZOrder)
+			while (insertAt < overlays.Count && insertZ >= overlays[insertAt].ZOrder)
 				insertAt++;
 
 			overlays.Insert(insertAt, overlay);
