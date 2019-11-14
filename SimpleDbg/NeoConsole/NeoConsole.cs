@@ -163,7 +163,10 @@ namespace Neo.Console
 		} // ctor
 
 		public void Dispose()
-			=> Dispose(true);
+		{
+			Dispose(true);
+			GC.SuppressFinalize(this);
+		} // proc Dispose
 
 		protected virtual void Dispose(bool disposing)
 		{

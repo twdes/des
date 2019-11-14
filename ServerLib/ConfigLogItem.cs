@@ -73,7 +73,7 @@ namespace TecWare.DE.Server
 				.Append(((int)Typ).ToString())
 				.Append('\t');
 
-			foreach (char c in Text)
+			foreach (var c in Text)
 			{
 				switch (c)
 				{

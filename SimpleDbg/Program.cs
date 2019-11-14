@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -30,6 +31,7 @@ using CommandLine.Text;
 using Neo.Console;
 using Neo.IronLua;
 using TecWare.DE.Networking;
+using TecWare.DE.Server.Stuff;
 using TecWare.DE.Server.UI;
 using TecWare.DE.Stuff;
 
@@ -40,7 +42,7 @@ namespace TecWare.DE.Server
 	/// <summary>Command line arguments for data exchange simple debug.</summary>
 	public class SimpleDebugArguments
 	{
-		[Option('o', HelpText = "Uri to the server.", Required = true)]
+		[Option('o', HelpText = "Uri to the server.", Required = false)]
 		public string Uri { get; set; }
 		[Option('u', "username", HelpText = "Authentification user", Required = false)]
 		public string UserName { get; set; }
@@ -104,49 +106,57 @@ namespace TecWare.DE.Server
 		[STAThread]
 		public static int Main(string[] args)
 		{
-			var parser = new Parser(
+			using (var parser = new Parser(
 				s =>
 				{
 					s.CaseSensitive = false;
 					s.IgnoreUnknownArguments = false;
-				});
-
-			var r = parser.ParseArguments<SimpleDebugArguments>(args);
-
-			return r.MapResult(
-				options =>
-				{
-					var app = ConsoleApplication.Current;
-					try
+				}))
+			{
+				var r = parser.ParseArguments<SimpleDebugArguments>(args);
+				return r.MapResult(
+					options =>
 					{
-						return app.Run(
-							() => RunDebugProgramAsync(
-								new Uri(options.Uri),
-								options.UserName == null ? null : UserCredential.Create(options.UserName, options.Password),
-								options.Wait,
-								false
-							)
-						);
-					}
-					catch (TaskCanceledException) { }
-					catch (Exception e)
-					{
-						Console.WriteLine("Input loop failed. Application is aborted.");
-						Console.Write(e.GetMessageString());
+						var app = ConsoleApplication.Current;
+						try
+						{
+							return app.Run(
+								() => RunDebugProgramAsync(
+									options.Uri == null ? null : new Uri(options.Uri),
+									options.UserName == null ? null : UserCredential.Create(options.UserName, options.Password),
+									options.Wait,
+									false
+								)
+							);
+						}
+						catch (TaskCanceledException) { }
+						catch (Exception e)
+						{
+							Console.WriteLine("Input loop failed. Application is aborted.");
+							Console.Write(e.GetMessageString());
 #if DEBUG
-						Console.ReadLine();
+							Console.ReadLine();
 #endif
+						}
+						return -1;
+					},
+					errors =>
+					{
+						var first = errors.FirstOrDefault();
+						if (first is HelpRequestedError)
+						{
+							var ht = HelpText.AutoBuild(r);
+							Console.WriteLine(ht.ToString());
+						}
+						else
+						{
+							foreach (var err in errors)
+								Console.WriteLine(err.ToString());
+						}
+						return 1;
 					}
-					return -1;
-				},
-				errors =>
-				{
-					var ht = HelpText.AutoBuild(r);
-					Console.WriteLine(ht.ToString());
-
-					return 1;
-				}
-			);
+				);
+			}
 		} // proc Main
 
 		/// <summary>Gets called from InvokeDebugger</summary>
@@ -271,7 +281,7 @@ namespace TecWare.DE.Server
 							break;
 #if DEBUG
 						case ConsoleKey.F9:
-							BeginTask(ShowLogFileAsync(""));
+							BeginTask(ShowLogFileAsync(@"C:\Projects\twdes\des\Server\Configs\Log\Main\Http.log"));
 							break;
 #endif
 					}
@@ -888,11 +898,11 @@ namespace TecWare.DE.Server
 
 		private static async Task SelectUseNodeAsync()
 		{
-			var selectList = new SelectListDialog(app,
-				(new KeyValuePair<object, string>[] { new KeyValuePair<object, string>("/", "/") }).Concat(
-				from c in GetFormattedList(await GetListInfoAsync("/", 1000, false), "/", String.Empty, 1000)
-				orderby c.path
-				select new KeyValuePair<object, string>(c.path, c.name)
+			var selectList = new SelectListDialog<string>(app,
+				(new SelectPairItem<string>[] { new SelectPairItem<string>("/", "/") }).Concat(
+					from c in GetFormattedList(await GetListInfoAsync("/", 1000, false), "/", String.Empty, 1000)
+					orderby c.path
+					select new SelectPairItem<string>(c.path, c.name)
 				)
 			)
 			{
@@ -1818,12 +1828,10 @@ namespace TecWare.DE.Server
 
 		private static async Task ShowLogFileAsync(string fileName)
 		{
-			//var lines = new List<Data.LogLine>();
-			//var l = new LogViewDialog(app, lines) { Title = "Log" };
-			var d = new KeyValuePair<object, string>[1000];
-			for (var i = 0; i < d.Length; i++)
-				d[i] = new KeyValuePair<object, string>(i + 1, $"Zeile {i}");
-			var l = new SelectListDialog(app, d) { Title = "Test" };
+			var lines = new List<Data.LogLine>();
+			await Data.LogLine.GetLogLinesAsync(fileName, (f, c) => lines.Add(c));
+
+			var l = new LogViewDialog(app, lines) { Title = "Log" };
 			l.Activate();
 			await l.DialogResult;
 		} // proc ShowLogFileAsync

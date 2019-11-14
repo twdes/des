@@ -13,11 +13,11 @@
 // specific language governing permissions and limitations under the Licence.
 //
 #endregion
-using Neo.Console;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using Neo.Console;
 using TecWare.DE.Server.Data;
 using TecWare.DE.Stuff;
 
@@ -25,31 +25,40 @@ namespace TecWare.DE.Server.UI
 {
 	#region -- class ListDialogBase ---------------------------------------------------
 
-	internal abstract class ListDialogBase : ConsoleDialogOverlay
+	internal abstract class ListDialogBase<T> : ConsoleDialogOverlay
+		where T : class
 	{
-		private readonly IEnumerable source;
+		private readonly ListView<T> list;
 
 		private string title = String.Empty;
 
-		private int firstLineIndex = 0;
-		private int selectedIndex = -1;
-
-		public ListDialogBase(ConsoleApplication app, IEnumerable source)
+		public ListDialogBase(ConsoleApplication app, IEnumerable<T> source)
 		{
-			this.source = source ?? throw new ArgumentNullException(nameof(source));
-
 			Application = app ?? throw new ArgumentNullException(nameof(app));
+
+			InsertControl(0, list = CreateListView());
+			list.Source = source;
+
+			Resize(app.WindowRight - 3, app.WindowBottom - 1);
+			Left = 2;
+			Top = 1;
+			Position = ConsoleOverlayPosition.Window;
+
+			OnResize();
 		} // ctor
+
+		protected virtual ListView<T> CreateListView()
+			=> new ListView<T>();
 
 		protected void ResizeToContent()
 		{
 			// calculate window size
-			var maxWidth = 10;
+			var maxWidth = (Title?.Length ?? 0) + 8;
 			var maxHeight = 0;
 
-			foreach (var c in source)
+			foreach (var c in list.Source)
 			{
-				var width = (FormatLine(c)?.Length ?? 0) + 2;
+				var width = list.GetLineText(-1, c, Int32.MaxValue).Length;
 				if (width > maxWidth)
 					maxWidth = width;
 				maxHeight++;
@@ -61,155 +70,34 @@ namespace TecWare.DE.Server.UI
 
 			Position = ConsoleOverlayPosition.Window;
 			Resize(
-				Math.Min(windowWidth - 4, maxWidth),
-				Math.Min(windowHeight - 2, maxHeight + 1)
+				Math.Min(windowWidth - 4, maxWidth + 2),
+				Math.Min(windowHeight - 2, maxHeight + 2)
 			);
 
 			Left = (windowWidth - Width) / 2;
 			Top = (windowHeight - Height) / 2;
+			
+			OnResize();
 		} // proc ResizeToContent
-
-		protected virtual int GetCount()
-			=> source is IList l ? l.Count : -1;
-
-		protected virtual object GetLine(int index)
-			=> source is IList list ? list[index] : GetLines(index, 1).OfType<object>().FirstOrDefault();
-
-		protected virtual IEnumerable GetLines(int startAt, int count)
-		{
-			if (source is IList list)
-			{
-				for (var i = 0; i < count; i++)
-				{
-					var idx = i + startAt;
-					if (idx >= list.Count)
-						yield break;
-					else
-						yield return list[idx];
-				}
-			}
-			else
-			{
-				var e = source.GetEnumerator();
-				try
-				{
-					var idx = 0;
-					while (idx < firstLineIndex)
-					{
-						if (!e.MoveNext())
-							yield break;
-					}
-
-					var endAt = startAt + count;
-					while (idx < endAt)
-					{
-						if (e.MoveNext())
-							yield return e.Current;
-						else
-							yield break;
-					}
-				}
-				finally
-				{
-					if (e is IDisposable d)
-						d.Dispose();
-				}
-			}
-		} // func GetLines
-
-		protected virtual object GetSelectedValue(object line)
-			=> line;
-
-		protected virtual string FormatLine(object line)
-			=> line?.ToString().GetFirstLine();
-
-		protected virtual void RenderLine(object line, int left, int top, int right, bool selected)
-		{
-			var content = TableColumn.TableStringPad(FormatLine(line), right - left + 1);
-			Content.Write(left, top, content, null,
-				selected ? ForegroundHighlightColor : ForegroundColor,
-				selected ? BackgroundHighlightColor : BackgroundColor
-			);
-		} // proc RenderLine
-
-		protected void RenderList(int left, int top, int right, int bottom)
-		{
-			var y = top;
-			var idx = firstLineIndex;
-			foreach (var cur in GetLines(firstLineIndex, bottom - top + 1))
-			{
-				RenderLine(cur, left, y, right, selectedIndex == idx);
-				idx++;
-				y++;
-			}
-
-			// clear rest
-			Content.Fill(left, y, right, bottom, ' ', ForegroundColor, BackgroundColor);
-		} // proc RenderList
 
 		protected override void OnRender()
 		{
-			if (Content == null)
-				return;
-
-			// render title
-			var top = 0;
-			if (!String.IsNullOrEmpty(title))
-			{
-				RenderTitle(title);
-				top = 1;
-			}
-
-			// render list full size
-			RenderList(1, top, Content.Width - 2, Content.Height - 1);
-
-			// render frame
-			var leftSite = Content.Width - 1;
-			Content.Fill(0, top, 0, Content.Height - 1, ' ', ForegroundColor, BackgroundColor);
-			Content.Fill(leftSite, top, leftSite, Content.Height - 1, ' ', ForegroundColor, BackgroundColor);
+			RenderFrame(title);
 		} // proc OnRender
 
-		private void SelectValue(object key)
+		public override void OnResize()
 		{
-			var idx = 0;
-			foreach (var c in source)
-			{
-				if (Equals(key, GetSelectedValue(c)))
-					SelectIndex(idx);
-				idx++;
-			}
-		} // proc SelectValue
-   
-		public void SelectIndex(int newIndex, bool allowInvalidIndex = true)
-		{
-			if (newIndex == -1 && allowInvalidIndex)
-			{
-				selectedIndex = -1;
-				Invalidate();
-			}
-			else if (newIndex >= 0 && newIndex < GetCount() && newIndex != selectedIndex)
-			{
-				selectedIndex = newIndex;
-				Invalidate();
-			}
-		} // proc SelectIndex
+			base.OnResize();
+
+			list.Resize(Width - 1, Height - 2, true);
+			list.Left = Left + 1;
+			list.Top = Top + 1;
+		} // proc OnResize
 
 		public override bool OnHandleEvent(EventArgs e)
 		{
-			if (e is ConsoleKeyDownEventArgs keyDown)
-			{
-				switch (keyDown.Key)
-				{
-					case ConsoleKey.DownArrow:
-						SelectIndex(selectedIndex + 1);
-						return true;
-					case ConsoleKey.UpArrow:
-						SelectIndex(selectedIndex - 1, false);
-						return true;
-				}
-			}
-
-			return base.OnHandleEvent(e);
+			return list.OnHandleEvent(e)
+				|| base.OnHandleEvent(e);
 		} // func OnHandleEvent
 
 		public string Title
@@ -225,15 +113,10 @@ namespace TecWare.DE.Server.UI
 			}
 		} // prop Title
 
-		public int SelectedIndex => selectedIndex;
+		public int SelectedIndex => list.SelectedIndex;
 
-		public object SelectedValue
-		{
-			get => GetSelectedValue(GetLine(selectedIndex));
-			set => SelectValue(value);
-		} // prop SelectedValue
-
-		protected IEnumerable Source => source;
+		public IEnumerable Source => list.Source;
+		public ListView<T> View => list;
 
 		public ConsoleColor BackgroundHighlightColor { get; set; } = ConsoleColor.Cyan;
 		public ConsoleColor ForegroundHighlightColor { get; set; } = ConsoleColor.Black;
@@ -243,46 +126,108 @@ namespace TecWare.DE.Server.UI
 
 	#region -- class LogViewDialog ----------------------------------------------------
 
-	internal sealed class LogViewDialog : ListDialogBase
+	internal sealed class LogViewDialog : ListDialogBase<LogLine>
 	{
+		#region -- class SelectListView -----------------------------------------------
+
+		internal sealed class LogListView : ListView<LogLine>
+		{
+			public override string GetLineText(int index, LogLine item, int width)
+			{
+				var time = index > 0 && index != FirstVisibleLine && GetItem(index - 1).Stamp.Date == item.Stamp.Date
+					? item.Stamp.ToString("       HH:mm:ss,fff") // only hours
+					: item.Stamp.ToString("dd.MM. HH:mm:ss,fff"); // full stamp
+				
+				return time + " " + LogLine.ToMsgTypeString(item.Type) + " " + item.Text.GetFirstLine();
+			} // func GetLineText
+
+			protected override ConsoleColor GetLineTextColor(int i, LogLine item, bool selected)
+			{
+				if (selected)
+					return ForegroundHighlightColor;
+				else
+				{
+					switch (item.Type)
+					{
+						case LogMsgType.Error:
+							return ConsoleColor.DarkRed;
+						case LogMsgType.Warning:
+							return ConsoleColor.Yellow;
+						default:
+							return ConsoleColor.Gray;
+					}
+				}
+			} // func GetLineTextColor
+		} // class LogListView
+
+		#endregion
+
 		public LogViewDialog(ConsoleApplication app, IReadOnlyList<LogLine> lines)
 			: base(app, lines)
 		{
-			Resize(app.WindowRight - 3, app.WindowBottom - 1);
-			Left = 2;
-			Top = 1;
-			Position = ConsoleOverlayPosition.Window;
 		} // ctor
 
-		protected override object GetLine(int index)
-			=> Lines[index];
-
-		protected override int GetCount()
-			=> Lines.Count;
-
-		protected override string FormatLine(object line) 
-			=> base.FormatLine(line);
-
-		private IReadOnlyList<LogLine> Lines => (IReadOnlyList<LogLine>)base.Source;
+		protected override ListView<LogLine> CreateListView()
+			=> new LogListView();
 	} // class LogViewDialog
+
+	#endregion
+
+	#region -- class SelectPairItem ---------------------------------------------------
+
+	internal class SelectPairItem<T>
+	{
+		public SelectPairItem(T key, string text)
+		{
+			Key = key;
+			Text = text;
+		} // ctor
+
+		public SelectPairItem(KeyValuePair<T, string> pair)
+			: this(pair.Key, pair.Value)
+		{
+		} // ctor
+
+		public T Key { get; }
+		public string Text { get; }
+	} // class SelectPairItem<T>
 
 	#endregion
 
 	#region -- class SelectListDialog -------------------------------------------------
 
-	internal sealed class SelectListDialog : ListDialogBase
+	internal sealed class SelectListDialog<T> : ListDialogBase<SelectPairItem<T>>
 	{
-		public SelectListDialog(ConsoleApplication app, IEnumerable<KeyValuePair<object, string>> values)
+		#region -- class SelectListView -----------------------------------------------
+
+		internal sealed class SelectListView : ListView<SelectPairItem<T>>
+		{
+			public override string GetLineText(int index, SelectPairItem<T> item, int width)
+			{
+				var text = item.Text;
+				if (text == null)
+					return null;
+				else
+				{
+					var firstLine = text.GetFirstLine();
+					if (firstLine.Length > width - 2 && firstLine.Length > 3)
+						return " " + firstLine.Substring(0, width - 3) + "... ";
+					else
+						return " " + firstLine + " ";
+				}
+			} // func GetLineText
+		} // class SelectListView
+
+		#endregion
+
+		public SelectListDialog(ConsoleApplication app, IEnumerable<SelectPairItem<T>> values)
 			: base(app, values.ToArray())
 		{
 			ResizeToContent();
 		} // ctor
 
-		protected override object GetSelectedValue(object line)
-			=> ((KeyValuePair<object, string>)line).Key;
-
-		protected override string FormatLine(object line)
-			=> ((KeyValuePair<object, string>)line).Value.GetFirstLine();
+		protected override ListView<SelectPairItem<T>> CreateListView()
+			=> new SelectListView();
 
 		protected override void OnAccept()
 		{
@@ -290,6 +235,16 @@ namespace TecWare.DE.Server.UI
 				return;
 			base.OnAccept();
 		} // proc OnAccept
+
+		public T SelectedValue
+		{
+			get
+			{
+				var tmp = View.SelectedItem;
+				return tmp == null ? default : tmp.Key;
+			}
+			set => View.SelectIndex(View.GetItemIndex(c => Equals(c.Key, value)));
+		} // proc SelectedValue
 	} // class SelectListDialog 
 
 	#endregion

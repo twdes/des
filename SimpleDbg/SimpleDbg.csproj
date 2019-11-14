@@ -50,6 +50,9 @@
     <Compile Include="..\Common\AssemblyInfoServer.cs">
       <Link>Properties\AssemblyInfoServer.cs</Link>
     </Compile>
+    <Compile Include="..\ServerLib\Stuff\LogLineParser.cs">
+      <Link>Extern\LogLineParser.cs</Link>
+    </Compile>
     <Compile Include="ConsoleDebugSocket.cs" />
     <Compile Include="ConsoleEventSocket.cs" />
     <Compile Include="ConsoleView.cs" />
@@ -63,6 +66,8 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="UI\ActivityOverlay.cs" />
     <Compile Include="UI\ConnectionStateOverlay.cs" />
+    <Compile Include="UI\DebugReadLine.cs" />
+    <Compile Include="UI\ListView.cs" />
     <Compile Include="UI\ReadLine.cs" />
     <Compile Include="UI\SelectListDialog.cs" />
   </ItemGroup>

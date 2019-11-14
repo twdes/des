@@ -18,12 +18,14 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using TecWare.DE.Data;
 using TecWare.DE.Networking;
+using TecWare.DE.Server.Stuff;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Data
@@ -47,7 +49,20 @@ namespace TecWare.DE.Server.Data
 		public DateTime Stamp => stamp;
 		public string Text => text;
 
-		private static LogMsgType GetFromString(string t)
+		public static string ToMsgTypeString(LogMsgType type)
+		{
+			switch (type)
+			{
+				case LogMsgType.Error:
+					return "E";
+				case LogMsgType.Warning:
+					return "W";
+				default:
+					return "I";
+			}
+		} // func ToMsgTypeString
+
+		private static LogMsgType FromMsgTypeString(string t)
 		{
 			switch (String.IsNullOrEmpty(t) ? 'I' : Char.ToUpper(t[0]))
 			{
@@ -62,6 +77,19 @@ namespace TecWare.DE.Server.Data
 
 		private static DateTime GetDateTime(string stamp)
 			=> DateTime.TryParse(stamp, out var dt) ? dt : DateTime.MinValue;
+
+		public static async Task GetLogLinesAsync(string fileName, Action<string, LogLine> process)
+		{
+			using (var tr = new StreamReader(fileName))
+			{
+				string line;
+				while ((line = await tr.ReadLineAsync()) != null)
+				{
+					LogLineParser.Parse(line, out var typ, out var stamp, out var text);
+					process(fileName, new LogLine(typ, stamp, text));
+				}
+			}
+		} // func GetLogLinesAsync
 
 		public static async Task GetLogLinesAsync(DEHttpClient http, string path, int start, int count, Action<string, LogLine> process)
 		{
@@ -81,7 +109,7 @@ namespace TecWare.DE.Server.Data
 					process(
 						path,
 						new LogLine(
-							GetFromString(x.GetAttribute("typ", "I")),
+							FromMsgTypeString(x.GetAttribute("typ", "I")),
 							GetDateTime(x.GetAttribute("stamp", null)),
 							x.Value
 						)

@@ -24,7 +24,7 @@ using System.Security;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using TecWare.DE.Stuff;
+using TecWare.DE.Server.UI;
 
 namespace Neo.Console
 {
@@ -44,6 +44,16 @@ namespace Neo.Console
 
 	public class ConsoleOverlay
 	{
+		public const char VerticalDoubleLine = (char)0x2551;
+		public const char HorizontalDoubleLine = (char)0x2550;
+		public const char TopLeftDoubleLine = (char)0x2554;
+		public const char TopRightDoubleLine = (char)0x2557;
+		public const char BottomLeftDoubleLine = (char)0x255A;
+		public const char BottomRightDoubleLine = (char)0x255D;
+
+		public const char Block = (char)0x2588;
+		public const char Shadow = (char)0x2591;
+
 		private ConsoleApplication application = null;
 		private ConsoleOverlayPosition position = ConsoleOverlayPosition.Buffer;
 		private int left = 0;
@@ -57,7 +67,7 @@ namespace Neo.Console
 		{
 		} // ctor
 
-		protected void Resize(int newWidth, int newHeight, bool clear = true)
+		public void Resize(int newWidth, int newHeight, bool clear = true)
 		{
 			if (newWidth == Width && newHeight == Height)
 				return;
@@ -298,6 +308,9 @@ namespace Neo.Console
 
 		public virtual bool IsRenderable => IsVisible;
 
+		public ConsoleColor ForegroundColor { get; set; } = ConsoleColor.White;
+		public ConsoleColor BackgroundColor { get; set; } = ConsoleColor.DarkCyan;
+
 		internal CharBuffer Content => content;
 	} // class ConsoleOverlay
 
@@ -367,6 +380,7 @@ namespace Neo.Console
 	public abstract class ConsoleDialogOverlay : ConsoleFocusableOverlay
 	{
 		private readonly TaskCompletionSource<bool> dialogResult;
+		private readonly List<ConsoleOverlay> children = new List<ConsoleOverlay>();
 
 		protected ConsoleDialogOverlay()
 		{
@@ -374,14 +388,45 @@ namespace Neo.Console
 			SetCursor(0, 0, 0);
 		} // ctor
 
-		public void RenderTitle(string title)
+		public void RenderFrame(string title)
 		{
-			var left = (Width / 2 - title.Length / 2);
-			var spaces = left > 0 ? new string('=', left) : String.Empty;
-			var titleBar = spaces + " " + title + " " + spaces;
+			var width = Width;
+			var height = Height;
 
-			Content.Write(0, 0, titleBar, foreground: ForegroundColor, background: BackgroundColor);
-		} // proc RenderTitle
+			Content.Set(0, 0, TopLeftDoubleLine, ForegroundColor, BackgroundColor);
+			Content.Set(width - 1, 0, TopRightDoubleLine, ForegroundColor, BackgroundColor);
+			Content.Set(0, height - 1, BottomLeftDoubleLine, ForegroundColor, BackgroundColor);
+			Content.Set(width - 1, height - 1, BottomRightDoubleLine, ForegroundColor, BackgroundColor);
+
+			for (var i = 1; i < width - 1; i++)
+			{
+				Content.Set(i, 0, HorizontalDoubleLine, ForegroundColor, BackgroundColor);
+				Content.Set(i, height - 1, HorizontalDoubleLine, ForegroundColor, BackgroundColor);
+			}
+
+			for (var i = 1; i < height - 1; i++)
+			{
+				Content.Set(0, i, VerticalDoubleLine, ForegroundColor, BackgroundColor);
+				Content.Set(width - 1, i, VerticalDoubleLine, ForegroundColor, BackgroundColor);
+			}
+
+			if (!String.IsNullOrEmpty(title))
+			{
+				var left = width / 2 - title.Length / 2;
+				var maxWidth = width - 8;
+				if (left < 4)
+					left = 4;
+				if (left < width || maxWidth < 0)
+				{
+					if (title.Length > maxWidth)
+						title = title.Substring(0, maxWidth);
+
+					Content.Set(left - 1, 0, ' ');
+					Content.Write(left, 0, title, null, ForegroundColor, BackgroundColor);
+					Content.Set(left + title.Length, 0, ' ');
+				}
+			}
+		} // proc RenderFrame
 
 		protected virtual void OnAccept()
 		{
@@ -418,1088 +463,45 @@ namespace Neo.Console
 				return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
 
-		public ConsoleColor ForegroundColor { get; set; } = ConsoleColor.White;
-		public ConsoleColor BackgroundColor { get; set; } = ConsoleColor.DarkCyan;
+		public void InsertControl(int index, ConsoleOverlay child)
+		{
+			children.Insert(index, child);
+			if (Application != null)
+			{
+				child.ZOrder = ZOrder + index; // fixme: zorder collision
+				child.Application = Application;
+			}
+		} // proc InsertControl
+
+		public void RemoveControl(ConsoleOverlay child)
+		{
+			children.Remove(child);
+			if (child.Application != null)
+				child.Application = null;
+		} // proc RemoveControl
+
+		protected override void OnAdded()
+		{
+			base.OnAdded();
+
+			var zOrder = ZOrder;
+			foreach(var cur in children)
+			{
+				cur.ZOrder = ++zOrder;
+				cur.Application = Application;
+			}
+		} // proc OnAdded
+
+		protected override void OnRemoved()
+		{
+			foreach (var cur in children)
+				cur.Application = null;
+			base.OnRemoved();
+		} // proc OnRemoved
 
 		public Task<bool> DialogResult => dialogResult.Task;
+		public IReadOnlyList<ConsoleOverlay> Children => children;
 	} // class ConsoleDialogOverlay
-
-	#endregion
-
-	#region -- struct ConsoleToken ----------------------------------------------------
-
-	public struct ConsoleToken
-	{
-		public ConsoleToken(StringBuilder content, int offset, int length, ConsoleColor color)
-		{
-			Content = content;
-			Offset = offset;
-			Length = length;
-			Color = color;
-		} // ctor
-
-		public StringBuilder Content { get; }
-		public int Offset { get; }
-		public int Length { get; }
-		public ConsoleColor Color { get; }
-
-		public string Text => Content.ToString(Offset, Length);
-	} // struct ConsoleToken
-
-	#endregion
-
-	#region -- class ConsoleReadLineOverlay -------------------------------------------
-
-	#region -- interface IConsoleReadLineManager --------------------------------------
-
-	/// <summary>Basic ReadLine interface.</summary>
-	public interface IConsoleReadLineManager
-	{
-		/// <summary>Leave the read line.</summary>
-		/// <param name="command">Currently, collected text.</param>
-		/// <returns></returns>
-		bool CanExecute(string command);
-		/// <summary>Get prompt for the line.</summary>
-		/// <returns>Prompt or nothing.</returns>
-		string GetPrompt();
-	} // interface IConsoleReadLineManager
-
-	#endregion
-
-	#region -- interface IConsoleReadLineScannerSource --------------------------------
-
-	/// <summary>Text buffer access (implemented by read line).</summary>
-	public interface IConsoleReadLineScannerSource
-	{
-		/// <summary>Set color for a specific text part.</summary>
-		/// <param name="lineStart"></param>
-		/// <param name="columnStart"></param>
-		/// <param name="lineEnd"></param>
-		/// <param name="columnEnd"></param>
-		/// <param name="color"></param>
-		void AppendToken(int lineStart, int columnStart, int lineEnd, int columnEnd, ConsoleColor color);
-
-		/// <summary>Sequential text buffer of the current text buffer.</summary>
-		TextReader TextReader { get; }
-
-		/// <summary>Content of a line.</summary>
-		/// <param name="lineIndex">Index of the line</param>
-		/// <returns></returns>
-		string this[int lineIndex] { get; }
-		/// <summary>Number of lines.</summary>
-		int LineCount { get; }
-	} // interface IConsoleReadLineScannerSource
-
-	#endregion
-
-	#region -- interface IConsoleReadLineScanner --------------------------------------
-
-	/// <summary>Colorization implementation.</summary>
-	public interface IConsoleReadLineScanner
-	{
-		/// <summary>Starts the colorization.</summary>
-		/// <param name="source">Text buffer source.</param>
-		void Scan(IConsoleReadLineScannerSource source);
-
-		/// <summary>Get the next offset for strg+cursor key.</summary>
-		/// <param name="offset"></param>
-		/// <param name="text"></param>
-		/// <param name="left"></param>
-		/// <returns>-1 for not implemented.</returns>
-		int GetNextToken(int offset, string text, bool left);
-	} // interface IConsoleReadLineScanner
-
-	#endregion
-
-	#region -- interface IConsoleReadLineHistory --------------------------------------
-
-	/// <summary>Command history</summary>
-	public interface IConsoleReadLineHistory : IReadOnlyList<string>
-	{
-	} // interface IConsoleReadLineHistory
-
-	#endregion
-
-	public sealed class ConsoleReadLineOverlay : ConsoleFocusableOverlay
-	{
-		#region -- class SingleLineManager --------------------------------------------
-
-		private sealed class SingleLineManager : IConsoleReadLineManager
-		{
-			private readonly string prompt;
-
-			public SingleLineManager(string prompt)
-			{
-				this.prompt = prompt ?? String.Empty;
-			} // ctor
-
-			public bool CanExecute(string command)
-				=> true;
-
-			public string GetPrompt()
-				=> prompt;
-
-			public static IConsoleReadLineManager Default { get; } = new SingleLineManager(String.Empty);
-		} // class SingleLineManager
-
-		#endregion
-
-		#region -- class InputLine ----------------------------------------------------
-
-		private sealed class InputLine
-		{
-			private readonly string prompt;
-			public readonly StringBuilder content = new StringBuilder();
-			private int height = 1;
-
-			public ConsoleToken[] tokenCache = null;
-
-			public InputLine(string prompt)
-			{
-				this.prompt = prompt ?? String.Empty;
-			} // ctor
-
-			#region -- Insert, Remove -------------------------------------------------
-
-			public void InsertLine(int index, StringBuilder text)
-			{
-				for (var i = 0; i < text.Length; i++)
-					content.Insert(index++, text[i]);
-				ClearTokenCache();
-			} // proc AppendLine
-
-			public void InsertLine(ref int index, string text, int startAt, int count)
-			{
-				var endAt = startAt + count;
-				for (var i = startAt; i < endAt; i++)
-				{
-					if (text[i] == '\t')
-					{
-						content.Insert(index++, ' ');
-						content.Insert(index++, ' ');
-						content.Insert(index++, ' ');
-						content.Insert(index++, ' ');
-					}
-					else if (!Char.IsControl(text[i]))
-						content.Insert(index++, text[i]);
-				}
-				ClearTokenCache();
-			} // proc AppendLine
-
-			public bool Insert(ref int index, char c, bool overwrite)
-			{
-				if (index < content.Length)
-				{
-					if (overwrite)
-						content[index] = c;
-					else
-						content.Insert(index, c);
-					return ClearTokenCache();
-				}
-				else
-				{
-					index = content.Length;
-					content.Append(c);
-					return ClearTokenCache();
-				}
-			} // func Insert
-
-			public bool Remove(int index)
-			{
-				if (content.Length > 0 && index < content.Length)
-				{
-					content.Remove(index, 1);
-					return ClearTokenCache();
-				}
-				else
-					return false;
-			} // func Remove
-
-			public void FixLineEnd(ref int currentLineOffset)
-			{
-				if (currentLineOffset > content.Length)
-					currentLineOffset = content.Length;
-			} // func FixLineEnd
-
-			public int UpdateHeight(int maxWidth)
-			{
-				var totalLength = TotalLineLength;
-				if (totalLength == 0)
-					height = 1;
-				else
-				{
-					var h = totalLength / maxWidth;
-					if (h == 0)
-						height = 1;
-					else
-					{
-						var r = totalLength / maxWidth;
-						height = r == 0 ? h : h + 1;
-					}
-				}
-				return height;
-			} // func GetHeight
-
-			#endregion
-
-			public bool ClearTokenCache()
-			{
-				tokenCache = null;
-				return true;
-			} // func ClearTokenCache
-
-			public void SetDefaultToken()
-			{
-				tokenCache = new ConsoleToken[] { new ConsoleToken(content, 0, content.Length, ConsoleColor.Gray) };
-			} // proc SetDefault
-
-			public bool IsTokenCacheEmpty => tokenCache == null;
-
-			public string Prompt => prompt;
-			public string Content => content.ToString();
-
-			public int LineHeight => height;
-
-			public int ContentLength => content.Length;
-			public int TotalLineLength => prompt.Length + content.Length;
-		} // class InputLine
-
-		#endregion
-
-		#region -- class InputLineScannerSource ---------------------------------------
-
-		private sealed class InputLineScannerSource : TextReader, IConsoleReadLineScannerSource
-		{
-			private int currentLineIndex = 0;
-			private int currentLineOffset = 0;
-
-			private int lastLineIndex = 0;
-			private int lastColumnIndex = 0;
-			private ConsoleColor currentColor = ConsoleColor.Gray;
-			private List<ConsoleToken> lineTokens = new List<ConsoleToken>();
-
-			private readonly List<InputLine> lines;
-
-			public InputLineScannerSource(List<InputLine> lines)
-			{
-				this.lines = lines ?? throw new ArgumentNullException(nameof(lines));
-			} // ctor
-
-			public override void Close()
-			{
-				try
-				{
-					var lastLineIndex = lines.Count - 1;
-					EmitCurrentColor(lastLineIndex, lines[lastLineIndex].ContentLength);
-					if (lineTokens.Count > 0)
-						EmitTokens();
-				}
-				finally
-				{
-					base.Close();
-				}
-			} // proc Close
-
-			public override int Read()
-			{
-				if (currentLineIndex < lines.Count)
-				{
-					var len = lines[currentLineIndex].ContentLength;
-					if (currentLineOffset < len)
-						return lines[currentLineIndex].Content[currentLineOffset++];
-					else
-					{
-						currentLineOffset = 0;
-						currentLineIndex++;
-						return '\n';
-					}
-				}
-				else
-					return -1;
-			} // func Read
-
-			public override int Read(char[] buffer, int index, int count)
-			{
-				// todo: is not used, currently.
-				return base.Read(buffer, index, count);
-			} // func Read
-
-			public override int ReadBlock(char[] buffer, int index, int count)
-				=> Read(buffer, index, count);
-
-			public override Task<int> ReadAsync(char[] buffer, int index, int count)
-				=> Task.FromResult(Read(buffer, index, count));
-
-			public override Task<int> ReadBlockAsync(char[] buffer, int index, int count)
-				=> Task.FromResult(Read(buffer, index, count));
-
-			public void AppendToken(int lineStart, int columnStart, int lineEnd, int columnEnd, ConsoleColor color)
-			{
-				if (color != currentColor)
-				{
-					EmitCurrentColor(lineStart, columnStart);
-					currentColor = color;
-					lastLineIndex = lineStart;
-					lastColumnIndex = columnStart;
-				}
-			} // proc UpdateToken
-
-			private void EmitCurrentColor(int lineTo, int columnTo)
-			{
-				int len;
-
-				while (lastLineIndex < lineTo) // fill lines with current color
-				{
-					var cnt = lines[lastLineIndex].content;
-					len = cnt.Length - lastColumnIndex;
-					if (len > 0)
-						lineTokens.Add(new ConsoleToken(cnt, lastColumnIndex, len, currentColor));
-
-					EmitTokens();
-				}
-
-				// create current token
-				len = columnTo - lastColumnIndex;
-				if (len > 0 && lastLineIndex < lines.Count)
-				{
-					var cnt = lines[lastLineIndex].content;
-					lineTokens.Add(new ConsoleToken(cnt, lastColumnIndex, len, currentColor));
-					lastColumnIndex = columnTo;
-				}
-			} // proc EmitCurrentColor
-
-			private void EmitTokens()
-			{
-				lines[lastLineIndex].tokenCache = lineTokens.ToArray();
-				lineTokens.Clear();
-
-				lastLineIndex++;
-				lastColumnIndex = 0;
-			} // proc EmitTokens
-
-			TextReader IConsoleReadLineScannerSource.TextReader => this;
-
-			public string this[int lineIndex] => lines[lineIndex].Content;
-			public int LineCount => lines.Count;
-		} // class InputLineScannerSource
-
-		#endregion
-
-		private readonly IConsoleReadLineManager manager;
-		private readonly TaskCompletionSource<string> commandAccepted;
-
-		private int currentLineIndex = 0;
-		private int currentLineOffset = 0;
-		private bool overwrite = false;
-		private readonly List<InputLine> lines = new List<InputLine>();
-
-		private string lastInputCommand = null;
-		private int lastLineIndex = 0;
-		private int lastLineOffset = 0;
-		private int currentHistoryIndex = -1;
-
-		#region -- Ctor/Dtor ----------------------------------------------------------
-
-		public ConsoleReadLineOverlay(IConsoleReadLineManager manager, TaskCompletionSource<string> commandAccepted = null)
-		{
-			this.manager = manager ?? SingleLineManager.Default;
-			this.commandAccepted = commandAccepted;
-
-			this.lines.Add(new InputLine(this.manager.GetPrompt()));
-		} // ctor
-
-		#endregion
-
-		#region -- OnResize, OnRender -------------------------------------------------
-
-		public override void OnResize()
-			=> Invalidate();
-
-		protected override void OnRender()
-		{
-			var w = Application.BufferWidth;
-
-			// build new buffer the can hold the text
-			var totalHeight = 0;
-			var reLex = false;
-			var scan = manager as IConsoleReadLineScanner;
-			for (var i = 0; i < lines.Count; i++)
-			{
-				totalHeight += lines[i].UpdateHeight(w);
-				if (lines[i].IsTokenCacheEmpty)
-				{
-					if (scan == null)
-						lines[i].SetDefaultToken();
-					else
-						reLex = true;
-				}
-			}
-			Resize(w, totalHeight);
-
-			if (reLex)
-			{
-				using (var source = new InputLineScannerSource(lines))
-				{
-					scan.Scan(source);
-					source.Close();
-				}
-			}
-
-			var top = 0;
-
-			for (var i = 0; i < lines.Count; i++)
-			{
-				var l = lines[i];
-
-				// first write the prompt
-				var (endLeft, endTop) = Content.Write(0, top, l.Prompt);
-
-				// enforce tokens
-				if (l.IsTokenCacheEmpty)
-					l.SetDefaultToken();
-				// write tokens
-				foreach (var tok in l.tokenCache)
-					(endLeft, endTop) = Content.Write(endLeft, endTop, tok.Text, lineBreakTo: 0, foreground: tok.Color);
-
-				if (endLeft < w)
-					Content.Fill(endLeft, endTop, w - 1, endTop, ' ');
-
-				// update cursor
-				if (i == currentLineIndex)
-				{
-					var cursorIndex = currentLineOffset + l.Prompt.Length;
-					if (cursorIndex > l.TotalLineLength)
-						cursorIndex = l.TotalLineLength;
-					SetCursor(cursorIndex % w, top + cursorIndex / w, overwrite ? 100 : 25);
-				}
-
-				top = endTop + 1;
-			}
-		} // proc OnRender
-
-		#endregion
-
-		#region -- Last input command -------------------------------------------------
-
-		private void ClearLastInputCommand()
-		{
-			currentHistoryIndex = -1;
-			lastLineIndex = 0;
-			lastLineOffset = 0;
-			lastInputCommand = null;
-		} // proc ClearLastInputCommand
-
-		private void SaveLastInputCommand()
-		{
-			lastLineIndex = currentLineIndex;
-			lastLineOffset = currentLineOffset;
-			lastInputCommand = Command;
-		} // proc SaveLastInputCommand
-
-		private void ResetLastInputCommand()
-		{
-			Command = lastInputCommand;
-			currentLineIndex = lastLineIndex;
-			currentLineOffset = lastLineOffset;
-			ClearLastInputCommand();
-		} // proc ResetLastInputCommand
-		
-		#endregion
-
-		#region -- OnHandleEvent ------------------------------------------------------
-
-		public override bool OnHandleEvent(EventArgs e)
-		{
-			// handle key down events
-			if (e is ConsoleKeyDownEventArgs keyDown)
-			{
-				switch (keyDown.KeyChar)
-				{
-					#region -- Return --
-					case '\r':
-						var command = Command;
-						if (currentLineIndex >= lines.Count - 1 && manager.CanExecute(command))
-						{
-							ClearLastInputCommand();
-
-							if (commandAccepted != null)
-								commandAccepted.SetResult(command);
-						}
-						else
-						{
-							InsertNewLine();
-							Invalidate();
-						}
-						return true;
-					#endregion
-					#region -- Escape --
-					case '\x1B':
-						if (lastInputCommand != null)
-						{
-							ResetLastInputCommand();
-							Invalidate();
-						}
-						else if (currentLineIndex > 0 || currentLineOffset > 0)
-						{
-							currentLineIndex = 0;
-							currentLineOffset = 0;
-							Invalidate();
-						}
-						else if (CurrentLine.ContentLength > 0 && lines.Count > 0)
-						{
-							Command = String.Empty;
-							Invalidate();
-						}
-						return true;
-					#endregion
-					#region -- Backspace --
-					case '\b':
-						CurrentLine.FixLineEnd(ref currentLineOffset);
-						if (currentLineOffset > 0)
-						{
-							ClearLastInputCommand();
-							currentLineOffset--;
-							if (CurrentLine.Remove(currentLineOffset))
-								Invalidate();
-						}
-						else if (currentLineIndex > 0)
-						{
-							ClearLastInputCommand();
-
-							if (currentLineIndex >= lines.Count)
-								currentLineIndex = lines.Count - 1;
-
-							var prevLine = lines[currentLineIndex - 1];
-							var currLine = CurrentLine;
-
-							currentLineOffset = prevLine.ContentLength;
-
-							if (currLine.ContentLength > 0) // copy content
-								prevLine.InsertLine(currentLineOffset, currLine.content);
-
-							lines.RemoveAt(currentLineIndex);
-							currentLineIndex--;
-
-							Invalidate();
-						}
-						return true;
-					#endregion
-					#region -- Tab --
-					case '\t':
-						for (var i = 0; i < 4; i++)
-						{
-							if (CurrentLine.Insert(ref currentLineOffset, ' ', overwrite))
-							{
-								ClearLastInputCommand();
-								currentLineOffset++;
-								Invalidate();
-							}
-						}
-						return true;
-					#endregion
-					default:
-						if (!Char.IsControl(keyDown.KeyChar))
-						{
-							#region -- Char --
-							if (CurrentLine.Insert(ref currentLineOffset, keyDown.KeyChar, overwrite))
-							{
-								ClearLastInputCommand();
-								currentLineOffset++;
-								Invalidate();
-							}
-							#endregion
-							return true;
-						}
-						else
-						{
-							switch (keyDown.Key)
-							{
-								#region -- Delete --
-								case ConsoleKey.Delete:
-									if (currentLineOffset >= CurrentLine.ContentLength)
-									{
-										ClearLastInputCommand();
-
-										if (currentLineIndex < lines.Count - 1)
-										{
-											CurrentLine.InsertLine(currentLineOffset, lines[currentLineIndex + 1].content);
-											lines.RemoveAt(currentLineIndex + 1);
-											Invalidate();
-										}
-									}
-									else if (CurrentLine.Remove(currentLineOffset))
-									{
-										ClearLastInputCommand();
-										Invalidate();
-									}
-									return true;
-								#endregion
-								#region -- Up,Down,Left,Right --
-								case ConsoleKey.UpArrow:
-									if (currentLineIndex > 0)
-									{
-										if (currentLineIndex >= lines.Count)
-										{
-											if (lines.Count > 1)
-												currentLineIndex = lines.Count - 2;
-											else
-												currentLineIndex = 0;
-										}
-										else
-											currentLineIndex--;
-										Invalidate();
-									}
-
-									InvalidateCursor();
-									return true;
-								case ConsoleKey.DownArrow:
-									if (currentLineIndex < lines.Count - 1)
-									{
-										currentLineIndex++;
-										Invalidate();
-									}
-									else if (currentLineIndex >= lines.Count)
-										currentLineIndex = lines.Count - 1;
-
-									InvalidateCursor();
-									return true;
-								case ConsoleKey.LeftArrow:
-									if ((keyDown.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
-									{
-										MoveCursorByToken(CurrentLine.Content, true);
-										InvalidateCursor();
-										return true;
-									}
-									else if (currentLineOffset > 0)
-									{
-										if (currentLineOffset < CurrentLine.ContentLength)
-											currentLineOffset--;
-										else
-											currentLineOffset = CurrentLine.ContentLength - 1;
-									}
-									else
-										currentLineOffset = 0;
-
-									Invalidate();
-									InvalidateCursor();
-									return true;
-								case ConsoleKey.RightArrow:
-									if ((keyDown.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
-									{
-										MoveCursorByToken(CurrentLine.Content, false);
-										InvalidateCursor();
-										return true;
-									}
-									else if (currentLineOffset < CurrentLine.ContentLength)
-										currentLineOffset++;
-									else
-										currentLineOffset = CurrentLine.ContentLength;
-
-									Invalidate();
-									InvalidateCursor();
-									return true;
-									#endregion
-							}
-						}
-						break;
-				}
-			}
-			else if (e is ConsoleKeyUpEventArgs keyUp)
-			{
-				switch (keyUp.Key)
-				{
-					#region -- Home,End,Up,Down,PageUp,PageDown --
-					case ConsoleKey.PageUp:
-						MoveHistory(false);
-						return true;
-					case ConsoleKey.UpArrow:
-						{
-							if ((keyUp.KeyModifiers & ConsoleKeyModifiers.AltPressed) != 0)
-							{
-								MoveHistory(false);
-								return true;
-							}
-						}
-						break;
-					case ConsoleKey.PageDown:
-						MoveHistory(true);
-						return true;
-					case ConsoleKey.DownArrow:
-						{
-							if (manager is IConsoleReadLineHistory history && (keyUp.KeyModifiers & ConsoleKeyModifiers.AltPressed) != 0)
-							{
-								MoveHistory(true);
-								return true;
-							}
-						}
-						break;
-					case ConsoleKey.End:
-						if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
-							currentLineIndex = lines.Count - 1;
-						currentLineOffset = CurrentLine.ContentLength;
-						Invalidate();
-						return true;
-					case ConsoleKey.Home:
-						if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
-							currentLineIndex = 0;
-						currentLineOffset = 0;
-						Invalidate();
-						return true;
-					#endregion
-					#region -- Insert --
-					case ConsoleKey.Insert:
-						overwrite = !overwrite;
-						Invalidate();
-						return true;
-					case ConsoleKey.V:
-						if ((keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0)
-						{
-							var clipText = GetClipboardText();
-							var first = true;
-							foreach (var (startAt, len) in Procs.SplitNewLinesTokens(clipText))
-							{
-								if (first)
-									first = false;
-								else // new line
-									InsertNewLine();
-
-								CurrentLine.InsertLine(ref currentLineOffset, clipText, startAt, len);
-								Invalidate();
-							}
-							return true;
-						}
-						break;
-					#endregion
-					default:
-						{
-							//if (manager is IConsoleReadLineHistory history && (keyUp.KeyModifiers & ConsoleKeyModifiers.CtrlPressed) != 0 && keyUp.Key == ConsoleKey.R)
-							//	;
-						}
-						break;
-				}
-			}
-
-			return base.OnHandleEvent(e);
-		} // proc OnHandleEvent
-
-		private static string GetClipboardText()
-		{
-			var apartmentState = Thread.CurrentThread.GetApartmentState();
-			if (apartmentState == ApartmentState.STA)
-				return System.Windows.Forms.Clipboard.GetText();
-			else
-			{
-				var sb = new StringBuilder();
-				var thread = new Thread(ReadClipboardText);
-				thread.SetApartmentState(ApartmentState.STA);
-				thread.Start(sb);
-				thread.Join();
-				return sb.ToString();
-			}
-		} // proc GetClipboardText
-
-		[STAThread]
-		private static void ReadClipboardText(object state)
-			=> ((StringBuilder)state).Append(System.Windows.Forms.Clipboard.GetText());
-
-		private void InsertNewLine()
-		{
-			ClearLastInputCommand();
-
-			var initalText = String.Empty;
-			var currentLine = CurrentLine;
-
-			if (currentLineOffset < currentLine.ContentLength)
-			{
-				var removeLength = currentLine.ContentLength - currentLineOffset;
-				initalText = currentLine.content.ToString(currentLineOffset, removeLength);
-				currentLine.content.Remove(currentLineOffset, removeLength);
-				currentLine.ClearTokenCache();
-			}
-
-			var line = new InputLine(manager.GetPrompt());
-			lines.Insert(++currentLineIndex, line);
-			currentLineOffset = 0;
-
-			if (initalText.Length > 0)
-			{
-				var idx = currentLineOffset;
-				line.InsertLine(ref idx, initalText, 0, initalText.Length);
-			}
-		} // proc InsertNewLine
-
-		private static bool IsNewCharGroup(int idx, string text, bool leftMove, ref int state)
-		{
-			int GetCharGroup(char c)
-			{
-				switch (c)
-				{
-					case '[':
-					case ']':
-						return 12;
-					case '(':
-					case ')':
-						return 13;
-					case '{':
-					case '}':
-						return 14;
-					default:
-						if (Char.IsLetterOrDigit(c))
-							return 10;
-						else if (Char.IsSymbol(c))
-							return 11;
-						else
-							return 1;
-				}
-			}
-
-			switch (state)
-			{
-				case 0: // set char group
-					if (Char.IsWhiteSpace(text[idx]))
-						state = leftMove ? 0 : 1;
-					else
-						state = GetCharGroup(text[idx]);
-					return false;
-				case 1: // skip spaces
-					return !Char.IsWhiteSpace(text[idx]);
-				default:
-					if (!leftMove && Char.IsWhiteSpace(text[idx]))
-					{
-						state = 1;
-						return false;
-					}
-					return state != GetCharGroup(text[idx]);
-			}
-		} // proc IsNewCharGroup
-
-		private int GetNextTokenDefault(int offset, string text, bool leftMove)
-		{
-			var state = 0;
-			if (leftMove)
-			{
-				if (offset <= 0)
-					return -1;
-
-				var idx = offset;
-				while (idx > 0)
-				{
-					idx--;
-					if (IsNewCharGroup(idx, text, leftMove, ref state))
-					{
-						idx++;
-						break;
-					}
-				}
-				return idx;
-			}
-			else
-			{
-				if (offset >= text.Length)
-					return -1;
-
-				var idx = offset;
-				while (idx < text.Length)
-				{
-					if (IsNewCharGroup(idx, text, leftMove, ref state))
-						break;
-					idx++;
-				}
-
-				return idx;
-			}
-		} // func GetNextTokenDefault
-
-		private void MoveCursorByToken(string content, bool leftMove)
-		{
-			var nextIndex = -1;
-			if (manager is IConsoleReadLineScanner scan)
-				nextIndex = scan.GetNextToken(currentLineOffset, content, leftMove);
-
-			if (nextIndex < 0)
-				nextIndex = GetNextTokenDefault(currentLineOffset, content, leftMove);
-
-			if (nextIndex >= 0 && nextIndex <= content.Length)
-				currentLineOffset = nextIndex;
-
-			Invalidate();
-		} // proc MoveCursorByToken
-
-		private void MoveHistory(bool forward)
-		{
-			if (!(manager is IConsoleReadLineHistory history)
-				|| history.Count == 0)
-				return;
-
-			if (currentHistoryIndex == -1)
-			{
-				if (forward)
-					return;
-
-				SaveLastInputCommand();
-				currentHistoryIndex = history.Count - 1;
-
-				Command = history[currentHistoryIndex];
-			}
-			else
-			{
-				if (forward)
-				{
-					if (currentHistoryIndex >= history.Count - 1)
-						ResetLastInputCommand();
-					else
-						Command = history[++currentHistoryIndex];
-				}
-				else
-				{
-					if (currentHistoryIndex > 0)
-						Command = history[--currentHistoryIndex];
-				}
-			}
-		} // proc MoveHistory
-
-		private InputLine CurrentLine => lines[currentLineIndex >= lines.Count ? lines.Count - 1 : currentLineIndex];
-
-		#endregion
-
-		public string Command
-		{
-			get
-			{
-				var cmd = new string[lines.Count];
-				for (var i = 0; i < cmd.Length; i++)
-					cmd[i] = lines[i].Content.ToString();
-				return String.Join(Environment.NewLine, cmd);
-			}
-			set
-			{
-				lines.Clear();
-				foreach (var (startAt, len) in Procs.SplitNewLinesTokens(value))
-				{
-					var line = new InputLine(manager.GetPrompt());
-					line.content.Append(value, startAt, len);
-					lines.Add(line);
-				}
-				if (lines.Count == 0)
-					lines.Add(new InputLine(manager.GetPrompt()));
-
-				currentLineIndex = lines.Count - 1;
-				currentLineOffset = lines[currentLineIndex].ContentLength;
-
-				Invalidate();
-			}
-		} // prop Command
-
-		public static IConsoleReadLineManager CreatePrompt(string prompt)
-			=> new SingleLineManager(prompt);
-	} // class ConsoleReadLineOverlay
-
-	#endregion
-
-	#region -- class ConsoleReadSecureStringOverlay -----------------------------------
-
-	public sealed class ConsoleReadSecureStringOverlay : ConsoleFocusableOverlay, IDisposable
-	{
-		private readonly string prompt;
-		private readonly SecureString content = new SecureString();
-		private readonly TaskCompletionSource<SecureString> commandAccepted;
-
-		#region -- Ctor/Dtor ----------------------------------------------------------
-
-		public ConsoleReadSecureStringOverlay(string prompt, TaskCompletionSource<SecureString> commandAccepted = null)
-		{
-			this.prompt = prompt ?? String.Empty;
-			this.commandAccepted = commandAccepted;
-		} // ctor
-
-		public void Dispose()
-		{
-			content.Dispose();
-		} // proc Dispose
-
-		#endregion
-
-		#region -- OnResize, OnRender -------------------------------------------------
-
-		public override void OnResize()
-			=> base.OnResize();
-
-		protected override void OnRender()
-		{
-			var w = Application.BufferWidth;
-
-			// build new buffer the can hold the text
-			Resize(w, 1);
-
-			var (endLeft, endTop) = Content.Write(0, 0, prompt);
-			if (endTop == 0)
-			{
-				(endLeft, endTop) = Content.Write(endLeft, endTop, new string('*', content.Length));
-				if (endTop == 0)
-				{
-					Content.Fill(endLeft, endTop, w - 1, 0, ' ');
-					SetCursor(endLeft, endTop, 25);
-				}
-			}
-		} // proc OnRender
-
-		#endregion
-
-		#region -- OnHandleEvent ------------------------------------------------------
-
-		public override bool OnHandleEvent(EventArgs e)
-		{
-			// handle key down events
-			if (e is ConsoleKeyDownEventArgs keyDown)
-			{
-				switch (keyDown.KeyChar)
-				{
-					case '\r':
-						if (commandAccepted != null)
-							commandAccepted.SetResult(GetSecureString());
-						return true;
-					case '\b':
-						if (content.Length > 0)
-						{
-							content.RemoveAt(content.Length - 1);
-							Invalidate();
-						}
-						return true;
-					default:
-						if (keyDown.KeyChar != '\0')
-						{
-							content.AppendChar(keyDown.KeyChar);
-							Invalidate();
-						}
-						else
-						{
-							switch (keyDown.Key)
-							{
-								case ConsoleKey.Delete:
-									if (content.Length > 0)
-									{
-										content.Clear();
-										Invalidate();
-									}
-									break;
-							}
-						}
-						return true;
-				}
-			}
-			else
-				return base.OnHandleEvent(e);
-		} // proc OnHandleEvent
-
-		#endregion
-
-		public SecureString GetSecureString()
-		{
-			var result = content.Copy();
-			result.MakeReadOnly();
-			return result;
-		} // proc GetSecureString
-	} // class ConsoleReadSecureStringOverlay
 
 	#endregion
 
@@ -2072,7 +1074,6 @@ namespace Neo.Console
 				if (bottomRow >= activeOutput.Height) // we a hidden the buffer end
 				{
 					var scrollY = activeOutput.Height - bottomRow - 1;
-					activeOutput.Scroll(0, scrollY);
 					output.Scroll(0, scrollY);
 				}
 				else// move window down, to make bottom rows visible
