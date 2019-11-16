@@ -411,8 +411,11 @@ namespace TecWare.DE.Server.UI
 
 		#region -- OnResize, OnRender -------------------------------------------------
 
-		public override void OnResize()
-			=> Invalidate();
+		protected override void OnResize()
+		{
+			base.OnResize();
+			Invalidate();
+		} // proc OnResize
 
 		protected override void OnRender()
 		{
@@ -507,6 +510,8 @@ namespace TecWare.DE.Server.UI
 
 		#region -- OnHandleEvent ------------------------------------------------------
 
+		private string executeCommandOnKeyUp = null;
+
 		public override bool OnHandleEvent(EventArgs e)
 		{
 			// handle key down events
@@ -519,10 +524,7 @@ namespace TecWare.DE.Server.UI
 						var command = Command;
 						if (currentLineIndex >= lines.Count - 1 && manager.CanExecute(command))
 						{
-							ClearLastInputCommand();
-
-							if (commandAccepted != null)
-								commandAccepted.SetResult(command);
+							executeCommandOnKeyUp = command;
 						}
 						else
 						{
@@ -708,6 +710,17 @@ namespace TecWare.DE.Server.UI
 				switch (keyUp.Key)
 				{
 					#region -- Home,End,Up,Down,PageUp,PageDown --
+					case ConsoleKey.Enter:
+						if (executeCommandOnKeyUp != null)
+						{
+							ClearLastInputCommand();
+
+							if (commandAccepted != null)
+								commandAccepted.SetResult(executeCommandOnKeyUp);
+
+							executeCommandOnKeyUp = null;
+						}
+						break;
 					case ConsoleKey.PageUp:
 						MoveHistory(false);
 						return true;
@@ -781,21 +794,36 @@ namespace TecWare.DE.Server.UI
 			return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
 
-		private static string GetClipboardText()
+		private static Task DoClipboardActionAsync(ParameterizedThreadStart action, object state)
 		{
 			var apartmentState = Thread.CurrentThread.GetApartmentState();
 			if (apartmentState == ApartmentState.STA)
-				return System.Windows.Forms.Clipboard.GetText();
+			{
+				action(state);
+				return Task.CompletedTask;
+			}
 			else
 			{
-				var sb = new StringBuilder();
-				var thread = new Thread(ReadClipboardText);
+				var thread = new Thread(action);
 				thread.SetApartmentState(ApartmentState.STA);
-				thread.Start(sb);
-				thread.Join();
-				return sb.ToString();
+				thread.Start(state);
+				return Task.Run(new Action(thread.Join));
 			}
+		} // proc DoClipboardActionAsync
+
+		public static Task SetClipboardTextAsync(string text)
+			=> DoClipboardActionAsync(WriteClipboardText, text);
+
+		public static string GetClipboardText()
+		{
+			var sb = new StringBuilder();
+			DoClipboardActionAsync(ReadClipboardText, sb).Wait();
+			return sb.ToString();
 		} // proc GetClipboardText
+
+		[STAThread]
+		private static void WriteClipboardText(object state)
+			=> System.Windows.Forms.Clipboard.SetText((string)state);
 
 		[STAThread]
 		private static void ReadClipboardText(object state)
@@ -1020,9 +1048,6 @@ namespace TecWare.DE.Server.UI
 
 		#region -- OnResize, OnRender -------------------------------------------------
 
-		public override void OnResize()
-			=> base.OnResize();
-
 		protected override void OnRender()
 		{
 			var w = Application.BufferWidth;
@@ -1065,7 +1090,7 @@ namespace TecWare.DE.Server.UI
 						}
 						return true;
 					default:
-						if (keyDown.KeyChar != '\0')
+						if (!Char.IsControl(keyDown.KeyChar))
 						{
 							content.AppendChar(keyDown.KeyChar);
 							Invalidate();
@@ -1099,6 +1124,124 @@ namespace TecWare.DE.Server.UI
 			return result;
 		} // proc GetSecureString
 	} // class ConsoleReadSecureStringOverlay
+
+	#endregion
+
+	#region -- class ReadLineOverlay --------------------------------------------------
+
+	public class ReadLineOverlay : ConsoleFocusableOverlay
+	{
+		public event EventHandler TextChanged;
+
+		private readonly StringBuilder text = new StringBuilder();
+		private int offset = 0;
+		private int insertAt = 0;
+
+		public ReadLineOverlay()
+		{
+			Position = ConsoleOverlayPosition.Window;
+		}
+
+		protected override void OnRender()
+		{
+			var j = offset;
+			for (var i = 0; i < Width; i++)
+			{
+				var c = j < text.Length ? text[j] : ' ';
+				Content.Set(i, 0, c, ForegroundColor, BackgroundColor);
+				j++;
+			}
+		} // proc OnRender
+
+		private void InvalidateText()
+		{
+			TextChanged?.Invoke(this, EventArgs.Empty);
+			Invalidate();
+		} // proc InvalidateText
+
+		private void InvalidateCursorIntern()
+		{
+			if (insertAt < offset)
+			{
+				offset = insertAt;
+				Invalidate();
+			}
+			if (insertAt > offset + Width - 1)
+			{
+				offset = insertAt - Width + 1;
+				Invalidate();
+			}
+
+			SetCursor(insertAt - offset, 0, 25);
+		} // proc InvalidateCursorIntern
+
+		public override bool OnHandleEvent(EventArgs e)
+		{
+			// handle key down events
+			if (e is ConsoleKeyDownEventArgs keyDown)
+			{
+				switch (keyDown.KeyChar)
+				{
+					case '\b':
+						if (insertAt > 0)
+						{
+							text.Remove(insertAt - 1, 1);
+							insertAt--;
+							InvalidateCursorIntern();
+							InvalidateText();
+						}
+						return true;
+					default:
+						if (!Char.IsControl(keyDown.KeyChar))
+						{
+							text.Insert(insertAt++, keyDown.KeyChar);
+							InvalidateCursorIntern();
+							InvalidateText();
+						}
+						else
+						{
+							switch (keyDown.Key)
+							{
+								case ConsoleKey.LeftArrow:
+									if (insertAt > 0)
+									{
+										insertAt--;
+										InvalidateCursorIntern();
+									}
+									break;
+								case ConsoleKey.RightArrow:
+									if(insertAt < text.Length)
+									{
+										insertAt++;
+										InvalidateCursorIntern();
+									}
+									break;
+								case ConsoleKey.Home:
+									insertAt = 0;
+									InvalidateCursorIntern();
+									break;
+								case ConsoleKey.End:
+									insertAt = text.Length;
+									InvalidateCursorIntern();
+									break;
+								case ConsoleKey.Delete:
+									if (insertAt < text.Length)
+									{
+										text.Remove(insertAt, 1);
+										InvalidateText();
+									}
+									break;
+							}
+						}
+						return true;
+				}
+			}
+			else 
+				return base.OnHandleEvent(e);
+		} // func OnHandleEvent
+
+		public string Text => text.ToString();
+	} // class ReadLineOverlay
 
 	#endregion
 }

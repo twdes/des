@@ -13,16 +13,18 @@
 // specific language governing permissions and limitations under the Licence.
 //
 #endregion
-using Neo.IronLua;
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using System.Xml.Linq;
+using Neo.Console;
+using Neo.IronLua;
 using TecWare.DE.Data;
 using TecWare.DE.Networking;
 using TecWare.DE.Server.Stuff;
@@ -38,11 +40,11 @@ namespace TecWare.DE.Server.Data
 		private readonly DateTime stamp;
 		private readonly string text;
 
-		private LogLine(LogMsgType type, DateTime stamp, string text)
+		public LogLine(LogMsgType type, DateTime stamp, string text)
 		{
 			this.type = type;
 			this.stamp = stamp;
-			this.text = text ?? String.Empty;
+			this.text = (text ?? String.Empty).Replace("\t", "    ");
 		} // ctor
 
 		public LogMsgType Type => type;
@@ -78,18 +80,19 @@ namespace TecWare.DE.Server.Data
 		private static DateTime GetDateTime(string stamp)
 			=> DateTime.TryParse(stamp, out var dt) ? dt : DateTime.MinValue;
 
-		public static async Task GetLogLinesAsync(string fileName, Action<string, LogLine> process)
+		public static bool TryGetLogEvent(DEHttpSocketEventArgs e, out int lineCount)
 		{
-			using (var tr = new StreamReader(fileName))
+			if (e.Id == "tw_lines") // log line event
 			{
-				string line;
-				while ((line = await tr.ReadLineAsync()) != null)
-				{
-					LogLineParser.Parse(line, out var typ, out var stamp, out var text);
-					process(fileName, new LogLine(typ, stamp, text));
-				}
+				lineCount = e.Values.GetAttribute("lineCount", -1);
+				return lineCount > 0;
 			}
-		} // func GetLogLinesAsync
+			else
+			{
+				lineCount = -1;
+				return false;
+			}
+		} // func TryGetLogEvent
 
 		public static async Task GetLogLinesAsync(DEHttpClient http, string path, int start, int count, Action<string, LogLine> process)
 		{
@@ -302,6 +305,282 @@ namespace TecWare.DE.Server.Data
 			}
 		} // func GetLogProperties
 	} // class LogPropertyValue
+
+	#endregion
+
+	#region -- class LogLines ---------------------------------------------------------
+
+	internal abstract class LogLines : IReadOnlyList<LogLine>, INotifyCollectionChanged
+	{
+		public event NotifyCollectionChangedEventHandler CollectionChanged;
+
+		#region -- class LogLineBuffer ------------------------------------------------
+
+		internal class LogLineBuffer
+		{
+			private readonly LogLines lines;
+			private readonly LogLine[] buffer = new LogLine[1024];
+			private int bufferCount = 0;
+			private int insertAt = 0;
+
+			private readonly List<LogLine> staged = new List<LogLine>();
+
+			public LogLineBuffer(LogLines lines)
+			{
+				this.lines = lines ?? throw new ArgumentNullException(nameof(lines));
+			} // ctor
+
+			private void FlushCore()
+			{
+				lines.Insert(insertAt, buffer, bufferCount);
+				insertAt += bufferCount;
+				bufferCount = 0;
+			} // proc FlushCore
+
+			public void Flush()
+			{
+				if (bufferCount > 0)
+					FlushCore();
+			} // proc Flush
+
+			private void AddCore(LogLine item)
+			{
+				if (bufferCount >= buffer.Length)
+					FlushCore();
+
+				buffer[bufferCount++] = item;
+			} // proc AddCore
+
+			public void Add(LogLine item)
+			{
+				for (var i = 0; i < staged.Count; i++)
+					AddCore(staged[i]);
+				staged.Clear();
+
+				AddCore(item);
+			} // proc Add
+
+			public void Stage(LogLine item)
+				=> staged.Add(item);
+
+			public void PatchDate(DateTime stamp)
+			{
+				for (var i = 0; i < staged.Count; i++)
+					staged[i] = new LogLine(staged[i].Type, stamp, staged[i].Text);
+			} // proc PatchDate
+		} // class LogLineBuffer
+
+		#endregion
+
+		private readonly List<LogLine> lines = new List<LogLine>();
+
+		protected void Clear()
+		{
+			lines.Clear();
+			CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+		} // proc Clear
+
+		protected void Insert(int insertAt, LogLine[] lines, int count)
+		{
+			var app = ConsoleApplication.Current;
+			if (app.IsInvokeRequired)
+				app.Invoke(() => Insert(insertAt, lines, count));
+			else
+			{
+				var startIndex = this.lines.Count;
+				this.lines.InsertRange(insertAt,
+					lines.Length == count
+						? lines
+						: lines.Take(count)
+				);
+				var length = this.lines.Count - startIndex;
+				if (length > 0)
+				{
+					var slice = new LogLine[length];
+					this.lines.CopyTo(startIndex, slice, 0, length);
+					CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(
+						NotifyCollectionChangedAction.Add,
+						slice,
+						insertAt
+					)); 
+				}
+			}
+		} // proc Append
+
+		public IEnumerator<LogLine> GetEnumerator()
+			=> lines.GetEnumerator();
+
+		IEnumerator IEnumerable.GetEnumerator()
+			=> GetEnumerator();
+
+		public LogLine this[int index] => lines[index];
+
+		public int Count => lines.Count;
+	} // class LogLines
+
+	#endregion
+
+	#region -- class LogFileLines -----------------------------------------------------
+
+	internal sealed class LogFileLines : LogLines
+	{
+		public LogFileLines(string fileName)
+		{
+			FetchLinesAsync(fileName).Silent(e => ConsoleApplication.Current.WriteError(e, "Log not parsed."));
+		} // ctor
+
+		private static readonly Regex logcatLine = new Regex(@"^(?<mo>\d{2})-(?<d>\d{2})\s+(?<h>\d{2}):(?<mi>\d{2}):(?<s>\d{2})\.(?<f>\d{3})\s+(?<pid>\d+)\s+(?<tid>\d+)\s+(?<typ>\w)\s+(?<text>.*)", RegexOptions.Singleline | RegexOptions.Compiled);
+
+		private static bool TryParseLogcat(string line, LogLineBuffer buffer)
+		{
+			if (line.StartsWith("--------- beginning of"))
+			{
+				buffer.Stage(new LogLine(LogMsgType.Information, DateTime.MinValue, line.TrimStart('-', ' ')));
+				return true;
+			}
+			else
+			{
+				var m = logcatLine.Match(line);
+				if (m.Success)
+				{
+					var dt = new DateTime(
+						year: DateTime.Now.Year,
+						month: Int32.Parse(m.Groups["mo"].Value),
+						day: Int32.Parse(m.Groups["d"].Value),
+						hour: Int32.Parse(m.Groups["h"].Value),
+						minute: Int32.Parse(m.Groups["mi"].Value),
+						second: Int32.Parse(m.Groups["s"].Value),
+						millisecond: Int32.Parse(m.Groups["f"].Value)
+					);
+
+					LogMsgType typ;
+					switch (m.Groups["typ"].Value)
+					{
+						case "E":
+							typ = LogMsgType.Error;
+							break;
+						case "W":
+							typ = LogMsgType.Warning;
+							break;
+						case "D":
+							typ = LogMsgType.Debug;
+							break;
+						default:
+							typ = LogMsgType.Information;
+							break;
+					}
+
+					buffer.PatchDate(dt);
+					buffer.Add(new LogLine(typ, dt, m.Groups["text"].Value));
+					return true;
+				}
+				else
+					return false;
+			}
+		} // func TryParseLogcat
+
+		private async Task FetchLinesAsync(string fileName)
+		{
+			using (var tr = new StreamReader(fileName, Encoding.Default, true))
+			{
+				var buf = new LogLineBuffer(this);
+
+				var state = 0;
+				string line;
+				while ((line = await tr.ReadLineAsync()) != null)
+				{
+					if (state == 0)
+					{
+						if (TryParseLogcat(line, buf))
+							state = 2;
+						else
+						{
+							LogLineParser.Parse(line, out var typ, out var stamp, out var text);
+							if (text != null) // valid log format
+							{
+								buf.Add(new LogLine(typ, stamp, text));
+								state = 1;
+							}
+							else
+							{
+								buf.Add(new LogLine(LogMsgType.Information, DateTime.MinValue, line));
+								state = 10;
+							}
+						}
+					}
+					else if (state == 1) // parse valid log
+					{
+						LogLineParser.Parse(line, out var typ, out var stamp, out var text);
+						buf.Add(new LogLine(typ, stamp, text));
+					}
+					else if (state == 2)
+					{
+						TryParseLogcat(line, buf);
+					}
+					else
+						buf.Add(new LogLine(LogMsgType.Information, DateTime.MinValue, line));
+				}
+
+				buf.Flush();
+			}
+		} // proc FetchLinesAsync
+	} // class LogFileLines
+
+	#endregion
+
+	#region -- class LogHttpLines -----------------------------------------------------
+
+	internal sealed class LogHttpLines : LogLines
+	{
+		private readonly DEHttpClient http;
+		private readonly string path;
+
+		private readonly AsyncQueue queue = new AsyncQueue();
+		private int lastLineCount;
+
+		public LogHttpLines(DEHttpClient http, string path)
+		{
+			this.http = http ?? throw new ArgumentNullException(nameof(http));
+			this.path = path ?? throw new ArgumentNullException(nameof(path));
+
+			queue.OnException = e => ConsoleApplication.Current.Invoke(()=> ConsoleApplication.Current.WriteError(e, "Log not parsed."));
+			queue.Enqueue(FetchLinesAsync);
+		} // ctor
+
+		private async Task FetchLinesAsync()
+		{
+			var buffer = new LogLineBuffer(this);
+			await LogLine.GetLogLinesAsync(http, path, 0, Int32.MaxValue, (_, log) => buffer.Add(log));
+			lastLineCount = Count;
+			buffer.Flush();
+		} // proc FetchLinesAsync
+
+		private async Task FetchNextAsync(int nextLineCount)
+		{
+			if (lastLineCount < nextLineCount) // log not truncated calculate difference
+			{
+				var count = nextLineCount - lastLineCount;
+				if (count > 0)
+				{
+					var buffer = new LogLineBuffer(this);
+					await LogLine.GetLogLinesAsync(http, path, lastLineCount, count, (_, log) => buffer.Add(log));
+					lastLineCount = count + lastLineCount;
+					buffer.Flush();
+				}
+			}
+			else // fetch all
+			{
+				Clear();
+				await FetchLinesAsync();
+			}
+		} // func FetchNextAsync
+
+		internal void EventReceived(object sender, DEHttpSocketEventArgs e)
+		{
+			if (e.Path == path && LogLine.TryGetLogEvent(e, out var lineCount))
+				queue.Enqueue(() => FetchNextAsync(lineCount));
+		} // evetn EventReceived
+	} // class LogHttpLines
 
 	#endregion
 }

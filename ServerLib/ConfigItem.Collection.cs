@@ -943,9 +943,10 @@ namespace TecWare.DE.Server
 			var x = new XElement("item",
 				new XAttribute("name", Name),
 				new XAttribute("displayname", DisplayName),
-				new XAttribute("icon", Config.GetAttribute("icon", Icon))
+				new XAttribute("icon", Config.GetAttribute("icon", Icon)),
+				this is DEConfigLogItem l && l.HasLog ? new XAttribute("hasLog", true) : null
 			);
-
+			
 			// Füge die entsprechenden Collections
 			if (published)
 			{

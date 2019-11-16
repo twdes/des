@@ -24,6 +24,7 @@ using System.Security;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using TecWare.DE.Server;
 using TecWare.DE.Server.UI;
 
 namespace Neo.Console
@@ -59,7 +60,8 @@ namespace Neo.Console
 		private int left = 0;
 		private int top = 0;
 		private CharBuffer content = null;
-		private bool isInvalidate = true;
+		private bool isBufferInvalidate = false;
+		private bool isSizeInvalidate = true;
 		private bool isVisible = true;
 		private int zOrder = 0;
 
@@ -67,10 +69,26 @@ namespace Neo.Console
 		{
 		} // ctor
 
-		public void Resize(int newWidth, int newHeight, bool clear = true)
+		public bool Locate(int newLeft, int newTop)
+		{
+			var c = false;
+			if (newLeft != left)
+			{
+				Left = newLeft;
+				c = true;
+			}
+			if (newTop != top)
+			{
+				Top = newTop;
+				c = true;
+			}
+			return c;
+		} // func Locate
+
+		public bool Resize(int newWidth, int newHeight, bool clear = true)
 		{
 			if (newWidth == Width && newHeight == Height)
-				return;
+				return false;
 
 			if (newWidth <= 0 || newHeight <= 0)
 				content = null; // clear buffer
@@ -81,23 +99,39 @@ namespace Neo.Console
 				{
 					// todo: copy
 				}
+				else
+					Invalidate();
 				content = newBuffer;
 			}
+			return true;
 		} // proc Resize
 
 		public void Invalidate()
 		{
 			// mark to render
-			isInvalidate = true;
+			isBufferInvalidate = true;
 			application?.Invalidate();
 		} // proc Invalidate
+
+		public void InvalidateSize()
+		{
+			isSizeInvalidate = true;
+			if (IsVisible)
+				application?.Invalidate();
+		} // proc InvalidateSize
 
 		public void Render(int windowLeft, int windowTop, CharBuffer windowBuffer)
 		{
 			if (application == null)
 				return;
 
-			if (isInvalidate)
+			if (isSizeInvalidate)
+			{
+				OnResize();
+				isSizeInvalidate = false;
+			}
+
+			if (isBufferInvalidate)
 			{
 				try
 				{
@@ -119,7 +153,7 @@ namespace Neo.Console
 						endLeft = 0;
 					}
 				}
-				isInvalidate = false;
+				isBufferInvalidate = false;
 			}
 
 			if (Content != null)
@@ -130,7 +164,7 @@ namespace Neo.Console
 
 		public virtual void OnIdle() { }
 
-		public virtual void OnResize() { }
+		protected virtual void OnResize() { }
 
 		public virtual bool OnPreHandleKeyEvent(ConsoleKeyEventArgs e)
 			=> false;
@@ -150,6 +184,7 @@ namespace Neo.Console
 		{
 			application.AddOverlay(this);
 			OnAdded();
+			InvalidateSize();
 			if (IsVisible)
 				Invalidate();
 		} // proc AddOverlay
@@ -320,6 +355,8 @@ namespace Neo.Console
 
 	public class ConsoleFocusableOverlay : ConsoleOverlay
 	{
+		public event EventHandler CursorChanged;
+
 		private bool cursorIsInvalidate = false;
 		private int cursorLeft = 0;
 		private int cursorTop = 0;
@@ -346,9 +383,18 @@ namespace Neo.Console
 			Invalidate();
 		} // pproc SetCursor
 
+		protected override void OnResize()
+		{
+			base.OnResize();
+			InvalidateCursor();
+		} // proc OnResize
+
 		/// <summary>Reset the cursor, and make the cursor visible.</summary>
-		public void InvalidateCursor() 
-			=> cursorIsInvalidate = true;
+		public void InvalidateCursor()
+		{
+			cursorIsInvalidate = true;
+			CursorChanged?.Invoke(this, EventArgs.Empty);
+		} // proc InvalidateCursor
 
 		internal bool ResetInvalidateCursor()
 		{
@@ -379,14 +425,178 @@ namespace Neo.Console
 
 	public abstract class ConsoleDialogOverlay : ConsoleFocusableOverlay
 	{
+		#region -- class KeyCommand ---------------------------------------------------
+
+		private sealed class KeyCommand
+		{
+			private readonly ConsoleKey key;
+			private readonly string name;
+			private readonly Func<Task<bool?>> execute;
+			private readonly Func<bool> canExecute;
+
+			public KeyCommand(ConsoleKey key, string name, Func<Task<bool?>> execute, Func<bool> canExecute)
+			{
+				this.key = key;
+				this.name = name;
+				this.execute = execute;
+				this.canExecute = canExecute;
+			} // ctor
+
+			public void Execute(ConsoleDialogOverlay dialog)
+			{
+				if (execute == null)
+					return;
+
+				var app = dialog.Application;
+				dialog.Application = null; // remove current dialog
+				execute().ContinueWith(
+					t =>
+					{
+						try
+						{
+							if (t.Result.HasValue)
+							{
+								if (t.Result.Value)
+									dialog.OnAccept();
+								else
+									dialog.OnCancel();
+							}
+							else
+							{
+								dialog.Application = app;
+								dialog.Activate();
+							}
+						}
+						catch (Exception e)
+						{
+							app.WriteError(e);
+						}
+					},
+					TaskContinuationOptions.ExecuteSynchronously
+				);
+			} // proc Execute
+
+			public ConsoleKey Key => key;
+			public string Name => name;
+
+			public bool IsVisible => Key >= ConsoleKey.F1 && Key <= ConsoleKey.F10 && !String.IsNullOrEmpty(name);
+			public bool CanExecute => canExecute == null ? true : canExecute.Invoke();
+		} // class KeyCommand
+
+		#endregion
+
 		private readonly TaskCompletionSource<bool> dialogResult;
+
+		private readonly Dictionary<ConsoleKey, KeyCommand> commands = new Dictionary<ConsoleKey, KeyCommand>();
+		private readonly KeyCommand[] visibleCommands = new KeyCommand[10];
 		private readonly List<ConsoleOverlay> children = new List<ConsoleOverlay>();
+
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		protected ConsoleDialogOverlay()
 		{
 			dialogResult = new TaskCompletionSource<bool>();
 			SetCursor(0, 0, 0);
 		} // ctor
+
+		public override void OnIdle()
+		{
+			base.OnIdle();
+			RefreshCommands();
+		} // proc OnIdle
+
+		protected virtual void GetResizeConstraints(out int maxWidth, out int maxHeight, out bool includeReservedRows)
+		{
+			maxWidth = Int32.MaxValue;
+			maxHeight = Int32.MaxValue;
+			includeReservedRows = false;
+		} // proc GetResizeConstraints
+
+		protected sealed override void OnResize()
+		{
+			base.OnResize();
+
+			var app = Application;
+			GetResizeConstraints(out var maxWidth, out var maxHeight, out var includeReservedRows);
+
+			var windowWidth = app.WindowRight - app.WindowLeft + 1;
+			var windowHeight = app.WindowBottom - app.WindowTop - (includeReservedRows ? app.ReservedBottomRowCount : 0) + 1;
+
+			var width = Math.Min(maxWidth, windowWidth - 4);
+			var height = Math.Min(maxHeight, windowHeight - 2);
+
+			Position = ConsoleOverlayPosition.Window;
+			if (Resize(width, height)
+				| Locate((windowWidth - width) / 2, (windowHeight - height) / 2))
+				OnResizeContent();
+		} // proc OnResize
+
+		protected virtual void OnResizeContent() { }
+
+		#endregion
+
+		#region -- Render -------------------------------------------------------------
+
+		private (int firstIdx, int lastIdx) RenderTitle(string title, int width)
+		{
+			if (String.IsNullOrEmpty(title))
+				goto failed;
+
+			var left = width / 2 - title.Length / 2;
+			var maxWidth = width - 8;
+			if (left < 4)
+				left = 4;
+			if (left < width || maxWidth < 0)
+			{
+				if (title.Length > maxWidth)
+				{
+					if (maxWidth > 4)
+						title = "..." + title.Substring(title.Length - maxWidth + 3);
+					else
+						title = title.Substring(0, maxWidth);
+				}
+
+				var lastIdx = left + title.Length;
+				var firstIdx = left - 1;
+				Content.Set(firstIdx, 0, ' ', ForegroundColor, BackgroundColor);
+				Content.Write(left, 0, title, null, ForegroundColor, BackgroundColor);
+				Content.Set(lastIdx, 0, ' ', ForegroundColor, BackgroundColor);
+
+				return (firstIdx, lastIdx);
+			}
+			failed:
+			return (Int32.MaxValue, Int32.MinValue);
+		} // func RenderTitle
+
+		private (int firstIdx, int lastIdx) RenderCommands(int width, int height)
+		{
+			var top = height - 1;
+			var left = 2;
+			for (var i = 0; i < 10; i++)
+			{
+				if (visibleCommands[i] != null)
+				{
+					var name = visibleCommands[i].Name;
+					if (name.Length + 2 > width - 24)
+						break;
+
+					if (left == 2)
+						Content.Set(left++, top, ' ', ForegroundColor, BackgroundColor);
+
+					Content.Set(left++, top, i == 9 ? '1' : 'F', ConsoleColor.Cyan, BackgroundColor);
+					Content.Set(left++, top, i == 9 ? '0' : (char)('1' + i), ConsoleColor.Cyan, BackgroundColor);
+					var (endLeft, _) = Content.Write(left, top, name, foreground: ForegroundColor, background: BackgroundColor);
+					Content.Set(endLeft, top, ' ', ForegroundColor, BackgroundColor);
+					left = endLeft;
+				}
+			}
+
+			if (left == 2)
+				goto failed;
+			return (2, left);
+			failed:
+			return (Int32.MaxValue, Int32.MinValue);
+		} // proc RenderCommands
 
 		public void RenderFrame(string title)
 		{
@@ -398,10 +608,14 @@ namespace Neo.Console
 			Content.Set(0, height - 1, BottomLeftDoubleLine, ForegroundColor, BackgroundColor);
 			Content.Set(width - 1, height - 1, BottomRightDoubleLine, ForegroundColor, BackgroundColor);
 
+			var (titleFirstIdx, titleLastIdx) = RenderTitle(title, width);
+			var (commandFirstIdx, commandLastIdx) = RenderCommands(width, height);
 			for (var i = 1; i < width - 1; i++)
 			{
-				Content.Set(i, 0, HorizontalDoubleLine, ForegroundColor, BackgroundColor);
-				Content.Set(i, height - 1, HorizontalDoubleLine, ForegroundColor, BackgroundColor);
+				if (i < titleFirstIdx || i > titleLastIdx)
+					Content.Set(i, 0, HorizontalDoubleLine, ForegroundColor, BackgroundColor);
+				if (i < commandFirstIdx || i > commandLastIdx)
+					Content.Set(i, height - 1, HorizontalDoubleLine, ForegroundColor, BackgroundColor);
 			}
 
 			for (var i = 1; i < height - 1; i++)
@@ -409,24 +623,11 @@ namespace Neo.Console
 				Content.Set(0, i, VerticalDoubleLine, ForegroundColor, BackgroundColor);
 				Content.Set(width - 1, i, VerticalDoubleLine, ForegroundColor, BackgroundColor);
 			}
-
-			if (!String.IsNullOrEmpty(title))
-			{
-				var left = width / 2 - title.Length / 2;
-				var maxWidth = width - 8;
-				if (left < 4)
-					left = 4;
-				if (left < width || maxWidth < 0)
-				{
-					if (title.Length > maxWidth)
-						title = title.Substring(0, maxWidth);
-
-					Content.Set(left - 1, 0, ' ');
-					Content.Write(left, 0, title, null, ForegroundColor, BackgroundColor);
-					Content.Set(left + title.Length, 0, ' ');
-				}
-			}
 		} // proc RenderFrame
+
+		#endregion
+
+		#region -- OnHandleEvent, OnAccept, OnCancel ----------------------------------
 
 		protected virtual void OnAccept()
 		{
@@ -444,7 +645,13 @@ namespace Neo.Console
 		{
 			if (e is ConsoleKeyUpEventArgs keyUp)
 			{
-				if (keyUp.Key == ConsoleKey.Enter)
+				if (commands.TryGetValue(keyUp.Key, out var cmd))
+				{
+					if (cmd.CanExecute)
+						cmd.Execute(this);
+					return true;
+				}
+				else if (keyUp.Key == ConsoleKey.Enter)
 				{
 					OnAccept();
 					return true;
@@ -462,6 +669,10 @@ namespace Neo.Console
 			else
 				return base.OnHandleEvent(e);
 		} // proc OnHandleEvent
+
+		#endregion
+
+		#region -- Children -----------------------------------------------------------
 
 		public void InsertControl(int index, ConsoleOverlay child)
 		{
@@ -499,7 +710,62 @@ namespace Neo.Console
 			base.OnRemoved();
 		} // proc OnRemoved
 
-		public Task<bool> DialogResult => dialogResult.Task;
+		#endregion
+
+		#region -- Commands -----------------------------------------------------------
+
+		public void AddKeyCommand(ConsoleKey key, string name = null, Func<Task<bool?>> executeTask = null, Func<bool> canExecute = null)
+		{
+			commands[key] = new KeyCommand(key, name, executeTask, canExecute);
+			RefreshCommands();
+		} // proc AddKeyCommand
+
+		private void RefreshCommands()
+		{
+			var updatedCommands = false;
+
+			foreach (var c in commands.Values)
+			{
+				if (c.IsVisible)
+				{
+					var idx = c.Key - ConsoleKey.F1;
+					if (c.CanExecute)
+					{
+						if (visibleCommands[idx] == null)
+						{
+							visibleCommands[idx] = c;
+							updatedCommands = true;
+						}
+					}
+					else
+					{
+						if (visibleCommands[idx] != null)
+						{
+							visibleCommands[idx] = null;
+							updatedCommands = true;
+						}
+					}
+				}
+			}
+
+			if (updatedCommands)
+				Invalidate();
+		} // proc RefreshCommands
+
+		public static async Task<bool?> ContinueFalse(Task t)
+		{
+			await t;
+			return null;
+		} // proc ContinueFalse
+
+		#endregion
+
+		public Task<bool> ShowDialogAsync()
+		{
+			Activate();
+			return dialogResult.Task;
+		} // proc ShowDialogAsync
+
 		public IReadOnlyList<ConsoleOverlay> Children => children;
 	} // class ConsoleDialogOverlay
 
@@ -578,7 +844,7 @@ namespace Neo.Console
 
 		private ConsoleApplication(ConsoleOutputBuffer output = null, ConsoleInputBuffer input = null)
 		{
-			this.activeOutput = output ?? ConsoleOutputBuffer.GetActiveBuffer();
+			activeOutput = output ?? ConsoleOutputBuffer.GetActiveBuffer();
 			var mode = activeOutput.ConsoleMode
 				| 0x0008 //  ENABLE_WINDOW_INPUT
 				| 0x0080 // ENABLE_EXTENDED_FLAGS 
@@ -811,6 +1077,8 @@ namespace Neo.Console
 			if (overlay is ConsoleFocusableOverlay fo)
 				RemoveActiveOverlay(fo);
 			overlays.Remove(overlay);
+
+			Invalidate(true);
 		} // proc RemoveOverlay
 
 		private void RemoveActiveOverlay(ConsoleFocusableOverlay overlay)
@@ -1121,7 +1389,7 @@ namespace Neo.Console
 
 					// notify size change
 					foreach (var o in overlays)
-						o.OnResize();
+						o.InvalidateSize();
 					Invalidate();
 				}
 			}
@@ -1196,7 +1464,7 @@ namespace Neo.Console
 				lastWindow = currentWindow;
 
 				foreach (var o in overlays)
-					o.OnResize();
+					o.InvalidateSize();
 
 				Invalidate();
 			}

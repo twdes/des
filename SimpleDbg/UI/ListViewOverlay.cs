@@ -14,20 +14,16 @@
 //
 #endregion
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Neo.Console;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.UI
 {
-	#region -- class ListView ---------------------------------------------------------
+	#region -- class ListViewOverlay --------------------------------------------------
 
-	internal class ListView<T> : ConsoleFocusableOverlay
+	internal class ListViewOverlay<T> : ConsoleFocusableOverlay
 		where T : class
 	{
 		private readonly List<T> view = new List<T>();
@@ -35,7 +31,7 @@ namespace TecWare.DE.Server.UI
 		private int firstVisibleIndex = 0;
 		private int selectedIndex = 0;
 
-		public ListView()
+		public ListViewOverlay()
 		{
 			Position = ConsoleOverlayPosition.Window;
 		} // ctor
@@ -72,6 +68,20 @@ namespace TecWare.DE.Server.UI
 			switch(e.Action)
 			{
 				case NotifyCollectionChangedAction.Add:
+					var insertAt = e.NewStartingIndex;
+					var selectLast = selectedIndex == view.Count - 1;
+					foreach (var c in e.NewItems)
+					{
+						var cur = (T)c;
+						if (!IsItemFiltered(cur))
+							view.Insert(insertAt++, cur);
+					}
+
+					if (selectLast)
+						SelectLast();
+					Invalidate();
+
+					break;
 				case NotifyCollectionChangedAction.Remove:
 				case NotifyCollectionChangedAction.Move:
 				case NotifyCollectionChangedAction.Reset:
@@ -82,9 +92,9 @@ namespace TecWare.DE.Server.UI
 
 		public void RefreshList()
 		{
-			view.Clear();
 			var item = SelectedItem;
 
+			view.Clear();
 			if (source != null)
 			{
 				foreach (var cur in source)
@@ -128,6 +138,9 @@ namespace TecWare.DE.Server.UI
 
 		protected sealed override void OnRender()
 		{
+			if (Content == null)
+				return;
+
 			var width = Content.Width - 1;
 			var height = Content.Height;
 			var top = 0;
@@ -168,7 +181,7 @@ namespace TecWare.DE.Server.UI
 			for (var i = 0; i < height; i++)
 			{
 				var selected = i >= startAt && i <= endAt;
-				Content.Set(width, i, selected ? Block : Shadow, selected ? BackgroundHighlightColor : ForegroundColor, BackgroundColor);
+				Content.Set(width, i, selected ? Block : Shadow, ForegroundColor, BackgroundColor);
 			}
 		} // proc RenderVerticalScroll
 
@@ -191,10 +204,10 @@ namespace TecWare.DE.Server.UI
 						SelectIndex(selectedIndex - Height + 1, false);
 						return true;
 					case ConsoleKey.End:
-						SelectIndex(view.Count - 1, false);
+						SelectLast();
 						return true;
 					case ConsoleKey.Home:
-						SelectIndex(0, false);
+						SelectFirst();
 						return true;
 				}
 			}
@@ -216,10 +229,12 @@ namespace TecWare.DE.Server.UI
 
 		public void SetFirstVisibleLine(int newFirstVisibleIndex)
 		{
-			if (firstVisibleIndex > view.Count)
-				firstVisibleIndex = view.Count - 1;
-			if (firstVisibleIndex < 0)
-				firstVisibleIndex = 0;
+			if (newFirstVisibleIndex > view.Count)
+				newFirstVisibleIndex = view.Count - 1;
+			if (newFirstVisibleIndex < 0)
+				newFirstVisibleIndex = 0;
+			if (LastVisibleLine >= view.Count && view.Count >= Height)
+				newFirstVisibleIndex = view.Count - Height;
 
 			if (firstVisibleIndex != newFirstVisibleIndex)
 			{
@@ -249,13 +264,19 @@ namespace TecWare.DE.Server.UI
 					// make index visible
 					if (selectedIndex < firstVisibleIndex)
 						SetFirstVisibleLine(selectedIndex);
-					else if (selectedIndex > LastVisibleLine)
+					else if (Height > 0 && selectedIndex > LastVisibleLine)
 						SetFirstVisibleLine(selectedIndex - Height + 1);
 
 					Invalidate();
 				}
 			}
 		} // proc SelectIndex
+		
+		public void SelectFirst()
+			=> SelectIndex(0, false);
+
+		public void SelectLast()
+			=> SelectIndex(view.Count - 1, false);
 
 		public bool SelectItem(T item)
 		{

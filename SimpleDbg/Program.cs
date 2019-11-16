@@ -31,7 +31,7 @@ using CommandLine.Text;
 using Neo.Console;
 using Neo.IronLua;
 using TecWare.DE.Networking;
-using TecWare.DE.Server.Stuff;
+using TecWare.DE.Server.Data;
 using TecWare.DE.Server.UI;
 using TecWare.DE.Stuff;
 
@@ -279,11 +279,9 @@ namespace TecWare.DE.Server
 						case ConsoleKey.F2:
 							BeginTask(SelectUseNodeAsync());
 							break;
-#if DEBUG
-						case ConsoleKey.F9:
-							BeginTask(ShowLogFileAsync(@"C:\Projects\twdes\des\Server\Configs\Log\Main\Http.log"));
+						case ConsoleKey.F3:
+							BeginTask(ShowLogCurrentAsync());
 							break;
-#endif
 					}
 				}
 			}
@@ -731,18 +729,154 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- Log ----------------------------------------------------------------
+
+		private static Task CopyTextToClipboardAsync(string text)
+		{
+			if (text != null)
+				return ConsoleReadLineOverlay.SetClipboardTextAsync(text);
+			else
+				return Task.CompletedTask;
+		} // proc CopyTextToClipboardAsync
+
+		public static Task ShowTextBlockAsync(string content, string title)
+		{
+			var dlg = new TextViewDialog(app, content) { Title = title };
+			if (!String.IsNullOrEmpty(content))
+			{
+				dlg.AddKeyCommand(ConsoleKey.F5,
+				  "Copy",
+				  () => ConsoleDialogOverlay.ContinueFalse(CopyTextToClipboardAsync(content))
+			  );
+			}
+			return dlg.ShowDialogAsync();
+		} // proc ShowTextBlockAsync
+
+		private static Task ShowLogItemAsync(LogLine item)
+			=> ShowTextBlockAsync(item.Text, $"{item.Type}: {item.Stamp:F},{item.Stamp.Millisecond:000}");
+
+		private static Task ShowLogAsync(LogLines lines, string title)
+		{
+			var dlg = new LogViewDialog(app, lines) { Title = title };
+
+			dlg.AddKeyCommand(ConsoleKey.Enter,
+				null,
+				() => ConsoleDialogOverlay.ContinueFalse(ShowLogItemAsync(dlg.View.SelectedItem)),
+				() => dlg.View.SelectedItem != null
+			);
+			dlg.AddKeyCommand(ConsoleKey.F5,
+				"Copy",
+				() => ConsoleDialogOverlay.ContinueFalse(CopyTextToClipboardAsync(dlg.View.SelectedItem?.Text)),
+				() => dlg.View.SelectedItem != null
+			);
+
+			return dlg.ShowDialogAsync();
+		} // proc ShowLogAsync
+
+		public static Task ShowLogFileAsync(string fileName, string title = null)
+		{
+			if (String.IsNullOrEmpty(fileName))
+				return Task.CompletedTask;
+
+			return ShowLogAsync(new LogFileLines(fileName), title ?? Path.GetFileName(fileName));
+		} // proc ShowLogFileAsync
+
+		private static async Task ShowLogHttpAsync(DEHttpClient http, string path)
+		{
+			var log = new LogHttpLines(http, path);
+			var socket = TryGetEvent(out var tmp) ? tmp : null;
+			if (socket != null)
+				socket.Notify += log.EventReceived;
+			try
+			{
+				await ShowLogAsync(log, "Log: " + path);
+			}
+			finally
+			{
+				socket.Notify -= log.EventReceived;
+			}
+		} // proc ShowLogHttpAsync
+
+		private static Task ShowLogCurrentAsync()
+		{
+			return TryGetHttp(out var http)
+				? ShowLogHttpAsync(http, CurrentUsePath)
+				: Task.CompletedTask;
+		} // func ShowLogCurrentAsync
+
+		[InteractiveCommand("log", HelpText = "Show a log file/directory.", ConnectionRequest = InteractiveCommandConnection.None)]
+		public static async Task LogViewerAsync(string path)
+		{
+			if (String.IsNullOrEmpty(path))
+				return;
+
+			if (!Path.IsPathRooted(path))
+				path = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, path));
+
+			if (Directory.Exists(path)) // is this a directory
+			{
+				var recursive = File.Exists(Path.Combine(path, "main.log"));
+				var pathEnd = path.Length;
+				var logs = new List<SelectPairItem<FileInfo>>();
+
+				if (path[path.Length - 1] != Path.DirectorySeparatorChar)
+					pathEnd++;
+
+				foreach (var file in Directory.EnumerateFiles(path, "*.*", recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
+				{
+					var fi = new FileInfo(file);
+					if (String.Compare(fi.Extension, ".txt", StringComparison.OrdinalIgnoreCase) == 0
+						|| String.Compare(fi.Extension, ".log", StringComparison.OrdinalIgnoreCase) == 0)
+						logs.Add(new SelectPairItem<FileInfo>(fi, file.Substring(pathEnd)));
+				}
+
+				// show dialog
+				var dlg = new SelectListDialog<FileInfo>(app, logs) { Title = path };
+				dlg.AddKeyCommand(ConsoleKey.Enter, null,
+					() => ConsoleDialogOverlay.ContinueFalse(ShowLogFileAsync(dlg.SelectedValue?.FullName, dlg.View.SelectedItem?.Text)),
+					() => dlg.SelectedValue != null
+				);
+				dlg.AddKeyCommand(ConsoleKey.F3, "View",
+					() => ConsoleDialogOverlay.ContinueFalse(ShowLogFileAsync(dlg.SelectedValue?.FullName,dlg.View.SelectedItem?.Text)),
+					() => dlg.SelectedValue != null
+				);
+				await dlg.ShowDialogAsync();
+			}
+			else if (File.Exists(path)) // show a single log file
+				await ShowLogFileAsync(path);
+			else
+				app.WriteError("Could not open: " + path);
+		} // proc LogViewerAsync
+
+		#endregion
+
 		#region -- List/Use -----------------------------------------------------------
 
-		private static Task<XElement> GetListInfoAsync(string path, int rlevel, bool published)
+		#region -- class ListNodePair -------------------------------------------------
+
+		private sealed class ListNodePair : SelectPairItem<string>
 		{
-			return GetHttp().GetXmlAsync(MakeUri(path,
+			public ListNodePair(string key, string text, bool hasLog) 
+				: base(key, text)
+			{
+				HasLog = hasLog;
+			} // ctor
+
+			public bool HasLog { get; }
+		} // class ListNodePair
+
+		#endregion
+
+		private static Task<XElement> GetListInfoAsync(DEHttpClient http, string path, int rlevel, bool published)
+		{
+			return http.GetXmlAsync(MakeUri(path,
 				new PropertyValue("action", "list"),
 				new PropertyValue("published", published),
 				new PropertyValue("rlevel", rlevel)
 			));
 		} // func GetListInfo
 
-		private static IEnumerable<(string path, string name, string displayName)> GetFormattedList(XElement xRoot, string basePath, string baseIndent, int maxLevel)
+		private static IEnumerable<(string path, string name, string displayName, bool hasLog)> GetFormattedList(XElement xRoot, string basePath, string baseIndent, int maxLevel)
 		{
 			var s = new Stack<(XElement x, string indent, string path)>();
 			var x = xRoot.FirstNode;
@@ -766,9 +900,10 @@ namespace TecWare.DE.Server
 					var xItem = (XElement)x;
 					var name = xItem.Attribute("name")?.Value;
 					var displayName = xItem.Attribute("displayname")?.Value;
+					var hasLog = xItem.GetAttribute("hasLog", false);
 
 					var newPath = path + name + "/";
-					yield return (newPath, indent + name, displayName);
+					yield return (newPath, indent + name, displayName, hasLog);
 
 					if (xItem.FirstNode != null && s.Count < maxLevel - 1)
 					{
@@ -790,12 +925,12 @@ namespace TecWare.DE.Server
 		)
 		{
 			var maxLevel = recursive ? 1000 : 1;
-			var xList = await GetListInfoAsync(CurrentUsePath, maxLevel, maxLevel == 1);
+			var xList = await GetListInfoAsync(GetHttp(), CurrentUsePath, maxLevel, maxLevel == 1);
 
 			if (maxLevel > 1)
 			{
 				// print formatted list
-				foreach (var (path, name, displayName) in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
+				foreach (var (path, name, displayName, _) in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
 				{
 					app.WriteLine(
 						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
@@ -877,7 +1012,7 @@ namespace TecWare.DE.Server
 					lastName = node.Substring(p + 1, node.Length - p - 2);
 				}
 
-				var x = await GetListInfoAsync(node, 0, false);
+				var x = await GetListInfoAsync(GetHttp(), node, 0, false);
 				if (String.Compare(x.Attribute("name")?.Value, lastName, StringComparison.OrdinalIgnoreCase) != 0)
 					throw new ArgumentException("Could not change path.");
 
@@ -898,20 +1033,30 @@ namespace TecWare.DE.Server
 
 		private static async Task SelectUseNodeAsync()
 		{
-			var selectList = new SelectListDialog<string>(app,
-				(new SelectPairItem<string>[] { new SelectPairItem<string>("/", "/") }).Concat(
-					from c in GetFormattedList(await GetListInfoAsync("/", 1000, false), "/", String.Empty, 1000)
-					orderby c.path
-					select new SelectPairItem<string>(c.path, c.name)
-				)
-			)
+			if (!TryGetHttp(out var http))
+				return;
+
+			var nodeList = new List<ListNodePair>
 			{
-				Title = "Use"
+				new ListNodePair("/", "/", true)
 			};
-			selectList.Activate();
-			selectList.SelectedValue = CurrentUsePath;
-			if (await selectList.DialogResult)
-				await UseNodeAsync((string)selectList.SelectedValue);
+			nodeList.AddRange(
+				from c in GetFormattedList(await GetListInfoAsync(http, "/", 1000, false), "/", String.Empty, 1000)
+				orderby c.path
+				select new ListNodePair(c.path, c.name, c.hasLog)
+			);
+			var dlg = new SelectListDialog<string>(app, nodeList) { Title = "Use" };
+
+			dlg.AddKeyCommand(ConsoleKey.F2, null, () => Task.FromResult<bool?>(false));
+
+			dlg.AddKeyCommand(ConsoleKey.F3, "Log",
+				() => ConsoleDialogOverlay.ContinueFalse(ShowLogHttpAsync(http, dlg.SelectedValue)),
+				() => dlg.View.SelectedItem is ListNodePair p && p.HasLog
+			);
+
+			dlg.SelectedValue = CurrentUsePath;
+			if (await dlg.ShowDialogAsync())
+				await UseNodeAsync(dlg.SelectedValue);
 		} // proc SelectUseNodeAsync
 
 		#endregion
@@ -1110,7 +1255,7 @@ namespace TecWare.DE.Server
 		#region -- SendRecompile ------------------------------------------------------
 
 		[InteractiveCommand("recompile", HelpText = "Force a recompile and rerun of all script files (if the are outdated).", ConnectionRequest = InteractiveCommandConnection.Debug)]
-		private static async Task SendRecompileAsync()
+		public static async Task SendRecompileAsync()
 		{
 			var r = await GetDebug().RecompileAsync();
 
@@ -1825,16 +1970,6 @@ namespace TecWare.DE.Server
 			else if (count >= 0)
 				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} lines" }, true);
 		} //  func ListGetAsync
-
-		private static async Task ShowLogFileAsync(string fileName)
-		{
-			var lines = new List<Data.LogLine>();
-			await Data.LogLine.GetLogLinesAsync(fileName, (f, c) => lines.Add(c));
-
-			var l = new LogViewDialog(app, lines) { Title = "Log" };
-			l.Activate();
-			await l.DialogResult;
-		} // proc ShowLogFileAsync
 
 		#endregion
 

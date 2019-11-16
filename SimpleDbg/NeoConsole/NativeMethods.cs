@@ -84,6 +84,7 @@ namespace Neo.Console
 	} // struct Coord
 
 	[DebuggerDisplay("{Char}:{Attributes}")]
+	[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]	
 	internal struct CharInfo
 	{
 		public char Char;
@@ -228,7 +229,11 @@ namespace Neo.Console
 		public static extern int GetConsoleCP();
 		[DllImport(kernel32, CharSet = CharSet.Unicode, SetLastError = true)]
 		public static extern int GetConsoleOutputCP();
-		
+		[DllImport(kernel32, CharSet = CharSet.Unicode, SetLastError = true)]
+		public static extern bool SetConsoleCP(uint cp);
+		[DllImport(kernel32, CharSet = CharSet.Unicode, SetLastError = true)]
+		public static extern bool SetConsoleOutputCP(uint cp);
+
 		[DllImport(kernel32, SetLastError = true, CharSet = CharSet.Unicode)]
 		public static extern IntPtr CreateConsoleScreenBuffer([In] DesiredAccessRights dwDesiredAccess, [In, MarshalAs(UnmanagedType.U4)] FileShare dwShareMode, [In] IntPtr lpSecurityAttributes, [In] uint dwFlags, [In] IntPtr lpScreenBufferData);
 

@@ -157,10 +157,9 @@ namespace TecWare.DE.Server.UI
 			}
 		} // proc OnRender
 
-		public override void OnResize()
+		protected override void OnResize()
 		{
-			if (Application == null)
-				return;
+			base.OnResize();
 
 			var newWidth = Application.WindowRight - Application.WindowLeft + 1;
 			if (Width != newWidth)
@@ -191,12 +190,6 @@ namespace TecWare.DE.Server.UI
 			}
 		} // proc OnResize
 
-		protected override void OnAdded()
-		{
-			base.OnAdded();
-			OnResize();
-		} // proc OnAdded
-
 		private void AppendLogLine(string path, LogLine line)
 		{
 			// move lines
@@ -212,27 +205,24 @@ namespace TecWare.DE.Server.UI
 
 		internal void EventReceived(object sender, DEHttpSocketEventArgs e)
 		{
-			if (e.Id == "tw_lines") // log line event
+			if (LogLine.TryGetLogEvent(e, out var lineCount)) // log line event
 			{
-				var lineCount = e.Values.GetAttribute("lineCount", -1);
-				if (lineCount > 0)
-				{
-					var count = 1;
-					// check last log line count, to get the difference
-					if (lastLogNumber.TryGetValue(e.Path, out var lastLineCount))
-					{
-						if (lastLineCount < lineCount) // log not truncated calculate difference
-						{
-							count = lineCount - lastLineCount;
-							if (count > lastLogs.Length)
-								count = lastLogs.Length;
-						}
-					}
-					lastLogNumber[e.Path] = lineCount;
+				var count = 1;
 
-					// get log info async
-					LogLine.GetLogLinesAsync(http, e.Path, lineCount - count, count, AppendLogLine).Silent();
+				// check last log line count, to get the difference
+				if (lastLogNumber.TryGetValue(e.Path, out var lastLineCount))
+				{
+					if (lastLineCount < lineCount) // log not truncated calculate difference
+					{
+						count = lineCount - lastLineCount;
+						if (count > lastLogs.Length)
+							count = lastLogs.Length;
+					}
 				}
+				lastLogNumber[e.Path] = lineCount;
+
+				// get log info async
+				LogLine.GetLogLinesAsync(http, e.Path, lineCount - count, count, AppendLogLine).Silent();
 			}
 			else if (e.Id == "tw_properties") // log property changed
 			{
