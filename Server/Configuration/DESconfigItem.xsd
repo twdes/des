@@ -35,6 +35,28 @@
 		</xs:attribute>
 	</xs:complexType>
 
+	<xs:element name="variable">
+		<xs:annotation>
+			<xs:documentation>Variables that are used for the configuration of the service node.</xs:documentation>
+		</xs:annotation>
+		<xs:complexType>
+			<xs:simpleContent>
+				<xs:extension base="xs:string">
+					<xs:attribute name="name" type="KeyType" use="required">
+						<xs:annotation>
+							<xs:documentation>Name of the variable.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="type" type="LuaType" use="required">
+						<xs:annotation>
+							<xs:documentation>Data type of the variable content.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:extension>
+			</xs:simpleContent>
+		</xs:complexType>
+	</xs:element>
+	
 	<xs:complexType name="ConfigItemType">
 		<xs:annotation>
 			<xs:documentation>Defines an item service node type.</xs:documentation>
@@ -42,28 +64,7 @@
 		<xs:complexContent>
 			<xs:extension base="ConfigServiceType">
 				<xs:sequence minOccurs="0" maxOccurs="unbounded">
-					<xs:element name="variable" minOccurs="0" maxOccurs="unbounded">
-						<xs:annotation>
-							<xs:documentation>Variables that are used for the configuration of the service node.</xs:documentation>
-						</xs:annotation>
-						<xs:complexType>
-							<xs:simpleContent>
-								<xs:extension base="xs:string">
-									<xs:attribute name="name" type="KeyType" use="required">
-										<xs:annotation>
-											<xs:documentation>Name of the variable.</xs:documentation>
-										</xs:annotation>
-									</xs:attribute>
-									<xs:attribute name="type" type="LuaType" use="required">
-										<xs:annotation>
-											<xs:documentation>Data type of the variable content.</xs:documentation>
-										</xs:annotation>
-									</xs:attribute>
-								</xs:extension>
-							</xs:simpleContent>
-						</xs:complexType>
-					</xs:element>
-
+					<xs:element ref="variable"  minOccurs="0" maxOccurs="unbounded" />
 					<xs:element ref="configItem" minOccurs="0" maxOccurs="unbounded" />
 				</xs:sequence>
 				<xs:attribute name="name" type="KeyType" use="required">

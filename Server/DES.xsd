@@ -593,6 +593,7 @@
 						<xs:element ref="serverTcp" minOccurs="0" maxOccurs="1" />
 
 						<xs:sequence minOccurs="0" maxOccurs="unbounded">
+							<xs:element ref="variable"  minOccurs="0" maxOccurs="unbounded" />
 							<xs:element ref="genericService" minOccurs="0" maxOccurs="unbounded" />
 							<xs:element ref="configItem" minOccurs="0" maxOccurs="unbounded" />
 						</xs:sequence>
