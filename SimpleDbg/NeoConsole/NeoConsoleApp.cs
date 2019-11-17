@@ -580,8 +580,7 @@ namespace Neo.Console
 					if (name.Length + 2 > width - 24)
 						break;
 
-					if (left == 2)
-						Content.Set(left++, top, ' ', ForegroundColor, BackgroundColor);
+					Content.Set(left++, top, ' ', ForegroundColor, BackgroundColor);
 
 					Content.Set(left++, top, i == 9 ? '1' : 'F', ConsoleColor.Cyan, BackgroundColor);
 					Content.Set(left++, top, i == 9 ? '0' : (char)('1' + i), ConsoleColor.Cyan, BackgroundColor);
@@ -752,11 +751,11 @@ namespace Neo.Console
 				Invalidate();
 		} // proc RefreshCommands
 
-		public static async Task<bool?> ContinueFalse(Task t)
+		public static async Task<bool?> ContinueDialog(Task t, bool? accept = null)
 		{
 			await t;
-			return null;
-		} // proc ContinueFalse
+			return accept;
+		} // proc ContinueDialog
 
 		#endregion
 

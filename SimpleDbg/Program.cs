@@ -746,7 +746,7 @@ namespace TecWare.DE.Server
 			{
 				dlg.AddKeyCommand(ConsoleKey.F5,
 				  "Copy",
-				  () => ConsoleDialogOverlay.ContinueFalse(CopyTextToClipboardAsync(content))
+				  () => ConsoleDialogOverlay.ContinueDialog(CopyTextToClipboardAsync(content))
 			  );
 			}
 			return dlg.ShowDialogAsync();
@@ -761,12 +761,12 @@ namespace TecWare.DE.Server
 
 			dlg.AddKeyCommand(ConsoleKey.Enter,
 				null,
-				() => ConsoleDialogOverlay.ContinueFalse(ShowLogItemAsync(dlg.View.SelectedItem)),
+				() => ConsoleDialogOverlay.ContinueDialog(ShowLogItemAsync(dlg.View.SelectedItem)),
 				() => dlg.View.SelectedItem != null
 			);
 			dlg.AddKeyCommand(ConsoleKey.F5,
 				"Copy",
-				() => ConsoleDialogOverlay.ContinueFalse(CopyTextToClipboardAsync(dlg.View.SelectedItem?.Text)),
+				() => ConsoleDialogOverlay.ContinueDialog(CopyTextToClipboardAsync(dlg.View.SelectedItem?.Text)),
 				() => dlg.View.SelectedItem != null
 			);
 
@@ -833,11 +833,11 @@ namespace TecWare.DE.Server
 				// show dialog
 				var dlg = new SelectListDialog<FileInfo>(app, logs) { Title = path };
 				dlg.AddKeyCommand(ConsoleKey.Enter, null,
-					() => ConsoleDialogOverlay.ContinueFalse(ShowLogFileAsync(dlg.SelectedValue?.FullName, dlg.View.SelectedItem?.Text)),
+					() => ConsoleDialogOverlay.ContinueDialog(ShowLogFileAsync(dlg.SelectedValue?.FullName, dlg.View.SelectedItem?.Text)),
 					() => dlg.SelectedValue != null
 				);
 				dlg.AddKeyCommand(ConsoleKey.F3, "View",
-					() => ConsoleDialogOverlay.ContinueFalse(ShowLogFileAsync(dlg.SelectedValue?.FullName,dlg.View.SelectedItem?.Text)),
+					() => ConsoleDialogOverlay.ContinueDialog(ShowLogFileAsync(dlg.SelectedValue?.FullName,dlg.View.SelectedItem?.Text)),
 					() => dlg.SelectedValue != null
 				);
 				await dlg.ShowDialogAsync();
@@ -856,12 +856,21 @@ namespace TecWare.DE.Server
 
 		private sealed class ListNodePair : SelectPairItem<string>
 		{
-			public ListNodePair(string key, string text, bool hasLog) 
+			public ListNodePair(string key, string text, string displayName, bool hasLog) 
 				: base(key, text)
 			{
+				DisplayName = displayName;
 				HasLog = hasLog;
 			} // ctor
 
+			public ListNodePair(string key, string text, XElement x)
+				:base(key, text)
+			{
+				DisplayName = x.Attribute("displayname")?.Value;
+				HasLog = x.GetAttribute("hasLog", false);
+			} // ctor
+
+			public string DisplayName { get; }
 			public bool HasLog { get; }
 		} // class ListNodePair
 
@@ -876,45 +885,23 @@ namespace TecWare.DE.Server
 			));
 		} // func GetListInfo
 
-		private static IEnumerable<(string path, string name, string displayName, bool hasLog)> GetFormattedList(XElement xRoot, string basePath, string baseIndent, int maxLevel)
+		private static IEnumerable<ListNodePair> GetFormattedList(XElement xRoot, string basePath, string baseIndent, int maxLevel)
 		{
-			var s = new Stack<(XElement x, string indent, string path)>();
-			var x = xRoot.FirstNode;
-			var indent = baseIndent;
-			var path = basePath;
-			while (true)
+			var newIndent = baseIndent + "    ";
+			foreach (var (xCur, pair) in (
+				from x in xRoot.Elements("item")
+				let name = x.Attribute("name")?.Value
+				where name != null
+				orderby name
+				select (x, new ListNodePair(basePath + name + "/", baseIndent + name, x))
+			))
 			{
-				// move to element
-				while (x != null && !(x is XElement xe && xe.Name == "item"))
-					x = x.NextNode;
-
-				if (x == null)
+				yield return pair;
+				if (maxLevel > 0)
 				{
-					if (s.Count == 0)
-						yield break;
-
-					(x, indent, path) = s.Pop();
+					foreach (var c in GetFormattedList(xCur, pair.Key, newIndent, maxLevel - 1))
+						yield return c;
 				}
-				else
-				{
-					var xItem = (XElement)x;
-					var name = xItem.Attribute("name")?.Value;
-					var displayName = xItem.Attribute("displayname")?.Value;
-					var hasLog = xItem.GetAttribute("hasLog", false);
-
-					var newPath = path + name + "/";
-					yield return (newPath, indent + name, displayName, hasLog);
-
-					if (xItem.FirstNode != null && s.Count < maxLevel - 1)
-					{
-						s.Push((xItem, indent, path));
-						x = xItem.FirstNode;
-						indent += "    ";
-						path = newPath;
-					}
-				}
-
-				x = x.NextNode;
 			}
 		} // func GetFormattedList
 
@@ -930,11 +917,11 @@ namespace TecWare.DE.Server
 			if (maxLevel > 1)
 			{
 				// print formatted list
-				foreach (var (path, name, displayName, _) in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
+				foreach (var cur in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
 				{
 					app.WriteLine(
 						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
-						new string[] { path, " : ", displayName }
+						new string[] { cur.Key, " : ", cur.DisplayName }
 					);
 				}
 			}
@@ -965,7 +952,7 @@ namespace TecWare.DE.Server
 				} // proc PrintList
 
 				// print sub list items
-				PrintList("Nodes:", GetFormattedList(xList, CurrentUsePath, String.Empty, 1).Select(c => new KeyValuePair<string, string>(c.name, c.displayName)));
+				PrintList("Nodes:", GetFormattedList(xList, CurrentUsePath, String.Empty, 1).Select(c => new KeyValuePair<string, string>(c.Text, c.DisplayName)));
 
 				// print available actions
 				PrintList("Actions:",
@@ -1038,20 +1025,24 @@ namespace TecWare.DE.Server
 
 			var nodeList = new List<ListNodePair>
 			{
-				new ListNodePair("/", "/", true)
+				new ListNodePair("/", "/", "Data Exchange Server", true)
 			};
 			nodeList.AddRange(
 				from c in GetFormattedList(await GetListInfoAsync(http, "/", 1000, false), "/", String.Empty, 1000)
-				orderby c.path
-				select new ListNodePair(c.path, c.name, c.hasLog)
+				orderby c.Key
+				select c
 			);
 			var dlg = new SelectListDialog<string>(app, nodeList) { Title = "Use" };
 
 			dlg.AddKeyCommand(ConsoleKey.F2, null, () => Task.FromResult<bool?>(false));
 
 			dlg.AddKeyCommand(ConsoleKey.F3, "Log",
-				() => ConsoleDialogOverlay.ContinueFalse(ShowLogHttpAsync(http, dlg.SelectedValue)),
+				() => ConsoleDialogOverlay.ContinueDialog(ShowLogHttpAsync(http, dlg.SelectedValue)),
 				() => dlg.View.SelectedItem is ListNodePair p && p.HasLog
+			);
+			dlg.AddKeyCommand(ConsoleKey.F5, "Uri",
+				() => ConsoleDialogOverlay.ContinueDialog(ConsoleReadLineOverlay.SetClipboardTextAsync(new Uri(http.BaseAddress, dlg.SelectedValue).ToString())),
+				() => dlg.SelectedValue != null
 			);
 
 			dlg.SelectedValue = CurrentUsePath;

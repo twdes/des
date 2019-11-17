@@ -481,7 +481,8 @@ namespace TecWare.DE.Server.Data
 
 		private async Task FetchLinesAsync(string fileName)
 		{
-			using (var tr = new StreamReader(fileName, Encoding.Default, true))
+			using (var src = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			using (var tr = new StreamReader(src, Encoding.Default, true))
 			{
 				var buf = new LogLineBuffer(this);
 

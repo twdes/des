@@ -343,6 +343,9 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public IDisposable EnterWriteLock()
 		{
+			if (listLock == null)
+				return null;
+
 			listLock.EnterWriteLock();
 			return new DisposableScope(listLock.ExitWriteLock);
 		} // func EnterWriteLock
