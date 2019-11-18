@@ -240,10 +240,10 @@ namespace TecWare.DE.Server
 		private void StartRefreshFiles()
 		{
 			var refreshFiles = new Action(RefreshFiles);
-			refreshFiles.BeginInvoke(EndRefreshlFiles, refreshFiles);
+			refreshFiles.BeginInvoke(EndRefreshFiles, refreshFiles);
 		} // proc StartRefreshFiles
 
-		private void EndRefreshlFiles(IAsyncResult ar)
+		private void EndRefreshFiles(IAsyncResult ar)
 		{
 			try
 			{

@@ -327,7 +327,7 @@ namespace TecWare.DE.Server
 			if (disposing)
 			{
 				cancellationTokenSource.Cancel();
-				lock (actions)
+				lock (MessageLoopSync)
 					actions.Clear();
 			}
 			base.Dispose(disposing);
@@ -339,7 +339,7 @@ namespace TecWare.DE.Server
 
 		public void ExecuteEvent(DEServerEvent eventType)
 		{
-			lock (actions)
+			lock (MessageLoopSync)
 			{
 				var eventActions = actions.OfType<EventItem>().Where(c => c.EventType == eventType).ToArray();
 				foreach (var action in eventActions)
