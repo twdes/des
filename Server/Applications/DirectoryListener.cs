@@ -15,6 +15,7 @@
 #endregion
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -25,14 +26,21 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
 {
+	#region -- class DirectoryListenerItem --------------------------------------------
+
 	internal class DirectoryListenerItem : DEConfigLogItem
 	{
+		public const string DirectoryListenerCategory = "Directory";
+
 		#region -- enum NotifyMethod --------------------------------------------------
 
 		private enum NotifyMethod
 		{
+			/// <summary>No method selected.</summary>
 			None,
+			/// <summary>Compare the timestamp.</summary>
 			TimeStamp,
+			/// <summary>Archive-Bit is set after process.</summary>
 			ArchiveBit
 		} // enum NotifyMethod
 
@@ -48,25 +56,28 @@ namespace TecWare.DE.Server
 			private int errorCounter = 0;
 
 			public FileNotifyEvent(FileSystemEventArgs e)
-				: this(e.Name, e.FullPath)
+				: this(e.Name, e.FullPath, DateTime.Now)
 			{
 			} // ctor
 
-			public FileNotifyEvent(string name, string fullPath)
+			public FileNotifyEvent(string name, string fullPath, DateTime eventCreated)
 			{
-				this.name = name;
-				this.fullPath = fullPath;
-				this.eventCreated = DateTime.Now;
+				this.name = name ?? throw new ArgumentNullException(nameof(name));
+				this.fullPath = fullPath ?? throw new ArgumentNullException(nameof(fullPath));
+				this.eventCreated = eventCreated;
 			} // ctor
 
 			public void IncError()
 			{
 				errorCounter++;
-				this.eventCreated = DateTime.Now.AddSeconds(errorCounter * 5);
+				eventCreated = DateTime.Now.AddSeconds(errorCounter * 5);
 			} // proc IncError
-			
-			public DateTime Stamp => eventCreated;
+
+			public bool IsSamePath(string otherFullPath)
+				=> String.Compare(fullPath, otherFullPath, StringComparison.OrdinalIgnoreCase) == 0;
+
 			public string Name => name;
+			public DateTime Stamp => eventCreated;
 			public FileInfo File => new FileInfo(fullPath);
 
 			public int ErrorCounter => errorCounter;
@@ -78,10 +89,15 @@ namespace TecWare.DE.Server
 		private readonly List<FileNotifyEvent> notifyQueue = new List<FileNotifyEvent>();
 		private NotifyMethod notifyMethod = NotifyMethod.None;
 		private TimeSpan notifyDelay = TimeSpan.FromSeconds(5);
-		private bool debugCoreEvents = true;
+		private TimeSpan? rescanDelay = null;
+		private bool debugCoreEvents = false;
 
 		private readonly Action notifyCheck;
 		private DateTime lastTimeStamp = DateTime.MinValue;
+		private DateTime lastFullScan = DateTime.MinValue;
+
+		private long fileCount = 0;
+		private long fileErrCount = 0;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
@@ -95,6 +111,9 @@ namespace TecWare.DE.Server
 			fileSystemWatcher.Error += FileSystemWatcher_Error;
 
 			notifyCheck = NotifyCheckIdle;
+
+			PublishItem(new DEConfigItemPublicAction("debugOn"));
+			PublishItem(new DEConfigItemPublicAction("debugOff"));
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -134,6 +153,10 @@ namespace TecWare.DE.Server
 			fileSystemWatcher.IncludeSubdirectories = Config.GetAttribute("recursive", false);
 
 			notifyMethod = Config.GetAttribute("method", NotifyMethod.None);
+			notifyDelay = Config.GetAttribute("delay", notifyDelay);
+			rescanDelay = Config.GetAttribute("rescan", rescanDelay ?? TimeSpan.Zero);
+			if (rescanDelay <= TimeSpan.Zero)
+				rescanDelay = null;
 
 			switch (notifyMethod)
 			{
@@ -143,6 +166,7 @@ namespace TecWare.DE.Server
 				case NotifyMethod.TimeStamp:
 					fileSystemWatcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName;
 					break;
+				case NotifyMethod.None:
 				default:
 					fileSystemWatcher.NotifyFilter = NotifyFilters.Attributes | NotifyFilters.LastWrite | NotifyFilters.FileName;
 					break;
@@ -178,7 +202,7 @@ namespace TecWare.DE.Server
 
 				lock (notifyQueue)
 				{
-					RemoveNotifyEvent(e.Name);
+					RemoveNotifyEvent(e.FullPath);
 					notifyQueue.Add(new FileNotifyEvent(e));
 				}
 			}
@@ -186,7 +210,7 @@ namespace TecWare.DE.Server
 			{
 				type = WatcherChangeTypes.Deleted;
 				lock (notifyQueue)
-					RemoveNotifyEvent(e.Name);
+					RemoveNotifyEvent(e.FullPath);
 			}
 			else if ((e.ChangeType & WatcherChangeTypes.Renamed) != 0) // files is renamed
 			{
@@ -194,7 +218,7 @@ namespace TecWare.DE.Server
 
 				lock (notifyQueue)
 				{
-					RemoveNotifyEvent(e2.OldName);
+					RemoveNotifyEvent(e2.OldFullPath);
 
 					// check if the new name requires the filter criteria
 					if (Regex.IsMatch(e.Name, Procs.FileFilterToRegex(fileSystemWatcher.Filter)))
@@ -207,7 +231,7 @@ namespace TecWare.DE.Server
 
 				lock (notifyQueue)
 				{
-					RemoveNotifyEvent(e.Name);
+					RemoveNotifyEvent(e.FullPath);
 					notifyQueue.Add(new FileNotifyEvent(e));
 				}
 			}
@@ -229,18 +253,23 @@ namespace TecWare.DE.Server
 			}
 		} // event FileSystemWatcher_Changed
 
-		private void RemoveNotifyEvent(string name)
+		private void RemoveNotifyEvent(string fullPath)
 		{
-			var idx = notifyQueue.FindIndex(c => String.Compare(c.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
+			var idx = notifyQueue.FindIndex(c => c.IsSamePath(fullPath));
 			if (idx >= 0)
 				notifyQueue.RemoveAt(idx);
 		} // proc RemoveNotifyEvent
 
+		#endregion
+
+		#region  -- RefreshFiles ------------------------------------------------------
+
 		[LuaMember("StartRefreshFiles")]
-		private void StartRefreshFiles()
+		private void StartRefreshFiles(int wait = 500)
 		{
-			var refreshFiles = new Action(RefreshFiles);
-			refreshFiles.BeginInvoke(EndRefreshFiles, refreshFiles);
+			// wait because the initialization process is not finished.
+			var refreshFiles = new Action<int>(RefreshFiles);
+			refreshFiles.BeginInvoke(wait, EndRefreshFiles, refreshFiles);
 		} // proc StartRefreshFiles
 
 		private void EndRefreshFiles(IAsyncResult ar)
@@ -255,9 +284,13 @@ namespace TecWare.DE.Server
 			}
 		} // proc EndRefreshlFiles
 
-		private void RefreshFiles()
+		private void RefreshFiles(int wait)
 		{
-			Thread.Sleep(500); // fix: initialization process is in this case broken
+			lastFullScan = DateTime.Now;
+
+			if (wait > 0)
+				Thread.Sleep(wait);
+
 			Func<FileInfo, bool> isFileProcessed;
 
 			if (notifyMethod == NotifyMethod.ArchiveBit)
@@ -282,17 +315,24 @@ namespace TecWare.DE.Server
 			// check file
 			foreach (var fi in di.EnumerateFiles(fileSystemWatcher.Filter, fileSystemWatcher.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
 			{
-				if (!isFileProcessed(fi))
+				if (!isFileProcessed(fi)) // check for enqueue
 				{
 					lock (notifyQueue)
-						notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName));
+					{
+						RemoveNotifyEvent(fi.FullName);
+						notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName, fi.LastWriteTime));
+					}
 				}
 			}
 		} // proc RefreshFiles
 
 		private void FileSystemWatcher_Error(object sender, ErrorEventArgs e)
-			=> Log.Except("FileSystemWatcher failed.", e.GetException());
-		
+		{
+			Log.Warn("FileSystemWatcher failed.", e.GetException());
+			// start a scan
+			StartRefreshFiles(200);
+		} // event FileSystemWatcher_Error
+
 		#endregion
 
 		#region -- Handle File Notify -----------------------------------------------------
@@ -314,8 +354,8 @@ namespace TecWare.DE.Server
 				var fileName = Path.ChangeExtension(LogFileName, "timestmap");
 				if (File.Exists(fileName))
 				{
-					using (var sr = new StreamReader(fileName))
-						lastTimeStamp = DateTime.Parse(sr.ReadLine(), CultureInfo.InvariantCulture);
+					using var sr = new StreamReader(fileName);
+					lastTimeStamp = DateTime.Parse(sr.ReadLine(), CultureInfo.InvariantCulture);
 				}
 				else
 					lastTimeStamp = DateTime.MinValue;
@@ -330,13 +370,17 @@ namespace TecWare.DE.Server
 		{
 			var newLastTimeStamp = lastTimeStamp;
 
+			// rescan needed
+			if (rescanDelay.HasValue && (DateTime.Now - lastFullScan) > rescanDelay.Value)
+				RefreshFiles(0);
+
 			// notify files
 			lock (notifyQueue)
 			{
 				while (true)
 				{
 					var item = notifyQueue.FirstOrDefault();
-					if (item != null && DateTime.Now - item.Stamp > notifyDelay)
+					if (item != null && (DateTime.Now - item.Stamp) > notifyDelay)
 					{
 						// update time stamp
 						if (item.Stamp > newLastTimeStamp)
@@ -356,14 +400,19 @@ namespace TecWare.DE.Server
 								if (item.File.Exists)
 									item.File.Attributes = item.File.Attributes | FileAttributes.Archive;
 							}
+
+							fileCount++;
+							OnPropertyChanged(nameof(FileCount));
 						}
 						catch (Exception e)
 						{
 							// re add
 							item.IncError();
 							notifyQueue.Add(item);
-
 							Log.Except(String.Format("Failed {0}.", item.File?.FullName), e);
+
+							fileErrCount++;
+							OnPropertyChanged(nameof(FileErrCount));
 						}
 					}
 					else
@@ -378,7 +427,51 @@ namespace TecWare.DE.Server
 
 		private void NotifyFile(FileInfo file)
 			=> CallMember("NotifyFile", file);
-		
+
+		#endregion
+
+		[DEConfigHttpAction("debugOn", IsSafeCall = true, SecurityToken = SecuritySys)]
+		public void HttpDebugOn()
+			=> IsDebugEvents = true;
+
+		[DEConfigHttpAction("debugOff", IsSafeCall = true, SecurityToken = SecuritySys)]
+		public void HttpDebugOff()
+			=> IsDebugEvents = false;
+
+		#region -- Properties ---------------------------------------------------------
+
+		[
+		LuaMember,
+		PropertyName("tw_dirlsn_debugevents"),
+		DisplayName("IsDebugEvents"),
+		Description("Is the core events debugging active."),
+		Category(DirectoryListenerCategory)
+		]
+		public bool IsDebugEvents
+		{
+			get => debugCoreEvents;
+			set => debugCoreEvents = value;
+		} // prop IsDebugEvents
+
+		[
+		PropertyName("tw_dirlsn_filecount"),
+		DisplayName("FileCount"),
+		Description("Processed files."),
+		Category(DirectoryListenerCategory),
+		Format("N0")
+		]
+		public long FileCount => fileCount;
+		[
+		PropertyName("tw_dirlsn_fileerrcount"),
+		DisplayName("FileErrCount"),
+		Description("Processing errors."),
+		Category(DirectoryListenerCategory),
+		Format("N0")
+		]
+		public long FileErrCount => fileErrCount;
+
 		#endregion
 	} // class DirectoryListenerItem
+
+	#endregion
 }

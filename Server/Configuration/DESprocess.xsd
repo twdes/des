@@ -152,6 +152,16 @@
 							</xs:restriction>
 						</xs:simpleType>
 					</xs:attribute>
+					<xs:attribute name="delay" type="TimeSpan" use="optional" default="00:00:05">
+						<xs:annotation>
+							<xs:documentation>Delay after notification, before the file is processed.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="rescan" type="TimeSpan" use="optional" default="(null)">
+						<xs:annotation>
+							<xs:documentation>Time between full directory scans, null for disable.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
 				</xs:extension>
 			</xs:complexContent>
 		</xs:complexType>

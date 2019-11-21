@@ -154,7 +154,7 @@ namespace TecWare.DE.Server
 		/// <summary>Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um die Aktion auszuführen.</summary>
 		public string SecurityToken { get; set; }
 		/// <summary>Sollen Exceptions in eine gültige Rückgabe umgewandelt werden (default: false).</summary>
-		public bool IsSafeCall { get; set; }
+		public bool IsSafeCall { get; set; } = false;
 	} // class DEConfigHttpActionAttribute
 
 	#endregion

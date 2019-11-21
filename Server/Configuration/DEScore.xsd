@@ -83,6 +83,15 @@
 		<xs:union memberTypes="PasswordTypeCore VariableType" />
 	</xs:simpleType>
 
+	<xs:simpleType name="TimeSpan">
+		<xs:annotation>
+			<xs:documentation>.net timespan (days.hours:minutes:seconds.nanoseconds</xs:documentation>
+		</xs:annotation>
+		<xs:restriction base="xs:string">
+			<xs:pattern value="(\d+\.)?\d{2}:\d{2}:\d{2}(\.\d{7})?" />
+		</xs:restriction>
+	</xs:simpleType>
+
 	<xs:complexType name="LogType">
 		<xs:annotation>
 			<xs:documentation>Defines a log file configuration type.</xs:documentation>
