@@ -157,7 +157,7 @@
 							<xs:documentation>Delay after notification, before the file is processed.</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
-					<xs:attribute name="rescan" type="TimeSpan" use="optional" default="(null)">
+					<xs:attribute name="rescan" type="TimeSpan" use="optional">
 						<xs:annotation>
 							<xs:documentation>Time between full directory scans, null for disable.</xs:documentation>
 						</xs:annotation>
