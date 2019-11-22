@@ -112,8 +112,8 @@ namespace TecWare.DE.Server
 
 			notifyCheck = NotifyCheckIdle;
 
-			PublishItem(new DEConfigItemPublicAction("debugOn"));
-			PublishItem(new DEConfigItemPublicAction("debugOff"));
+			PublishItem(new DEConfigItemPublicAction("debugOn") { DisplayName = "DebugOn" });
+			PublishItem(new DEConfigItemPublicAction("debugOff") { DisplayName = "DebugOff" });
 		} // ctor
 
 		protected override void Dispose(bool disposing)
