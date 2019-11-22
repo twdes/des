@@ -276,7 +276,7 @@ namespace TecWare.DE.Server
 		{
 			try
 			{
-				((Action)ar.AsyncState).EndInvoke(ar);
+				((Action<int>)ar.AsyncState).EndInvoke(ar);
 			}
 			catch (Exception e)
 			{
