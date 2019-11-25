@@ -90,8 +90,7 @@ namespace TecWare.DE.Server
 		private NotifyMethod notifyMethod = NotifyMethod.None;
 		private TimeSpan notifyDelay = TimeSpan.FromSeconds(5);
 		private TimeSpan? rescanDelay = null;
-		private bool debugCoreEvents = false;
-
+		
 		private readonly Action notifyCheck;
 		private DateTime lastTimeStamp = DateTime.MinValue;
 		private DateTime lastFullScan = DateTime.MinValue;
@@ -112,8 +111,7 @@ namespace TecWare.DE.Server
 
 			notifyCheck = NotifyCheckIdle;
 
-			PublishItem(new DEConfigItemPublicAction("debugOn") { DisplayName = "DebugOn" });
-			PublishItem(new DEConfigItemPublicAction("debugOff") { DisplayName = "DebugOff" });
+			PublishDebugInterface();
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -187,12 +185,12 @@ namespace TecWare.DE.Server
 			var e2 = e as RenamedEventArgs;
 
 			// write debug message
-			if (debugCoreEvents)
+			if (IsDebug)
 			{
 				if (e2 != null)
-					Log.Info("FileSystemWatcher event: Type={0}, Name={1} > {2}, FullPath={3} > {4}", e.ChangeType, e2.OldName, e.Name, e2.OldFullPath, e.FullPath);
+					Log.Debug("FileSystemWatcher event: Type={0}, Name={1} > {2}, FullPath={3} > {4}", e.ChangeType, e2.OldName, e.Name, e2.OldFullPath, e.FullPath);
 				else
-					Log.Info("FileSystemWatcher event: Type={0}, Name={1}, FullPath={2}", e.ChangeType, e.Name, e.FullPath);
+					Log.Debug("FileSystemWatcher event: Type={0}, Name={1}, FullPath={2}", e.ChangeType, e.Name, e.FullPath);
 			}
 
 			// we priorisize the events, and ignore lower level events, if the occure
@@ -286,10 +284,17 @@ namespace TecWare.DE.Server
 
 		private void RefreshFiles(int wait)
 		{
+			using var scope = IsDebug ? null : Log.CreateScope(LogMsgType.Debug, true, true);
+
+			scope?.WriteLine("RefreshFiles");
+
 			lastFullScan = DateTime.Now;
 
 			if (wait > 0)
+			{
 				Thread.Sleep(wait);
+				scope?.WriteLine("Wait for {0:N0}ms", wait);
+			}
 
 			Func<FileInfo, bool> isFileProcessed;
 
@@ -317,12 +322,15 @@ namespace TecWare.DE.Server
 			{
 				if (!isFileProcessed(fi)) // check for enqueue
 				{
+					scope?.WriteLine("Add: {0}", fi.FullName);
 					lock (notifyQueue)
 					{
 						RemoveNotifyEvent(fi.FullName);
 						notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName, fi.LastWriteTime));
 					}
 				}
+				else
+					scope?.WriteLine("Skip file: {0}", fi.FullName);
 			}
 		} // proc RefreshFiles
 
@@ -430,28 +438,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		[DEConfigHttpAction("debugOn", IsSafeCall = true, SecurityToken = SecuritySys)]
-		public void HttpDebugOn()
-			=> IsDebugEvents = true;
-
-		[DEConfigHttpAction("debugOff", IsSafeCall = true, SecurityToken = SecuritySys)]
-		public void HttpDebugOff()
-			=> IsDebugEvents = false;
-
 		#region -- Properties ---------------------------------------------------------
-
-		[
-		LuaMember,
-		PropertyName("tw_dirlsn_debugevents"),
-		DisplayName("IsDebugEvents"),
-		Description("Is the core events debugging active."),
-		Category(DirectoryListenerCategory)
-		]
-		public bool IsDebugEvents
-		{
-			get => debugCoreEvents;
-			set => debugCoreEvents = value;
-		} // prop IsDebugEvents
 
 		[
 		PropertyName("tw_dirlsn_filecount"),
