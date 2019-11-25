@@ -24,6 +24,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Neo.IronLua;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Stuff;
 using TecWare.DE.Stuff;
@@ -551,6 +552,7 @@ namespace TecWare.DE.Server
 		private DELogFile logFile = null;
 		private readonly IDEListController logListController;
 		private readonly Lazy<string> logFileName;
+		private bool isDebug = false;
 
 		private readonly List<LogMessageScopeFrame> scopes = new List<LogMessageScopeFrame>();
 
@@ -645,10 +647,10 @@ namespace TecWare.DE.Server
 		{
 			Debug.Print("[{0}] {1}", Name, text);
 
-			// create lock line
-			if (type != LogMsgType.Debug)
+			// create log line
+			if (IsDebug || type != LogMsgType.Debug)
 			{
-				var logLine = new DELogLine(DateTime.Now, type, text);
+				var logLine = new DELogLine(DateTime.Now, type == LogMsgType.Debug ? LogMsgType.Information : type, text);
 				if (Server.Queue?.IsQueueRunning ?? false)
 					Server.Queue.RegisterCommand(() => logFile?.Add(logLine));
 				else // Background thread is not in service, synchron add
@@ -704,6 +706,13 @@ namespace TecWare.DE.Server
 
 		#region -- Http Schnittstelle -------------------------------------------------
 
+		/// <summary>Publish commands to turn the debug flag on/off.</summary>
+		protected void PublishDebugInterface()
+		{
+			PublishItem(new DEConfigItemPublicAction("debugOn") { DisplayName = "DebugOn" });
+			PublishItem(new DEConfigItemPublicAction("debugOff") { DisplayName = "DebugOff" });
+		} // proc PublishDebugInterface
+
 		/// <summary>Is called if a log line is added.</summary>
 		protected virtual void OnLinesAdded()
 		{
@@ -716,20 +725,33 @@ namespace TecWare.DE.Server
 			OnPropertyChanged(nameof(LogFileSize));
 		} // proc OnLinesAdded
 
+		/// <summary>Aktivate debug flag.</summary>
+		[DEConfigHttpAction("debugOn", IsSafeCall = true, SecurityToken = SecuritySys)]
+		internal void HttpDebugOn()
+			=> IsDebug = true;
+
+		/// <summary>Deactivate debug flag.</summary>
+		[DEConfigHttpAction("debugOff", IsSafeCall = true, SecurityToken = SecuritySys)]
+		internal void HttpDebugOff()
+			=> IsDebug = false;
+
 #if DEBUG
 		/// <summary>Spam log with message for test proposes.</summary>
-		/// <param name="spam"></param>
-		/// <param name="lines"></param>
+		/// <param name="spam">Spam message.</param>
+		/// <param name="lines">Number of lines to generate</param>
+		/// <param name="payloadLength">Add payload to make the message bigger.</param>
 		/// <returns></returns>
 		[
 		DEConfigHttpAction("spam", IsSafeCall = true),
-		Description("Erzeugt im aktuellen Log die angegebene Anzahl von Meldungen.")
+		Description("Spam log with message for test proposes."),
+		LuaMember
 		]
-		public XElement HttpSpamLog(string spam = "SPAM", int lines = 1024)
+		public LuaTable SpamLog(string spam = "SPAM", int lines = 1024, int payloadLength = 0)
 		{
-			while (lines-- > 0)
-				Log.Info("{0} {1}" + new string('-', 100), spam, lines);
-			return new XElement("spam");
+			var msg = payloadLength > 0 ? "{0} {1} " + new string('-', payloadLength) : "{0} {1}";
+			for (var i = 1; i <= lines; i++)
+				Log.Info(msg, spam, i);
+			return new LuaTable { ["lines"] = lines };
 		} // func HttpSpamLog
 #endif
 
@@ -737,7 +759,7 @@ namespace TecWare.DE.Server
 
 		#region -- Properties ---------------------------------------------------------
 
-		/// <summary></summary>
+		/// <summary>Size of the log file, to truncate.</summary>
 		[
 		PropertyName("tw_log_minsize"),
 		DisplayName("Size (minimum)"),
@@ -746,7 +768,7 @@ namespace TecWare.DE.Server
 		Format("{0:XiB}")
 		]
 		public FileSize LogMinSize => new FileSize(logFile.MinimumSize);
-		/// <summary></summary>
+		/// <summary>If this size exceeds, the truncate will start.</summary>
 		[
 		PropertyName("tw_log_maxsize"),
 		DisplayName("Size (maximum)"),
@@ -755,7 +777,7 @@ namespace TecWare.DE.Server
 		Format("{0:XiB}")
 		]
 		public FileSize LogMaxSize => new FileSize(logFile.MaximumSize);
-		/// <summary></summary>
+		/// <summary>Current size of the log file.</summary>
 		[
 		PropertyName("tw_log_size"),
 		DisplayName("Size (current)"),
@@ -764,7 +786,7 @@ namespace TecWare.DE.Server
 		Format("{0:XiB}")
 		]
 		public FileSize LogFileSize => new FileSize(logFile.CurrentSize);
-		/// <summary></summary>
+		/// <summary>Fullpath of the log file.</summary>
 		[
 		PropertyName("tw_log_filename"),
 		DisplayName("FileName"),
@@ -772,7 +794,7 @@ namespace TecWare.DE.Server
 		Category(LogCategory)
 		]
 		public string LogFileName => logFileName.Value;
-		/// <summary></summary>
+		/// <summary>Number of lines in the log file.</summary>
 		[
 		PropertyName("tw_log_lines"),
 		DisplayName("Lines"),
@@ -782,7 +804,28 @@ namespace TecWare.DE.Server
 		]
 		public int LogLineCount => logFile.Count;
 
-		/// <summary></summary>
+		/// <summary>if <c>true</c>, all debug-messages are written to the log file.</summary>
+		[
+		LuaMember,
+		PropertyName("tw_log_debug"),
+		DisplayName("IsDebug"),
+		Description("Write the debug messages to the log file as information."),
+		Category(LogCategory)
+		]
+		public bool IsDebug
+		{
+			get => isDebug;
+			set
+			{
+				if (isDebug != value)
+				{
+					isDebug = value;
+					OnPropertyChanged(nameof(IsDebug));
+				}
+			}
+		} // prop IsDebugEvents
+
+		/// <summary>Has this node a log file.</summary>
 		public bool HasLog => logFile != null;
 
 		#endregion
