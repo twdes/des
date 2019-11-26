@@ -251,11 +251,20 @@ namespace TecWare.DE.Server
 			}
 		} // event FileSystemWatcher_Changed
 
+		private int IndexOfNotifyEvent(string fullPath)
+		{
+			lock (notifyQueue)
+				return notifyQueue.FindIndex(c => c.IsSamePath(fullPath));
+		} // func IndexOfNotifyEvent
+
 		private void RemoveNotifyEvent(string fullPath)
 		{
-			var idx = notifyQueue.FindIndex(c => c.IsSamePath(fullPath));
-			if (idx >= 0)
-				notifyQueue.RemoveAt(idx);
+			lock (notifyQueue)
+			{
+				var idx = IndexOfNotifyEvent(fullPath);
+				if (idx >= 0)
+					notifyQueue.RemoveAt(idx);
+			}
 		} // proc RemoveNotifyEvent
 
 		#endregion
@@ -322,11 +331,19 @@ namespace TecWare.DE.Server
 			{
 				if (!isFileProcessed(fi)) // check for enqueue
 				{
-					scope?.WriteLine("Add: {0}", fi.FullName);
 					lock (notifyQueue)
 					{
-						RemoveNotifyEvent(fi.FullName);
-						notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName, fi.LastWriteTime));
+						if (IndexOfNotifyEvent(fi.FullName) < 0)
+						{
+							var stamp = fi.LastWriteTime;
+							if (stamp > DateTime.Now) // do not allow timestamp's they are in the future
+								stamp = DateTime.Now;
+
+							scope?.WriteLine("Add: {0}", fi.FullName);
+							notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName, stamp));
+						}
+						else
+							scope?.WriteLine("Already queued: {0}", fi.FullName);
 					}
 				}
 				else

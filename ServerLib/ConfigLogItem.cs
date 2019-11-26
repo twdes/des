@@ -727,13 +727,19 @@ namespace TecWare.DE.Server
 
 		/// <summary>Aktivate debug flag.</summary>
 		[DEConfigHttpAction("debugOn", IsSafeCall = true, SecurityToken = SecuritySys)]
-		internal void HttpDebugOn()
-			=> IsDebug = true;
+		internal LuaTable HttpDebugOn()
+		{
+			IsDebug = true;
+			return new LuaTable { [nameof(IsDebug)] = true };
+		} // func HttpDebugOn
 
 		/// <summary>Deactivate debug flag.</summary>
 		[DEConfigHttpAction("debugOff", IsSafeCall = true, SecurityToken = SecuritySys)]
-		internal void HttpDebugOff()
-			=> IsDebug = false;
+		internal LuaTable HttpDebugOff()
+		{
+			IsDebug = false;
+			return new LuaTable { [nameof(IsDebug)] = false };
+		} // func HttpDebugOff
 
 #if DEBUG
 		/// <summary>Spam log with message for test proposes.</summary>
@@ -815,14 +821,7 @@ namespace TecWare.DE.Server
 		public bool IsDebug
 		{
 			get => isDebug;
-			set
-			{
-				if (isDebug != value)
-				{
-					isDebug = value;
-					OnPropertyChanged(nameof(IsDebug));
-				}
-			}
+			set => SetProperty(ref isDebug, value, nameof(IsDebug));
 		} // prop IsDebugEvents
 
 		/// <summary>Has this node a log file.</summary>

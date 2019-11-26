@@ -35,6 +35,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 using System.Xml.Linq;
+using Neo.IronLua;
 using TecWare.DE.Networking;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
@@ -904,8 +905,6 @@ namespace TecWare.DE.Server
 		private readonly List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
 		private readonly List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
 
-		private bool debugMode = false; // Print nearly all requests to the log
-
 		private readonly HttpCacheItem[] cacheItems = new HttpCacheItem[256];
 		private CacheItemListController cacheItemController;
 
@@ -940,8 +939,7 @@ namespace TecWare.DE.Server
 
 			cacheItemController = new CacheItemListController(this);
 			PublishItem(new DEConfigItemPublicAction("clearCache") { DisplayName = "Clear http-cache" });
-			PublishItem(new DEConfigItemPublicAction("debugOn") { DisplayName = "Http-Debug(on)" });
-			PublishItem(new DEConfigItemPublicAction("debugOff") { DisplayName = "Http-Debug(off)" });
+			PublishDebugInterface();
 		} // ctor
 
 		protected override void Dispose(bool disposing)
@@ -1144,31 +1142,13 @@ namespace TecWare.DE.Server
 
 		#region -- Http Schnittstelle -------------------------------------------------
 
-		[
-		DEConfigHttpAction("debugOn", SecurityToken = SecuritySys, IsSafeCall = true),
-		Description("Turns the debug mode on.")
-		]
-		private XElement HttpDebugOnAction()
-		{
-			this.IsDebug = true;
-			return new XElement("debug", IsDebug);
-		} // proc HttpDebugAction
-
-		[
-		DEConfigHttpAction("debugOff", SecurityToken = SecuritySys, IsSafeCall = true),
-		Description("Turns the debug mode off.")
-		]
-		private XElement HttpDebugOffAction()
-		{
-			this.IsDebug = false;
-			return new XElement("debug", IsDebug);
-		} // proc HttpDebugAction
-
+		
 		[
 		DEConfigHttpAction("clearCache", SecurityToken = SecuritySys, IsSafeCall = true),
-		Description("Clear current cached information.")
+		Description("Clear current cached information."),
+		LuaMember
 		]
-		private void HttpClearCacheAction()
+		internal void ClearCacheAction()
 			=> ClearHttpCache();
 
 		#endregion
@@ -1382,7 +1362,7 @@ namespace TecWare.DE.Server
 					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
 
 					// Start logging
-					if (debugMode || pathTranslation.IsHttpDebugOn)
+					if (IsDebug || pathTranslation.IsHttpDebugOn)
 						context.LogStart();
 
 					// start to find the endpoint
@@ -1575,14 +1555,7 @@ namespace TecWare.DE.Server
 
 		/// <summary>Default encoding for text requests.</summary>
 		public Encoding DefaultEncoding { get; private set; } = Encoding.UTF8;
-		[
-		PropertyName("tw_http_debugmode"),
-		DisplayName("Protokollierung"),
-		Category("Http"),
-		Description("Turn on/off the protocol requests."),
-		]
-		public bool IsDebug { get => debugMode;  private set => SetProperty(ref debugMode, value); }
-
+		
 		/// <summary>Default base uri for e.g. debug requests.</summary>
 		public Uri DefaultBaseUri => defaultBaseUri;
 		/// <summary>Default culture</summary>
