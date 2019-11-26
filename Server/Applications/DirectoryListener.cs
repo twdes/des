@@ -293,7 +293,7 @@ namespace TecWare.DE.Server
 
 		private void RefreshFiles(int wait)
 		{
-			using var scope = IsDebug ? null : Log.CreateScope(LogMsgType.Debug, true, true);
+			using var scope = IsDebug ? Log.CreateScope(LogMsgType.Information, true, true) : null;
 
 			scope?.WriteLine("RefreshFiles");
 

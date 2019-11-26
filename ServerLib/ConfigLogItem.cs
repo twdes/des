@@ -727,18 +727,18 @@ namespace TecWare.DE.Server
 
 		/// <summary>Aktivate debug flag.</summary>
 		[DEConfigHttpAction("debugOn", IsSafeCall = true, SecurityToken = SecuritySys)]
-		internal LuaTable HttpDebugOn()
+		internal XElement HttpDebugOn()
 		{
 			IsDebug = true;
-			return new LuaTable { [nameof(IsDebug)] = true };
+			return new XElement("return", new XAttribute(nameof(IsDebug), true));
 		} // func HttpDebugOn
 
 		/// <summary>Deactivate debug flag.</summary>
 		[DEConfigHttpAction("debugOff", IsSafeCall = true, SecurityToken = SecuritySys)]
-		internal LuaTable HttpDebugOff()
+		internal XElement HttpDebugOff()
 		{
 			IsDebug = false;
-			return new LuaTable { [nameof(IsDebug)] = false };
+			return new XElement("return", new XAttribute(nameof(IsDebug), false));
 		} // func HttpDebugOff
 
 #if DEBUG
