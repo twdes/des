@@ -1520,13 +1520,13 @@ namespace TecWare.DE.Server
 
 			private async Task BeginNewScopeAsync()
 			{
-				if (currentScope != null && !currentScope.IsCommited.HasValue)
+				if (currentScope != null && !currentScope.IsCommitted.HasValue)
 					await currentScope.DisposeAsync();
 
 				currentScope = await CreateCommonScopeAsync(context.User, null);
 			} // func BeginNewScopeAsync
 
-			private async Task<XElement> BeginScopeAsync(XElement xMessage)
+			private async Task<XElement> BeginScopeAsync(XElement _)
 			{
 				// rollback curent scope
 				await BeginNewScopeAsync();

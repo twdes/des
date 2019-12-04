@@ -437,7 +437,7 @@ namespace TecWare.DE.Server
 #pragma warning restore IDE0069 // Disposable fields should be disposed
 		private bool userOwner;
 
-		private bool? isCommited = null;
+		private bool? isCommitted = null;
 		private bool isDisposed = false;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
@@ -485,7 +485,7 @@ namespace TecWare.DE.Server
 				return;
 			isDisposed = true;
 
-			if (!isCommited.HasValue)
+			if (!isCommitted.HasValue)
 				await RollbackAsync(false);
 
 			// dispose resources
@@ -858,8 +858,29 @@ namespace TecWare.DE.Server
 			foreach (var cur in funcs)
 				await cur();
 
-			isCommited = null;
+			isCommitted = null;
 		} // proc RestartAsync
+
+		private static void RemoveActions(List<TransactionFunction> actions, bool restart)
+		{
+			lock (actions)
+			{
+				var i = 0;
+				while (i < actions.Count)
+				{
+					if (restart && actions[i].CanRestart)
+						i++;
+					else
+						actions.RemoveAt(i);
+				}
+			}
+		} // proc RemoveActions
+
+		private void CheckCommitted()
+		{
+			if (isCommitted.HasValue)
+				throw new InvalidOperationException("Transaction is already committed.");
+		} // proc CheckCommitted
 
 		/// <summary></summary>
 		/// <returns></returns>
@@ -871,10 +892,20 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public async Task CommitAsync(bool restart)
 		{
-			isCommited = true;
+			CheckCommitted();
+
+			// commit
+			isCommitted = true;
 			await RunActionsAsync(commitActions, restart, false);
+
 			if (restart)
+			{
+				// remove rollback actions
+				RemoveActions(rollbackActions, restart);
+
+				// restart transactions
 				await RestartAsync();
+			}
 		} // proc Commit
 
 		/// <summary></summary>
@@ -887,10 +918,20 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public async Task RollbackAsync(bool restart)
 		{
-			isCommited = false;
+			CheckCommitted();
+
+			// rollback
+			isCommitted = false;
 			await RunActionsAsync(rollbackActions, restart, true);
+
 			if (restart)
+			{
+				// remove commit actions
+				RemoveActions(commitActions, restart);
+
+				// restart transactions
 				await RestartAsync();
+			}
 		} // proc Rollback
 
 		#endregion
@@ -932,7 +973,7 @@ namespace TecWare.DE.Server
 		public virtual CultureInfo CultureInfo => CultureInfo.CurrentUICulture;
 		
 		/// <summary>Is the scope committed (<c>null</c> if the scope is active)</summary>
-		public bool? IsCommited => isCommited;
+		public bool? IsCommitted => isCommitted;
 	} // class DECommonScope
 
 	#endregion

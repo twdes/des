@@ -1392,7 +1392,7 @@ namespace TecWare.DE.Server
 						throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
 
 					// commit all is fine!
-					if (!context.IsCommited.HasValue)
+					if (!context.IsCommitted.HasValue)
 						await context.CommitAsync();
 				}
 				catch (Exception e)
