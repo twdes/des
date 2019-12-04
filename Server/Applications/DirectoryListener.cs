@@ -97,6 +97,7 @@ namespace TecWare.DE.Server
 
 		private long fileCount = 0;
 		private long fileErrCount = 0;
+		private long fileCountRefresh = 0;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
@@ -325,6 +326,7 @@ namespace TecWare.DE.Server
 			}
 
 			var di = new DirectoryInfo(fileSystemWatcher.Path);
+			var fileCountChanged = false;
 
 			// check file
 			foreach (var fi in di.EnumerateFiles(fileSystemWatcher.Filter, fileSystemWatcher.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
@@ -341,6 +343,8 @@ namespace TecWare.DE.Server
 
 							scope?.WriteLine("Add: {0}", fi.FullName);
 							notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName, stamp));
+							fileCountRefresh++;
+							fileCountChanged |= true;
 						}
 						else
 							scope?.WriteLine("Already queued: {0}", fi.FullName);
@@ -349,6 +353,9 @@ namespace TecWare.DE.Server
 				else
 					scope?.WriteLine("Skip file: {0}", fi.FullName);
 			}
+
+			if (fileCountChanged)
+				OnPropertyChanged(nameof(FileCountRefresh));
 		} // proc RefreshFiles
 
 		private void FileSystemWatcher_Error(object sender, ErrorEventArgs e)
@@ -465,6 +472,15 @@ namespace TecWare.DE.Server
 		Format("N0")
 		]
 		public long FileCount => fileCount;
+
+		[
+		PropertyName("tw_dirlsn_filecountr"),
+		DisplayName("FileCountRefresh"),
+		Description("File count, that collected through the refresh."),
+		Category(DirectoryListenerCategory),
+		Format("N0")
+		]
+		public long FileCountRefresh => fileCountRefresh;
 		[
 		PropertyName("tw_dirlsn_fileerrcount"),
 		DisplayName("FileErrCount"),

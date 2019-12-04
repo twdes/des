@@ -238,18 +238,49 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		bool RemoveService(Type serviceType);
 
-		/// <summary>Register a commit action.</summary>
-		/// <param name="action"></param>
+		/// <summary>Register a action, that is execute on an commit request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
 		void RegisterCommitAction(Action action);
-		/// <summary>Register a commit action.</summary>
-		/// <param name="action"></param>
+
+		/// <summary>Register a action, that is execute on an commit request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canRestart"><c>true</c>, if the function should be called multiple times.</param>
+		void RegisterCommitAction(Action action, bool canRestart);
+
+		/// <summary>Register a action, that is execute on an commit request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
 		void RegisterCommitAction(Func<Task> action);
-		/// <summary>Register a rollback action.</summary>
-		/// <param name="action"></param>
+
+		/// <summary>Register a action, that is execute on an commit request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canRestart"><c>true</c>, if the function should be called multiple times.</param>
+		void RegisterCommitAction(Func<Task> action, bool canRestart);
+
+		/// <summary>Register a action, that is execute on a rollback request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
 		void RegisterRollbackAction(Action action);
-		/// <summary>Register a rollback action.</summary>
-		/// <param name="action"></param>
+
+		/// <summary>Register a action, that is execute on a rollback request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canRestart"><c>true</c>, if the function should be called multiple times.</param>
+		void RegisterRollbackAction(Action action, bool canRestart);
+
+		/// <summary>Register a action, that is execute on a rollback request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
 		void RegisterRollbackAction(Func<Task> action);
+
+		/// <summary>Register a action, that is execute on a rollback request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canRestart"><c>true</c>, if the function should be called multiple times.</param>
+		void RegisterRollbackAction(Func<Task> action, bool canRestart);
+		
+		/// <summary>Register a action, that is execute on a reset request.</summary>
+		/// <param name="action">Action to execute.</param>
+		void RegisterRestartAction(Action action);
+
+		/// <summary>Register a action, that is execute on a reset request.</summary>
+		/// <param name="action">Action to execute.</param>
+		void RegisterRestartAction(Func<Task> action);
 
 		/// <summary>Register an object, that will be disposed with this scope.</summary>
 		/// <param name="obj"></param>
@@ -270,9 +301,17 @@ namespace TecWare.DE.Server
 		/// <summary>Executes all commit actions.</summary>
 		/// <returns></returns>
 		Task CommitAsync();
+		/// <summary>Executes all commit actions with restart option.</summary>
+		/// <param name="restart"></param>
+		/// <returns></returns>
+		Task CommitAsync(bool restart);
 		/// <summary>Executes all rollback actions.</summary>
 		/// <returns></returns>
 		Task RollbackAsync();
+		/// <summary>Executes all rollback actions with restart option.</summary>
+		/// <param name="restart"></param>
+		/// <returns></returns>
+		Task RollbackAsync(bool restart);
 
 		/// <summary>Access to the user context.</summary>
 		/// <typeparam name="T"></typeparam>
@@ -371,8 +410,19 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private readonly List<Func<Task>> commitActions = new List<Func<Task>>();
-		private readonly List<Func<Task>> rollbackActions = new List<Func<Task>>();
+		#region -- struct TransactionFunction -----------------------------------------
+
+		private struct TransactionFunction
+		{
+			public bool CanRestart;
+			public Func<Task> Function;
+		} // struct TransactionFunction
+
+		#endregion
+
+		private readonly List<TransactionFunction> commitActions = new List<TransactionFunction>();
+		private readonly List<TransactionFunction> rollbackActions = new List<TransactionFunction>();
+		private readonly List<Func<Task>> restartActions = new List<Func<Task>>();
 		private readonly List<IDisposable> autoDispose = new List<IDisposable>();
 
 		private readonly Dictionary<Type, ServiceDescriptor> services = new Dictionary<Type, ServiceDescriptor>();
@@ -387,7 +437,7 @@ namespace TecWare.DE.Server
 #pragma warning restore IDE0069 // Disposable fields should be disposed
 		private bool userOwner;
 
-		private bool? isCommitted = null;
+		private bool? isCommited = null;
 		private bool isDisposed = false;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
@@ -435,8 +485,8 @@ namespace TecWare.DE.Server
 				return;
 			isDisposed = true;
 
-			if (!isCommitted.HasValue)
-				await RollbackAsync();
+			if (!isCommited.HasValue)
+				await RollbackAsync(false);
 
 			// dispose resources
 			foreach (var dispose in autoDispose)
@@ -633,45 +683,59 @@ namespace TecWare.DE.Server
 
 		#region -- Commit, Rollback, Auto Dispose -------------------------------------
 
-		private async Task RunActionsAsync(IEnumerable<Func<Task>> actions, bool rollback)
+		private async Task RunActionsAsync(List<TransactionFunction> actions, bool restartFollows, bool rollback)
 		{
 			var transactions = new List<Func<Task>>();
 
 			// registered commit actions
 			lock (actions)
-				transactions.AddRange(actions);
+			{
+				var i = 0;
+				while (i < actions.Count)
+				{
+					var cur = actions[i];
+					transactions.Add(cur.Function);
+					if (restartFollows && cur.CanRestart) // let action in list, because it can restarted
+						i++;
+					else
+						actions.RemoveAt(i);
+				}
+			}
 
 			// find service commit actions
-			lock (services)
+			if (!restartFollows) // destroy services on last commit/rollback
 			{
-				foreach (var cur in services.Values.Where(c => c.IsValueCreated))
+				lock (services)
 				{
-					switch (cur.Service)
+					foreach (var cur in services.Values.Where(c => c.IsValueCreated))
 					{
-						case IDbTransaction trans:
-							transactions.Add(
-								() => Task.Run(() =>
+						switch (cur.Service)
+						{
+							case IDbTransaction trans:
+								transactions.Add(
+									() => Task.Run(() =>
+									  {
+										  if (rollback)
+											  trans.Rollback();
+										  else
+											  trans.Commit();
+									  })
+								);
+								break;
+							case IDETransaction trans:
+								transactions.Add(() => Task.Run(() =>
 								  {
 									  if (rollback)
 										  trans.Rollback();
 									  else
 										  trans.Commit();
 								  })
-							);
-							break;
-						case IDETransaction trans:
-							transactions.Add(() => Task.Run(() =>
-							  {
-								  if (rollback)
-									  trans.Rollback();
-								  else
-									  trans.Commit();
-							  })
-							);
-							break;
-						case IDETransactionAsync trans:
-							transactions.Add(rollback ? new Func<Task>(trans.RollbackAsync) : new Func<Task>(trans.CommitAsync));
-							break;
+								);
+								break;
+							case IDETransactionAsync trans:
+								transactions.Add(rollback ? new Func<Task>(trans.RollbackAsync) : new Func<Task>(trans.CommitAsync));
+								break;
+						}
 					}
 				}
 			}
@@ -682,33 +746,82 @@ namespace TecWare.DE.Server
 				await c();
 		} // func RunActionsAsync
 
-		/// <summary></summary>
-		/// <param name="action"></param>
-		public void RegisterCommitAction(Action action)
-			=> RegisterCommitAction(() => Task.Run(action));
+		#region -- RegisterCommitAction -----------------------------------------------
 
-		/// <summary></summary>
-		/// <param name="action"></param>
+		/// <summary>Register a action, that is execute on an commit request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
+		public void RegisterCommitAction(Action action)
+			=> RegisterCommitAction(action, false);
+
+		/// <summary>Register a action, that is execute on an commit request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canReset"><c>true</c>, if the function should be called multiple times.</param>
+		public void RegisterCommitAction(Action action, bool canReset)
+			=> RegisterCommitAction(() => Task.Run(action), canReset);
+
+		/// <summary>Register a action, that is execute on an commit request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
 		public void RegisterCommitAction(Func<Task> action)
+			=> RegisterCommitAction(action, false);
+
+		/// <summary>Register a action, that is execute on an commit request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canReset"><c>true</c>, if the function should be called multiple times.</param>
+		public void RegisterCommitAction(Func<Task> action, bool canReset)
 		{
 			lock (commitActions)
-				commitActions.Add(action);
+				commitActions.Add(new TransactionFunction { CanRestart = canReset, Function = action });
 		} // func RegisterCommitAction
 
-		/// <summary></summary>
-		/// <param name="action"></param>
-		public void RegisterRollbackAction(Action action)
-			=> RegisterRollbackAction(() => Task.Run(action));
+		#endregion
 
-		/// <summary></summary>
-		/// <param name="action"></param>
+		#region -- RegisterRollbackAction ---------------------------------------------
+
+		/// <summary>Register a action, that is execute on a rollback request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
+		public void RegisterRollbackAction(Action action)
+			=> RegisterRollbackAction(action, false);
+
+		/// <summary>Register a action, that is execute on a rollback request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canReset"><c>true</c>, if the function should be called multiple times.</param>
+		public void RegisterRollbackAction(Action action, bool canReset)
+			=> RegisterRollbackAction(() => Task.Run(action), canReset);
+
+		/// <summary>Register a action, that is execute on a rollback request. After the execute the function will be removed.</summary>
+		/// <param name="action">Action to execute.</param>
 		public void RegisterRollbackAction(Func<Task> action)
+			=> RegisterRollbackAction(action, false);
+
+		/// <summary>Register a action, that is execute on a rollback request.</summary>
+		/// <param name="action">Action to execute.</param>
+		/// <param name="canReset"><c>true</c>, if the function should be called multiple times.</param>
+		public void RegisterRollbackAction(Func<Task> action, bool canReset)
 		{
 			lock (rollbackActions)
-				rollbackActions.Add(action);
+				rollbackActions.Add(new TransactionFunction { CanRestart = canReset, Function = action });
 		} // func RegisterRollbackAction
 
-		/// <summary></summary>
+		#endregion
+
+		#region -- RegisterResetAction ------------------------------------------------
+
+		/// <summary>Register a action, that is execute on a reset request.</summary>
+		/// <param name="action">Action to execute.</param>
+		public void RegisterRestartAction(Action action)
+			=> RegisterRestartAction(() => Task.Run(action));
+
+		/// <summary>Register a action, that is execute on a reset request.</summary>
+		/// <param name="action">Action to execute.</param>
+		public void RegisterRestartAction(Func<Task> action)
+		{
+			lock (restartActions)
+				restartActions.Add(action);
+		} // func RegisterResetAction
+
+		#endregion
+
+		/// <summary>Register a dispose method. Transaction's will also register the commit and rollback actions.</summary>
 		/// <param name="obj"></param>
 		public void RegisterDispose(IDisposable obj)
 		{
@@ -734,20 +847,50 @@ namespace TecWare.DE.Server
 			}
 		} // proc RegisterDispose
 
+		private async Task RestartAsync()
+		{
+			// copy functions
+			var funcs = new List<Func<Task>>();
+			lock (restartActions)
+				funcs.AddRange(restartActions);
+
+			// execute
+			foreach (var cur in funcs)
+				await cur();
+
+			isCommited = null;
+		} // proc RestartAsync
+
 		/// <summary></summary>
 		/// <returns></returns>
 		public Task CommitAsync()
+			=> CommitAsync(false);
+
+		/// <summary></summary>
+		/// <param name="restart"></param>
+		/// <returns></returns>
+		public async Task CommitAsync(bool restart)
 		{
-			isCommitted = true;
-			return RunActionsAsync(commitActions, false);
+			isCommited = true;
+			await RunActionsAsync(commitActions, restart, false);
+			if (restart)
+				await RestartAsync();
 		} // proc Commit
 
 		/// <summary></summary>
 		/// <returns></returns>
 		public Task RollbackAsync()
+			=> RollbackAsync(false);
+
+		/// <summary></summary>
+		/// <param name="restart"></param>
+		/// <returns></returns>
+		public async Task RollbackAsync(bool restart)
 		{
-			isCommitted = false;
-			return RunActionsAsync(rollbackActions, true);
+			isCommited = false;
+			await RunActionsAsync(rollbackActions, restart, true);
+			if (restart)
+				await RestartAsync();
 		} // proc Rollback
 
 		#endregion
@@ -789,7 +932,7 @@ namespace TecWare.DE.Server
 		public virtual CultureInfo CultureInfo => CultureInfo.CurrentUICulture;
 		
 		/// <summary>Is the scope committed (<c>null</c> if the scope is active)</summary>
-		public bool? IsCommited => isCommitted;
+		public bool? IsCommited => isCommited;
 	} // class DECommonScope
 
 	#endregion

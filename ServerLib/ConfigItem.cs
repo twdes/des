@@ -1096,7 +1096,7 @@ namespace TecWare.DE.Server
 			// execute the exceion within the thread pool
 			var (err, returnValue) = await Task.Run(() => InvokeAction(action, r));
 			if (!err)
-				await r.RollbackAsync();
+				await r.RollbackAsync(false);
 
 			// check the return value
 			if (returnValue == DBNull.Value) // NativeCall
