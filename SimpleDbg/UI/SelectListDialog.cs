@@ -89,6 +89,8 @@ namespace TecWare.DE.Server.UI
 
 		protected override void OnResizeContent()
 		{
+			base.OnResizeContent();
+
 			list.Resize(Width - 1, Height - 2, true);
 			list.Left = Left + 1;
 			list.Top = Top + 1;
@@ -96,6 +98,7 @@ namespace TecWare.DE.Server.UI
 			filter.Resize(Math.Min(Width - 4, 20), 1);
 			filter.Left = Left + Width - filter.Width - 3;
 			filter.Top = Top + Height - 1;
+			Filter_CursorChanged(filter, EventArgs.Empty);
 		} // proc OnResize
 
 		protected virtual void SetFilterString(string text)
@@ -110,7 +113,6 @@ namespace TecWare.DE.Server.UI
 
 		private void Filter_CursorChanged(object sender, EventArgs e)
 			=> SetCursor(filter.Left + filter.CursorLeft - Left, filter.Top + filter.CursorTop - Top, filter.CursorSize);
-
 
 		public override bool OnHandleEvent(EventArgs e)
 		{

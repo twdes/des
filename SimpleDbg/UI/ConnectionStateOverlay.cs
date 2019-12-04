@@ -51,7 +51,7 @@ namespace TecWare.DE.Server.UI
 
 			// position
 			Position = ConsoleOverlayPosition.Window;
-			OnResize();
+			OnParentResize();
 		} // ctor
 
 		protected override void OnRender()

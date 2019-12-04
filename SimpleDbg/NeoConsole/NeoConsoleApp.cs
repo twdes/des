@@ -127,7 +127,7 @@ namespace Neo.Console
 
 			if (isSizeInvalidate)
 			{
-				OnResize();
+				OnParentResize();
 				isSizeInvalidate = false;
 			}
 
@@ -164,7 +164,7 @@ namespace Neo.Console
 
 		public virtual void OnIdle() { }
 
-		protected virtual void OnResize() { }
+		protected virtual void OnParentResize() { }
 
 		public virtual bool OnPreHandleKeyEvent(ConsoleKeyEventArgs e)
 			=> false;
@@ -383,11 +383,10 @@ namespace Neo.Console
 			Invalidate();
 		} // pproc SetCursor
 
-		protected override void OnResize()
+		protected override void OnParentResize()
 		{
-			base.OnResize();
-			InvalidateCursor();
-		} // proc OnResize
+			base.OnParentResize();
+		} // proc OnParentResize
 
 		/// <summary>Reset the cursor, and make the cursor visible.</summary>
 		public void InvalidateCursor()
@@ -512,9 +511,9 @@ namespace Neo.Console
 			includeReservedRows = false;
 		} // proc GetResizeConstraints
 
-		protected sealed override void OnResize()
+		protected sealed override void OnParentResize()
 		{
-			base.OnResize();
+			base.OnParentResize();
 
 			var app = Application;
 			GetResizeConstraints(out var maxWidth, out var maxHeight, out var includeReservedRows);
@@ -529,9 +528,12 @@ namespace Neo.Console
 			if (Resize(width, height)
 				| Locate((windowWidth - width) / 2, (windowHeight - height) / 2))
 				OnResizeContent();
-		} // proc OnResize
+		} // proc OnParentResize
 
-		protected virtual void OnResizeContent() { }
+		protected virtual void OnResizeContent()
+		{
+			InvalidateCursor();
+		} // proc OnResizeContent
 
 		#endregion
 

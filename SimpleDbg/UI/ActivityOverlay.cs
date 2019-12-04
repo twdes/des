@@ -157,9 +157,9 @@ namespace TecWare.DE.Server.UI
 			}
 		} // proc OnRender
 
-		protected override void OnResize()
+		protected override void OnParentResize()
 		{
-			base.OnResize();
+			base.OnParentResize();
 
 			var newWidth = Application.WindowRight - Application.WindowLeft + 1;
 			if (Width != newWidth)
@@ -188,7 +188,7 @@ namespace TecWare.DE.Server.UI
 				// repaint
 				Invalidate();
 			}
-		} // proc OnResize
+		} // proc OnParentResize
 
 		private void AppendLogLine(string path, LogLine line)
 		{

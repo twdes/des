@@ -411,11 +411,11 @@ namespace TecWare.DE.Server.UI
 
 		#region -- OnResize, OnRender -------------------------------------------------
 
-		protected override void OnResize()
+		protected override void OnParentResize()
 		{
-			base.OnResize();
+			base.OnParentResize();
 			Invalidate();
-		} // proc OnResize
+		} // proc OnParentResize
 
 		protected override void OnRender()
 		{
