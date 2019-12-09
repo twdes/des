@@ -1381,6 +1381,10 @@ namespace TecWare.DE.Server
 			public object TryGetScopeService(object serviceType)
 				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, false), false);
 
+			[LuaMember]
+			public object CreateCommonScope()
+				=> new DECommonScope(GetCurrentScope() as IServiceProvider ?? server, false, null);
+
 			#endregion
 
 			[LuaMember("format")]
