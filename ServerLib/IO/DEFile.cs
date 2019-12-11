@@ -666,7 +666,7 @@ namespace TecWare.DE.Server.IO
 			protected override Task RollbackCoreAsync()
 			{
 				blocks.Clear();
-				return RollbackCoreAsync();
+				return base.RollbackCoreAsync();
 			} // proc RollbackCoreAsync
 
 			protected override byte[] ReadBlock(int index)

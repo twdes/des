@@ -1471,7 +1471,7 @@ namespace TecWare.DE.Server
 					var forWrite = mode.IndexOfAny(new char[] { '+', 'w' }) > 0;
 					var forTrans = mode.IndexOf('t') >= 0;
 					if (forTrans && forWrite)
-						return new LuaResult(OpenRaw(GetFullFileName(filename), mode.IndexOf('m') >= 0));
+						return new LuaResult(OpenRaw(GetFullFileName(filename), mode.IndexOf('m') >= 0)); // todo: broken, wrong return?
 					else // only read, no transaction
 					{
 						var file = LuaFileStream.OpenFile(GetFullFileName(filename), mode, encoding ?? Encoding.UTF8);

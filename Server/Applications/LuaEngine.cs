@@ -91,7 +91,7 @@ namespace TecWare.DE.Server
 
 					// Remove the script from the engine
 					engine.RemoveScript(this);
-					log.Info("Entfernt.");
+					log.Info("Removed.");
 
 					Procs.FreeAndNil(ref chunk);
 				}
@@ -212,7 +212,7 @@ namespace TecWare.DE.Server
 			public void SetFileSource(FileInfo fileSource)
 			{
 				if (!fileSource.Exists)
-					throw new ArgumentException($"File '{fileSource.FullName}' not found.", nameof(fileSource));
+					Log.Except($"File '{fileSource.FullName}' not found.");
 				this.fileSource = fileSource;
 				compiledStamp = DateTime.MinValue;
 			} // proc SetFileSource
