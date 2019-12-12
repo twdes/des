@@ -544,25 +544,30 @@ namespace TecWare.DE.Server.IO
 
 			public sealed override void Flush() { }
 
-			private IEnumerable<BlockInfo> GetBlockOffset(long position, int offset, int count)
+			private IEnumerable<BlockInfo> GetBlockOffset(long position, int count)
 			{
 				// first block
 				var blockIndex = (int)(position >> blockBits);
 				var blockOfs = (int)(position & blockMask);
 				var blockLen = blockSize - blockOfs;
-				yield return new BlockInfo() { Index = blockIndex, Ofs = blockOfs, Len = blockLen };
-
-				count -= blockLen;
-				blockIndex++;
-
-				// next blocks
-				while (count > 0)
+				if (blockLen >= count)
+					yield return new BlockInfo() { Index = blockIndex, Ofs = blockOfs, Len = count };
+				else
 				{
-					blockLen = Math.Min(blockSize, count);
-					yield return new BlockInfo() { Index = blockIndex, Ofs = 0, Len = blockLen };
+					yield return new BlockInfo() { Index = blockIndex, Ofs = blockOfs, Len = blockLen };
 
 					count -= blockLen;
 					blockIndex++;
+
+					// next blocks
+					while (count > 0)
+					{
+						blockLen = Math.Min(blockSize, count);
+						yield return new BlockInfo() { Index = blockIndex, Ofs = 0, Len = blockLen };
+
+						count -= blockLen;
+						blockIndex++;
+					}
 				}
 			} // func GetBlockOffset
 
@@ -570,7 +575,18 @@ namespace TecWare.DE.Server.IO
 			{
 				var readed = 0;
 
-				foreach (var b in GetBlockOffset(position, offset, count))
+				// check count, align it to the total length
+				if (position + count > length)
+				{
+					count = checked((int)(length - position));
+					if (count < 0)
+						throw new ArgumentOutOfRangeException(nameof(count));
+					else if (count == 0)
+						return 0;
+				}
+
+				// enumerate the blocks to read
+				foreach (var b in GetBlockOffset(position, count))
 				{
 					var block = ReadBlock(b.Index);
 					if (block != null)
@@ -578,7 +594,8 @@ namespace TecWare.DE.Server.IO
 					else
 					{
 						stream.Position = position;
-						stream.Read(buffer, b.Ofs, b.Len);
+						if (stream.Read(buffer, offset, b.Len) != b.Len)
+							throw new InvalidOperationException();
 					}
 
 					offset += b.Len;
@@ -591,7 +608,7 @@ namespace TecWare.DE.Server.IO
 
 			public sealed override void Write(byte[] buffer, int offset, int count)
 			{
-				foreach (var b in GetBlockOffset(position, offset, count))
+				foreach (var b in GetBlockOffset(position, count))
 				{
 					var block = ReadBlock(b.Index);
 
@@ -746,7 +763,7 @@ namespace TecWare.DE.Server.IO
 			protected override async Task CommitCoreAsync(Stream stream)
 			{
 				// is the temp file the target file?
-				if (IsSequence(stream)) // move whole file
+				if (IsSequence()) // move whole file
 				{
 					// close target
 					stream.Dispose();
@@ -770,7 +787,7 @@ namespace TecWare.DE.Server.IO
 				}
 			} // proc CommitCoreAsync
 
-			private bool IsSequence(Stream stream)
+			private bool IsSequence()
 			{
 				if (transactionStream.Length < Length) // not all blocks in file
 					return false;
