@@ -1471,7 +1471,13 @@ namespace TecWare.DE.Server
 					var forWrite = mode.IndexOfAny(new char[] { '+', 'w' }) > 0;
 					var forTrans = mode.IndexOf('t') >= 0;
 					if (forTrans && forWrite)
-						return new LuaResult(OpenRaw(GetFullFileName(filename), mode.IndexOf('m') >= 0)); // todo: broken, wrong return?
+					{
+						return new LuaResult(
+							LuaFileStream.OpenFile(
+								OpenRaw(GetFullFileName(filename), mode.IndexOf('m') >= 0), encoding
+							)
+						);
+					}
 					else // only read, no transaction
 					{
 						var file = LuaFileStream.OpenFile(GetFullFileName(filename), mode, encoding ?? Encoding.UTF8);
@@ -1490,7 +1496,7 @@ namespace TecWare.DE.Server
 			/// <param name="inMemory">Transaktion log is only written in memory.</param>
 			/// <returns>A <see cref="Stream"/> that supports transactions.</returns>
 			[LuaMember("openraw")]
-			public Stream OpenRaw(object filename, bool inMemory)
+			public DETransactionStream OpenRaw(object filename, bool inMemory)
 			{
 				var stream = inMemory
 					? DEFile.OpenInMemoryAsync(GetFullFileName(filename)).AwaitTask()

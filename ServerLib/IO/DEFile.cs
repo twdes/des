@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace TecWare.DE.Server.IO
@@ -36,6 +37,43 @@ namespace TecWare.DE.Server.IO
 		/// <summary>Create a new file name for the source and keep target.</summary>
 		KeepTarget
 	} // enum DEFileTargetExists
+
+	#endregion
+
+	#region -- class DETransactionStream ----------------------------------------------
+
+	/// <summary>Interface for extented stream methods.</summary>
+	public abstract class DETransactionStream : Stream
+	{
+		/// <summary>Commit the file changes.</summary>
+		/// <returns></returns>
+		public abstract Task CommitAsync();
+
+		/// <summary>Rollback the file changes.</summary>
+		/// <returns></returns>
+		public abstract Task RollbackAsync();
+
+		/// <summary>Commit the file changes.</summary>
+		public void Commit()
+			=> CommitAsync().AwaitTask();
+
+		/// <summary>Rollback the file changes.</summary>
+		public void Rollback()
+			=> RollbackAsync().AwaitTask();
+
+		/// <summary>Create a text access for read.</summary>
+		/// <param name="encoding"></param>
+		/// <returns></returns>
+		public TextReader CreateTextReader(Encoding encoding = null)
+			=> new StreamReader(this, encoding ?? Encoding.UTF8, false, 4096, true);
+
+		/// <summary>Create a text access for write.</summary>
+		/// <param name="encoding"></param>
+		/// <returns></returns>
+		public TextWriter CreateTextWriter(Encoding encoding = null)
+			=> new StreamWriter(this, encoding ?? Encoding.UTF8, 4096, true);
+
+	} // class DETransactionStream
 
 	#endregion
 
@@ -398,7 +436,7 @@ namespace TecWare.DE.Server.IO
 
 		#region -- class TransactionStream --------------------------------------------
 
-		private abstract class TransactionStream : Stream, IDETransactionAsync
+		private abstract class TransactionStream : DETransactionStream, IDETransactionAsync
 		{
 			#region -- struct BlockInfo -----------------------------------------------
 
@@ -443,7 +481,7 @@ namespace TecWare.DE.Server.IO
 					RollbackAsync().AwaitTask();
 			} // proc Dispose
 
-			public async Task CommitAsync()
+			public sealed override async Task CommitAsync()
 			{
 				if (commited.HasValue)
 					throw new InvalidOperationException();
@@ -453,12 +491,6 @@ namespace TecWare.DE.Server.IO
 
 				commited = true;
 			} // func CommitAsync
-
-			public void Commit()
-				=> CommitAsync().AwaitTask();
-
-			public void Rollback()
-				=> RollbackAsync().AwaitTask();
 
 			protected virtual async Task CommitCoreAsync(Stream stream)
 			{
@@ -487,7 +519,7 @@ namespace TecWare.DE.Server.IO
 				}
 			} // func CommitCoreAsync
 
-			public async Task RollbackAsync()
+			public sealed override async Task RollbackAsync()
 			{
 				if (commited.HasValue)
 					throw new InvalidOperationException();
@@ -670,7 +702,7 @@ namespace TecWare.DE.Server.IO
 			} // proc RollbackCoreAsync
 
 			protected override byte[] ReadBlock(int index)
-				=> index > 0 && index < blocks.Count ? blocks[index] : null;
+				=> index >= 0 && index < blocks.Count ? blocks[index] : null;
 
 			protected override void WriteBlock(int index, byte[] block)
 			{
@@ -819,9 +851,9 @@ namespace TecWare.DE.Server.IO
 		/// in memory and write to disk on commit.</summary>
 		/// <param name="fileName"></param>
 		/// <returns></returns>
-		public static Task<Stream> OpenInMemoryAsync(string fileName)
+		public static Task<DETransactionStream> OpenInMemoryAsync(string fileName)
 		{
-			return Task.Run<Stream>(() =>
+			return Task.Run<DETransactionStream>(() =>
 				{
 					var (s, n) = CreateOrOpenFile(fileName);
 					return new MemoryTransactionStream(s, n);
@@ -833,12 +865,16 @@ namespace TecWare.DE.Server.IO
 		/// commit the source will be overwritten (needs more disk space).</summary>
 		/// <param name="fileName"></param>
 		/// <returns></returns>
-		public static async Task<Stream> OpenCopyAsync(string fileName)
+		public static async Task<DETransactionStream> OpenCopyAsync(string fileName)
 		{
 			var fileInfo = new FileInfo(fileName);
 			var transactionFileInfo = await CreateTempFileInfoAsync(fileInfo);
-			var (stream, isNew) = await Task.Run<(FileStream, bool)>(() => CreateOrOpenFile(fileInfo.FullName));
-			return new DiskTransactionStream(stream, isNew, fileInfo, transactionFileInfo);
+			return await Task.Run<DETransactionStream>(() =>
+				{
+					var (stream, isNew) = CreateOrOpenFile(fileInfo.FullName);
+					return new DiskTransactionStream(stream, isNew, fileInfo, transactionFileInfo);
+				}
+			);
 		} // func OpenCopyAsync
 
 		#endregion
