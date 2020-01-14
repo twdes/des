@@ -198,6 +198,8 @@ namespace TecWare.DE.Server.Http
 
 		/// <summary>Is there a call of GetOutputStream, GetOutputTextWriter or Redirect.</summary>
 		bool IsOutputStarted { get; }
+		/// <summary>Requested output encoding.</summary>
+		Encoding OutputEncoding { get; }
 
 		/// <summary>Current node, on which the request is executed.</summary>
 		IDEConfigItem CurrentNode { get; }
@@ -295,7 +297,7 @@ namespace TecWare.DE.Server.Http
 			CheckOutputOpened();
 
 			if (encoding == null)
-				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
+				encoding = context.OutputEncoding;
 		} // proc PrepareOutput
 
 		[LuaMember("otext")]
@@ -404,7 +406,7 @@ namespace TecWare.DE.Server.Http
 		private static void PrepareWriteText(IDEWebRequestScope context, ref string contentType, ref Encoding encoding)
 		{
 			if (encoding == null)
-				encoding = context.InputEncoding ?? context.Http.DefaultEncoding;
+				encoding = context.OutputEncoding;
 			if (contentType.IndexOf("charset=") == -1)
 				contentType += ";charset=" + encoding.WebName;
 		} // proc PrepareWriteText

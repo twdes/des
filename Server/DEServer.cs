@@ -1659,7 +1659,7 @@ namespace TecWare.DE.Server
 			public static TextWriter CreateTextWriter(string mimeType = MimeTypes.Text.Plain)
 			{
 				var r = GetWebRequestScope();
-				return r.GetOutputTextWriter(mimeType, r.Http.DefaultEncoding);
+				return r.GetOutputTextWriter(mimeType);
 			} // func CreateTextReader
 
 			[LuaMember]

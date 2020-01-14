@@ -323,6 +323,19 @@ namespace TecWare.DE.Server
 				throw new InvalidOperationException("Output stream is already started.");
 		} // proc CheckOutputSended
 
+		private Encoding GetOutputEncoding()
+		{
+			if (this.TryGetProperty<string>("Accept-Charset", out var charset))
+			{
+				try
+				{
+					return Encoding.GetEncoding(charset);
+				}
+				catch (ArgumentException) { }
+			}
+			return Http.DefaultEncoding;
+		} // func GetOutputEncoding
+
 		public Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null)
 		{
 			CheckOutputSended();
@@ -371,7 +384,7 @@ namespace TecWare.DE.Server
 
 		public TextWriter GetOutputTextWriter(string contentType, Encoding encoding = null, long contentLength = -1)
 		{
-			encoding ??= Http.DefaultEncoding;
+			encoding ??= OutputEncoding;
 		
 			// add encoding to the content type
 			contentType = contentType + "; charset=" + encoding.WebName;
@@ -431,6 +444,7 @@ namespace TecWare.DE.Server
 		public CookieCollection OutputCookies => context.Response.Cookies;
 		public WebHeaderCollection OutputHeaders => context.Response.Headers;
 
+		public Encoding OutputEncoding => GetOutputEncoding();
 		public bool IsOutputStarted => isOutputSended;
 
 		#endregion
