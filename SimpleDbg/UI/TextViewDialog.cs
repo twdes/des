@@ -38,7 +38,7 @@ namespace TecWare.DE.Server.UI
 			virtualOffsetX = 0;
 			virtualOffsetY = 0;
 			virtualWidth = lines.Max(c => c.len);
-			virtualHeight = lines.Count;
+			virtualHeight = lines.Count + 1;
 
 			Application = app ?? throw new ArgumentNullException(nameof(app));
 		} // ctor
@@ -76,8 +76,8 @@ namespace TecWare.DE.Server.UI
 				}
 			}
 
-			RenderVerticalScroll(Width - 1, 1, height - 1, virtualOffsetY, virtualHeight);
-			RenderHorizontalScroll(Width / 3, width - 3, height, virtualOffsetX, virtualWidth);
+			RenderVerticalScroll(Width - 1, 1, height - 1, ContentHeight, virtualOffsetY, virtualHeight);
+			RenderHorizontalScroll(Width / 3, width - 3, height, ContentWidth, virtualOffsetX, virtualWidth);
 		} // proc OnRender
 
 		private bool ScrollTo(int offsetX, int offsetY)
@@ -105,7 +105,7 @@ namespace TecWare.DE.Server.UI
 					case ConsoleKey.DownArrow:
 						return ScrollTo(virtualOffsetX, virtualOffsetY + 1);
 					case ConsoleKey.PageUp:
-						return ScrollTo(virtualOffsetX, virtualOffsetY - ContentHeight -1);
+						return ScrollTo(virtualOffsetX, virtualOffsetY - ContentHeight + 1);
 					case ConsoleKey.PageDown:
 						return ScrollTo(virtualOffsetX, virtualOffsetY + ContentHeight - 1);
 					case ConsoleKey.Home:

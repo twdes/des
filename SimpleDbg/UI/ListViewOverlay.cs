@@ -170,7 +170,7 @@ namespace TecWare.DE.Server.UI
 				Content.Fill(0, top, width - 1, height - 1, ' ', ForegroundColor, BackgroundColor);
 
 			// render scroll
-			RenderVerticalScroll(width, 0, height - 1, firstVisibleIndex, view.Count);
+			RenderVerticalScroll(width, 0, height - 1, Height, firstVisibleIndex, view.Count);
 		} // proc OnRender
 
 		public override bool OnHandleEvent(EventArgs e)

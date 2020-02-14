@@ -411,24 +411,28 @@ namespace Neo.Console
 
 		#region -- Scrolling ----------------------------------------------------------
 
-		private static bool CalculateScroll(int screenOffset, int screenSize, int virtualOffset, int virtualSize, out int startAt, out int endAt)
+		private static bool CalculateScroll(int top, int scrollHeight, int visibleSize, int virtualOffset, int virtualSize, out int startAt, out int endAt)
 		{
-			screenSize--;
-			if (screenSize <= 0)
+			if (scrollHeight <= 0)
 			{
 				startAt = 0;
 				endAt = 0;
 				return false;
 			}
 
-			startAt = virtualSize > 0 ? (virtualOffset * screenSize / virtualSize) + screenOffset : -1;
-			endAt = startAt >= 0 ? (startAt + screenSize * screenSize / virtualSize) + screenOffset : -1;
+			startAt = virtualSize > 0 ? (virtualOffset * scrollHeight / virtualSize) : -1;
+			endAt = startAt >= 0 ? (startAt + visibleSize * scrollHeight / virtualSize) : -1;
+
+			// move parameter to render position
+			startAt += top;
+			endAt += top;
+
 			return true;
 		} // proc CalculateScroll
 
-		protected void RenderVerticalScroll(int left, int top, int bottom, int virtualOffset, int virtualSize)
+		protected void RenderVerticalScroll(int left, int top, int bottom, int visibleSize, int virtualOffset, int virtualSize)
 		{
-			if (!CalculateScroll(top, bottom - top + 1, virtualOffset, virtualSize, out var startAt, out var endAt))
+			if (!CalculateScroll(top, bottom - top + 1, visibleSize, virtualOffset, virtualSize, out var startAt, out var endAt))
 				return;
 
 			for (var i = top; i <= bottom; i++)
@@ -438,9 +442,9 @@ namespace Neo.Console
 			}
 		} // proc RenderVerticalScroll
 
-		protected void RenderHorizontalScroll(int left, int right, int top, int virtualOffset, int virtualSize)
+		protected void RenderHorizontalScroll(int left, int right, int top, int visibleSize, int virtualOffset, int virtualSize)
 		{
-			if (!CalculateScroll(left, right - left + 1, virtualOffset, virtualSize, out var startAt, out var endAt))
+			if (!CalculateScroll(left, right - left + 1, visibleSize, virtualOffset, virtualSize, out var startAt, out var endAt))
 				return;
 
 			for (var i = left; i <= right; i++)
@@ -461,7 +465,7 @@ namespace Neo.Console
 				else
 					newOffset = virtualSize - screenSize;
 			}
-			
+
 			if (newOffset != offset)
 			{
 				offset = newOffset;
@@ -761,7 +765,7 @@ namespace Neo.Console
 			base.OnAdded();
 
 			var zOrder = ZOrder;
-			foreach(var cur in children)
+			foreach (var cur in children)
 			{
 				cur.ZOrder = ++zOrder;
 				cur.Application = Application;
