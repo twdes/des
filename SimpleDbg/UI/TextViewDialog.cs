@@ -75,7 +75,20 @@ namespace TecWare.DE.Server.UI
 						Content.Set(x, y, ' ', ForegroundColor, BackgroundColor);
 				}
 			}
+
+			RenderVerticalScroll(Width - 1, 1, height - 1, virtualOffsetY, virtualHeight);
+			RenderHorizontalScroll(Width / 3, width - 3, height, virtualOffsetX, virtualWidth);
 		} // proc OnRender
+
+		private bool ScrollTo(int offsetX, int offsetY)
+		{
+			if (ValidateScrollOffset(ref virtualOffsetX, offsetX, ContentWidth, virtualWidth)
+				|| ValidateScrollOffset(ref virtualOffsetY, offsetY, ContentHeight, virtualHeight))
+			{
+				Invalidate();
+			}
+			return true;
+		} // proc ScrollTo
 
 		public override bool OnHandleEvent(EventArgs e)
 		{
@@ -84,35 +97,29 @@ namespace TecWare.DE.Server.UI
 				switch (keyDown.Key)
 				{
 					case ConsoleKey.LeftArrow:
-						if (virtualOffsetX > 0)
-							virtualOffsetX--;
-						Invalidate();
-						return true;
+						return ScrollTo(virtualOffsetX - 1, virtualOffsetY);
 					case ConsoleKey.RightArrow:
-						if (virtualOffsetX < virtualWidth - Width)
-							virtualOffsetX++;
-						Invalidate();
-						return true;
+						return ScrollTo(virtualOffsetX + 1, virtualOffsetY);
 					case ConsoleKey.UpArrow:
-						if (virtualOffsetY > 0)
-							virtualOffsetY--;
-						Invalidate();
-						return true;
+						return ScrollTo(virtualOffsetX, virtualOffsetY - 1);
 					case ConsoleKey.DownArrow:
-						if (virtualOffsetY < virtualHeight - Height)
-							virtualOffsetY++;
-						Invalidate();
-						return true;
+						return ScrollTo(virtualOffsetX, virtualOffsetY + 1);
+					case ConsoleKey.PageUp:
+						return ScrollTo(virtualOffsetX, virtualOffsetY - ContentHeight -1);
+					case ConsoleKey.PageDown:
+						return ScrollTo(virtualOffsetX, virtualOffsetY + ContentHeight - 1);
 					case ConsoleKey.Home:
-						virtualOffsetX = 0;
-						virtualOffsetY = 0;
-						Invalidate();
-						break;
+						return ScrollTo(0, 0);
+					case ConsoleKey.End:
+						return ScrollTo(virtualOffsetX, Int32.MaxValue);
 				}
 			}
 
 			return base.OnHandleEvent(e);
 		} // func OnHandleEvent
+
+		private int ContentWidth => Width - 2;
+		private int ContentHeight => Height - 2;
 
 		public string Title { get; set; } = "Text";
 	} // class TextViewDialog

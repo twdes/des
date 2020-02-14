@@ -170,20 +170,8 @@ namespace TecWare.DE.Server.UI
 				Content.Fill(0, top, width - 1, height - 1, ' ', ForegroundColor, BackgroundColor);
 
 			// render scroll
-			RenderVerticalScroll(width, height);
+			RenderVerticalScroll(width, 0, height - 1, firstVisibleIndex, view.Count);
 		} // proc OnRender
-
-		private void RenderVerticalScroll(int width, int height)
-		{
-			var startAt = view.Count > 0 ? firstVisibleIndex * height / view.Count : -1;
-			var endAt = startAt >= 0 ? (startAt + height * height / view.Count) : -1;
-
-			for (var i = 0; i < height; i++)
-			{
-				var selected = i >= startAt && i <= endAt;
-				Content.Set(width, i, selected ? Block : Shadow, ForegroundColor, BackgroundColor);
-			}
-		} // proc RenderVerticalScroll
 
 		public override bool OnHandleEvent(EventArgs e)
 		{

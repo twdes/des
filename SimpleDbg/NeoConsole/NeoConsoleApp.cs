@@ -409,6 +409,70 @@ namespace Neo.Console
 		public void Activate()
 			=> Application.ActivateOverlay(this);
 
+		#region -- Scrolling ----------------------------------------------------------
+
+		private static bool CalculateScroll(int screenOffset, int screenSize, int virtualOffset, int virtualSize, out int startAt, out int endAt)
+		{
+			screenSize--;
+			if (screenSize <= 0)
+			{
+				startAt = 0;
+				endAt = 0;
+				return false;
+			}
+
+			startAt = virtualSize > 0 ? (virtualOffset * screenSize / virtualSize) + screenOffset : -1;
+			endAt = startAt >= 0 ? (startAt + screenSize * screenSize / virtualSize) + screenOffset : -1;
+			return true;
+		} // proc CalculateScroll
+
+		protected void RenderVerticalScroll(int left, int top, int bottom, int virtualOffset, int virtualSize)
+		{
+			if (!CalculateScroll(top, bottom - top + 1, virtualOffset, virtualSize, out var startAt, out var endAt))
+				return;
+
+			for (var i = top; i <= bottom; i++)
+			{
+				var selected = i >= startAt && i <= endAt;
+				Content.Set(left, i, selected ? Block : Shadow, ForegroundColor, BackgroundColor);
+			}
+		} // proc RenderVerticalScroll
+
+		protected void RenderHorizontalScroll(int left, int right, int top, int virtualOffset, int virtualSize)
+		{
+			if (!CalculateScroll(left, right - left + 1, virtualOffset, virtualSize, out var startAt, out var endAt))
+				return;
+
+			for (var i = left; i <= right; i++)
+			{
+				var selected = i >= startAt && i <= endAt;
+				Content.Set(i, top, selected ? Block : Shadow, ForegroundColor, BackgroundColor);
+			}
+		} // proc RenderHorizontalScroll
+
+		protected bool ValidateScrollOffset(ref int offset, int newOffset, int screenSize, int virtualSize)
+		{
+			if (newOffset < 0)
+				newOffset = 0;
+			else if (newOffset > virtualSize - screenSize)
+			{
+				if (virtualSize <= screenSize)
+					newOffset = 0;
+				else
+					newOffset = virtualSize - screenSize;
+			}
+			
+			if (newOffset != offset)
+			{
+				offset = newOffset;
+				return true;
+			}
+			else
+				return false;
+		} // proc ValidateScrollOffset
+
+		#endregion
+
 		public bool IsActive => Application.ActiveOverlay == this;
 
 		public override bool IsRenderable => Position == ConsoleOverlayPosition.Console ? base.IsRenderable && IsActive : base.IsRenderable;
