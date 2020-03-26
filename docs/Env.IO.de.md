@@ -34,3 +34,18 @@ delete(file, throwException)
 
 fileExists(file)
 :   Prüft ob die Datei existiert.
+
+LocalToUnc(localPath)
+:   Übersetzt einen Pfad
+
+UncToLocal(uncPath)
+:   Übersetzt einen Pfad
+
+UncShares
+:   Zeigt die Server shares an
+
+IncludeTrailingBackslash(path)
+:   Fügt DirectorySeperator an
+
+ExcludeTrailingBackslash(path)
+:   Entfernt DirectorySeperator

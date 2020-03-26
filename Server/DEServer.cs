@@ -1634,6 +1634,44 @@ namespace TecWare.DE.Server
 			[LuaMember("popen")]
 			public static LuaFile OpenProcess(string program, string mode = "r")
 				=> new LuaFilePackage().popen(program, mode);
+
+			/// <summary>Translate a local path to an remotePath.</summary>
+			/// <param name="localPath"></param>
+			/// <returns></returns>
+			[LuaMember]
+			public static LuaResult LocalToUnc(string localPath)
+			{
+				var r = ShareInfo.TryLocalToUnc(localPath, out var uncPath);
+				return new LuaResult(uncPath, r);
+			} // func LocalToUnc
+
+			/// <summary>Translate a remote path to an unc path.</summary>
+			/// <param name="uncPath"></param>
+			/// <returns></returns>
+			[LuaMember]
+			public static LuaResult UncToLocal(string uncPath)
+			{
+				var r = ShareInfo.TryUncToLocal(uncPath, out var localPath);
+				return new LuaResult(localPath, r);
+			} // func LocalToUnc
+
+			/// <summary>Return all shares.</summary>
+			[LuaMember]
+			public static IEnumerable<ShareInfo> UncShares => ShareInfo.Shares;
+
+			/// <summary></summary>
+			/// <param name="path"></param>
+			/// <returns></returns>
+			[LuaMember]
+			public string IncludeTrailingBackslash(string path)
+				=> Procs.IncludeTrailingBackslash(path);
+
+			/// <summary></summary>
+			/// <param name="path"></param>
+			/// <returns></returns>
+			[LuaMember]
+			public string ExcludeTrailingBackslash(string path)
+				=> Procs.ExcludeTrailingBackslash(path);
 		} // func DELuaIO
 
 		#endregion

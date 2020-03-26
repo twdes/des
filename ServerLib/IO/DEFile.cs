@@ -16,8 +16,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Win32;
+using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.IO
 {
@@ -74,6 +77,152 @@ namespace TecWare.DE.Server.IO
 			=> new StreamWriter(this, encoding ?? Encoding.UTF8, 4096, true);
 
 	} // class DETransactionStream
+
+	#endregion
+
+	#region -- class ShareInfo --------------------------------------------------------
+
+	/// <summary>Simple structure to represent a share.</summary>
+	public sealed class ShareInfo
+	{
+		/// <summary>Initialize share info</summary>
+		/// <param name="name">Name of the share.</param>
+		/// <param name="path">Local path of the share.</param>
+		/// <param name="remark"></param>
+		/// <param name="maxUses"></param> 
+		public ShareInfo(string name, string path, string remark, uint maxUses)
+		{
+			Name = name ?? throw new ArgumentNullException(nameof(name));
+			Path = path ?? throw new ArgumentNullException(nameof(path));
+
+			Remark = remark;
+			MaxUses = maxUses;
+		} // ctor
+
+		/// <summary>Name of the share.</summary>
+		public string Name { get; }
+		/// <summary>Local path of the share.</summary>
+		public string Path { get; }
+		/// <summary>Remark of the share.</summary>
+		public string Remark { get; }
+		/// <summary>Number of users.</summary>
+		public uint MaxUses { get; }
+
+		// -- Static ----------------------------------------------------------
+
+		private static readonly CachedProperty<Dictionary<string, ShareInfo>> shares = new CachedProperty<Dictionary<string, ShareInfo>>(new Dictionary<string, ShareInfo>(StringComparer.OrdinalIgnoreCase), ReadShares, 10000);
+
+		private static bool TryParseShareInfo(string[] values, string name, out ShareInfo share)
+		{
+			string path = null;
+			string remark = null;
+			var maxUses = 0u;
+
+			foreach (var c in values)
+			{
+				if (c.StartsWith("ShareName=", StringComparison.OrdinalIgnoreCase))
+					name = c.Substring(10).Trim();
+				else if (c.StartsWith("Path=", StringComparison.OrdinalIgnoreCase))
+					path = c.Substring(5).Trim();
+				else if (c.StartsWith("Remark=", StringComparison.OrdinalIgnoreCase))
+					remark = c.Substring(7).Trim();
+				else if (c.StartsWith("MaxUses=", StringComparison.OrdinalIgnoreCase) && UInt32.TryParse(c.Substring(8), out var tmp))
+					maxUses = tmp;
+			}
+
+			if (String.IsNullOrEmpty(path))
+			{
+				share = null;
+				return false;
+			}
+			else
+			{
+				share = new ShareInfo(name, Procs.IncludeTrailingBackslash(path), remark, maxUses);
+				return true;
+			}
+		} // func TryParseShareInfo
+
+		private static void ReadShares(Dictionary<string, ShareInfo> value)
+		{
+			value.Clear();
+
+			using (var r = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\LanmanServer\Shares", false))
+			{
+				foreach (var n in r.GetValueNames())
+				{
+					if (r.GetValue(n) is string[] values && TryParseShareInfo(values, n, out var share))
+						value[share.Name] = share;
+				}
+			}
+		} // proc ReadShares
+
+		/// <summary>Translate a local path to an remotePath.</summary>
+		/// <param name="localPath"></param>
+		/// <param name="uncPath"></param>
+		/// <returns></returns>
+		public static bool TryLocalToUnc(string localPath, out string uncPath)
+		{
+			localPath = System.IO.Path.GetFullPath(localPath);
+
+			lock (shares)
+			{
+				var shareName = String.Empty;
+				var sharePathLength = -1;
+
+				foreach (var v in shares.Value)
+				{
+					if (localPath.StartsWith(v.Value.Path, StringComparison.OrdinalIgnoreCase) && sharePathLength < v.Value.Path.Length)
+					{
+						shareName = v.Key;
+						sharePathLength = v.Value.Path.Length;
+					}
+
+				}
+
+				if (sharePathLength <= 0)
+				{
+					uncPath = localPath;
+					return false;
+				}
+
+				uncPath = "\\\\" + Environment.MachineName + "\\" + shareName + "\\" + localPath.Substring(sharePathLength);
+				return true;
+			}
+		} // func TryLocalToUnc
+
+		/// <summary>Translate a remote path to an unc path.</summary>
+		/// <param name="uncPath"></param>
+		/// <param name="localPath"></param>
+		/// <returns></returns>
+		public static bool TryUncToLocal(string uncPath, out string localPath)
+		{
+			lock (shares)
+			{
+				if (Procs.TrySplitUncPath(uncPath, out var serverName, out var shareName, out var sharePath)
+					&& String.Compare(serverName, Environment.MachineName, StringComparison.OrdinalIgnoreCase) == 0
+					&& shares.Value.TryGetValue(shareName, out var share))
+				{
+					localPath = share.Path + sharePath;
+					return true;
+				}
+				else
+				{
+					localPath = uncPath;
+					return false;
+				}
+			}
+		} // func TryUncToLocal
+
+		/// <summary>Return all shares.</summary>
+		public static IReadOnlyList<ShareInfo> Shares
+		{
+			get
+			{
+				lock (shares)
+					return shares.Value.Values.ToArray();
+			}
+		} // func GetShares
+	} // class ShareInfo
 
 	#endregion
 

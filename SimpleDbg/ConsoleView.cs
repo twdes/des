@@ -161,10 +161,11 @@ namespace TecWare.DE.Server
 						if (c.width >= 0)
 							continue;
 
-						var varColumnWidth = (totalVariableWidth * Math.Abs(c.width) / variableWidth);
+						var varColumnWidth = (totalVariableWidth * Math.Abs(c.width) / variableWidth) - 1;
 						if (varColumnWidth < c.MinWidth)
 							varColumnWidth = c.MinWidth;
-						else if (c.MaxWidth > 0 && c.MaxWidth < varColumnWidth)
+						
+						if (c.MaxWidth > 0 && c.MaxWidth < varColumnWidth)
 							c.width = c.MaxWidth;
 						else
 							c.width = varColumnWidth;
