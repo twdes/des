@@ -772,7 +772,10 @@ namespace TecWare.DE.Server
 				}
 				catch (WebSocketException e)
 				{
-					log.Except($"Debug session closed ({e.WebSocketErrorCode}).", e);
+					if (e.WebSocketErrorCode == WebSocketError.Success)
+						log.Info($"Debug session closed ({e.WebSocketErrorCode}).\n{e.Message}\n>{e.InnerException?.Message}");
+					else
+						log.Except($"Debug session closed ({e.WebSocketErrorCode}).", e);
 				}
 				catch (Exception e)
 				{
