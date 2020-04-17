@@ -54,6 +54,7 @@
   <ItemGroup>
     <Compile Include="Configuration.cs" />
     <Compile Include="CsvTest.cs" />
+    <Compile Include="DynamicRow.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="LuaEx.cs" />
     <Compile Include="HtmlMimeType.cs" />
