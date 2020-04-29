@@ -20,8 +20,12 @@ using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
+using Neo.IronLua;
+using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -133,6 +137,8 @@ namespace TecWare.DE.Server
 			{
 				var c = (CronCacheItem)item;
 
+				xml.WriteStartProperty("item");
+				
 				xml.WriteAttributeProperty("id", c.Job.UniqueName);
 				xml.WriteAttributeProperty("displayname", c.Job.DisplayName);
 				xml.WriteAttributeProperty("bound", c.Job.Bound.ToString());
@@ -144,6 +150,8 @@ namespace TecWare.DE.Server
 				}
 				if (c.NextRun.HasValue)
 					xml.WriteAttributeProperty("nextrun", c.NextRun.Value);
+				
+				xml.WriteEndProperty();
 			} // proc WriteItem
 
 			public static CronItemCacheDescriptor Instance { get; } = new CronItemCacheDescriptor();
@@ -430,7 +438,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Job-Verwaltung ---------------------------------------------------------
+		#region -- Job-Verwaltung -----------------------------------------------------
 
 		private void CronIdle()
 		{
@@ -444,11 +452,12 @@ namespace TecWare.DE.Server
 						var now = DateTime.Now;
 						for (var i = 0; i < cronItemCache.Length; i++)
 						{
-							if (cronItemCache[i].NextRun.HasValue && cronItemCache[i].NextRun.Value < now)
+							ref var cronCacheItem = ref cronItemCache[i];
+							if (cronCacheItem.NextRun.HasValue && cronCacheItem.NextRun.Value < now)
 							{
-								if (!StartJob(cronItemCache[i].Job))
+								if (!StartJob(cronCacheItem.Job))
 								{
-									cronItemCache[i].NextRun = cronItemCache[i].NextRun.Value.Add(TimeSpan.FromSeconds(60)); // add 60sec if the job is busy
+									cronCacheItem.NextRun = cronCacheItem.NextRun.Value.Add(TimeSpan.FromSeconds(60)); // add 60sec if the job is busy
 								}
 							}
 						}
@@ -562,6 +571,46 @@ namespace TecWare.DE.Server
 			}
 			Task.WaitAll(tasks.ToArray());
 		} // proc CancelJobs
+
+		[LuaMember]
+		public ICronJobItem GetJobItem(string jobId)
+		{
+			lock (cronItemCache)
+			{
+				if (cronItemCache != null)
+				{
+					for(var i = 0;i<cronItemCache.Length;i++)
+					{
+						if (String.Compare(cronItemCache[i].Job.UniqueName, jobId, StringComparison.OrdinalIgnoreCase) == 0)
+							return cronItemCache[i].Job;
+					}
+				}
+				return null;
+			}
+		} // func GetJobItem
+
+		[LuaMember]
+		public bool ResetNextRuntime(ICronJobItem job)
+		{
+			if (job != null && !job.Bound.IsEmpty)
+			{
+				UpdateNextRuntime(job, job.Bound.GetNext(DateTime.Now), true, false);
+				return true;
+			}
+			else
+				return false;
+		} // func ResetNextRuntime
+
+		[DEConfigHttpAction("resetJobRuntime", IsSafeCall = true, SecurityToken = SecuritySys)]
+		public XElement HttpResetNextRuntim(string id)
+		{
+			var job = GetJobItem(id);
+			if (job == null)
+				throw new HttpResponseException(HttpStatusCode.NotFound, "Job not found.");
+			return new XElement("state",
+				new XElement("reset", ResetNextRuntime(job))
+			);
+		} // func HttpResetNextRuntim
 
 		#endregion
 

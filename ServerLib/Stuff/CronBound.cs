@@ -20,7 +20,7 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Stuff
 {
-	#region -- struct CronBound ---------------------------------------------------------
+	#region -- struct CronBound -------------------------------------------------------
 
 	///////////////////////////////////////////////////////////////////////////////
 	/// <summary>Descripes time boundaries</summary>
@@ -38,12 +38,12 @@ namespace TecWare.DE.Server.Stuff
 	[Serializable]
 	public struct CronBound : IFormattable, IEquatable<CronBound>
 	{
-		private byte[] days;
-		private byte[] weekDays;
-		private byte[] hours;
-		private byte[] minutes;
+		private readonly byte[] days;
+		private readonly byte[] weekDays;
+		private readonly byte[] hours;
+		private readonly byte[] minutes;
 
-		#region -- Ctor -------------------------------------------------------------------
+		#region -- Ctor ---------------------------------------------------------------
 
 		/// <summary>Erstellt aus einer Zeichenkette eine Zeitschranke.</summary>
 		/// <param name="value">Beschreibung Zeitschranke</param>
@@ -81,8 +81,7 @@ namespace TecWare.DE.Server.Stuff
 					// Create a bit mask for the weekdays
 					foreach (var segment in value.Substring(0, daysSep).Split(','))
 					{
-						int index;
-						if (Int32.TryParse(segment, out index))
+						if (Int32.TryParse(segment, out var index))
 						{
 							if (index >= 0 && index < values.Length)
 								values[index] = true;
@@ -138,7 +137,7 @@ namespace TecWare.DE.Server.Stuff
 			{
 				var ret = new byte[count];
 				var offset = 0;
-				for (int i = min; i <= max; i++)
+				for (var i = min; i <= max; i++)
 				{
 					if (values[i])
 						ret[offset++] = (byte)i;
@@ -153,8 +152,6 @@ namespace TecWare.DE.Server.Stuff
 			var lastLastIndex = -1;
 			foreach (var cur in values.Split(','))
 			{
-				int index;
-
 				if (cur == "*")
 				{
 					var startAt = 0;
@@ -170,10 +167,10 @@ namespace TecWare.DE.Server.Stuff
 #endif
 					}
 
-					for (int i = startAt; i < maxValueRow; i += step)
+					for (var i = startAt; i < maxValueRow; i += step)
 						result[i] = true;
 				}
-				else if (int.TryParse(cur, out index))
+				else if (Int32.TryParse(cur, out var index))
 				{
 					if (index >= 0 && index < result.Length)
 					{
@@ -215,29 +212,24 @@ namespace TecWare.DE.Server.Stuff
 
 		#endregion
 
-		#region -- IEquatable Member ------------------------------------------------------
+		#region -- IEquatable Member --------------------------------------------------
 
 		/// <summary>Vergleicht die zwei Schranken miteinander.</summary>
 		/// <param name="other">Vergleichswert</param>
 		/// <returns><c>true</c>, wenn die Schranken exakt gleich sind.</returns>
 		public bool Equals(CronBound other)
-		{
-			return CompareTo(ref other);
-		} // func Equals
+			=> CompareTo(ref other);
 
 		/// <summary>Vergleicht die zwei Schranken miteinander.</summary>
 		/// <param name="obj">Vergleichswert. Es können Zeichenfolgen und andere Schranken (<c>CronBound</c>'s) übergeben werden.</param>
 		/// <returns><c>true</c>, wenn die Schranken exakt gleich sind.</returns>
 		public override bool Equals(object obj)
 		{
-			if (obj is CronBound)
-			{
-				var o = (CronBound)obj;
+			if (obj is CronBound o)
 				return CompareTo(ref o);
-			}
-			else if (obj is string)
+			else if (obj is string s)
 			{
-				CronBound o = new CronBound((string)obj);
+				o = new CronBound(s);
 				return CompareTo(ref o);
 			}
 			else
@@ -261,7 +253,7 @@ namespace TecWare.DE.Server.Stuff
 			if (array != null)
 			{
 				sum++;
-				for (int i = 0; i < array.Length; i++)
+				for (var i = 0; i < array.Length; i++)
 					sum += array[i];
 			}
 		} // proc SumArray
@@ -271,23 +263,21 @@ namespace TecWare.DE.Server.Stuff
 		/// <returns><c>true</c>, wenn die Schranken exakt gleich sind.</returns>
 		public bool CompareTo(ref CronBound o)
 		{
-			return Procs.CompareBytes(days, o.days) &&
-				Procs.CompareBytes(weekDays, o.weekDays) &&
-				Procs.CompareBytes(hours, o.hours) &&
-				Procs.CompareBytes(minutes, o.minutes);
+			return Procs.CompareBytes(days, o.days) 
+				&& Procs.CompareBytes(weekDays, o.weekDays) 
+				&& Procs.CompareBytes(hours, o.hours) 
+				&& Procs.CompareBytes(minutes, o.minutes);
 		} // func CompareTo
 
 		#endregion
 
-		#region -- ToString ---------------------------------------------------------------
+		#region -- ToString -----------------------------------------------------------
 
 		/// <summary>Wandelt die Zeitschranke wieder in eine Zeichenkette um.</summary>
 		/// <returns>Zeitschranke als lesbare Zeichenkette.</returns>
 		public override string ToString()
-		{
-			return ToString(null, CultureInfo.CurrentCulture);
-		} // func ToString
-
+			=> ToString(null, CultureInfo.CurrentCulture);
+		
 		/// <summary>Wandelt die Zeitschranke wieder in eine Zeichenkette um.</summary>
 		/// <param name="format">Derzeit ohne Bedeutung. Es sollte <c>null</c> übergeben werden.</param>
 		/// <param name="formatProvider">Gibt die Kultur</param>
@@ -297,26 +287,30 @@ namespace TecWare.DE.Server.Stuff
 			var dtfi = GetDateTimeFormatInfo(formatProvider);
 			var sb = new StringBuilder();
 			if (days != null)
-				for (int i = 0; i < days.Length; i++)
+			{
+				for (var i = 0; i < days.Length; i++)
 				{
 					if (sb.Length > 0)
 						sb.Append(',');
 					sb.Append(days[i]);
 				}
+			}
 			if (weekDays != null)
-				for (int i = 0; i < weekDays.Length; i++)
+			{
+				for (var i = 0; i < weekDays.Length; i++)
 				{
 					if (sb.Length > 0)
 						sb.Append(',');
 					sb.Append(dtfi.ShortestDayNames[weekDays[i]]);
 				}
+			}
 
 			if (sb.Length > 0)
 				sb.Append(' ');
 
 			if (hours != null)
 			{
-				for (int i = 0; i < hours.Length; i++)
+				for (var i = 0; i < hours.Length; i++)
 				{
 					if (i > 0)
 						sb.Append(',');
@@ -326,24 +320,26 @@ namespace TecWare.DE.Server.Stuff
 			}
 
 			if (minutes != null)
-				for (int i = 0; i < minutes.Length; i++)
+			{
+				for (var i = 0; i < minutes.Length; i++)
 				{
 					if (i > 0)
 						sb.Append(',');
 					sb.Append(minutes[i].ToString("00"));
 				}
+			}
 
 			return sb.ToString();
 		} // func ToString
 
 		#endregion
 
-		#region -- GetNext ----------------------------------------------------------------
+		#region -- GetNext ------------------------------------------------------------
 
 		private static byte GetFollowValue(byte[] values, byte current, bool equalAllowed, out bool overflow)
 		{
 			overflow = false;
-			for (int i = 0; i < values.Length; i++)
+			for (var i = 0; i < values.Length; i++)
 			{
 				if (equalAllowed)
 				{
@@ -368,8 +364,8 @@ namespace TecWare.DE.Server.Stuff
 			var ret = new DateTime(lastTime.Year, lastTime.Month, lastTime.Day, lastTime.Hour, lastTime.Minute, 0); // Sekunden und Fragmente interessieren nicht
 
 			var changed = false;
-			var overflow = false;
-			
+			bool overflow;
+
 			// first check the minues
 			if (minutes != null)
 			{
@@ -489,13 +485,25 @@ namespace TecWare.DE.Server.Stuff
 
 		#endregion
 
-		/// <summary>Ist die Schranke Leer.</summary>
-		public bool IsEmpty { get { return days == null && weekDays == null && hours == null && minutes == null; } }
+		/// <summary></summary>
+		/// <param name="left"></param>
+		/// <param name="right"></param>
+		/// <returns></returns>
+		public static bool operator ==(CronBound left, CronBound right)
+			=> left.Equals(right);
 
-		private static CronBound empty = new CronBound();
+		/// <summary></summary>
+		/// <param name="left"></param>
+		/// <param name="right"></param>
+		/// <returns></returns>
+		public static bool operator !=(CronBound left, CronBound right)
+			=> !(left == right);
+
+		/// <summary>Ist die Schranke Leer.</summary>
+		public bool IsEmpty => days == null && weekDays == null && hours == null && minutes == null;
 
 		/// <summary>Gibt eine leere Schranke zurück.</summary>
-		public static CronBound Empty { get { return empty; } }
+		public static CronBound Empty { get; } = new CronBound();
 	} // struct CronBound
 
 	#endregion
