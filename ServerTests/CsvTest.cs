@@ -88,5 +88,26 @@ namespace TecWare.DE.Server
 				Assert.AreEqual(1, r.Row);
 			}
 		}
+
+		[TestMethod]
+		public void TestRead04()
+		{
+			const string sampleRead04 = "1;<p style=\"\"margin-top: 0\"\">Applikationszange    </p>;3";
+
+			var row = 0;
+			using (var r = new TextCsvReader(new StringReader(sampleRead04), new TextCsvSettings() { }))
+			{
+				while (r.ReadRow())
+				{
+					Assert.AreEqual(r.Count, 3);
+					Assert.AreEqual(r[0], "1");
+					Assert.AreEqual(r[1], "<p style=\"margin-top: 0\">Applikationszange    </p>");
+					Assert.AreEqual(r[2], "3");
+					Console.WriteLine(r[1]);
+					row++;
+				}
+				Assert.AreEqual(1, row);
+			}
+		}
 	}
 }
