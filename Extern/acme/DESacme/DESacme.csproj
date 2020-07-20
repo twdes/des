@@ -43,7 +43,7 @@
     <None Include="..\..\..\Server\des.licenseheader" Link="des.licenseheader" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Certes" Version="2.3.3" />
+    <PackageReference Include="Certes" Version="2.3.4" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\ServerLib\ServerLib.csproj" />

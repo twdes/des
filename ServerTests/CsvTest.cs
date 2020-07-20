@@ -20,9 +20,9 @@ namespace TecWare.DE.Server
 			"Hallo     Welt      ",
 			"\"Quote\"   1         ");
 		private static readonly string sampleSimple03 = String.Join(Environment.NewLine,
-			"Preis;Datum",
-			"5.9;2015-02-05",
-			"5.1;2015-02-02");
+			"Preis;Datum;Menge",
+			"5.9;2015-02-05;3,2",
+			";2015-02-02");
 
 		[TestMethod]
 		public void TestRead01()
@@ -65,8 +65,11 @@ namespace TecWare.DE.Server
 
 				r.UpdateColumns(
 					new TextDataRowColumn() { Name = header[0], DataType = typeof(decimal), FormatProvider = CultureInfo.InvariantCulture },
-					new TextDataRowColumn() { Name = header[1], DataType = typeof(DateTime), FormatProvider = CultureInfo.InvariantCulture }
+					new TextDataRowColumn() { Name = header[1], DataType = typeof(DateTime), FormatProvider = CultureInfo.InvariantCulture },
+					new TextDataRowColumn() { Name = header[2], DataType = typeof(decimal?), FormatProvider = CultureInfo.GetCultureInfo("de-DE") }
 				);
+
+				r.IsParsedStrict = true;
 
 				while (r.MoveNext())
 				{
@@ -75,11 +78,13 @@ namespace TecWare.DE.Server
 					{
 						Assert.AreEqual(5.9m, c[0]);
 						Assert.AreEqual(new DateTime(2015, 2, 5), c[1]);
+						Assert.AreEqual(3.2m, c[2]);
 					}
 					else if (r.Row == 1)
 					{
-						Assert.AreEqual(5.1m, c["Preis"]);
+						Assert.AreEqual(0.0m, c["Preis"]);
 						Assert.AreEqual(new DateTime(2015, 2, 2), c["Datum"]);
+						Assert.AreEqual(null, c[2]);
 					}
 					else
 						Assert.Fail();
