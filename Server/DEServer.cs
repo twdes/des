@@ -1815,8 +1815,21 @@ namespace TecWare.DE.Server
 			#region -- Client ---------------------------------------------------------
 
 			[LuaMember]
-			public DEHttpClient CreateClient(string baseUri)
-				=> DEHttpClient.Create(new Uri(baseUri, UriKind.Absolute));
+			public object CreateClient(string baseUri)
+			{
+				var uri = new Uri(baseUri, UriKind.Absolute);
+				if (uri.Scheme == "http" || uri.Scheme == "https")
+					return DEHttpClient.Create(uri);
+				else if (uri.Scheme == "ftp")
+					return new DEFtpClient(uri);
+				else if (uri.Scheme == "ftps")
+				{
+					var ftp = "ftp" + baseUri.Substring(4);
+					return new DEFtpClient(new Uri(ftp, UriKind.Absolute), true);
+				}
+				else
+					throw new ArgumentException("Invalid scheme");
+			} // func CreateClient
 
 			#endregion
 		} // class DELuaHttp
