@@ -360,8 +360,9 @@ namespace TecWare.DE.Server
 
 		private void FileSystemWatcher_Error(object sender, ErrorEventArgs e)
 		{
-			Log.Warn("FileSystemWatcher failed.", e.GetException());
+			Log.Warn($"FileSystemWatcher failed (state: {fileSystemWatcher.EnableRaisingEvents}).", e.GetException());
 			// start a scan
+			fileSystemWatcher.EnableRaisingEvents = true;
 			StartRefreshFiles(200);
 		} // event FileSystemWatcher_Error
 
