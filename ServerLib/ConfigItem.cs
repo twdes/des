@@ -145,16 +145,16 @@ namespace TecWare.DE.Server
 		/// <summary>Erzeugt die Aktion mit den angegebenen Namen.</summary>
 		/// <param name="actionName">Name der Aktion</param>
 		public DEConfigHttpActionAttribute(string actionName)
-		{
-			this.ActionName = actionName;
-		} // ctor
+			=> ActionName = actionName;
 
-		/// <summary>Name der Aktion</summary>
+		/// <summary>Name of the action</summary>
 		public string ActionName { get; }
 		/// <summary>Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um die Aktion auszuführen.</summary>
 		public string SecurityToken { get; set; }
 		/// <summary>Sollen Exceptions in eine gültige Rückgabe umgewandelt werden (default: false).</summary>
 		public bool IsSafeCall { get; set; } = false;
+		/// <summary>Should this action get a log scope. Is a parameter of the type <see cref="LogMessageScopeProxy"/> is defined, AutoLog is always <c>true</c>.</summary>
+		public bool IsAutoLog { get; set; } = false;
 	} // class DEConfigHttpActionAttribute
 
 	#endregion
@@ -267,13 +267,13 @@ namespace TecWare.DE.Server
 
 			private readonly XElement configNew;
 			private readonly XElement configOld;
-			private bool configurationChanged;
-			private DateTime lastWrite;
+			private readonly bool configurationChanged;
+			private readonly DateTime lastWrite;
 
 			private IDisposable itemLock = null;
 			private Exception loadException = null;
 			private PropertyDictionary data = null;
-			private LinkedList<Action> endReadConfig = new LinkedList<Action>();
+			private readonly LinkedList<Action> endReadConfig = new LinkedList<Action>();
 
 			#region -- Ctor/Dtor ------------------------------------------------------
 
@@ -357,7 +357,7 @@ namespace TecWare.DE.Server
 					for (var i = item.subItems.Count - 1; i >= 0; i--)
 					{
 						var curI = item.subItems[i];
-						if (!subLoads.Exists(c => Object.ReferenceEquals(c.item, curI)))
+						if (!subLoads.Exists(c => ReferenceEquals(c.item, curI)))
 						{
 							item.UnregisterSubItem(i, curI);
 						}
@@ -442,17 +442,16 @@ namespace TecWare.DE.Server
 			} // proc RegisterSubItem
 
 			public void EndReadAction(Action action)
-			{
-				endReadConfig.AddLast(action);
-			} // proc EndReadAction
+				=> endReadConfig.AddLast(action);
 
-			public string GetFullFileName(string fileName = null) => ProcsDE.GetFileName(configNew, fileName);
+			public string GetFullFileName(string fileName = null) 
+				=> ProcsDE.GetFileName(configNew, fileName);
 
 			public XElement ConfigNew => configNew;
 			public XElement ConfigOld => configOld;
 			public bool IsConfigurationChanged => configurationChanged;
 
-			public Exception LoadException { get { return loadException; } set { loadException = value; } }
+			public Exception LoadException { get => loadException; set => loadException = value; }
 			public bool IsLoadedSuccessful => loadException == null;
 			public DateTime LastWrite => lastWrite;
 
@@ -468,7 +467,7 @@ namespace TecWare.DE.Server
 				}
 			} // prop Tags
 
-			public IEnumerable<DEConfigLoading> SubLoadings { get { return subLoads; } }
+			public IEnumerable<DEConfigLoading> SubLoadings => subLoads;
 		} // class DEConfigLoading
 
 		#endregion
@@ -876,15 +875,16 @@ namespace TecWare.DE.Server
 			where T : class
 		{
 			using (walkUnsafe ? null : EnterReadLock())
+			{
 				foreach (var cur in subItems)
 				{
-					var r = cur as T;
-					if (r != null)
+					if (cur is T r)
 						action(r);
 
 					if (recursive)
-						cur.WalkChildren<T>(action, true, walkUnsafe);
+						cur.WalkChildren(action, true, walkUnsafe);
 				}
+			}
 		} // func WalkChildren
 
 		/// <summary></summary>
@@ -901,14 +901,13 @@ namespace TecWare.DE.Server
 			{
 				foreach (var cur in subItems)
 				{
-					var r = cur as T;
-					if (r != null && predicate(r))
+					if (cur is T r && predicate(r))
 					{
 						action?.Invoke(r);
 						return true;
 					}
 
-					if (recursive && cur.FirstChildren<T>(predicate, action, true))
+					if (recursive && cur.FirstChildren(predicate, action, true))
 						return true;
 				}
 			}
@@ -916,10 +915,10 @@ namespace TecWare.DE.Server
 		} // func FirstChildren
 
 		/// <summary></summary>
-		/// <param name="sName"></param>
+		/// <param name="name"></param>
 		/// <returns></returns>
-		public DEConfigItem UnsafeFind(string sName)
-			=> subItems.Find(c => String.Compare(c.Name, sName, StringComparison.OrdinalIgnoreCase) == 0);
+		public DEConfigItem UnsafeFind(string name)
+			=> subItems.Find(c => String.Compare(c.Name, name, StringComparison.OrdinalIgnoreCase) == 0);
 
 		private StringBuilder GetNodeUri(StringBuilder sb)
 		{
@@ -1390,44 +1389,52 @@ namespace TecWare.DE.Server
 
 		// -- Static ----------------------------------------------------------------
 
-		private static MethodInfo miGetPropertyObject;
-		private static MethodInfo miGetPropertyString;
-		private static MethodInfo miGetPropertyGeneric;
+		private static readonly MethodInfo getPropertyObjectMethodInfo;
+		private static readonly MethodInfo getPropertyStringMethodInfo;
+		private static readonly MethodInfo getPropertyGenericMethodInfo;
 
-		private static PropertyInfo piInvariantCulture;
-		private static MethodInfo miConvertToStringFallBack;
-		private static MethodInfo miConvertFromInvariantString;
+		private static readonly PropertyInfo invariantCulturePropertyInfo;
+		private static readonly MethodInfo convertToStringFallBackMethodInfo;
+		private static readonly MethodInfo convertFromInvariantStringMethodInfo;
+
+		private static readonly MethodInfo disposeMethodInfo;
+
+		private static readonly MethodInfo writeActionStartMethodInfo;
+		private static readonly MethodInfo writeActionResultMethodInfo;
+
+		private static readonly MethodInfo getInputStreamMethodInfo;
+		private static readonly MethodInfo getInputTextReaderMethodInfo;
 
 		static DEConfigItem()
 		{
 			var typePropertyDictionaryExtensions = typeof(PropertyDictionaryExtensions).GetTypeInfo();
-			foreach (var mi in typePropertyDictionaryExtensions.GetDeclaredMethods("GetProperty"))
+			foreach (var mi in typePropertyDictionaryExtensions.GetDeclaredMethods(nameof(PropertyDictionaryExtensions.GetProperty)))
 			{
 				var parameterInfo = mi.GetParameters();
 				if (parameterInfo.Length == 3)
 				{
 					if (parameterInfo[2].ParameterType == typeof(object))
-						miGetPropertyObject = mi;
+						getPropertyObjectMethodInfo = mi;
 					else if (parameterInfo[2].ParameterType == typeof(string))
-						miGetPropertyString = mi;
+						getPropertyStringMethodInfo = mi;
 					else if (mi.IsGenericMethodDefinition)
-						miGetPropertyGeneric = mi;
+						getPropertyGenericMethodInfo = mi;
 				}
 			}
-			if (miGetPropertyObject == null || miGetPropertyString == null || miGetPropertyGeneric == null)
+			if (getPropertyObjectMethodInfo == null || getPropertyStringMethodInfo == null || getPropertyGenericMethodInfo == null)
 				throw new ArgumentNullException("sctor", "PropertyDictionaryExtensions");
 
-			piInvariantCulture = typeof(CultureInfo).GetProperty("InvariantCulture", BindingFlags.Public | BindingFlags.Static | BindingFlags.GetProperty);
-			if (piInvariantCulture == null)
-				throw new ArgumentNullException("sctor", "CulturInfo");
+			disposeMethodInfo = typeof(IDisposable).GetMethod(nameof(IDisposable.Dispose)) ?? throw new ArgumentNullException("sstor", "Dispose");
 
-			miConvertToStringFallBack = typeof(Convert).GetMethod("ToString", BindingFlags.Public | BindingFlags.Static | BindingFlags.InvokeMethod, null, new Type[] { typeof(object), typeof(IFormatProvider) }, null);
-			if (miConvertToStringFallBack == null)
-				throw new ArgumentNullException("sctor", "Convert");
+			writeActionStartMethodInfo = typeof(DEConfigItem).GetMethod(nameof(DEConfigItem.WriteActionStart)) ?? throw new ArgumentNullException("sstor", "WriteActionStart");
+			writeActionResultMethodInfo = typeof(DEConfigItem).GetMethod(nameof(DEConfigItem.WriteActionResult)) ?? throw new ArgumentNullException("sstor", "WriteActionResult");
 
-			miConvertFromInvariantString = typeof(TypeConverter).GetMethod("ConvertFromInvariantString", BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string) }, null);
-			if (miConvertFromInvariantString == null)
-				throw new ArgumentNullException("sctor", "TypeConverter");
+			getInputStreamMethodInfo = typeof(IDEWebRequestScope).GetMethod(nameof(IDEWebRequestScope.GetInputStream)) ?? throw new ArgumentNullException("sstor", "GetInputStream");
+			getInputTextReaderMethodInfo = typeof(IDEWebRequestScope).GetMethod(nameof(IDEWebRequestScope.GetInputTextReader)) ?? throw new ArgumentNullException("sstor", "GetInputStream");
+
+			invariantCulturePropertyInfo = typeof(CultureInfo).GetProperty(nameof(CultureInfo.InvariantCulture), BindingFlags.Public | BindingFlags.Static | BindingFlags.GetProperty) ?? throw new ArgumentNullException("sctor", "CulturInfo");
+			convertToStringFallBackMethodInfo = typeof(Convert).GetMethod(nameof(Convert.ToString), BindingFlags.Public | BindingFlags.Static | BindingFlags.InvokeMethod, null, new Type[] { typeof(object), typeof(IFormatProvider) }, null) ?? throw new ArgumentNullException("sctor", "Convert");
+			convertFromInvariantStringMethodInfo = typeof(TypeConverter).GetMethod(nameof(TypeConverter.ConvertFromInvariantString), BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string) }, null) ?? throw new ArgumentNullException("sctor", "TypeConverter");
 		} // sctor	
 
 		internal static string GetSourceUri(XmlSchemaObject x)

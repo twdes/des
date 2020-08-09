@@ -21,6 +21,9 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Net;
 using System.Reflection;
+using System.Text;
+using System.Xml.Linq;
+using Microsoft.SqlServer.Server;
 using Neo.IronLua;
 using TecWare.DE.Networking;
 using TecWare.DE.Server.Http;
@@ -33,8 +36,9 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	/// <param name="item"></param>
 	/// <param name="context"></param>
+	/// <param name="log"></param>
 	/// <returns></returns>
-	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEWebRequestScope context);
+	public delegate object DEConfigActionDelegate(DEConfigItem item, IDEWebRequestScope context, LogMessageScopeProxy log);
 
 	#endregion
 
@@ -49,6 +53,7 @@ namespace TecWare.DE.Server
 		private readonly DEConfigActionDelegate action;
 		private readonly bool isNativeCall;
 		private readonly bool isSafeCall;
+		private readonly bool isAutoLog;
 
 		/// <summary></summary>
 		/// <param name="securityToken"></param>
@@ -56,31 +61,46 @@ namespace TecWare.DE.Server
 		/// <param name="action"></param>
 		/// <param name="isSafeCall"></param>
 		/// <param name="methodDescription"></param>
-		public DEConfigAction(string securityToken, string description, DEConfigActionDelegate action, bool isSafeCall, MethodInfo methodDescription)
+		/// <param name="isAutoLog"></param>
+		public DEConfigAction(string securityToken, string description, DEConfigActionDelegate action, bool isSafeCall, MethodInfo methodDescription, bool isAutoLog)
 		{
 			this.securityToken = securityToken;
 			this.description = description;
 			this.action = action;
-			this.isNativeCall = methodDescription == null ? false : Array.Exists(methodDescription.GetParameters(), p => p.ParameterType == typeof(IDEWebRequestScope));
-			this.isSafeCall = isNativeCall ? false : isSafeCall;
+
+			if (methodDescription != null)
+			{
+				var parameterInfo = methodDescription.GetParameters();
+				for (var i = 0; i < parameterInfo.Length; i++)
+				{
+					if (parameterInfo[i].ParameterType == typeof(IDEWebRequestScope))
+						isNativeCall = true;
+					else if (parameterInfo[i].ParameterType == typeof(LogMessageScopeProxy))
+						isAutoLog = true;
+				}
+			}
+		
+			this.isSafeCall = !isNativeCall && isSafeCall;
 			this.methodDescription = methodDescription;
+			this.isAutoLog = isAutoLog;
 		} // ctor
 
 		/// <summary></summary>
 		/// <param name="item"></param>
 		/// <param name="context"></param>
+		/// <param name="log"></param>
 		/// <returns></returns>
-		public object Invoke(DEConfigItem item, IDEWebRequestScope context)
+		public object Invoke(DEConfigItem item, IDEWebRequestScope context, LogMessageScopeProxy log = null)
 		{
 			if (action != null)
 			{
 				if (isNativeCall)
 				{
-					action(item, context);
+					action(item, context, log);
 					return DBNull.Value;
 				}
 				else
-					return action(item, context);
+					return action(item, context, log);
 			}
 			else
 				return null;
@@ -96,6 +116,8 @@ namespace TecWare.DE.Server
 		public string SecurityToken => securityToken;
 		/// <summary>Is this action called in the safe mode.</summary>
 		public bool IsSafeCall => isSafeCall;
+		/// <summary>Should this action create a log scope.</summary>
+		public bool IsAutoLog => isAutoLog;
 
 		/// <summary></summary>
 		public bool IsEmpty => action == null;
@@ -103,7 +125,7 @@ namespace TecWare.DE.Server
 		// -- Static ----------------------------------------------------------
 
 		/// <summary></summary>
-		public static DEConfigAction Empty { get; } = new DEConfigAction(null, null, null, false, null);
+		public static DEConfigAction Empty { get; } = new DEConfigAction(null, null, null, false, null, false);
 	} // class DEConfigAction
 
 	#endregion
@@ -358,12 +380,12 @@ namespace TecWare.DE.Server
 		/// <returns>Rückgabe</returns>
 		public (bool, object) InvokeAction(string actionName, IDEWebRequestScope context)
 		{
-			// Suche die Action im Cache
+			// Lookup action within cache
 			DEConfigAction a;
 			lock (actions)
 			{
 				a = actions[actionName];
-				if (a == null) // Beziehungsweise erzeuge sie
+				if (a == null) // No cached action, create execution code
 				{
 					a = CompileAction(actionName);
 					if (a == null)
@@ -372,42 +394,51 @@ namespace TecWare.DE.Server
 				}
 			}
 
-			// Führe die Aktion aus
-			try
+			// Execute action
+			using (var log = a.IsAutoLog ? Log.CreateScope(LogMsgType.Information, true, true) : null)
 			{
-				if (a == DEConfigAction.Empty)
-					throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
-
-				context.DemandToken(a.SecurityToken);
-				using (context.Use())
-					return (true, a.Invoke(this, context)); // support for async actions is missing -> results in a InvokeAcionAsync
-			}
-			catch (Exception e)
-			{
-				if (!a.IsSafeCall || context.IsOutputStarted || (e is HttpResponseException)) // Antwort kann nicht mehr gesendet werden
-					throw;
-
-				// Write protocol
-				if (e is ILuaUserRuntimeException userMessage)
+				try
 				{
-					Log.LogMsg(LogMsgType.Warning, e.GetMessageString());
-					return (false, CreateDefaultReturn(context, DEHttpReturnState.User, userMessage.Message));
+					if (a == DEConfigAction.Empty)
+						throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
+
+					context.DemandToken(a.SecurityToken);
+					using (context.Use())
+						return (true, a.Invoke(this, context, log)); // support for async actions is missing -> results in a InvokeAcionAsync
 				}
-				else
+				catch (Exception e)
 				{
-					Log.LogMsg(LogMsgType.Error, e.GetMessageString());
-					return (false, CreateDefaultReturn(context, DEHttpReturnState.Error, e.Message));
+					if (!a.IsSafeCall || context.IsOutputStarted || (e is HttpResponseException)) // Antwort kann nicht mehr gesendet werden
+						throw;
+
+					// Write protocol
+					if (e is ILuaUserRuntimeException userMessage)
+					{
+						if (log == null)
+							Log.Warn(e);
+						else
+							log.WriteWarning(e);
+						return (false, CreateDefaultReturn(context, DEHttpReturnState.User, userMessage.Message));
+					}
+					else
+					{
+						if (log == null)
+							Log.Except(e);
+						else
+							log.WriteException(e);
+						return (false, CreateDefaultReturn(context, DEHttpReturnState.Error, e.Message));
+					}
 				}
 			}
 		} // func InvokeAction
 
-		private DEConfigAction CompileTypeAction(string sAction)
+		private DEConfigAction CompileTypeAction(string actionName)
 		{
 			var cac = ConfigDescriptionCache.Get(GetType());
 			if (cac == null)
 				return DEConfigAction.Empty;
 
-			return cac.GetConfigAction(sAction, out var ca)
+			return cac.GetConfigAction(actionName, out var ca)
 				? CompileTypeAction(ref ca)
 				: DEConfigAction.Empty;
 		} // func CompileTypeAction
@@ -424,21 +455,22 @@ namespace TecWare.DE.Server
 			{
 				for (var i = 0; i < cac.Actions.Length; i++)
 				{
-					if (!actions.Contains(cac.Actions[i].Attribute.ActionName))
-						actions[cac.Actions[i].Attribute.ActionName] = CompileTypeAction(ref cac.Actions[i]);
+					var actionName = cac.Actions[i].Attribute.ActionName;
+					if (!actions.Contains(actionName))
+						actions[actionName] = CompileTypeAction(ref cac.Actions[i]);
 				}
 			}
 		} // proc CompileTypeActions
 
 		private DEConfigAction CompileTypeAction(ref ConfigAction ca)
 		{
-			var exprLambda = CompileMethodAction(ca.Method);
+			var exprLambda = CompileMethodAction(ca.Attribute.ActionName, ca.Method);
 
 			// Erzeuge die Action
-			return new DEConfigAction(ca.Attribute.SecurityToken, ca.Description, exprLambda.Compile(), ca.Attribute.IsSafeCall, ca.Method);
+			return new DEConfigAction(ca.Attribute.SecurityToken, ca.Description, exprLambda.Compile(), ca.Attribute.IsSafeCall, ca.Method, ca.Attribute.IsAutoLog);
 		} // func CompileTypeAction
 
-		private DEConfigAction CompileLuaAction(string sAction)
+		private DEConfigAction CompileLuaAction(string actionName)
 		{
 			// Table mit den Aktions
 			var table = GetActionTable();
@@ -446,12 +478,12 @@ namespace TecWare.DE.Server
 				return DEConfigAction.Empty;
 
 			// Erzeuge die Aktion
-			return CompileLuaAction(sAction, table[sAction] as LuaTable);
+			return CompileLuaAction(actionName, table[actionName] as LuaTable);
 		} // func CompileLuaAction
 
-		private DEConfigAction CompileLuaAction(string sAction, LuaTable ca)
+		private DEConfigAction CompileLuaAction(string actionName, LuaTable ca)
 		{
-			if (sAction == null || ca == null)
+			if (actionName == null || ca == null)
 				return DEConfigAction.Empty;
 
 			if (!(ca["Method"] is Delegate dlg))
@@ -460,9 +492,10 @@ namespace TecWare.DE.Server
 			return new DEConfigAction(
 				ca.GetOptionalValue<string>("Security", null),
 				ca.GetOptionalValue<string>("Description", null),
-				CompileMethodAction(dlg.Method, dlg, i => ca[i + 1]).Compile(),
+				CompileMethodAction(actionName, dlg.Method, dlg, i => ca[i + 1]).Compile(),
 				ca.GetOptionalValue("SafeCall", true),
-				dlg.Method
+				dlg.Method,
+				ca.GetOptionalValue("AutoLog", false)
 			);
 		} // func CompileLuaAction
 
@@ -480,15 +513,16 @@ namespace TecWare.DE.Server
 				return DEConfigAction.Empty;
 		} // proc CompileAction
 
-		private Expression<DEConfigActionDelegate> CompileMethodAction(MethodInfo method, Delegate @delegate = null, Func<int, object> alternateParameterDescription = null)
+		private Expression<DEConfigActionDelegate> CompileMethodAction(string actionName, MethodInfo method, Delegate @delegate = null, Func<int, object> alternateParameterDescription = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
 			var argCaller = Expression.Parameter(typeof(IDEWebRequestScope), "#arg");
+			var argLog = Expression.Parameter(typeof(LogMessageScopeProxy), "#log");
 
 			ParameterInfo[] parameterInfo;
-			var parameterOffset = 0;
+			int parameterOffset;
 
-			// ger the parameter information
+			// get the parameter information
 			if (@delegate != null)
 			{
 				var miInvoke = @delegate.GetType().GetMethod("Invoke");
@@ -502,51 +536,103 @@ namespace TecWare.DE.Server
 				parameterOffset = 0;
 			}
 
-			// Gibt es einen InputStream-Parameter
-			ParameterExpression inputStream = null;
-			Expression exprGetExtraData = null;
-			Expression exprFinallyExtraData = null;
+			/* var inputStream = args.GetInputStream();
+			 * try
+			 * {
+			 *	 var arg1
+			 *	 var arg2
+			 *	 if (log != null)
+			 *		WriteActionStart(log, actionName, n, new object[] { arg1, arg2 });
+			 *	 r = call(args);
+			 *	 if (log != null)
+			 *		WriteResult(log, e);
+			 *	 return r;
+			 * }
+			 * finally
+			 * {
+			 *   inputStream.Dispose();
+			 * }
+			 */
 
-			var inputStreamIndex = Array.FindIndex(parameterInfo, c => c.ParameterType == typeof(StreamWriter) || c.ParameterType == typeof(Stream));
-			if (inputStreamIndex >= 0)
-				throw new NotImplementedException("configuration of extraData is currently not implemented.");
+			var methodBlock = new List<Expression>(16);
+			var methodVariables = new List<ParameterExpression>(4);
 
-			// Generiere das Parameter Mapping
-			var exprParameter = CreateArgumentExpressions(argCaller, argThis, parameterOffset, parameterInfo, alternateParameterDescription, inputStream);
+			// generate parameter setting for the function and logging
+			CreateArgumentExpressions(methodBlock, methodVariables, argCaller, argThis, argLog, parameterOffset, parameterInfo, alternateParameterDescription, out var inputStream);
 
-			// Erzeuge den Call auf die Action
-			var exprCall = @delegate == null ?
-				(Expression)Expression.Call(Expression.Convert(argThis, method.DeclaringType), method, exprParameter) :
-				(Expression)Expression.Invoke(Expression.Constant(@delegate), exprParameter);
+			// generate start log message
+			methodBlock.Add(Expression.IfThen(Expression.ReferenceNotEqual(argLog, Expression.Constant(null, argLog.Type)),
+				Expression.Call(writeActionStartMethodInfo,
+					argLog,
+					Expression.Constant(actionName),
+					Expression.NewArrayInit(typeof(string), methodVariables.Select(c => Expression.Constant(c.Name[0] != '#' ? c.Name : null, typeof(string)))),
+					Expression.NewArrayInit(typeof(object), methodVariables.Select(c => Expression.Convert(c, typeof(object))))
+				)
+			));
 
-			if (inputStream != null)
-				exprCall = Expression.Block(new ParameterExpression[] { inputStream }, exprGetExtraData, Expression.TryFinally(exprCall, exprFinallyExtraData));
-
-			// Werte den Rückgabewert aus
-			Expression<DEConfigActionDelegate> exprLambda;
-			var returnValue = method.ReturnType == typeof(void) ? null : Expression.Variable(method.ReturnType, "#return");
-			if (returnValue == null)
+			// generate the call command
+			var returnVariable = method.ReturnType == typeof(void) ? null : Expression.Variable(typeof(object), "#return");
+			var exprCall = @delegate == null
+				? (Expression)Expression.Call(Expression.Convert(argThis, method.DeclaringType), method, methodVariables)
+				: Expression.Invoke(Expression.Constant(@delegate), methodVariables);
+			if (returnVariable != null)
 			{
-				exprLambda = Expression.Lambda<DEConfigActionDelegate>(
-					Expression.Block(exprCall, Expression.Default(typeof(object))),
-					true, argThis, argCaller);
+				methodVariables.Add(returnVariable);
+				methodBlock.Add(Expression.Assign(returnVariable, exprCall));
+
+				// generate finish log message
+				methodBlock.Add(Expression.IfThen(Expression.ReferenceNotEqual(argLog, Expression.Constant(null, argLog.Type)),
+					Expression.Call(writeActionResultMethodInfo, argLog, returnVariable)
+				));
+
+				methodBlock.Add(returnVariable);
 			}
 			else
 			{
-				exprLambda = Expression.Lambda<DEConfigActionDelegate>(
-					Expression.Block(exprCall),
-					true, argThis, argCaller
-				);
+				methodBlock.Add(exprCall);
+				methodBlock.Add(Expression.Default(typeof(object)));
 			}
+
+			// input stream is requested
+			if (inputStream != null)
+			{
+				var expr = Expression.Block(new ParameterExpression[] { inputStream },
+					Expression.Assign(inputStream, CreateGetInputExpression(argCaller, inputStream.Type)),
+					Expression.TryFinally(
+						Expression.Block(typeof(object), methodVariables, methodBlock),
+						Expression.Call(Expression.Convert(inputStream, typeof(IDisposable)), disposeMethodInfo)
+					)
+				);
+				methodVariables.Add(inputStream);
+				methodBlock.Clear();
+				methodBlock.Add(expr);
+			}
+
+			// Create lamda with return value
+			var exprLambda = Expression.Lambda<DEConfigActionDelegate>(
+				Expression.Block(typeof(object), methodVariables, methodBlock),
+				true, argThis, argCaller, argLog
+			);
 			return exprLambda;
 		} // func CompileMethodAction
 
-		private Expression[] CreateArgumentExpressions(ParameterExpression arg, ParameterExpression argThis, int parameterOffset, ParameterInfo[] parameterInfo, Func<int, object> alternateParameterDescription, ParameterExpression extraData)
+		private Expression CreateGetInputExpression(ParameterExpression argCaller, Type type)
 		{
-			var r = new Expression[parameterInfo.Length - parameterOffset];
+			if (type == typeof(Stream))
+				return Expression.Call(GetWebScopeExpression(argCaller), getInputStreamMethodInfo);
+			else if (type == typeof(TextReader))
+				return Expression.Call(GetWebScopeExpression(argCaller), getInputTextReaderMethodInfo);
+			else
+				throw new ArgumentException("Invalid input stream type.");
+		} // func CreateGetInputExpression
+
+		private void CreateArgumentExpressions(List<Expression> methodBlock, List<ParameterExpression> methodVariables, ParameterExpression arg, ParameterExpression argThis, ParameterExpression argLog, int parameterOffset, ParameterInfo[] parameterInfo, Func<int, object> alternateParameterDescription, out ParameterExpression extraData)
+		{
+			extraData = null;
 
 			// Create the parameter
-			for (var i = 0; i < r.Length; i++)
+			var l = parameterInfo.Length - parameterOffset;
+			for (var i = 0; i < l; i++)
 			{
 				var currentParameter = parameterInfo[i + parameterOffset];
 				var typeTo = currentParameter.ParameterType;
@@ -555,36 +641,43 @@ namespace TecWare.DE.Server
 				var propertyDictionary = Expression.Convert(arg, typeof(IPropertyReadOnlyDictionary));
 
 				// generate expressions
-				CreateArgumentExpressionsByInfo(alternateParameterDescription != null ? alternateParameterDescription(i) : null, currentParameter, out var parameterName, out var parameterDefault);
+				CreateArgumentExpressionsByInfo(
+					alternateParameterDescription?.Invoke(i),
+					currentParameter,
+					out var parameterName,
+					out var parameterDefault
+				);
 
 				Expression exprGetParameter;
+				var emitParameter = false;
 
 				if (typeTo == typeof(object)) // Keine Konvertierung
 				{
-					exprGetParameter = Expression.Call(miGetPropertyObject, propertyDictionary, parameterName, parameterDefault);
+					exprGetParameter = Expression.Call(getPropertyObjectMethodInfo, propertyDictionary, parameterName, parameterDefault);
+					emitParameter = true;
 				}
 				else if (typeCode == TypeCode.Object && !typeTo.IsValueType) // Gibt keine Default-Werte, ermittle den entsprechenden TypeConverter
 				{
 					if (typeTo == typeof(IDEWebRequestScope))
-					{
-						exprGetParameter = Expression.Condition(
-							Expression.TypeIs(arg, typeof(IDEWebRequestScope)),
-							Expression.Convert(arg, typeof(IDEWebRequestScope)),
-							Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant("NativeCall expects a IDEHttpContext argument.")), typeof(IDEWebRequestScope))
-						);
-					}
+						exprGetParameter = GetWebScopeExpression(arg);
+					else if (typeTo == typeof(LogMessageScopeProxy))
+						exprGetParameter = argLog;
 					else if (typeTo.IsAssignableFrom(GetType()))
 						exprGetParameter = argThis;
 					else if (typeTo == typeof(TextReader)) // Input-Datenstrom (Text)
 					{
-						if (extraData.Type != typeof(TextReader))
-							throw new ArgumentException("Can not bind extra data to call.");
+						if (extraData != null)
+							throw new ArgumentException("Only one input parameter is allowed.");
+
+						extraData = Expression.Variable(typeof(TextReader), "#input");
 						exprGetParameter = extraData;
 					}
 					else if (typeTo == typeof(Stream)) // Input-Datenstrom (Binär)
 					{
-						if (extraData.Type != typeof(Stream))
-							throw new ArgumentException("Can not bind extra data to call.");
+						if (extraData != null)
+							throw new ArgumentException("Only one input parameter is allowed.");
+
+						extraData = Expression.Variable(typeof(Stream), "#input");
 						exprGetParameter = extraData;
 					}
 					else
@@ -593,8 +686,8 @@ namespace TecWare.DE.Server
 
 						exprGetParameter =
 							Expression.Convert(
-								Expression.Call(Expression.Constant(conv), miConvertFromInvariantString,
-								Expression.Call(miGetPropertyString, propertyDictionary, parameterName, parameterDefault)
+								Expression.Call(Expression.Constant(conv), convertFromInvariantStringMethodInfo,
+								Expression.Call(getPropertyStringMethodInfo, propertyDictionary, parameterName, parameterDefault)
 							),
 							typeTo
 						);
@@ -602,35 +695,102 @@ namespace TecWare.DE.Server
 				}
 				else if (typeCode == TypeCode.String) // String gibt es nix zu tun
 				{
-					exprGetParameter = Expression.Call(miGetPropertyString, propertyDictionary, parameterName, parameterDefault);
+					exprGetParameter = Expression.Call(getPropertyStringMethodInfo, propertyDictionary, parameterName, parameterDefault);
+					emitParameter = true;
 				}
 				else // Some type
 				{
 					// ToType - Konverter
-					var miTarget = miGetPropertyGeneric.MakeGenericMethod(typeTo);
+					var miTarget = getPropertyGenericMethodInfo.MakeGenericMethod(typeTo);
 					exprGetParameter = Expression.Call(miTarget, propertyDictionary, parameterName, parameterDefault);
+					emitParameter = true;
 				}
 
-				r[i] = exprGetParameter;
+				// add expression
+				var v = Expression.Variable(exprGetParameter.Type, emitParameter ? (string)parameterName.Value : "#" + (string)parameterName.Value);
+				methodVariables.Add(v);
+				methodBlock.Add(Expression.Assign(v, exprGetParameter));
 			}
-
-			return r;
 		} // func CreateArgumentExpressions
 
-		private static void CreateArgumentExpressionsByInfo(dynamic alternateParameterInfo, ParameterInfo parameterInfo, out Expression parameterName, out Expression parameterDefault)
+		private static ConditionalExpression GetWebScopeExpression(ParameterExpression argCaller)
+		{
+			return Expression.Condition(
+				Expression.TypeIs(argCaller, typeof(IDEWebRequestScope)),
+				Expression.Convert(argCaller, typeof(IDEWebRequestScope)),
+				Expression.Throw(Expression.New(typeof(ArgumentException).GetConstructor(new Type[] { typeof(string) }), Expression.Constant($"Call expects a {nameof(IDEWebRequestScope)} argument.")), typeof(IDEWebRequestScope))
+			);
+		} // func GetWebScopeExpression
+
+		private static void CreateArgumentExpressionsByInfo(dynamic alternateParameterInfo, ParameterInfo parameterInfo, out ConstantExpression parameterName, out Expression parameterDefault)
 		{
 			var parameterNameString = (string)(alternateParameterInfo?.Name ?? parameterInfo.Name);
 			var parameterDefaultValue = (object)(alternateParameterInfo?.Default ?? parameterInfo.DefaultValue);
 
 			if (parameterNameString == null)
-				throw new ArgumentNullException("parameterName");
+				throw new ArgumentNullException(nameof(parameterName));
 
 			parameterName = Expression.Constant(parameterNameString, typeof(string));
-			parameterDefault =
-				parameterDefaultValue == DBNull.Value || parameterDefaultValue == null ?
-					(Expression)Expression.Default(parameterInfo.ParameterType) :
-					Expression.Constant(Procs.ChangeType(parameterDefaultValue, parameterInfo.ParameterType), parameterInfo.ParameterType);
+			parameterDefault = parameterDefaultValue == DBNull.Value || parameterDefaultValue == null
+				? (Expression)Expression.Default(parameterInfo.ParameterType) 
+				: Expression.Constant(Procs.ChangeType(parameterDefaultValue, parameterInfo.ParameterType), parameterInfo.ParameterType);
 		} // func CreateArgumentExpressionsByInfo
+
+		private static string FormatParameter(object value, int maxLen, bool escape = true)
+		{
+			if (value == null)
+				return "null";
+			else if (value is string s)
+			{
+				if (s.Length > maxLen)
+					s = s.Substring(0, maxLen - 3) + "...";
+
+				if (escape)
+					s = '"' + s + '"';
+
+				return s;
+			}
+			else if (value is LuaTable t)
+				return FormatParameter(t.ToLson(false), maxLen, false);
+			else if (value is XElement x)
+				return FormatParameter(x.ToString(SaveOptions.DisableFormatting), maxLen, false);
+			else
+				return FormatParameter(value.ChangeType<string>(), maxLen, false);
+		} // func FormatParameter
+
+		/// <summary></summary>
+		/// <param name="log"></param>
+		/// <param name="actioName"></param>
+		/// <param name="names"></param>
+		/// <param name="arguments"></param>
+		[EditorBrowsable(EditorBrowsableState.Advanced)]
+		public static void WriteActionStart(LogMessageScopeProxy log, string actioName, string[] names, object[] arguments)
+		{
+			var sb = new StringBuilder(actioName);
+			sb.Append('(');
+			for (var i = 0; i < names.Length; i++)
+			{
+				if (names[i] != null)
+				{
+					sb.Append(names[i])
+						.Append('=')
+						.Append(FormatParameter(arguments[i], 20));
+				}
+			}
+			sb.Append(')');
+
+			log.WriteLine(sb.ToString());
+		} // proc WriteActionStart
+
+		/// <summary></summary>
+		/// <param name="log"></param>
+		/// <param name="result"></param>
+		[EditorBrowsable(EditorBrowsableState.Advanced)]
+		public static void WriteActionResult(LogMessageScopeProxy log, object result)
+		{
+			log.NewLine();
+			log.WriteLine("Result: " + FormatParameter(result, 200));
+		} // WriteActionResult
 
 		private LuaTable GetActionTable()
 			=> this.GetMemberValue(LuaActions, rawGet: true) as LuaTable;
