@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27004.2010
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30406.217
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Extern", "Extern", "{19C46279-A2EA-4356-A0C7-4D172B97FD2E}"
 EndProject
@@ -32,6 +32,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{F472E4
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{075816AA-6B91-4BA9-AD94-08C7644E0E70}"
 	ProjectSection(SolutionItems) = preProject
+		docs\Actions.de.md = docs\Actions.de.md
 		docs\Configuration.de.md = docs\Configuration.de.md
 		docs\Env.IO.de.md = docs\Env.IO.de.md
 		docs\Passwords.de.md = docs\Passwords.de.md
@@ -41,7 +42,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{075816AA-6
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DESacme", "Extern\acme\DESacme\DESacme.csproj", "{9C2BC118-1D96-4B0D-AFCC-209D40580863}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEModette.Core", "Extern\odette\DEModette.Core\DEModette.Core.csproj", "{F258336F-F547-446D-A22B-447508ADE9D1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DEModette.Core", "Extern\odette\DEModette.Core\DEModette.Core.csproj", "{F258336F-F547-446D-A22B-447508ADE9D1}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEModette.UI", "Extern\odette\DEModette.UI\DEModette.UI.csproj", "{5A122B58-690A-46F8-817B-DEC2378F5424}"
 EndProject

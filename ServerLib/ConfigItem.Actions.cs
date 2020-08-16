@@ -22,6 +22,7 @@ using System.Linq.Expressions;
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using Microsoft.SqlServer.Server;
 using Neo.IronLua;
@@ -516,7 +517,7 @@ namespace TecWare.DE.Server
 		private Expression<DEConfigActionDelegate> CompileMethodAction(string actionName, MethodInfo method, Delegate @delegate = null, Func<int, object> alternateParameterDescription = null)
 		{
 			var argThis = Expression.Parameter(typeof(DEConfigItem), "#this");
-			var argCaller = Expression.Parameter(typeof(IDEWebRequestScope), "#arg");
+			var argCaller = Expression.Parameter(typeof(IDECommonScope), "#arg");
 			var argLog = Expression.Parameter(typeof(LogMessageScopeProxy), "#log");
 
 			ParameterInfo[] parameterInfo;
@@ -563,6 +564,7 @@ namespace TecWare.DE.Server
 			// generate start log message
 			methodBlock.Add(Expression.IfThen(Expression.ReferenceNotEqual(argLog, Expression.Constant(null, argLog.Type)),
 				Expression.Call(writeActionStartMethodInfo,
+					argCaller,
 					argLog,
 					Expression.Constant(actionName),
 					Expression.NewArrayInit(typeof(string), methodVariables.Select(c => Expression.Constant(c.Name[0] != '#' ? c.Name : null, typeof(string)))),
@@ -763,27 +765,32 @@ namespace TecWare.DE.Server
 		} // func FormatParameter
 
 		/// <summary></summary>
+		/// <param name="r"></param>
 		/// <param name="log"></param>
 		/// <param name="actioName"></param>
 		/// <param name="names"></param>
 		/// <param name="arguments"></param>
 		[EditorBrowsable(EditorBrowsableState.Advanced)]
-		public static void WriteActionStart(LogMessageScopeProxy log, string actioName, string[] names, object[] arguments)
+		public static void WriteActionStart(IDECommonScope r, LogMessageScopeProxy log, string actioName, string[] names, object[] arguments)
 		{
-			var sb = new StringBuilder(actioName);
-			sb.Append('(');
+			// write user
+			var userInfo = r.User?.Info;
+			if (userInfo != null)
+				log.Write("[").Write(userInfo.DisplayName).Write("] ");
+
+			// write action an parameter
+			log.Write(actioName);
+			log.Write("(");
 			for (var i = 0; i < names.Length; i++)
 			{
 				if (names[i] != null)
 				{
-					sb.Append(names[i])
-						.Append('=')
-						.Append(FormatParameter(arguments[i], 20));
+					log.Write(names[i])
+						.Write("=")
+						.Write(FormatParameter(arguments[i], 20));
 				}
 			}
-			sb.Append(')');
-
-			log.WriteLine(sb.ToString());
+			log.WriteLine(")");
 		} // proc WriteActionStart
 
 		/// <summary></summary>
