@@ -14,6 +14,7 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -85,6 +86,17 @@ namespace TecWare.DE.Server
 		/// <summary>Unique name of the job, e.g. ConfigPath, Guid</summary>
 		string UniqueName { get; }
 	} // interface CronJobItem
+
+	#endregion
+
+	#region -- interface ICronJobItems ------------------------------------------------
+
+	/// <summary>Allows a config item to return more than one cron item.</summary>
+	public interface ICronJobItems
+	{
+		/// <summary>List of cron-items on this config item.</summary>
+		IEnumerable<ICronJobItem> CronJobItems { get; }
+	} // interface ICronJobItems
 
 	#endregion
 

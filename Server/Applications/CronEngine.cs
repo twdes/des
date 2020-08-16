@@ -64,8 +64,8 @@ namespace TecWare.DE.Server
 
 			private void Execute()
 			{
-				using (var scope = new DECommonScope(job as IServiceProvider ?? parent, false, null))
-					job.RunJob(cancellationTokenSource.Token);
+				using var scope = new DECommonScope(job as IServiceProvider ?? parent, false, null);
+				job.RunJob(cancellationTokenSource.Token);
 			} // proc Execute
 
 			private void EndExecute(Task t)
@@ -257,6 +257,8 @@ namespace TecWare.DE.Server
 		{
 			if (current is ICronJobItem t)
 				cronItems.Add(t);
+			else if (current is ICronJobItems t2)
+				cronItems.AddRange(t2.CronJobItems);
 			else // No recursion, for nested cron jobs
 			{
 				foreach (var c in current.UnsafeChildren)
