@@ -19,10 +19,12 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;
@@ -904,6 +906,61 @@ namespace TecWare.DE.Server.Http
 
 		#endregion
 	} // class HttpResponseHelper
+
+	#endregion
+
+	#region -- class HttpRequestHelper ------------------------------------------------
+
+	/// <summary>Helper for input requests.</summary>
+	public static class HttpRequestHelper
+	{
+		/// <summary>Parse input stream as xml element.</summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
+		public static XElement GetXml(this IDEWebRequestScope r)
+		{
+			using (var xml = XmlReader.Create(r.GetInputTextReader(), Procs.XmlReaderSettings))
+				return XElement.Load(xml);
+		} // func GetXml
+
+		/// <summary>Parse input stream as xml element.</summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
+		public static Task<XElement> GetXmlAsync(this IDEWebRequestScope r)
+			=> Task.Run(() => GetXml(r));
+
+		/// <summary>Parse input stream as lua-table</summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
+		public static LuaTable GetTable(this IDEWebRequestScope r)
+		{
+			if (MediaTypeHeaderValue.TryParse(r.InputContentType, out var contentType))
+			{
+				if (contentType.MediaType == MimeTypes.Text.Xml)
+					return Procs.CreateLuaTable(GetXml(r));
+				else if (contentType.MediaType == MimeTypes.Text.Lson)
+				{
+					using (var tr = r.GetInputTextReader())
+						return LuaTable.FromLson(tr);
+				}
+				else if (contentType.MediaType == MimeTypes.Text.Json)
+				{
+					using (var tr = r.GetInputTextReader())
+						return LuaTable.FromJson(tr);
+				}
+				else
+					throw new ArgumentOutOfRangeException(nameof(r.InputContentType), r.InputContentType, "InputContentType is neither xml nor lson.");
+			}
+			else
+				throw new ArgumentException("InputContentType is missing.", nameof(r.InputContentType));
+		} // func GetTable
+
+		/// <summary>Parse input stream as lua-table</summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
+		public static Task<LuaTable> GetTableAsync(this IDEWebRequestScope r)
+			=> Task.Run(() => GetTable(r));
+	} // class HttpRequestHelper
 
 	#endregion
 }

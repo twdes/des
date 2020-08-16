@@ -1405,6 +1405,8 @@ namespace TecWare.DE.Server
 		private static readonly MethodInfo getInputStreamMethodInfo;
 		private static readonly MethodInfo getInputTextReaderMethodInfo;
 
+		private static readonly MethodInfo httpRequestGetTypeMethodInfo;
+
 		static DEConfigItem()
 		{
 			var typePropertyDictionaryExtensions = typeof(PropertyDictionaryExtensions).GetTypeInfo();
@@ -1435,6 +1437,8 @@ namespace TecWare.DE.Server
 			invariantCulturePropertyInfo = typeof(CultureInfo).GetProperty(nameof(CultureInfo.InvariantCulture), BindingFlags.Public | BindingFlags.Static | BindingFlags.GetProperty) ?? throw new ArgumentNullException("sctor", "CulturInfo");
 			convertToStringFallBackMethodInfo = typeof(Convert).GetMethod(nameof(Convert.ToString), BindingFlags.Public | BindingFlags.Static | BindingFlags.InvokeMethod, null, new Type[] { typeof(object), typeof(IFormatProvider) }, null) ?? throw new ArgumentNullException("sctor", "Convert");
 			convertFromInvariantStringMethodInfo = typeof(TypeConverter).GetMethod(nameof(TypeConverter.ConvertFromInvariantString), BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string) }, null) ?? throw new ArgumentNullException("sctor", "TypeConverter");
+
+			httpRequestGetTypeMethodInfo = typeof(HttpRequestHelper).GetMethod(nameof(HttpRequestHelper.GetTable), BindingFlags.Static | BindingFlags.Public);
 		} // sctor	
 
 		internal static string GetSourceUri(XmlSchemaObject x)

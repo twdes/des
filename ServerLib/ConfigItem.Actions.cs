@@ -680,6 +680,10 @@ namespace TecWare.DE.Server
 						extraData = Expression.Variable(typeof(Stream), "#input");
 						exprGetParameter = extraData;
 					}
+					else if (typeTo == typeof(LuaTable)) // input json/lson-object
+					{
+						exprGetParameter = Expression.Call(httpRequestGetTypeMethodInfo, GetWebScopeExpression(arg));
+					}
 					else
 					{
 						var conv = TypeDescriptor.GetConverter(typeTo);

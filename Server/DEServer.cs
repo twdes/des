@@ -1750,10 +1750,7 @@ namespace TecWare.DE.Server
 			/// <returns></returns>
 			[LuaMember]
 			public static XElement GetXml()
-			{
-				using var xml = CreateXmlReader();
-				return XElement.Load(xml);
-			} // proc WriteXml
+				=> GetWebRequestScope().GetXml();
 
 			#endregion
 
@@ -1772,28 +1769,7 @@ namespace TecWare.DE.Server
 			/// <returns></returns>
 			[LuaMember]
 			public static LuaTable GetTable()
-			{
-				var r = GetWebRequestScope();
-				if (MediaTypeHeaderValue.TryParse(r.InputContentType, out var contentType))
-				{
-					if (contentType.MediaType == MimeTypes.Text.Xml)
-						return Procs.CreateLuaTable(GetXml());
-					else if (contentType.MediaType == MimeTypes.Text.Lson)
-					{
-						using var tr = CreateTextReader();
-						return FromLson(tr);
-					}
-					else if(contentType.MediaType == MimeTypes.Text.Json)
-					{
-						using var tr = CreateTextReader();
-						return FromJson(tr);
-					}
-					else
-						throw new ArgumentOutOfRangeException(nameof(r.InputContentType), r.InputContentType, "InputContentType is neither xml nor lson.");
-				}
-				else
-					throw new ArgumentException("InputContentType is missing.", nameof(r.InputContentType));
-			} // func GetTable
+				=> GetWebRequestScope().GetTable();
 
 			#endregion
 
