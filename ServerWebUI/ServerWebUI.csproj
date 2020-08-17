@@ -23,12 +23,16 @@
     <Service Include="{4A0DDDB5-7A95-4FBF-97CC-616D07737A77}" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="css\bootstrap.min.css" />
     <Content Include="DEViewer.css" />
     <Content Include="des.html" />
     <Content Include="images\log.error.png" />
     <Content Include="images\log.information.png" />
     <Content Include="images\log.warning.png" />
+    <Content Include="libs\bootstrap.min.js" />
     <Content Include="libs\jquery-3.3.1.min.js" />
+    <Content Include="libs\jquery-3.5.1.min.js" />
+    <Content Include="libs\popper.min.js" />
     <Content Include="web.config" />
   </ItemGroup>
   <ItemGroup>
@@ -36,6 +40,9 @@
     <TypeScriptCompile Include="libs\jquery.d.ts" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="libs\popper.min.js.map" />
+    <Content Include="libs\bootstrap.min.js.map" />
+    <Content Include="css\bootstrap.min.css.map" />
     <None Include="web.Debug.config">
       <DependentUpon>web.config</DependentUpon>
     </None>

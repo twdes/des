@@ -166,6 +166,18 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\ServerWebUI\libs\jquery-3.5.1.min.js">
+      <Link>Resources\Http\libs\jquery-3.5.1.min.js</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\libs\bootstrap.min.js">
+      <Link>Resources\Http\libs\bootstrap.min.js</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\libs\popper.min.js">
+      <Link>Resources\Http\libs\popper.min.js</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\ServerWebUI\css\bootstrap.min.css">
+      <Link>Resources\Http\css\bootstrap.min.css</Link>
+    </EmbeddedResource>
     <Content Include="Configs\test\page2.html" />
     <Content Include="Configs\test\page1.html" />
     <EmbeddedResource Include="..\ServerWebUI\libs\jquery-3.3.1.min.js">
