@@ -1357,6 +1357,7 @@ namespace TecWare.DE.Server
 			=> Server.AppendNewEvent(this, securityToken, eventId, index, values);
 
 		/// <summary>Gibt den internen Namen zurück (muss nicht veröffentlicht werden).</summary>
+		[LuaMember]
 		public virtual string Name => name;
 		/// <summary>Anzeigename des Elements für den LogViewer (muss nicht veröffentlicht werden).</summary>
 		public virtual string DisplayName => Config.GetAttribute("displayname", Name);

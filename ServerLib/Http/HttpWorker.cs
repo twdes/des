@@ -78,9 +78,7 @@ namespace TecWare.DE.Server.Http
 		private bool TestFilter(XElement x, string subPath)
 		{
 			var value = x.GetAttribute<string>("filter", null);
-			return value == null || value.Length == 0 || value == "*" 
-				? true
-				: Procs.IsFilterEqual(subPath, value);
+			return value == null || value.Length == 0 || value == "*" || Procs.IsFilterEqual(subPath, value);
 		} // func TestFilter
 
 		/// <summary></summary>
@@ -286,7 +284,7 @@ namespace TecWare.DE.Server.Http
 				Log.LogMsg(LogMsgType.Error, "No namespace configured.");
 			}
 			else
-				namespaceRoot = namespaceRoot + ".";
+				namespaceRoot += ".";
 
 			// load alternative
 			nonePresentAlternativeExtensions = config.ConfigNew.GetStrings("nonePresentAlternativeExtensions", true);
@@ -311,6 +309,7 @@ namespace TecWare.DE.Server.Http
 			try
 			{
 				DateTime stamp;
+
 				// try to open the resource stream
 				var forceAlternativeCheck = nonePresentAlternativeExtensions != null && nonePresentAlternativeExtensions.FirstOrDefault(c => resourceName.EndsWith(c, StringComparison.OrdinalIgnoreCase)) != null;
 				src = assembly.GetManifestResourceStream(resourceName);
@@ -349,11 +348,15 @@ namespace TecWare.DE.Server.Http
 
 				// security
 				DemandFile(r, r.RelativeSubPath);
-
+				
 				// send the file
 				await Task.Run(() =>
 					r.SetLastModified(stamp)
-						.WriteStream(src, GetFileContentType(resourceName) ?? r.Http.GetContentType(Path.GetExtension(resourceName)))
+						.WriteContent(
+							() => src,
+							assembly.FullName.Replace(" ", "") + "\\[" + assemblyStamp.ToString("R") + "]\\" + resourceName ,
+							GetFileContentType(resourceName) ?? r.Http.GetContentType(Path.GetExtension(resourceName))
+						)
 				);
 				return true;
 			}

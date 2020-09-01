@@ -259,11 +259,11 @@ namespace TecWare.DE.Server.Http
 		} // func ConvertForHtml
 
 		[LuaMember("printValue")]
-		private void LuaPrintValue(object value, string fmt = null)
+		public void LuaPrintValue(object value, string fmt = null)
 			=> LuaPrintText(ConvertForHtml(value, fmt));
 
 		[LuaMember("print")]
-		private void LuaPrint(params object[] values)
+		public void LuaPrint(params object[] values)
 		{
 			if (values == null || values.Length == 0)
 				return;
@@ -310,7 +310,7 @@ namespace TecWare.DE.Server.Http
 		} // proc OpenText
 
 		[LuaMember("obinary")]
-		private void OpenBinary(string contentType = null, Encoding encoding = null)
+		public void OpenBinary(string contentType = null, Encoding encoding = null)
 		{
 			PrepareOutput();
 			streamOutput = context.GetOutputStream(contentType ?? this.contentType);
@@ -526,7 +526,7 @@ namespace TecWare.DE.Server.Http
 		public static void WriteResource(this IDEWebRequestScope context, Type type, string resourceName, string contentType = null)
 		{
 			if (String.IsNullOrEmpty(resourceName))
-				throw new ArgumentNullException("resourceName");
+				throw new ArgumentNullException(nameof(resourceName));
 
 			// Öffne die Resource
 			WriteResource(context, type.Assembly, type.Namespace + '.' + resourceName, contentType);
@@ -589,9 +589,9 @@ namespace TecWare.DE.Server.Http
 		public static void WriteContent(this IDEWebRequestScope context, Func<Stream> createSource, string cacheId, string contentType, Encoding defaultReadEncoding = null)
 		{
 			if (cacheId == null)
-				throw new ArgumentNullException("cacheId");
+				throw new ArgumentNullException(nameof(cacheId));
 			if (contentType == null)
-				throw new ArgumentNullException("contentType");
+				throw new ArgumentNullException(nameof(contentType));
 
 			// check for head request
 			if (context.InputMethod == HttpMethod.Head.Method)
@@ -608,6 +608,9 @@ namespace TecWare.DE.Server.Http
 			{
 				using (var src = createSource())
 				{
+					if (src == null)
+						throw new HttpResponseException(HttpStatusCode.NotFound, "Source is not created.");
+
 					var isLua = contentType.StartsWith(MimeTypes.Text.Lua);
 					var isHtml = contentType.StartsWith(MimeTypes.Text.Html);
 					var cacheItem = isLua || isHtml || (src.CanSeek && src.Length < CacheSize);
