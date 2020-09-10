@@ -396,7 +396,7 @@ namespace TecWare.DE.Server
 			}
 
 			// Execute action
-			using (var log = a.IsAutoLog ? Log.CreateScope(LogMsgType.Information, true, true) : null)
+			using (var log = a.IsAutoLog ? Log.CreateScope(LogMsgType.Information, false, true) : null)
 			{
 				try
 				{
@@ -405,12 +405,19 @@ namespace TecWare.DE.Server
 
 					context.DemandToken(a.SecurityToken);
 					using (context.Use())
+					{
+						log.AutoFlush();
 						return (true, a.Invoke(this, context, log)); // support for async actions is missing -> results in a InvokeAcionAsync
+					}
 				}
 				catch (Exception e)
 				{
 					if (!a.IsSafeCall || context.IsOutputStarted || (e is HttpResponseException)) // Antwort kann nicht mehr gesendet werden
+					{
+						if (log != null)
+							log.WriteException(e);
 						throw;
+					}
 
 					// Write protocol
 					if (e is ILuaUserRuntimeException userMessage)

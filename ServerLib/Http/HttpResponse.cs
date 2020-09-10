@@ -310,7 +310,7 @@ namespace TecWare.DE.Server.Http
 		} // proc OpenText
 
 		[LuaMember("obinary")]
-		public void OpenBinary(string contentType = null, Encoding encoding = null)
+		public void OpenBinary(string contentType = null)
 		{
 			PrepareOutput();
 			streamOutput = context.GetOutputStream(contentType ?? this.contentType);
