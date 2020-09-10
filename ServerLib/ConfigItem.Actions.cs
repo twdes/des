@@ -406,7 +406,7 @@ namespace TecWare.DE.Server
 					context.DemandToken(a.SecurityToken);
 					using (context.Use())
 					{
-						log.AutoFlush();
+						log?.AutoFlush();
 						return (true, a.Invoke(this, context, log)); // support for async actions is missing -> results in a InvokeAcionAsync
 					}
 				}
