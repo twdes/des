@@ -75,7 +75,6 @@ namespace TecWare.DE.Server.IO
 		/// <returns></returns>
 		public TextWriter CreateTextWriter(Encoding encoding = null)
 			=> new StreamWriter(this, encoding ?? Encoding.UTF8, 4096, true);
-
 	} // class DETransactionStream
 
 	#endregion

@@ -527,8 +527,9 @@ namespace TecWare.DE.Server.IO
 		/// <param name="path"></param>
 		/// <param name="searchPattern"></param>
 		/// <param name="searchOption"></param>
+		/// <param name="encoding"></param>
 		/// <returns></returns>
-		public IEnumerable<T> Enumerate<T>(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly)
+		public IEnumerable<T> Enumerate<T>(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly, Encoding encoding = null)
 			where T : FtpItem
 		{
 			var subFolders = new Stack<string>();
@@ -545,7 +546,7 @@ namespace TecWare.DE.Server.IO
 				var currentPath = subFolders.Pop();
 
 				using (var response = OpenRequest(WebRequestMethods.Ftp.ListDirectoryDetails, currentPath))
-				using (var sr = new StreamReader(response.GetResponseStream(), Encoding.ASCII))
+				using (var sr = new StreamReader(response.GetResponseStream(), encoding ?? Encoding.UTF8))
 				{
 					int pos;
 					string line;
@@ -593,25 +594,28 @@ namespace TecWare.DE.Server.IO
 		/// <param name="path"></param>
 		/// <param name="searchPattern"></param>
 		/// <param name="searchOption"></param>
+		/// <param name="encoding"></param>
 		/// <returns></returns>
-		public FtpItem[] List(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly)
-			=> Enumerate<FtpItem>(path, searchPattern, searchOption).ToArray();
+		public FtpItem[] List(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly, Encoding encoding = null)
+			=> Enumerate<FtpItem>(path, searchPattern, searchOption, encoding).ToArray();
 
 		/// <summary></summary>
 		/// <param name="path"></param>
 		/// <param name="searchPattern"></param>
 		/// <param name="searchOption"></param>
+		/// <param name="encoding"></param>
 		/// <returns></returns>
-		public FtpFile[] ListFiles(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly)
-			=> Enumerate<FtpFile>(path, searchPattern, searchOption).ToArray();
+		public FtpFile[] ListFiles(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly, Encoding encoding = null)
+			=> Enumerate<FtpFile>(path, searchPattern, searchOption, encoding).ToArray();
 
 		/// <summary></summary>
 		/// <param name="path"></param>
 		/// <param name="searchPattern"></param>
 		/// <param name="searchOption"></param>
+		/// <param name="encoding"></param>
 		/// <returns></returns>
-		public FtpDirectory[] ListDirectories(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly)
-			=> Enumerate<FtpDirectory>(path, searchPattern, searchOption).ToArray();
+		public FtpDirectory[] ListDirectories(string path = null, string searchPattern = null, SearchOption searchOption = SearchOption.TopDirectoryOnly, Encoding encoding = null)
+			=> Enumerate<FtpDirectory>(path, searchPattern, searchOption, encoding).ToArray();
 
 		#endregion
 
