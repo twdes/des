@@ -395,15 +395,17 @@ namespace TecWare.DE.Server
 				}
 			}
 
+			if (a == DEConfigAction.Empty)
+				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
+
+			// check security
+			context.DemandToken(a.SecurityToken);
+
 			// Execute action
 			using (var log = a.IsAutoLog ? Log.CreateScope(LogMsgType.Information, false, true) : null)
 			{
 				try
 				{
-					if (a == DEConfigAction.Empty)
-						throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
-
-					context.DemandToken(a.SecurityToken);
 					using (context.Use())
 					{
 						log?.AutoFlush();
