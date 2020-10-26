@@ -1151,21 +1151,25 @@ namespace TecWare.DE.Server
 				d.Dispose();
 		} // proc UnsafeInvokeHttpAction
 
-		/// <summary></summary>
-		/// <param name="r"></param>
-		/// <returns></returns>
-		internal async Task<bool> UnsafeProcessRequestAsync(IDEWebRequestScope r)
-		{
-			if (await OnProcessRequestAsync(r))
-				return true;
+		internal Task<bool> UnsafeProcessRequestAsync(IDEWebRequestScope r)
+			=> OnProcessRequestAsync(r);
 
-			foreach (var w in from c in this.UnsafeChildren
-							  let cHttp = c as IHttpWorker
-							  where cHttp != null && cHttp.VirtualRoot != null && r.RelativeSubPath.StartsWith(cHttp.VirtualRoot, StringComparison.OrdinalIgnoreCase)
-							  orderby cHttp.Priority descending
-							  select cHttp)
+		/// <summary>Gets call on an http-request to this configuration node. Sub-Items can process unsafe, because to current node needs a read lock.</summary>
+		/// <param name="r">Http-Response</param>
+		/// <returns><c>true</c>, if the request is processed.</returns>
+		protected virtual async Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
+		{
+			// enumerate all child http-worker in the current node
+			var childHttpWorker = (
+				from c in UnsafeChildren
+				let cHttp = c as IHttpWorker
+				where cHttp != null && cHttp.VirtualRoot != null && r.RelativeSubPath.StartsWith(cHttp.VirtualRoot, StringComparison.OrdinalIgnoreCase)
+				orderby cHttp.Priority descending
+				select cHttp
+			);
+			
+			foreach (var w in childHttpWorker)
 			{
-				// Führe den Request aus
 				if (r.TryEnterSubPath(w, w.VirtualRoot))
 				{
 					using (w.EnterReadLock())
@@ -1173,7 +1177,7 @@ namespace TecWare.DE.Server
 						try
 						{
 							if (await w.RequestAsync(r))
-								return true; // Alles I/O
+								return true; // request processed
 						}
 						finally
 						{
@@ -1184,13 +1188,7 @@ namespace TecWare.DE.Server
 			}
 
 			return false;
-		} // func UnsafeProcessRequest
-
-		/// <summary>Wird aufgerufen, wenn eine Http-Anfrage am Knoten verarbeitet werden soll.</summary>
-		/// <param name="r">Http-Response</param>
-		/// <returns><c>true</c>, wenn die Anfrage beantwortet wurde.</returns>
-		protected virtual Task<bool> OnProcessRequestAsync(IDEWebRequestScope r)
-			=> Task.FromResult(false);
+		} // func OnProcessRequestAsync
 
 		/// <summary></summary>
 		/// <param name="x"></param>
