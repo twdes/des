@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Xml;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Stuff;
@@ -90,6 +92,56 @@ namespace TecWare.DE.Server
 			Assert.IsNotNull(l2);
 			Assert.AreEqual("4096", l2.Attribute("min")?.Value);
 			Assert.AreEqual("8128", l2.Attribute("max")?.Value);
+		}
+
+		private static string GetListTypeString(IDEListDescriptor descriptor)
+		{
+			using (var s = new StringWriter())
+			using (var x = XmlWriter.Create(s))
+			{
+
+				descriptor.WriteType(new DEListTypeWriter(x));
+
+				x.Flush();
+				s.Flush();
+				return s.GetStringBuilder().ToString();
+			}
+		} // func GetListTypeString
+
+		private static string GetListItemString(IDEListDescriptor descriptor, object item)
+		{
+			using (var s = new StringWriter())
+			using (var x = XmlWriter.Create(s))
+			{
+
+				descriptor.WriteItem(new DEListItemWriter(x), item);
+
+				x.Flush();
+				s.Flush();
+				return s.GetStringBuilder().ToString();
+			}
+		} // func GetListItemString
+
+		[TestMethod]
+		public void TestListDescriptor()
+		{
+			var descriptor = DEConfigItem.CreateListDescriptorFromType(typeof(IDEConfigItemProperty));
+			var typeString = GetListTypeString(descriptor);
+			Assert.AreEqual("<?xml version=\"1.0\" encoding=\"utf-16\"?><property><attribute name=\"name\" type=\"string\" /><attribute name=\"displayname\" type=\"string\" /><attribute name=\"category\" type=\"string\" /><attribute name=\"description\" type=\"string\" /><attribute name=\"format\" type=\"string\" /><attribute name=\"type\" type=\"type\" /><element type=\"object\" /></property>", typeString);
+
+			var rowString = GetListItemString(descriptor, new SimpleConfigItemProperty<int>(null, "Name", "DisplayName", "Category", "Description", "N0", 23));
+			Assert.AreEqual("<?xml version=\"1.0\" encoding=\"utf-16\"?><property name=\"Name\" displayname=\"DisplayName\" category=\"Category\" description=\"Description\" format=\"N0\" type=\"int\">23</property>", rowString);
+		}
+
+		[TestMethod]
+		public void TestDictionaryDescriptor()
+		{
+			var descriptor = DEConfigItem.CreateListDescriptorFromType(typeof(KeyValuePair<string, IDEConfigItemProperty>));
+			var typeString = GetListTypeString(descriptor);
+			Assert.AreEqual("<?xml version=\"1.0\" encoding=\"utf-16\"?><property><attribute name=\"key\" type=\"string\" /><attribute name=\"name\" type=\"string\" /><attribute name=\"displayname\" type=\"string\" /><attribute name=\"category\" type=\"string\" /><attribute name=\"description\" type=\"string\" /><attribute name=\"format\" type=\"string\" /><attribute name=\"type\" type=\"type\" /><element type=\"object\" /></property>", typeString);
+
+			var rowString = GetListItemString(descriptor, new KeyValuePair<string, IDEConfigItemProperty>("key", new SimpleConfigItemProperty<int>(null, "Name", "DisplayName", "Category", "Description", "N0", 23)));
+			Assert.AreEqual("<?xml version=\"1.0\" encoding=\"utf-16\"?><property key=\"key\" name=\"Name\" displayname=\"DisplayName\" category=\"Category\" description=\"Description\" format=\"N0\" type=\"int\">23</property>", rowString);
 		}
 	} // class ConfigurationTest
 }

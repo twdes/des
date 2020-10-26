@@ -372,9 +372,9 @@ namespace TecWare.DE.Server.Configuration
 				var deleteMe = (XNode)null;
 				if (c is XComment)
 					deleteMe = c;
-				else if (c is XProcessingInstruction)
+				else if (c is XProcessingInstruction xpi)
 				{
-					ParseConfigurationPI(context, (XProcessingInstruction)c, fileToken);
+					ParseConfigurationPI(context, xpi, fileToken);
 					deleteMe = c;
 				}
 				else
@@ -756,7 +756,7 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func FindConfigTreeElement
 
-		private static Regex macroReplacement = new Regex("\\$\\(([\\w\\d\\-_]+)\\)", RegexOptions.Singleline | RegexOptions.Compiled);
+		private static readonly Regex macroReplacement = new Regex("\\$\\(([\\w\\d\\-_]+)\\)", RegexOptions.Singleline | RegexOptions.Compiled);
 
 		private bool ChangeConfigurationValue(ParseContext context, XObject x, string currentValue, out string newValue)
 		{

@@ -125,8 +125,9 @@ namespace TecWare.DE.Server
 
 	#region -- class SimpleConfigItemProperty -----------------------------------------
 
-	/// <summary></summary>
-	public class SimpleConfigItemProperty<T> : IDEConfigItemProperty, IDisposable
+	/// <summary>Simple property implementation</summary>
+	/// <typeparam name="T"></typeparam>
+	public sealed class SimpleConfigItemProperty<T> : IDEConfigItemProperty, IDisposable
 	{
 		/// <summary></summary>
 		public event EventHandler ValueChanged;
@@ -144,21 +145,20 @@ namespace TecWare.DE.Server
 		/// <param name="value"></param>
 		public SimpleConfigItemProperty(IServiceProvider sp, string name, string displayName, string category, string description, string format, T value)
 		{
-			this.service = sp.GetService<IDEConfigItemPropertyService>();
+			service = sp.GetService<IDEConfigItemPropertyService>();
 
 			if (String.IsNullOrEmpty(name))
-				throw new ArgumentNullException("name");
+				throw new ArgumentNullException(nameof(name));
 
-			this.Name = name;
-			this.DisplayName = displayName ?? name;
-			this.Category = category ?? "Misc";
-			this.Description = description;
-			this.Format = format;
+			Name = name;
+			DisplayName = displayName ?? name;
+			Category = category ?? "Misc";
+			Description = description;
+			Format = format;
 
 			this.value = value;
 
-			if (service != null)
-				service.RegisterProperty(this);
+			service?.RegisterProperty(this);
 		} // ctor
 
 		/// <summary></summary>
@@ -182,7 +182,7 @@ namespace TecWare.DE.Server
 		/// <summary></summary>
 		public T Value
 		{
-			get { return value; }
+			get => value;
 			set
 			{
 				if (!EqualityComparer<T>.Default.Equals(this.value, value))

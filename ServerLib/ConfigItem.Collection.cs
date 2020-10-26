@@ -17,7 +17,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Threading;
@@ -227,6 +229,19 @@ namespace TecWare.DE.Server
 			if (value != null)
 				xml.WriteAttributeString(propertyName, Procs.RemoveInvalidXmlChars(value, '?'));
 		} // proc WriteAttributeProperty
+
+		/// <summary>Write a complete property.</summary>
+		/// <param name="propertyName"></param>
+		/// <param name="value"></param>
+		public void WriteProperty(string propertyName, object value)
+		{
+			if (propertyName == ".")
+				WriteValue(value);
+			else if (propertyName.StartsWith("@"))
+				WriteAttributeProperty(propertyName.Substring(1), value);
+			else
+				WriteElementProperty(propertyName, value);
+		} // proc WriteProperty
 	} // class DEListItemWriter
 
 	#endregion
@@ -752,7 +767,12 @@ namespace TecWare.DE.Server
 		/// <param name="comparer"></param>
 		/// <returns></returns>
 		public static DEDictionary<TKey, TItem> CreateDictionary(DEConfigItem configItem, string id, string displayName, IDEListDescriptor listDescriptor = null, IEqualityComparer<TKey> comparer = null)
-			=> new DEDictionary<TKey, TItem>(configItem, id, displayName, listDescriptor, new Dictionary<TKey, TItem>(comparer ?? EqualityComparer<TKey>.Default));
+		{
+			return new DEDictionary<TKey, TItem>(configItem, id, displayName,
+				listDescriptor ?? DEConfigItem.CreateListDescriptorFromType(typeof(KeyValuePair<TKey, TItem>)),
+				new Dictionary<TKey, TItem>(comparer ?? EqualityComparer<TKey>.Default)
+			);
+		} // func CreateDictionary
 
 		/// <summary></summary>
 		/// <param name="configItem"></param>
@@ -762,7 +782,12 @@ namespace TecWare.DE.Server
 		/// <param name="comparer"></param>
 		/// <returns></returns>
 		public static DEDictionary<TKey, TItem> CreateSortedList(DEConfigItem configItem, string id, string displayName, IDEListDescriptor listDescriptor = null, IComparer<TKey> comparer = null)
-			=> new DEDictionary<TKey, TItem>(configItem, id, displayName, listDescriptor, new SortedDictionary<TKey, TItem>(comparer ?? Comparer<TKey>.Default));
+		{
+			return new DEDictionary<TKey, TItem>(configItem, id, displayName,
+				listDescriptor ?? DEConfigItem.CreateListDescriptorFromType(typeof(KeyValuePair<TKey, TItem>)),
+				new SortedDictionary<TKey, TItem>(comparer ?? Comparer<TKey>.Default)
+			);
+		} // func CreateSortedList
 	} // class DEDictionary
 
 	#endregion
@@ -949,7 +974,7 @@ namespace TecWare.DE.Server
 				new XAttribute("icon", Config.GetAttribute("icon", Icon)),
 				this is DEConfigLogItem l && l.HasLog ? new XAttribute("hasLog", true) : null
 			);
-			
+
 			// Füge die entsprechenden Collections
 			if (published)
 			{
@@ -992,46 +1017,63 @@ namespace TecWare.DE.Server
 
 		// -- Static ----------------------------------------------------------
 
+		#region -- class DEListDescriptorReflectedProperty ----------------------------
+
+		[DebuggerDisplay("{" + nameof(GetDebuggerDisplay) + "(),nq}")]
+		private sealed class DEListDescriptorReflectedProperty
+		{
+			private readonly DEListTypePropertyAttribute attribute;
+			private readonly PropertyDescriptor propertyDescriptor;
+
+			public DEListDescriptorReflectedProperty(DEListTypePropertyAttribute attribute, PropertyDescriptor propertyDescriptor)
+			{
+				this.attribute = attribute ?? throw new ArgumentNullException(nameof(attribute));
+				this.propertyDescriptor = propertyDescriptor ?? throw new ArgumentNullException(nameof(propertyDescriptor));
+			} // ctor
+
+			private string GetDebuggerDisplay()
+				=> $"{attribute.Name} : {propertyDescriptor.PropertyType} = {propertyDescriptor.Name}";
+
+			private object GetValueSafe(object item)
+			{
+				try
+				{
+					return propertyDescriptor.GetValue(item);
+				}
+				catch
+				{
+					return null;
+				}
+			} // func GetValueSafge
+
+			public void WriteType(DEListTypeWriter xml)
+				=> xml.WriteProperty(attribute.Name, propertyDescriptor.PropertyType);
+
+			public void WriteProperty(DEListItemWriter xml, object item)
+				=> xml.WriteProperty(attribute.Name, GetValueSafe(item));
+		} // class DEListDescriptorReflectedProperty
+
+		#endregion
+
 		#region -- class DEListDescriptorReflectorImpl --------------------------------
 
 		private sealed class DEListDescriptorReflectorImpl : IDEListDescriptor
 		{
 			private readonly string typeName;
-			private readonly List<KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>> properties = new List<KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>>();
+			private readonly DEListDescriptorReflectedProperty[] properties;
 
-			public DEListDescriptorReflectorImpl(Type typeDescripe)
+			public DEListDescriptorReflectorImpl(Type itemType)
 			{
-				var typeProperty = typeDescripe.GetCustomAttribute<DEListTypePropertyAttribute>(true);
-				this.typeName = typeProperty == null ? typeDescripe.Name : typeProperty.Name;
-
-				// Gibt es eine Methode zur Ausgabe des Items
-				var attributeBorder = 0;
-				var elementBorder = 0;
-				foreach (PropertyDescriptor pi in TypeDescriptor.GetProperties(typeDescripe))
-				{
-					var attr = (DEListTypePropertyAttribute)pi.Attributes[typeof(DEListTypePropertyAttribute)];
-					if (attr != null)
-					{
-						var cur = new KeyValuePair<DEListTypePropertyAttribute, PropertyDescriptor>(attr, pi);
-						if (attr.Name == ".")
-							properties.Add(cur);
-						else if (attr.Name[0] == '@')
-						{
-							properties.Insert(attributeBorder++, cur);
-							elementBorder++;
-						}
-						else
-							properties.Insert(elementBorder++, cur);
-					}
-				}
+				typeName = GetItemTypeName(itemType);
+				properties = GetItemTypeProperties(itemType);
 			} // ctor
 
 			public void WriteType(DEListTypeWriter xml)
 			{
 				xml.WriteStartType(typeName);
 
-				for (var i = 0; i < properties.Count; i++)
-					xml.WriteProperty(properties[i].Key.Name, properties[i].Value.PropertyType);
+				for (var i = 0; i < properties.Length; i++)
+					properties[i].WriteType(xml);
 
 				xml.WriteEndType();
 			} // proc WriteType
@@ -1039,21 +1081,54 @@ namespace TecWare.DE.Server
 			public void WriteItem(DEListItemWriter xml, object item)
 			{
 				xml.WriteStartProperty(typeName);
-				for (var i = 0; i < properties.Count; i++)
-				{
-					var name = properties[i].Key.Name;
-					var value = properties[i].Value.GetValue(item);
-
-					if (name == ".")
-						xml.WriteValue(value);
-					else if (name.StartsWith("@"))
-						xml.WriteAttributeProperty(name.Substring(1), value);
-					else
-						xml.WriteElementProperty(name, value);
-				}
+				for (var i = 0; i < properties.Length; i++)
+					properties[i].WriteProperty(xml, item);
 				xml.WriteEndProperty();
 			} // proc WriteItem
 		} // class DEListDescriptorReflectorImpl
+
+		#endregion
+
+		#region -- class DEListDescriptorReflectorImpl --------------------------------
+
+		private sealed class DEDictionaryDescriptorReflectorImpl : IDEListDescriptor
+		{
+			private readonly string typeName;
+			private readonly PropertyInfo keyProperty;
+			private readonly PropertyInfo itemProperty;
+			private readonly DEListDescriptorReflectedProperty[] properties;
+
+			public DEDictionaryDescriptorReflectorImpl(Type dictionaryType)
+			{
+				keyProperty = dictionaryType.GetProperty(nameof(KeyValuePair<object, object>.Key)) ?? throw new ArgumentNullException(nameof(keyProperty));
+				itemProperty = dictionaryType.GetProperty(nameof(KeyValuePair<object, object>.Value)) ?? throw new ArgumentNullException(nameof(itemProperty));
+
+				typeName = GetItemTypeName(itemProperty.PropertyType);
+				properties = GetItemTypeProperties(itemProperty.PropertyType);
+			} // ctor
+
+			public void WriteType(DEListTypeWriter xml)
+			{
+				xml.WriteStartType(typeName);
+
+				xml.WriteProperty("@key", keyProperty.PropertyType);
+
+				for (var i = 0; i < properties.Length; i++)
+					properties[i].WriteType(xml);
+
+				xml.WriteEndType();
+			} // proc WriteType
+
+			public void WriteItem(DEListItemWriter xml, object item)
+			{
+				xml.WriteStartProperty(typeName);
+				xml.WriteProperty("@key", keyProperty.GetValue(item));
+				var itemValue = itemProperty.GetValue(item);
+				for (var i = 0; i < properties.Length; i++)
+					properties[i].WriteProperty(xml, itemValue);
+				xml.WriteEndProperty();
+			} // proc WriteItem
+		} // class DEDictionaryDescriptorReflectorImpl
 
 		#endregion
 
@@ -1075,11 +1150,49 @@ namespace TecWare.DE.Server
 			};
 		} // func GetSettings
 
+		private static string GetItemTypeName(Type itemType)
+		{
+			var typeProperty = itemType.GetCustomAttribute<DEListTypePropertyAttribute>(true);
+			return typeProperty == null ? itemType.Name : typeProperty.Name;
+		} // func GetItemTypeName
+
+		private static DEListDescriptorReflectedProperty[] GetItemTypeProperties(Type itemType)
+		{
+			var properties = new List<DEListDescriptorReflectedProperty>();
+			
+			var attributeBorder = 0;
+			var elementBorder = 0;
+			foreach (var pi in TypeDescriptor.GetProperties(itemType).Cast<PropertyDescriptor>())
+			{
+				var attr = (DEListTypePropertyAttribute)pi.Attributes[typeof(DEListTypePropertyAttribute)];
+				if (attr != null)
+				{
+					var cur = new DEListDescriptorReflectedProperty(attr, pi);
+					if (attr.Name == ".")
+						properties.Add(cur);
+					else if (attr.Name[0] == '@')
+					{
+						properties.Insert(attributeBorder++, cur);
+						elementBorder++;
+					}
+					else
+						properties.Insert(elementBorder++, cur);
+				}
+			}
+
+			return properties.ToArray();
+		} // func GetItemTypeProperties
+
 		/// <summary>Create a list descriptor for the givven type.</summary>
 		/// <param name="itemType"></param>
 		/// <returns></returns>
 		public static IDEListDescriptor CreateListDescriptorFromType(Type itemType)
-			=> new DEListDescriptorReflectorImpl(itemType);
+		{
+			if (itemType.IsGenericType && itemType.GetGenericTypeDefinition() == typeof(KeyValuePair<,>)) // dictionary type
+				return new DEDictionaryDescriptorReflectorImpl(itemType);
+			else
+				return new DEListDescriptorReflectorImpl(itemType);
+		}
 	} // class DEConfigItem
 
 	#endregion
