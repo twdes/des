@@ -81,11 +81,11 @@ namespace TecWare.DE.Server.Http
 			return value == null || value.Length == 0 || value == "*" || Procs.IsFilterEqual(subPath, value);
 		} // func TestFilter
 
-		/// <summary></summary>
-		/// <param name="fileName"></param>
-		/// <returns></returns>
-		protected string GetFileContentType(string fileName)
-			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, fileName)).Select(x => x.Value).FirstOrDefault();
+		/// <summary>Get the content type for the file name.</summary>
+		/// <param name="fileName">Filename</param>
+		/// <returns><c>null</c>, if no content type for this file type was defined. Use Http to get default.</returns>
+		public string GetFileContentType(string fileName)
+			=> Config.Elements(xnMimeDef).Where(x => TestFilter(x, Path.GetFileName(fileName))).Select(x => x.Value).FirstOrDefault();
 
 		/// <summary></summary>
 		/// <param name="r"></param>

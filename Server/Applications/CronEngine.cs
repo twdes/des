@@ -707,7 +707,7 @@ namespace TecWare.DE.Server
 					if (StateRunning != null)
 						StateRunning.Value = c.DisplayName;
 					Log.Info("{0}: started...", c.DisplayName);
-					CronEngine.ExecuteJobAsync(c, cancellation);
+					CronEngine.ExecuteJobAsync(c, cancellation).Wait();
 					Log.Info("{0}: finished.", c.DisplayName);
 				}, true
 			);
