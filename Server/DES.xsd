@@ -43,10 +43,10 @@
 				<xs:sequence minOccurs="0" maxOccurs="unbounded">
 					<xs:element name="mimeDef" minOccurs="0" maxOccurs="unbounded">
 						<xs:annotation>
-							<xs:documentation>Definiert einen Mime-Type für die entsprechende Datei.</xs:documentation>
+							<xs:documentation>Defines a mime-type for the filter.</xs:documentation>
 						</xs:annotation>
 						<xs:complexType mixed="true">
-							<xs:attribute name="filter" type="xs:string" use="required">
+							<xs:attribute name="filter" type="KeyType" use="required">
 								<xs:annotation>
 									<xs:documentation>Filter for the files.</xs:documentation>
 								</xs:annotation>
@@ -58,7 +58,7 @@
 							<xs:documentation>Defines the security tokens for the file.</xs:documentation>
 						</xs:annotation>
 						<xs:complexType mixed="true">
-							<xs:attribute name="filter" type="xs:string" use="required">
+							<xs:attribute name="filter" type="KeyType" use="required">
 								<xs:annotation>
 									<xs:documentation>Filter for the files.</xs:documentation>
 								</xs:annotation>
