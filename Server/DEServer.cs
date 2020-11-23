@@ -1782,9 +1782,19 @@ namespace TecWare.DE.Server
 			public void Error(HttpStatusCode code, string text = null, Exception innerException = null)
 				=> throw new HttpResponseException(code, text, innerException);
 
+			/// <summary>Setzt den Status des Http-Requests.</summary>
+			/// <param name="code"></param>
+			/// <param name="text"></param>
 			[LuaMember]
 			public void SetStatus(HttpStatusCode code, string text = null)
 				=> GetWebRequestScope().SetStatus(code, text);
+
+			/// <summary>Setzt des Staus des Http-Requests auf ein Redirect.</summary>
+			/// <param name="url"></param>
+			/// <param name="statusDescription"></param>
+			[LuaMember]
+			public void Redirect(string url, string statusDescription = null)
+				=> GetWebRequestScope().Redirect(url, statusDescription);
 
 			#endregion
 

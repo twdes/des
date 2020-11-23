@@ -388,7 +388,13 @@ namespace TecWare.DE.Server
 			}
 			catch (Exception e)
 			{
-				Log.Warn("Event Socket failed.", e);
+				if (e.InnerException is HttpListenerException le)
+				{
+					if (le.NativeErrorCode != 995)
+						Log.Warn($"Event Socket failed.", le);
+				}
+				else
+					Log.Warn("Event Socket failed.", e);
 			}
 		} // func AcceptWebSocket
 

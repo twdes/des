@@ -570,6 +570,8 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- class DEHttpServer -----------------------------------------------------
+
 	/// <summary></summary>
 	internal class DEHttpServer : DEConfigLogItem, IDEHttpServer
 	{
@@ -1575,4 +1577,6 @@ namespace TecWare.DE.Server
 		/// <summary>Default culture</summary>
 		public CultureInfo DefaultCultureInfo { get; private set; }
 	} // class DEHttpServer
+
+	#endregion
 }

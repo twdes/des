@@ -24,7 +24,7 @@ namespace TecWare.DE.Server.Stuff
 		public static void Parse(string dataLine, out LogMsgType typ, out DateTime stamp, out string text)
 		{
 			if (String.IsNullOrEmpty(dataLine))
-				throw new ArgumentNullException("DataLine");
+				throw new ArgumentNullException(nameof(dataLine));
 
 			var parts = dataLine.Split('\t');
 

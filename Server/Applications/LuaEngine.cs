@@ -1596,6 +1596,10 @@ namespace TecWare.DE.Server
 			// register context extensions
 			LuaType.RegisterTypeExtension(typeof(HttpResponseHelper));
 
+			// register types for easy logging
+			LuaType.RegisterTypeAlias("LogScope", typeof(LogMessageScopeProxy));
+			LuaType.RegisterTypeAlias("LogMsg", typeof(LogMsgType));
+
 			// create the debug options
 			debugHook = new LuaEngineTraceLineDebugger(this);
 			debugOptions = new LuaCompileOptions()

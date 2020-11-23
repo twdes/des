@@ -808,7 +808,7 @@ namespace TecWare.DE.Server
 		Category(LogCategory),
 		Format("{0:N0}")
 		]
-		public int LogLineCount => logFile.Count;
+		public int LogLineCount => logFile?.Count ?? 0;
 
 		/// <summary>if <c>true</c>, all debug-messages are written to the log file.</summary>
 		[
