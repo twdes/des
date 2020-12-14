@@ -21,10 +21,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Net;
 using System.Reflection;
-using System.Text;
-using System.Xml;
 using System.Xml.Linq;
-using Microsoft.SqlServer.Server;
 using Neo.IronLua;
 using TecWare.DE.Networking;
 using TecWare.DE.Server.Http;
@@ -665,7 +662,7 @@ namespace TecWare.DE.Server
 					exprGetParameter = argLog;
 					emitParameterName = "#log";
 				}
-				else if (typeTo.IsAssignableFrom(GetType()))
+				else if (typeTo != typeof(object) && typeTo.IsAssignableFrom(GetType()))
 				{
 					exprGetParameter = argThis;
 					emitParameterName = "#this";
