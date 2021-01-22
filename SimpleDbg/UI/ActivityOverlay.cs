@@ -222,7 +222,7 @@ namespace TecWare.DE.Server.UI
 				lastLogNumber[e.Path] = lineCount;
 
 				// get log info async
-				LogLine.GetLogLinesAsync(http, e.Path, lineCount - count, count, AppendLogLine).Silent();
+				LogLine.GetLogLinesAsync(http, e.Path, lineCount - count, count, AppendLogLine).Spawn();
 			}
 			else if (e.Id == "tw_properties") // log property changed
 			{

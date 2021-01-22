@@ -437,7 +437,10 @@ namespace TecWare.DE.Server
 							}
 
 							currentScript.Chunk.Run(table);
-							m.WriteLine("Executed.");
+							if (table is IDEConfigItem configItem)
+								m.WriteLine("Executed on {0}.", configItem.Name);
+							else
+								m.WriteLine("Executed.");
 
 							needToRun = false;
 							OnScriptCompiled();

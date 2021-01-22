@@ -633,7 +633,7 @@ namespace TecWare.DE.Server
 		} // proc RunCommandAsync
 
 		private static void BeginTask(Task task)
-			=> task.Silent(e => app.WriteError(e));
+			=> task.Spawn(e => app.WriteError(e));
 
 		#endregion
 

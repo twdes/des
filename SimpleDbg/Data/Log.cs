@@ -269,7 +269,7 @@ namespace TecWare.DE.Server.Data
 			waits.Add(w);
 
 			// fork fetch properties
-			GetLogPropertyInfosAsync(http, path).Silent();
+			GetLogPropertyInfosAsync(http, path).Spawn();
 			
 			return w.Task;
 		} // func GetLogPropertyInfo
@@ -426,7 +426,7 @@ namespace TecWare.DE.Server.Data
 	{
 		public LogFileLines(string fileName)
 		{
-			FetchLinesAsync(fileName).Silent(e => ConsoleApplication.Current.WriteError(e, "Log not parsed."));
+			FetchLinesAsync(fileName).Spawn(e => ConsoleApplication.Current.WriteError(e, "Log not parsed."));
 		} // ctor
 
 		private static readonly Regex logcatLine = new Regex(@"^(?<mo>\d{2})-(?<d>\d{2})\s+(?<h>\d{2}):(?<mi>\d{2}):(?<s>\d{2})\.(?<f>\d{3})\s+(?<pid>\d+)\s+(?<tid>\d+)\s+(?<typ>\w)\s+(?<text>.*)", RegexOptions.Singleline | RegexOptions.Compiled);
