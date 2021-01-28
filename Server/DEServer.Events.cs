@@ -181,8 +181,10 @@ namespace TecWare.DE.Server
 
 			[DEListTypeProperty("@pathFilter")]
 			public abstract string PathFilter { get; }
-			[DEListTypeProperty(@"eventFilter")]
 			public IReadOnlyList<string> EventFilter => eventFilter;
+
+			[DEListTypeProperty(@"eventFilter")]
+			public string EventFilterInfo => String.Join(",", eventFilter);
 
 			[DEListTypeProperty(@"isActive")]
 			public abstract bool IsActive { get; }
