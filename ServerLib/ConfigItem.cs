@@ -1335,7 +1335,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		/// <summary>Send a event to the client.</summary>
+		/// <summary>Send a event to the client or and other subscriper.</summary>
 		/// <param name="eventId">Id of the event.</param>
 		/// <param name="index">Optional index for the event, if more the one element can be attached to the event.</param>
 		/// <param name="values">Additional arguemnts for the event.</param>

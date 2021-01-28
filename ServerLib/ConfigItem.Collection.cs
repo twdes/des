@@ -796,7 +796,7 @@ namespace TecWare.DE.Server
 
 	/// <summary>Markiert eine Eigenschaft für den automatischen Export.</summary>
 	[AttributeUsage(AttributeTargets.Property | AttributeTargets.Class | AttributeTargets.Interface)]
-	public class DEListTypePropertyAttribute : Attribute
+	public sealed class DEListTypePropertyAttribute : Attribute
 	{
 		/// <summary></summary>
 		/// <param name="name"></param>

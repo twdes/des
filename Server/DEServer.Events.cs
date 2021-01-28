@@ -63,15 +63,20 @@ namespace TecWare.DE.Server
 			} // ctor
 
 			public override bool Equals(object obj)
-				=> obj is FiredEvent other
+			{
+				return obj is FiredEvent other
 					? IsEqual(other.Path, other.Event, other.Index)
 					: base.Equals(obj);
+			} // func Equals
 
 			public override int GetHashCode()
 				=> path.GetHashCode() | eventId.GetHashCode() | index.GetHashCode();
 
 			#endregion
 
+			/// <summary>Reset event with new values.</summary>
+			/// <param name="revision"></param>
+			/// <param name="values"></param>
 			public void Reset(int revision, XElement values)
 			{
 				lastFired = Environment.TickCount;
@@ -80,15 +85,17 @@ namespace TecWare.DE.Server
 				this.values = values;
 			} // proc Reset
 
-			/// <summary>Formuliert das Event.</summary>
-			/// <returns>Xml-Fragment für dieses Event</returns>
+			/// <summary>Format the event to an xml-element.</summary>
+			/// <returns>Xml-representation of this event.</returns>
 			public XElement GetEvent()
-			=> FormatEvent(path, eventId, index, values);
+				=> FormatEvent(path, eventId, index, values);
 
 			public bool IsEqual(string testPath, string testEvent, string testIndex)
-				=> String.Compare(path, testPath, StringComparison.OrdinalIgnoreCase) == 0
-					&& String.Compare(eventId, testEvent, StringComparison.OrdinalIgnoreCase) == 0
-					&& String.Compare(index, testIndex, StringComparison.OrdinalIgnoreCase) == 0;
+			{
+				return String.Compare(path, testPath, StringComparison.OrdinalIgnoreCase) == 0
+					  && String.Compare(eventId, testEvent, StringComparison.OrdinalIgnoreCase) == 0
+					  && String.Compare(index, testIndex, StringComparison.OrdinalIgnoreCase) == 0;
+			} // func IsEqual
 
 			public bool IsActive => Environment.TickCount - lastFired > 300000; // 5min
 			public string Path => path;
@@ -101,31 +108,110 @@ namespace TecWare.DE.Server
 
 		#region -- class EventSession -------------------------------------------------
 
-		private sealed class EventSession : IDisposable
+		private abstract class EventSession : IDEEventSession, IDisposable
 		{
 			private readonly DEServer server;
-			private readonly IDEWebSocketScope context;
-			private readonly SynchronizationContext synchronizationContext;
+			private string[] eventFilter = Array.Empty<string>(); // all events
 
-			private string[] eventFilter = Array.Empty<string>();
+			private readonly DateTime started = DateTime.Now;
+			private int dispatchedEvents = 0;
 
 			#region -- Ctor/Dtor ------------------------------------------------------
 
-			public EventSession(DEServer server, IDEWebSocketScope context)
+			protected EventSession(DEServer server)
 			{
 				this.server = server ?? throw new ArgumentNullException(nameof(server));
-				this.context = context ?? throw new ArgumentNullException(nameof(context));
-
-				this.synchronizationContext = SynchronizationContext.Current ?? throw new ArgumentNullException("SynchronizationContext.Current");
 
 				server.AddEventSession(this);
 			} // ctor
 
 			public void Dispose()
 			{
-				// remove session
+				Dispose(true);
+			} // proc Dispose
+
+			protected virtual void Dispose(bool disposing)
+			{
 				server.RemoveEventSession(this);
 			} // proc Dispose
+
+			#endregion
+
+			#region -- PostNotify -----------------------------------------------------
+
+			protected virtual bool TryDemandToken(string securityToken)
+				=> false;
+
+			protected abstract void PostNotify(string path, string eventId, XElement xEvent);
+
+			public void TryPostNotify(string path, string securityToken, string eventId, XElement xEvent, CancellationToken cancellationToken)
+			{
+				// check if websocket still alive
+				if (!IsActive)
+					return;
+
+				// check if is eventId filtered
+				if (eventFilter.Length > 0 && !eventFilter.Contains(eventId))
+					return;
+
+				// check if the path is requested
+				var pathFilter = PathFilter;
+				if ((pathFilter != null && pathFilter.Length > 0 && !path.StartsWith(pathFilter, StringComparison.OrdinalIgnoreCase))
+					|| !TryDemandToken(securityToken))
+					return;
+
+				PostNotify(path, eventId, xEvent);
+			} // proc TryNotifyAsync
+
+			#endregion
+
+			void IDEEventSession.SetEventFilter(params string[] eventFilter)
+				=> SetEventFilter(eventFilter);
+
+			public void SetEventFilter(IEnumerable<string> eventFilter)
+			{
+				this.eventFilter = eventFilter == null
+					? Array.Empty<string>()
+					: (from e in eventFilter
+					   let c = e.Trim()
+					   select c).ToArray();
+			} // proc SetEventFilter
+
+			public DEServer Server => server;
+
+			[DEListTypeProperty("@pathFilter")]
+			public abstract string PathFilter { get; }
+			[DEListTypeProperty(@"eventFilter")]
+			public IReadOnlyList<string> EventFilter => eventFilter;
+
+			[DEListTypeProperty(@"isActive")]
+			public abstract bool IsActive { get; }
+			[DEListTypeProperty("@dispatched")]
+			public int Dispatched => dispatchedEvents;
+			[DEListTypeProperty("@started")]
+			public DateTime Started => started;
+			[DEListTypeProperty("@dispatchedPM")]
+			public float PerMinute => (float)(dispatchedEvents / (DateTime.Now - started).TotalMinutes);
+		} // class class EventSession
+
+		#endregion
+
+		#region -- class SocketEventSession -------------------------------------------
+
+		private sealed class SocketEventSession : EventSession
+		{
+			private readonly IDEWebSocketScope context;
+			private readonly SynchronizationContext synchronizationContext;
+
+			#region -- Ctor/Dtor ------------------------------------------------------
+
+			public SocketEventSession(DEServer server, IDEWebSocketScope context)
+				: base(server)
+			{
+				this.context = context ?? throw new ArgumentNullException(nameof(context));
+
+				synchronizationContext = SynchronizationContext.Current ?? throw new ArgumentNullException("SynchronizationContext.Current");
+			} // ctor
 
 			public Task CloseAsync(CancellationToken cancellationToken)
 			{
@@ -139,40 +225,28 @@ namespace TecWare.DE.Server
 
 			#region -- PostNotify -----------------------------------------------------
 
-			private void ExecuteNotify(object state)
-			{
-				var eventLine = (string)state;
-
-				SendEventLineAsync(eventLine)
-					.ContinueWith(
-						t => server.Log.Warn("Event Socket notify failed.", t.Exception),
-						TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously
-					);
-			} // proc ExecuteNotify
-
 			private Task SendEventLineAsync(string eventLine)
 			{
 				var segment = new ArraySegment<byte>(context.Http.DefaultEncoding.GetBytes(eventLine));
 				return Socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
 			} // proc SendEventLineAsync
 
-			public void TryPostNotify(string path, string securityToken, string eventId, string eventLine, CancellationToken cancellationToken)
+			private void ExecuteNotify(object state)
 			{
-				// check if websocket still alive
-				if (Socket.State != WebSocketState.Open)
-					return;
+				var eventLine = (string)state;
 
-				// check if is eventId filtered
-				if (eventFilter.Length > 0 && !eventFilter.Contains(eventId))
-					return;
+				SendEventLineAsync(eventLine)
+					.ContinueWith(
+						t => Server.Log.Warn("Event Socket notify failed.", t.Exception),
+						TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously
+					);
+			} // proc ExecuteNotify
 
-				// check if the path is requested
-				if ((context.AbsolutePath.Length > 0 && !path.StartsWith(context.AbsolutePath, StringComparison.OrdinalIgnoreCase))
-					|| !context.TryDemandToken(securityToken))
-					return;
+			protected override bool TryDemandToken(string securityToken)
+				=> context.TryDemandToken(securityToken);
 
-				synchronizationContext.Post(ExecuteNotify, eventLine);
-			} // proc TryNotifyAsync
+			protected override void PostNotify(string path, string eventId, XElement xEvent)
+				=> synchronizationContext.Post(ExecuteNotify, FormatEventLine(xEvent));
 
 			#endregion
 
@@ -185,12 +259,12 @@ namespace TecWare.DE.Server
 				{
 					case "/setFilter":
 						if (pos == -1)
-							eventFilter = Array.Empty<string>(); // clear filter
+							SetEventFilter(null); // clear filter
 						else
-							SetEventFilter(commandLine.Substring(pos + 1));
+							SetEventFilter(commandLine.Substring(pos + 1).Split(new char[] { ';', ',' }));
 						goto case "/getFilter";
 					case "/getFilter":
-						await SendEventLineAsync(FormatEventLine(FormatEvent(null, "eventFilter", null, new XElement("f", String.Join(";", eventFilter)))));
+						await SendEventLineAsync(FormatEventLine(FormatEvent(null, "eventFilter", null, new XElement("f", String.Join(";", EventFilter)))));
 						break;
 					case "/ping": // ping event
 						await SendEventLineAsync(FormatEventLine(FormatEvent(null, "pong", null, null))); // write empty event
@@ -202,18 +276,48 @@ namespace TecWare.DE.Server
 				}
 			} // proc ExecuteCommandAsync
 
-			public void SetEventFilter(string newEventFilter)
-			{
-				eventFilter = newEventFilter == null
-					? Array.Empty<string>()
-					: (from c in newEventFilter.Split(new char[] { ';', ',' })
-					   let c1 = c.Trim()
-					   where c1.Length > 0
-					   select c1).ToArray();
-			} // proc SetEventFilter
+			public override bool IsActive => Socket.State == WebSocketState.Open;
+			public override string PathFilter => context.AbsolutePath;
 
 			public WebSocket Socket => context.WebSocket;
-		} // class EventSession
+		} // class SocketEventSession
+
+		#endregion
+
+		#region -- class HandlerEventSession ------------------------------------------
+
+		private sealed class HandlerEventSession : EventSession
+		{
+			private readonly WeakReference<DEEventHandler> eventHandler;
+			private readonly string pathFilter;
+
+			#region -- Ctor/Dtor ------------------------------------------------------
+
+			public HandlerEventSession(DEServer server, DEEventHandler eventHandler, string pathFilter, string[] eventFilter)
+				: base(server)
+			{
+				this.eventHandler = new WeakReference<DEEventHandler>(eventHandler ?? throw new ArgumentNullException(nameof(eventHandler)));
+				this.pathFilter = pathFilter;
+				SetEventFilter(eventFilter);
+			} // ctor
+
+			#endregion
+
+			#region -- PostNotify -----------------------------------------------------
+
+			protected override void PostNotify(string path, string eventId, XElement xEvent)
+			{
+				if (eventHandler.TryGetTarget(out var handler))
+					Server.Queue.RegisterCommand(() => handler(path, eventId, xEvent));
+				else
+					Dispose();
+			} // proc PostNotify
+
+			#endregion
+
+			public override string PathFilter => pathFilter;
+			public override bool IsActive => eventHandler.TryGetTarget(out _);
+		} // class HandlerEventSession
 
 		#endregion
 
@@ -228,10 +332,19 @@ namespace TecWare.DE.Server
 		#region -- AddEventSession, RemoveEventSession --------------------------------
 
 		private void AddEventSession(EventSession eventSession)
-			=> eventSessions.Add(eventSession);
+		{
+			using (eventSessions.EnterWriteLock())
+				eventSessions.Add(eventSession);
+		} // proc AddEventSession
+
+		IDEEventSession IDEServer.SubscripeEvent(DEEventHandler eventHandler, string pathFilter, params string[] eventFilter)
+			=> new HandlerEventSession(this, eventHandler, pathFilter, eventFilter);
 
 		private void RemoveEventSession(EventSession eventSession)
-			=> eventSessions.Remove(eventSession);
+		{
+			using (eventSessions.EnterWriteLock())
+				eventSessions.Remove(eventSession);
+		} // proc RemoveEventSession
 
 		private void CloseEventSessions()
 		{
@@ -239,13 +352,21 @@ namespace TecWare.DE.Server
 
 			// close all connections
 			var closeTasks = new List<Task>();
-			while (eventSessions.Count > 0)
+			using (eventSessions.EnterWriteLock())
 			{
-				var es = eventSessions[eventSessions.Count - 1];
-				var t = es.CloseAsync(CancellationToken.None);
-				if (!t.IsCompleted)
-					closeTasks.Add(t);
-				eventSessions.Remove(es);
+				while (eventSessions.Count > 0)
+				{
+					var idx = eventSessions.Count - 1;
+					var es = eventSessions[idx];
+					eventSessions.RemoveAt(idx);
+
+					if (es is SocketEventSession ses) // close sockets
+					{
+						var t = ses.CloseAsync(CancellationToken.None);
+						if (!t.IsCompleted)
+							closeTasks.Add(t);
+					}
+				}
 			}
 			if (closeTasks.Count > 0)
 				Task.WaitAll(closeTasks.ToArray(), 5000);
@@ -271,17 +392,26 @@ namespace TecWare.DE.Server
 				else
 					propertyChanged[key] = ev = new FiredEvent(currentRevision, configPath, eventId, index, values);
 
-				// web socket event handling
-				FireEventOnSocket(configPath, securityToken ?? item.SecurityToken, eventId, ev.GetEvent());
+				// use security from item as default
+				if (String.IsNullOrEmpty(securityToken))
+					securityToken = item.SecurityToken;
+
+				// internal event handling, copy the event session, because they might changed during the post
+				EventSession[] currentSventSessions;
+				using (eventSessions.EnterReadLock())
+					currentSventSessions = eventSessions.List.Cast<EventSession>().ToArray();
+
+				foreach (var es in currentSventSessions)
+					es.TryPostNotify(configPath, securityToken, eventId, ev.GetEvent(), CancellationToken.None);
 			}
 		} // proc AppendNewEvent
 
 		private static string GetEventKey(string path, string eventId, string index)
 		{
 			if (String.IsNullOrEmpty(path))
-				throw new ArgumentNullException("path");
+				throw new ArgumentNullException(nameof(path));
 			if (String.IsNullOrEmpty(eventId))
-				throw new ArgumentNullException("event");
+				throw new ArgumentNullException(nameof(eventId));
 
 			return String.IsNullOrEmpty(index)
 				? path + ":" + eventId
@@ -340,7 +470,7 @@ namespace TecWare.DE.Server
 				return;
 
 			// create event session
-			var eventSession = new EventSession(this, webSocket);
+			var eventSession = new SocketEventSession(this, webSocket);
 			try
 			{
 				var ws = webSocket.WebSocket;
@@ -398,31 +528,16 @@ namespace TecWare.DE.Server
 			}
 		} // func AcceptWebSocket
 
-		private void FireEventOnSocket(string path, string securityToken, string eventId, XElement xEvent)
-		{
-			// prepare line
-			var eventLine = FormatEventLine(xEvent);
-
-			using (eventSessions.EnterReadLock())
-			{
-				// a call to notify can cause a remove of this session, this will be done in a different thread
-				foreach (var es in eventSessions.List.Cast<EventSession>())
-					es.TryPostNotify(path, securityToken, eventId, eventLine, CancellationToken.None);
-			}
-		} // proc FireEventOnSocket
-
 		string IDEWebSocketProtocol.Protocol => "des_event";
 		string IDEWebSocketProtocol.BasePath => String.Empty;
 		string IDEWebSocketProtocol.SecurityToken => SecurityUser;
 
 		#endregion
 
-		#region -- IDEListService members -------------------------------------------------
+		#region -- IDEListService members ---------------------------------------------
 
-		#region -- enum ListEnumeratorType ------------------------------------------------
+		#region -- enum ListEnumeratorType --------------------------------------------
 
-		///////////////////////////////////////////////////////////////////////////////
-		/// <summary></summary>
 		private enum ListEnumeratorType
 		{
 			Enumerable = 0,
@@ -434,7 +549,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- WriteListCheckRange-----------------------------------------------------
+		#region -- WriteListCheckRange-------------------------------------------------
 
 		private static void WriteListCheckRange(XmlWriter xml, ref int startAt, ref int count, int listCount, bool allowNegativeCount)
 		{
@@ -470,7 +585,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- WriteListFetchEnum -----------------------------------------------------
+		#region -- WriteListFetchEnum -------------------------------------------------
 
 		private void WriteListFetchEnum(XmlWriter xml, IDEListDescriptor descriptor, IEnumerator enumerator, int startAt, int count)
 		{
@@ -499,13 +614,13 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- WriteListFetchTyped ----------------------------------------------------
+		#region -- WriteListFetchTyped ------------------------------------------------
 
-		#region -- class GenericWriter ----------------------------------------------------
+		#region -- class GenericWriter ------------------------------------------------
 
 		private class GenericWriter
 		{
-			private static void WriteList<T>(IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, IReadOnlyList<T> list, int startAt, int count)
+			public static void WriteList<T>(IPropertyReadOnlyDictionary _, XmlWriter xml, IDEListDescriptor descriptor, IReadOnlyList<T> list, int startAt, int count)
 			{
 				WriteListCheckRange(xml, ref startAt, ref count, list.Count, false);
 
@@ -513,11 +628,11 @@ namespace TecWare.DE.Server
 				{
 					var end = startAt + count;
 					for (var i = startAt; i < end; i++)
-						descriptor.WriteItem(new DEListItemWriter(xml), (T)list[i]);
+						descriptor.WriteItem(new DEListItemWriter(xml), list[i]);
 				}
 			} // proc WriteList
 
-			private static void WriteList<T>(IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, IList<T> list, int startAt, int count)
+			public static void WriteList<T>(IPropertyReadOnlyDictionary _, XmlWriter xml, IDEListDescriptor descriptor, IList<T> list, int startAt, int count)
 			{
 				WriteListCheckRange(xml, ref startAt, ref count, list.Count, false);
 
@@ -525,11 +640,11 @@ namespace TecWare.DE.Server
 				{
 					var end = startAt + count;
 					for (var i = startAt; i < end; i++)
-						descriptor.WriteItem(new DEListItemWriter(xml), (T)list[i]);
+						descriptor.WriteItem(new DEListItemWriter(xml), list[i]);
 				}
 			} // proc WriteList
 
-			private static void WriteList<T>(IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable2<T> list, int startAt, int count)
+			public static void WriteList<T>(IPropertyReadOnlyDictionary r, XmlWriter xml, IDEListDescriptor descriptor, IDERangeEnumerable2<T> list, int startAt, int count)
 			{
 				WriteListCheckRange(xml, ref startAt, ref count, list.Count, true);
 
@@ -570,7 +685,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- WriteListFetchList -----------------------------------------------------
+		#region -- WriteListFetchList -------------------------------------------------
 
 		private void WriteListFetchList(XmlWriter xml, IDEListDescriptor descriptor, IList list, int startAt, int count)
 		{
@@ -579,7 +694,7 @@ namespace TecWare.DE.Server
 			if (count > 0)
 			{
 				var end = startAt + count;
-				for (int i = startAt; i < end; i++)
+				for (var i = startAt; i < end; i++)
 					descriptor.WriteItem(new DEListItemWriter(xml), list[i]);
 			}
 		} // proc WriteListFetchList
@@ -650,7 +765,7 @@ namespace TecWare.DE.Server
 								}
 							}
 						}
-						else if (ii == typeof(System.Collections.IList))
+						else if (ii == typeof(IList))
 						{
 							if (useInterface < ListEnumeratorType.ListUntyped)
 								useInterface = ListEnumeratorType.ListUntyped;
@@ -699,7 +814,7 @@ namespace TecWare.DE.Server
 		#endregion
 
 		[DEConfigHttpAction("events")]
-		private XElement HttpEventsAction(int rev = 0)
+		internal XElement HttpEventsAction(int rev = 0)
 		{
 			lock (propertyChanged)
 			{

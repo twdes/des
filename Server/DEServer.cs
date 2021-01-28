@@ -183,6 +183,7 @@ namespace TecWare.DE.Server
 			PublishItem(dumpFiles);
 			PublishItem(new DEConfigItemPublicAction("dump") { DisplayName = "Dump" });
 			PublishItem(users);
+			PublishItem(eventSessions);
 		} // ctor
 
 		protected override void Dispose(bool disposing)

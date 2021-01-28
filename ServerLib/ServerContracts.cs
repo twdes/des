@@ -116,6 +116,33 @@ namespace TecWare.DE.Server
 		/// <summary>Is the current thread Id equal to the queue thread id.</summary>
 		bool IsQueueRequired { get; }
 	} // interface IDEServerQueue
+
+	#endregion
+
+	#region -- interface IDEEventSession ----------------------------------------------
+
+	/// <summary></summary>
+	/// <param name="configPath"></param>
+	/// <param name="eventId"></param>
+	/// <param name="xValues"></param>
+	public delegate void DEEventHandler(string configPath, string eventId, XElement xValues);
+
+	/// <summary>Token to event session.</summary>
+	public interface IDEEventSession : IDisposable
+	{
+		/// <summary>Update event filter</summary>
+		/// <param name="eventFilter"></param>
+		void SetEventFilter(params string[] eventFilter);
+
+		/// <summary>Current path filter</summary>
+		string PathFilter { get; }
+		/// <summary>Current event filter</summary>
+		IReadOnlyList<string> EventFilter { get; }
+
+		/// <summary>Is this session active.</summary>
+		bool IsActive { get; }
+	} // interface IDEEventSession
+
 	#endregion
 
 	#region -- interface IDEServer ----------------------------------------------------
@@ -148,6 +175,13 @@ namespace TecWare.DE.Server
 		/// <param name="index">Index of the event.</param>
 		/// <param name="values">Additional arguments</param>
 		void AppendNewEvent(DEConfigItem item, string securityToken, string @event, string index, XElement values);
+
+		/// <summary>Subscripe to the event queue.</summary>
+		/// <param name="eventHandler">Handle for the event filter</param>
+		/// <param name="pathFilter"></param>
+		/// <param name="eventFilter"></param>
+		/// <returns></returns>
+		IDEEventSession SubscripeEvent(DEEventHandler eventHandler, string pathFilter, params string[] eventFilter);
 
 		/// <summary>Registriert einen Nutzer innerhalb des HttpServers</summary>
 		/// <param name="user">Nutzer</param>
