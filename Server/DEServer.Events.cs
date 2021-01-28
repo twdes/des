@@ -142,7 +142,7 @@ namespace TecWare.DE.Server
 			protected virtual bool TryDemandToken(string securityToken)
 				=> false;
 
-			protected abstract void PostNotify(string path, string eventId, XElement xEvent);
+			protected abstract void PostNotify(string path, string eventId, XElement xEvent, CancellationToken cancellationToken);
 
 			public void TryPostNotify(string path, string securityToken, string eventId, XElement xEvent, CancellationToken cancellationToken)
 			{
@@ -160,7 +160,8 @@ namespace TecWare.DE.Server
 					|| !TryDemandToken(securityToken))
 					return;
 
-				PostNotify(path, eventId, xEvent);
+				dispatchedEvents++;
+				PostNotify(path, eventId, xEvent, cancellationToken);
 			} // proc TryNotifyAsync
 
 			#endregion
@@ -247,7 +248,7 @@ namespace TecWare.DE.Server
 			protected override bool TryDemandToken(string securityToken)
 				=> context.TryDemandToken(securityToken);
 
-			protected override void PostNotify(string path, string eventId, XElement xEvent)
+			protected override void PostNotify(string path, string eventId, XElement xEvent, CancellationToken cancellationToken)
 				=> synchronizationContext.Post(ExecuteNotify, FormatEventLine(xEvent));
 
 			#endregion
@@ -307,7 +308,7 @@ namespace TecWare.DE.Server
 
 			#region -- PostNotify -----------------------------------------------------
 
-			protected override void PostNotify(string path, string eventId, XElement xEvent)
+			protected override void PostNotify(string path, string eventId, XElement xEvent, CancellationToken cancellationToken)
 			{
 				if (eventHandler.TryGetTarget(out var handler))
 					Server.Queue.RegisterCommand(() => handler(path, eventId, xEvent));
