@@ -114,5 +114,256 @@ namespace TecWare.DE.Server
 				Assert.AreEqual(1, row);
 			}
 		}
+
+		// TestMethodes for csv-writer
+		private static bool GetQuotedNormal(string v, char quote)
+		{
+			if (String.IsNullOrEmpty(v))
+				return false;
+
+			for (var i = 0; i < v.Length; i++)
+			{
+				if (v[i] == quote || Char.IsControl(v[i]))
+					return true;
+			}
+
+			return false;
+		}
+
+		private void TestGetQuotedNormal(bool expectedValue, string v, char quote)
+		{
+			Assert.AreEqual(expectedValue, GetQuotedNormal(v, quote));
+		}
+
+
+		[TestMethod]
+		public void TestGetQuotedNormal01()
+		{
+			const char quote = '"';
+			const bool expectedValue = true;
+			TestGetQuotedNormal(expectedValue, sampleSimple01, quote);
+		}
+
+		[TestMethod]
+		public void TestGetQuotedNormal02()
+		{
+			const char quote = '"';
+			const bool expectedValue = true;
+			TestGetQuotedNormal(expectedValue, sampleSimple02, quote);
+		}
+
+		[TestMethod]
+		public void TestGetQuotedNormal03()
+		{
+			const char quote = '"';
+			const bool expectedValue = false;
+			TestGetQuotedNormal(expectedValue, sampleSimple03, quote);
+		}
+
+		[TestMethod]
+		public void TestGetQuotedNormal04()
+		{
+			const string v = "'Hallo ich bin ein Quote'";
+			const char quote = '\'';
+			const bool expectedValue = true;
+			TestGetQuotedNormal(expectedValue, v, quote);
+		}
+		public void TestGetQuotedNormal05()
+		{
+			const string v = "Ich bin kein Quote";
+			const char quote = '\'';
+			const bool expectedValue = true;
+			TestGetQuotedNormal(expectedValue, v, quote);
+		}
+
+		[TestMethod]
+		public void TestGetQuotedNormal06()
+		{
+			const string v = "Hallo ich bin ein Text";
+			const char quote = '\'';
+			const bool expectedValue = false;
+			TestGetQuotedNormal(expectedValue, v, quote);
+		}
+
+		[TestMethod]
+		public void TestGetQuotedNormal07()
+		{
+			const string v = "\"Hallo ich bin ein Text\"";
+			const char quote = '\'';
+			const bool expectedValue = false;
+			TestGetQuotedNormal(expectedValue, v, quote);
+		}
+
+		[TestMethod]
+		public void TestGetQuotedNormal08()
+		{
+			const string v = "";
+			const char quote = '"';
+			const bool expectedValue = false;
+			TestGetQuotedNormal(expectedValue, v, quote);
+		}
+
+		[TestMethod]
+		public void TestGetQuotedNormal09()
+		{
+			const string v = null;
+			const char quote = '\'';
+			const bool expectedValue = false;
+			TestGetQuotedNormal(expectedValue, v, quote);
+		}
+
+
+		private string WriteRowValue(string v, bool quoted)
+		{
+			//var quoted = quoteValue(v, isText);
+			var returnvalue = "";
+
+			if (!quoted)
+			{
+				//BaseWriter.Write(v);
+				returnvalue = v;
+			}
+			else if (v == null)
+				//BaseWriter.Write("\"\"");
+				returnvalue += "\"\"";
+			else
+			{
+				var len = v.Length;
+				//BaseWriter.Write("\"");
+				returnvalue = "\"";
+				for (var i = 0; i < len; i++)
+				{
+					if (v[i] == '"')
+						//BaseWriter.Write("\"\"");
+						returnvalue += "\"\"";
+					else
+						//BaseWriter.Write(v[i]);
+						returnvalue += v[i].ToString();
+				}
+				//BaseWriter.Write("\"");
+				returnvalue += "\"";
+			}
+			return returnvalue;
+		} // proc WriteRowValue
+
+		public void TestWriteRowValue(string v, bool quoted, string expectedValue)
+		{
+			Assert.AreEqual(expectedValue, WriteRowValue(v, quoted));
+		}
+
+		[TestMethod]
+		public void TestWriteRowValue01()
+		{
+			var v = "Keine Quotes";
+			var quoted = false;
+			var expectedValue = "Keine Quotes";
+
+			TestWriteRowValue(v, quoted, expectedValue);
+
+		}
+
+		[TestMethod]
+		public void TestWriteRowValue02()
+		{
+			var v = "\"Quotes\"";
+			var quoted = true;
+			var expectedValue = "\"\"\"Quotes\"\"\"";
+
+			TestWriteRowValue(v, quoted, expectedValue);
+
+		}
+
+		[TestMethod]
+		public void TestWriteRowValue03()
+		{
+			var v = "A \"Quotes\"";
+			var quoted = true;
+			var expectedValue = "\"A \"\"Quotes\"\"\"";
+
+			TestWriteRowValue(v, quoted, expectedValue);
+		}
+
+		[TestMethod]
+		public void TestWriteRowValue04()
+		{
+			string v = null;
+			var quoted = true;
+			var expectedValue = "\"\"";
+
+			TestWriteRowValue(v, quoted, expectedValue);
+		}
+
+
+		public string WriteRow(IEnumerable<string> values, char delemiter, bool quoted)
+		{
+			var returnvalue = "";
+			//var delemiter = Settings.Delemiter;
+			var i = 0;
+			foreach (var v in values)
+			{
+				if (i > 0)
+					//BaseWriter.Write(delemiter);
+					returnvalue += delemiter.ToString();
+
+				returnvalue += WriteRowValue(v, quoted);
+				i++;
+			}
+			//BaseWriter.WriteLine();
+			returnvalue += "\\";
+
+			return returnvalue;
+		} // proc WriteRow
+
+		public void TestWriteRow(IEnumerable<string> values, char delemiter, bool quoted, string expectedValue)
+        {
+			Assert.AreEqual(expectedValue, WriteRow(values, delemiter, quoted));
+        }
+
+		[TestMethod]
+		public void TestWriteRow01()
+        {
+			var values = new List<string>
+			{
+				"Vorname",
+				"Nachname"
+			};
+			var delemiter = ',';
+			var quoted = false;
+			var expectedValue = "Vorname,Nachname\\";
+
+			TestWriteRow(values, delemiter, quoted, expectedValue);
+		}
+
+		[TestMethod]
+		public void TestWriteRow02()
+		{
+			var values = new List<string>
+			{
+				"\"Vorname\"",
+				"\"Nachname\""
+			};
+			var delemiter = ',';
+			var quoted = false;
+			var expectedValue = "\"Vorname\",\"Nachname\"\\";
+
+			TestWriteRow(values, delemiter, quoted, expectedValue);
+		}
+
+		[TestMethod]
+		public void TestWriteRow03()
+		{
+			var values = new List<string>
+			{
+				";Vorname",
+				"Nachname,"
+			};
+			var delemiter = ',';
+			var quoted = false;
+			var expectedValue = ";Vorname,Nachname,\\";
+
+			TestWriteRow(values, delemiter, quoted, expectedValue);
+		}
+
+
 	}
 }

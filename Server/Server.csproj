@@ -89,9 +89,6 @@
     <None Include="TecWare.DES.Deploy.targets" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\Common\AssemblyInfoServer.cs">
-      <Link>Properties\AssemblyInfoServer.cs</Link>
-    </Compile>
     <Compile Include="Applications\CronEngine.cs" />
     <Compile Include="Applications\DirectoryListener.cs" />
     <Compile Include="Applications\Group.cs" />
