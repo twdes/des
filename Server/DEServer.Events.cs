@@ -113,7 +113,7 @@ namespace TecWare.DE.Server
 			private readonly DEServer server;
 			private string[] eventFilter = Array.Empty<string>(); // all events
 
-			private DateTime started = DateTime.Now;
+			private readonly DateTime started = DateTime.Now;
 			private int dispatchedEvents = 0;
 
 			#region -- Ctor/Dtor ------------------------------------------------------
@@ -160,11 +160,7 @@ namespace TecWare.DE.Server
 					|| !TryDemandToken(securityToken))
 					return;
 
-				if ((++dispatchedEvents & 0x70000000) != 0)
-				{
-					dispatchedEvents = 0;
-					started = DateTime.Now;
-				}
+				dispatchedEvents++;
 				PostNotify(path, eventId, xEvent, cancellationToken);
 			} // proc TryNotifyAsync
 
@@ -184,8 +180,6 @@ namespace TecWare.DE.Server
 
 			public DEServer Server => server;
 
-			[DEListTypeProperty("@type")]
-			public abstract string Type { get; }
 			[DEListTypeProperty("@pathFilter")]
 			public abstract string PathFilter { get; }
 			public IReadOnlyList<string> EventFilter => eventFilter;
@@ -199,8 +193,8 @@ namespace TecWare.DE.Server
 			public int Dispatched => dispatchedEvents;
 			[DEListTypeProperty("@started")]
 			public DateTime Started => started;
-			[DEListTypeProperty("@dispatchedPerSec")]
-			public float PerMinute => (float)(dispatchedEvents / (DateTime.Now - started).TotalSeconds);
+			[DEListTypeProperty("@dispatchedPM")]
+			public float PerMinute => (float)(dispatchedEvents / (DateTime.Now - started).TotalMinutes);
 		} // class class EventSession
 
 		#endregion
@@ -285,7 +279,6 @@ namespace TecWare.DE.Server
 				}
 			} // proc ExecuteCommandAsync
 
-			public override string Type => "websocket";
 			public override bool IsActive => Socket.State == WebSocketState.Open;
 			public override string PathFilter => context.AbsolutePath;
 
@@ -325,7 +318,6 @@ namespace TecWare.DE.Server
 
 			#endregion
 
-			public override string Type => "handler";
 			public override string PathFilter => pathFilter;
 			public override bool IsActive => eventHandler.TryGetTarget(out _);
 		} // class HandlerEventSession
