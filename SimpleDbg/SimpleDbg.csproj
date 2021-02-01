@@ -47,9 +47,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\Common\AssemblyInfoServer.cs">
-      <Link>Properties\AssemblyInfoServer.cs</Link>
-    </Compile>
     <Compile Include="..\ServerLib\Stuff\LogLineParser.cs">
       <Link>Extern\LogLineParser.cs</Link>
     </Compile>

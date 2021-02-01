@@ -198,3 +198,4 @@ FakesAssemblies/
 /Server/Configs/Log/Main
 /Common/AssemblyInfoServer.cs
 /Server/Configs/test/me.lua
+/SimpleDbg/Properties/AssemblyInfoServer.cs
