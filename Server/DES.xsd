@@ -244,6 +244,30 @@
 					</xs:attribute>
 				</xs:complexType>
 			</xs:element>
+			<xs:element name="certificateRule">
+				<xs:complexType>
+					<xs:attribute name="id" type="KeyType" use="required">
+						<xs:annotation>
+							<xs:documentation>Unique id of this rule.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="hash" type="xs:string" use="optional">
+						<xs:annotation>
+							<xs:documentation>Certificate hash to allow/deny.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="cn" type="xs:string" use="optional">
+						<xs:annotation>
+							<xs:documentation>Common name to allow/deny.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+					<xs:attribute name="allow" type="xs:boolean" use="optional">
+						<xs:annotation>
+							<xs:documentation>Allow this certificate</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
+				</xs:complexType>
+			</xs:element>
 
 			<xs:sequence minOccurs="0" maxOccurs="unbounded">
 				<xs:element name="securitygroup" minOccurs="0" maxOccurs="unbounded">
