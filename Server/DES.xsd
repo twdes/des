@@ -226,11 +226,13 @@
 					</xs:simpleContent>
 				</xs:complexType>
 			</xs:element>
+			
 			<xs:element name="load" minOccurs="0" maxOccurs="unbounded" type="KeyType">
 				<xs:annotation>
 					<xs:documentation>Gibt das Assembly an, welches geladen werden soll. Das angegebene Assembly wird nach Schema-Informationen durchsucht.</xs:documentation>
 				</xs:annotation>
 			</xs:element>
+			
 			<xs:element name="dependonservice" minOccurs="0" maxOccurs="unbounded">
 				<xs:annotation>
 					<xs:documentation>Service to wait for. While waiting, the configuration is not loaded.</xs:documentation>
@@ -244,32 +246,33 @@
 					</xs:attribute>
 				</xs:complexType>
 			</xs:element>
-			<xs:element name="certificateRule">
-				<xs:complexType>
-					<xs:attribute name="id" type="KeyType" use="required">
-						<xs:annotation>
-							<xs:documentation>Unique id of this rule.</xs:documentation>
-						</xs:annotation>
-					</xs:attribute>
-					<xs:attribute name="hash" type="xs:string" use="optional">
-						<xs:annotation>
-							<xs:documentation>Certificate hash to allow/deny.</xs:documentation>
-						</xs:annotation>
-					</xs:attribute>
-					<xs:attribute name="cn" type="xs:string" use="optional">
-						<xs:annotation>
-							<xs:documentation>Common name to allow/deny.</xs:documentation>
-						</xs:annotation>
-					</xs:attribute>
-					<xs:attribute name="allow" type="xs:boolean" use="optional">
-						<xs:annotation>
-							<xs:documentation>Allow this certificate</xs:documentation>
-						</xs:annotation>
-					</xs:attribute>
-				</xs:complexType>
-			</xs:element>
 
 			<xs:sequence minOccurs="0" maxOccurs="unbounded">
+				<xs:element name="certificateRule" minOccurs="0" maxOccurs="unbounded">
+					<xs:complexType>
+						<xs:attribute name="id" type="KeyType" use="required">
+							<xs:annotation>
+								<xs:documentation>Unique id of this rule.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="hash" type="xs:string" use="optional">
+							<xs:annotation>
+								<xs:documentation>Certificate hash to allow/deny.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="cn" type="xs:string" use="optional">
+							<xs:annotation>
+								<xs:documentation>Common name to allow/deny.</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+						<xs:attribute name="allow" type="xs:boolean" use="optional">
+							<xs:annotation>
+								<xs:documentation>Allow this certificate</xs:documentation>
+							</xs:annotation>
+						</xs:attribute>
+					</xs:complexType>
+				</xs:element>
+
 				<xs:element name="securitygroup" minOccurs="0" maxOccurs="unbounded">
 					<xs:annotation>
 						<xs:documentation>Definiert Berechtigungen für den Zugriff auf den Server. Es werden Security-Tokens zu einer Gruppe zusammengefasst, was wiederrum einen Security-Token ergibt.</xs:documentation>
