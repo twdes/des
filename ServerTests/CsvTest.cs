@@ -115,38 +115,84 @@ namespace TecWare.DE.Server
 			}
 		}
 		// TestMethodes for TextFixedWriter
-		public void TestTextFixedWriter(string expectedValue, TextFixedWriter sw)
-		{
-			Assert.AreEqual(expectedValue, sw.BaseWriter.ToString());
-		}
-
-
 		[TestMethod]
 		public void TryTextFixedWriter01()
-		{
-			StringWriter textWriter = new StringWriter();
-			textWriter.Write("hi");
-
-			TestTextFixedWriter("hi", new TextFixedWriter(textWriter, new TextFixedSettings() { Lengths = new int[] { 2 } }));
+        {
+			using (var sw = new StringWriter())
+            {
+				using(var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 5 } }))
+                {
+					w.WriteRow(new string[] { "hi" });
+				}
+				Assert.AreEqual("hi   \r\n", sw.ToString());
+            }
 		}
 
 		[TestMethod]
 		public void TryTextFixedWriter02()
 		{
-			var textWriter = new StringWriter();
-			textWriter.Write("Der Text ist zu lang");
-
-			TestTextFixedWriter("Der Text ist zu lang", new TextFixedWriter(textWriter, new TextFixedSettings() { Lengths = new int[] { 5 } }));
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 8 } }))
+				{
+					w.WriteRow(new string[] { "Der Text ist zu lang" });
+				}
+				Assert.AreEqual("Der Text\r\n", sw.ToString());
+			}
 		}
 
 		[TestMethod]
 		public void TryTextFixedWriter03()
 		{
-			var textWriter = new StringWriter();
-			textWriter.Write("zu kurz");
-
-			TestTextFixedWriter("zu kurz", new TextFixedWriter(textWriter, new TextFixedSettings() { Lengths = new int[] { 3 } }));
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 12 } }))
+				{
+					w.WriteRow(new string[] { "genaue Länge" });
+				}
+				Assert.AreEqual("genaue Länge\r\n", sw.ToString());
+			}
 		}
+
+		[TestMethod]
+		public void TryTextFixedWriter04()
+		{
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 5,5 } }))
+				{
+					w.WriteRow(new string[] { "Wert1", "Wert2" });
+				}
+				Assert.AreEqual("Wert1\r\nWert2\r\n", sw.ToString());
+			}
+		}
+
+		[TestMethod]
+		public void TryTextFixedWriter05()
+		{
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 12, 5 } }))
+				{
+					w.WriteRow(new string[] { "zuwenig Rows"});
+				}
+				Assert.AreEqual("zuwenig Rows\r\n", sw.ToString());
+			}
+		}
+
+		[TestMethod]
+		public void TryTextFixedWriter06()
+		{
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 5, 5 } }))
+				{
+					w.WriteRow(new string[] { "zu" , "viele", "Rows" });
+				}
+				Assert.AreEqual("zu   viele\r\n", sw.ToString());
+			}
+		}
+
 
 		//Tests for TextCsvWriter
 
@@ -155,81 +201,89 @@ namespace TecWare.DE.Server
 			Assert.AreEqual(expectedValue, actualValue.BaseWriter.ToString());
         }
 
+
 		[TestMethod]
 		public void TryTextCsvWriter01()
         {
-			var textWriter = new StringWriter();
-			textWriter.Write("\" ForcedQuotation\", 123");
-			TestTextCsvWriter("\" ForcedQuotation\", \"123\"", new TextCsvWriter(textWriter, new TextCsvSettings() { Quotation = CsvQuotation.Forced, Quote='\"', Delemiter = ',' }));
-		}
+			using( var sw = new StringWriter())
+            {
+				using (var w = new TextCsvWriter(sw, new TextCsvSettings() { Quotation = CsvQuotation.Forced, Quote = '\"', Delemiter = ',' }))
+                {
+					w.WriteRow(new string[] { "Test "});
+					Assert.AreEqual("\"Test \"\r\n", w.BaseWriter.ToString());
+                }
+            }
+        }
 
 		[TestMethod]
 		public void TryTextCsvWriter02()
 		{
-			var input = String.Join(Environment.NewLine,
-				"ForcedText;",
-				123);
-			var textWriter = new StringWriter();
-			textWriter.Write(input);
-			TestTextCsvWriter("\"ForcedText\";123", new TextCsvWriter(textWriter, new TextCsvSettings() { Quotation = CsvQuotation.ForceText, Quote = '\"', Delemiter= ';' }));
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextCsvWriter(sw, new TextCsvSettings() { Quotation = CsvQuotation.ForceText, Quote = '\"', Delemiter = ',' ,HeaderRow = 0 }))
+				{
+					w.WriteRow(new string[] { "\"ForcedText\" ", "123" });
+					Assert.AreEqual("\"ForcedText\" ,123\r\n", w.BaseWriter.ToString());
+				}
+			}
 		}
 
 		[TestMethod]
 		public void TryTextCsvWriter03()
 		{
-			var textWriter = new StringWriter();
-			textWriter.Write("noQuotation, 123");
-			TestTextCsvWriter("noQuotation, 123", new TextCsvWriter(textWriter, new TextCsvSettings() { Quotation = CsvQuotation.None, Quote = '\"', Delemiter = ',' }));
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextCsvWriter(sw, new TextCsvSettings() { Quotation = CsvQuotation.None, Quote = '\"', Delemiter = ',' }))
+				{
+					w.WriteRow(new string[] { "NoQuote " });
+					Assert.AreEqual("NoQuote \r\n", w.BaseWriter.ToString());
+				}
+			}
 		}
 
 		[TestMethod]
 		public void TryTextCsvWriter04()
 		{
-			var textWriter = new StringWriter();
-			textWriter.Write("\"noQuotation\", 123");
-			TestTextCsvWriter("\"noQuotation\", 123", new TextCsvWriter(textWriter, new TextCsvSettings() { Quotation = CsvQuotation.None, Quote = '\"', Delemiter = ',' }));
-		}
-
-		[TestMethod]
-		public void TryTextCsvWriter05()
-		{
-			var textWriter = new StringWriter();
-			textWriter.Write("\"normal\", 123");
-			TestTextCsvWriter("\"normal\", 123", new TextCsvWriter(textWriter, new TextCsvSettings() { Quotation = CsvQuotation.Normal, Quote = '\"', Delemiter = ',' }));
+			using (var sw = new StringWriter())
+			{
+				using (var w = new TextCsvWriter(sw, new TextCsvSettings() { Quotation = CsvQuotation.Normal, Quote = '\"', Delemiter = ',' }))
+				{
+					w.WriteRow(new string[] { "normal ", "\"Quote\"" });
+					Assert.AreEqual("normal ,\"\"\"Quote\"\"\"\r\n", w.BaseWriter.ToString());
+				}
+			}
 		}
 
 		// Tests für TextDataRowWriter
 
-	
-		public void TestTextDataRowWriter(string expectedValue, StringWriter sw, TextFixedSettings settings, params IDataColumn[] columns)
+		[TestMethod]
+		public void TryDataRowWriter01()
         {
-			Assert.AreEqual(expectedValue, new TextDataRowWriter(sw, settings, columns).CoreWriter.BaseWriter.ToString());
+
+			using (var sw = new StringWriter())
+            {
+				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1 }, new TextDataRowColumn {Name = "Col1", DataType = typeof(string) } ))
+                {
+					sw.Write("test");
+					Assert.AreEqual("test", w.CoreWriter.BaseWriter.ToString());
+                }
+            }
         }
 
-		[TestMethod]
-		public void TryTextDataRowWriter01()
+
+		/*[TestMethod]
+		public void TryDataRowWriter02()
         {
-			var textWriter = new StringWriter();
-			textWriter.Write(sampleSimple01);
-			TestTextDataRowWriter(sampleSimple01, textWriter, new TextFixedSettings() { Lengths = new int[] { 2 } });
-        }
+			using (var sw = new StringWriter())
+            {
+				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1 }, new TextDataRowColumn { Name = "Col1", DataType = typeof(int)  }))
+				{
+					sw.Write(1);
+					Assert.AreEqual(1, w.CoreWriter.BaseWriter.ToString());
+				}
 
-		[TestMethod]
-		public void TryTextDataRowWriter02()
-		{
-			var textWriter = new StringWriter();
-			textWriter.Write(sampleSimple02);
-			TestTextDataRowWriter(sampleSimple02, textWriter, new TextFixedSettings() { Lengths = new int[] { 2 } });
-		}
+			}
 
-		[TestMethod]
-		public void TryTextDataRowWriter03()
-		{
-			var textWriter = new StringWriter();
-			textWriter.Write(sampleSimple03);
-			TestTextDataRowWriter(sampleSimple03, textWriter, new TextFixedSettings() { Lengths = new int[] { 2 } });
-		}
-
-
+		}*/
 	}
 }
