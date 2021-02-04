@@ -264,26 +264,25 @@ namespace TecWare.DE.Server
             {
 				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1 }, new TextDataRowColumn {Name = "Col1", DataType = typeof(string) } ))
                 {
-					sw.Write("test");
-					Assert.AreEqual("test", w.CoreWriter.BaseWriter.ToString());
+					w.CoreWriter.WriteRow(new string[] { "Col1", "Col2", "Col3" });
+					Assert.AreEqual("test", sw.ToString());
                 }
             }
         }
 
 
-		/*[TestMethod]
+		[TestMethod]
 		public void TryDataRowWriter02()
         {
 			using (var sw = new StringWriter())
             {
-				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1 }, new TextDataRowColumn { Name = "Col1", DataType = typeof(int)  }))
+				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Delemiter= ',' },  new TextDataRowColumn { Name = "Col1", DataType = typeof(string) }))
 				{
-					sw.Write(1);
-					Assert.AreEqual(1, w.CoreWriter.BaseWriter.ToString());
+					w.CoreWriter.WriteRow(new string[] {"Col1", "Col2", "Col3"});
+					Assert.AreEqual("Col1,Col2,Col3", sw.ToString());
 				}
-
 			}
 
-		}*/
+		}
 	}
 }
