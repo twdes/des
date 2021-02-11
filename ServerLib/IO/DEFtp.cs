@@ -429,11 +429,6 @@ namespace TecWare.DE.Server.IO
 		private FtpWebRequest CreateRequest(string method, string path)
 		{
 			var ftp = (FtpWebRequest)WebRequest.Create(CreateFullUri(path));
-
-			// todo: gefährlich, globale server einstellung definieren
-			if (enableSsl)
-				ServicePointManager.ServerCertificateValidationCallback = checkServerCertificate;
-
 			ftp.Method = method;
 			ftp.EnableSsl = enableSsl;
 			if (credentials != null)
@@ -443,15 +438,6 @@ namespace TecWare.DE.Server.IO
 
 		private FtpWebResponse OpenRequest(string method, string path)
 			=> (FtpWebResponse)CreateRequest(method, path).GetResponse();
-
-		private bool checkServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
-			=> sslPolicyErrors == SslPolicyErrors.None || CheckServerCertificate(certificate);
-
-		private bool CheckServerCertificate(X509Certificate certificate)
-		{
-			var subject = certificate.Subject;
-			return subject.Contains("CN=*.de-nserver.de,");
-		} // func CheckServerCertificate
 
 		#endregion
 

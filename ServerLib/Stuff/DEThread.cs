@@ -784,10 +784,7 @@ namespace TecWare.DE.Server
 			thread.IsBackground = true;
 		} // proc SetThreadParameter
 
-		/// <summary></summary>
-		/// <param name="d"></param>
-		/// <param name="state"></param>
-		/// <param name="waitHandle"></param>
+		/// <inherited/>
 		protected override void EnqueueTask(SendOrPostCallback d, object state, ManualResetEventSlim waitHandle)
 		{
 			lock (MessageLoopSync)
@@ -797,12 +794,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc EnqueueTask
 
-		/// <summary></summary>
-		/// <param name="cancellationToken"></param>
-		/// <param name="d"></param>
-		/// <param name="state"></param>
-		/// <param name="wait"></param>
-		/// <returns></returns>
+		/// <inherited/>
 		protected override bool TryDequeueTask(CancellationToken cancellationToken, out SendOrPostCallback d, out object state, out ManualResetEventSlim wait)
 		{
 			lock (MessageLoopSync)
@@ -895,7 +887,7 @@ namespace TecWare.DE.Server
 		/// <summary></summary>
 		public static void EnforceMessageLoopThread()
 		{
-			if (!TryGetMessageLoop(out var tmp))
+			if (!TryGetMessageLoop(out _))
 				throw new InvalidOperationException("DEThread context needed.");
 		} // proc EnforceMessageLoopThread
 	} // class Threading
