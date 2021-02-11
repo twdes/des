@@ -22,8 +22,10 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Security;
 using System.Reflection;
 using System.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Text;
@@ -170,6 +172,9 @@ namespace TecWare.DE.Server
 			AddAssemblyPath(".");
 			AddAssemblyPath(Path.GetDirectoryName(GetType().Assembly.Location));
 			AppDomain.CurrentDomain.AssemblyResolve += resolveEventHandler;
+
+			// certificate extension
+			ServicePointManager.ServerCertificateValidationCallback = CheckServerCertificate;
 
 			// register session list
 			eventSessions = new DEList<EventSession>(this, "tw_eventsessions", "Event sessions");
@@ -1038,6 +1043,122 @@ namespace TecWare.DE.Server
 		} // proc BuildSecurityTokens
 
 		public int SecurityGroupsVersion => securityGroupsVersion;
+
+		#endregion
+
+		#region -- Certificates -------------------------------------------------------
+
+		private static bool TryGetHostName(object sender, out string hostName)
+		{
+			if (sender is WebRequest web)
+			{
+				hostName = web.RequestUri.Host;
+				return true;
+			}
+			else
+			{
+				hostName = null;
+				return false;
+			}
+		} // func TryGetHostName
+
+		private static void LogCertificateFailure(LoggerProxy log, LogMsgType type, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors, string message)
+		{
+			var m = log.CreateScope(type);
+
+			m.WriteLine(message);
+			m.WriteLine();
+			m.WriteLine("Remote Certificate:");
+			if (certificate != null)
+			{
+				m.WriteLine("  Subject: {0}", certificate.Subject);
+				m.WriteLine("  CertHash: {0}", certificate.GetCertHashString());
+				m.WriteLine("  Expiration: {0}", certificate.GetExpirationDateString());
+				m.WriteLine("  Serial: {0}", certificate.GetSerialNumberString());
+				m.WriteLine("  Algorithm: {0}", certificate.GetKeyAlgorithmParametersString());
+			}
+			else
+			{
+				m.WriteLine("  <null>"); // no chance to skip
+			}
+
+			m.WriteLine("Chain:");
+
+			var i = 0;
+			if (chain != null)
+			{
+				foreach (var c in chain.ChainElements)
+				{
+					m.Write("  - {0}", c.Certificate?.Subject);
+					if (i < chain.ChainStatus.Length)
+						m.WriteLine(" --> {0}, {1}", chain.ChainStatus[i].Status, chain.ChainStatus[i].StatusInformation);
+					else
+						m.WriteLine();
+					i++;
+				}
+			}
+			else
+				m.WriteLine("  <null>");
+		} // proc LogCertificateFailure
+
+		private static bool CheckCertifcateByRule(LoggerProxy log, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors, XElement x)
+		{
+			var allow = x.GetAttribute("allow", true);
+ 			LogCertificateFailure(
+				log,
+				allow ? LogMsgType.Debug : LogMsgType.Error,
+				certificate, chain, sslPolicyErrors,
+				$"Remote certification rule {x.GetAttribute("id", "<id>")} used ({(allow ? "allow" : "deny")}."
+			);
+			return allow;
+		} // func CheckCertifcateByRule
+
+		public bool CheckServerCertificate(LoggerProxy log, object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+		{
+			// check for allowed certifcates
+			if (certificate != null) // check for white/black listed certifcates
+			{
+				var hashString = new Lazy<string>(certificate.GetCertHashString);
+				var commonName = new Lazy<string>(() => certificate.GetCommonName());
+
+				var xServer = Config.Element(xnServer);
+				if (xServer != null)
+				{
+					foreach (var x in xServer.Elements(xnServerCertificate))
+					{
+						var hash = x.GetAttribute("hash", null);
+						var host = x.GetAttribute("cn", null);
+
+						if (hash != null && String.Compare(hashString.Value, hash, StringComparison.OrdinalIgnoreCase) == 0)
+							return CheckCertifcateByRule(log ?? Log, certificate, chain, sslPolicyErrors, x);
+						else if (host != null && Procs.ValidateHostName(host, commonName.Value))
+							return CheckCertifcateByRule(log ?? Log, certificate, chain, sslPolicyErrors, x);
+					}
+				}
+			}
+
+			// default checks
+			switch (sslPolicyErrors)
+			{
+				case SslPolicyErrors.RemoteCertificateNameMismatch:
+					if (certificate != null 
+						&& TryGetHostName(sender, out var hostName) 
+						&& certificate.ValidateHostName(hostName))
+						return true;
+					else
+						goto default;
+				case SslPolicyErrors.None:
+					return true;
+				case SslPolicyErrors.RemoteCertificateNotAvailable:
+				case SslPolicyErrors.RemoteCertificateChainErrors:
+				default:
+					LogCertificateFailure(log ?? Log, LogMsgType.Error, certificate, chain, sslPolicyErrors, $"Remote certification validation failed ({sslPolicyErrors}).");
+					return false;
+			}
+		} // func CheckServerCertificate
+
+		private bool CheckServerCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+			=> CheckServerCertificate(null, sender, certificate, chain, sslPolicyErrors);
 
 		#endregion
 
