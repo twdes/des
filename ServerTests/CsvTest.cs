@@ -429,7 +429,7 @@ namespace TecWare.DE.Server
 			// mehr Felder als Columns
 			using (var sw = new StringWriter())
 			{
-				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1 }, col))
+				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation= CsvQuotation.Normal }, col))
 				{
 					w.Write(
 						new IDataRow[]
