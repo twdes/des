@@ -174,6 +174,7 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnServerExtent = MainNamespace + "extent";
 		public static readonly XName xnServerDependOnServer = MainNamespace + "dependonservice";
 		public static readonly XName xnServerSecurityGroup = MainNamespace + "securitygroup";
+		public static readonly XName xnServerCertificate = MainNamespace + "certificateRule";
 
 		public static readonly XName xnHttp = MainNamespace + "http";
 		public static readonly XName xnHttpPrefix = MainNamespace + "prefix";

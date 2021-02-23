@@ -20,6 +20,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -197,6 +199,15 @@ namespace TecWare.DE.Server
 		/// <param name="securityTokens">Token-Zeichenfolge</param>
 		/// <returns>Security-Token-Array</returns>
 		string[] BuildSecurityTokens(params string[] securityTokens);
+
+		/// <summary>Check certificate</summary>
+		/// <param name="log"></param>
+		/// <param name="sender"></param>
+		/// <param name="certificate"></param>
+		/// <param name="chain"></param>
+		/// <param name="sslPolicyErrors"></param>
+		/// <returns></returns>
+		bool CheckServerCertificate(LoggerProxy log, object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors);
 
 		/// <summary>Gibt das Verzeichnis für die Loginformationen zurück.</summary>
 		string LogPath { get; }
