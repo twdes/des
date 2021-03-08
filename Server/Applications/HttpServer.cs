@@ -336,7 +336,7 @@ namespace TecWare.DE.Server
 			return Http.DefaultEncoding;
 		} // func GetOutputEncoding
 
-		public Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null)
+		public Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null, bool? sendChunked = null)
 		{
 			CheckOutputSended();
 
@@ -367,6 +367,9 @@ namespace TecWare.DE.Server
 			else
 				compress = false;
 
+			// send chunked
+			context.Response.SendChunked = sendChunked ?? contentLength < 0 || contentLength > 0x10000;
+			
 			// create the output stream
 			isOutputSended = true;
 			if (compress.Value)
@@ -388,7 +391,7 @@ namespace TecWare.DE.Server
 		
 			// add encoding to the content type
 			contentType = contentType + "; charset=" + encoding.WebName;
-			var outputStream = GetOutputStream(contentType, contentLength, contentLength == -1);
+			var outputStream = GetOutputStream(contentType, contentLength, compress: contentLength == -1, sendChunked: null);
 
 			if (encoding == Encoding.UTF8)
 				encoding = Procs.Utf8Encoding;

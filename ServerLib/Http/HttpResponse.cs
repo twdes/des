@@ -180,9 +180,10 @@ namespace TecWare.DE.Server.Http
 		/// <summary></summary>
 		/// <param name="contentType"></param>
 		/// <param name="contentLength"></param>
-		/// <param name="compress"></param>
+		/// <param name="compress">Compress output.</param>
+		/// <param name="sendChunked">Send out chunked.</param>
 		/// <returns></returns>
-		Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null);
+		Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null, bool? sendChunked = null);
 		/// <summary></summary>
 		/// <param name="contentType"></param>
 		/// <param name="encoding"></param>
