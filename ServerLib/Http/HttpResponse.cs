@@ -177,13 +177,11 @@ namespace TecWare.DE.Server.Http
 		/// <returns></returns>
 		TextReader GetInputTextReader();
 
-		/// <summary></summary>
-		/// <param name="contentType"></param>
-		/// <param name="contentLength"></param>
-		/// <param name="compress">Compress output.</param>
-		/// <param name="sendChunked">Send out chunked.</param>
+		/// <summary>Get a output stream, to send data to the client.</summary>
+		/// <param name="contentType">MimeType for the content, add gzip to enforce compression.</param>
+		/// <param name="contentLength">Expected length of the output data.</param>
 		/// <returns></returns>
-		Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null, bool? sendChunked = null);
+		Stream GetOutputStream(string contentType, long contentLength = -1);
 		/// <summary></summary>
 		/// <param name="contentType"></param>
 		/// <param name="encoding"></param>

@@ -132,7 +132,7 @@ namespace TecWare.DE.Server
 
 				// process content
 				using (var src = await response.Content.ReadAsStreamAsync())
-				using (var dst = r.GetOutputStream(response.Content.Headers.ContentType.ToString(), response.Content.Headers.ContentLength ?? -1, false))
+				using (var dst = r.GetOutputStream(response.Content.Headers.ContentType.ToString(), response.Content.Headers.ContentLength ?? -1))
 					await src.CopyToAsync(dst);
 			}
 			return true;

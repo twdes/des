@@ -585,8 +585,9 @@ namespace TecWare.DE
 		} // proc ImportAccountKey
 
 		/// <summary>Update certificates</summary>
+		/// <param name="fileName">Write certififacte as file to disk.</param>
 		[LuaMember]
-		public void WriteCertificate(string fileName, string password = null)
+		public void WriteCertificate(string fileName)
 		{
 			if (TryGetState(LogMsgType.Error, out var state))
 			{

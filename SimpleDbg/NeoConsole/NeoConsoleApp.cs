@@ -1450,11 +1450,24 @@ namespace Neo.Console
 					UnsafeNativeMethods.GetConsoleScreenBufferInfoEx(activeOutput.Handle.DangerousGetHandle(), ref activeBufferInfo);
 					UnsafeNativeMethods.GetConsoleScreenBufferInfoEx(output.Handle.DangerousGetHandle(), ref outputBufferInfo);
 
+					//// check if buffer width is greater
+					//CharBuffer newContent = null;
+					//if (activeBufferInfo.dwSize.X > outputBufferInfo.dwSize.X)
+					//{
+					//	newContent = new CharBuffer(activeBufferInfo.dwSize.X, activeBufferInfo.dwSize.Y);
+					//	var diff = activeBufferInfo.dwSize.Y - output.Height;
+					//	output.ReadBuffer(0, Math.Max(diff, 0), activeBufferInfo.dwSize.X, output.Height - 1, newContent, 0,0);
+					//}
+
 					outputBufferInfo.dwMaximumWindowSize = activeBufferInfo.dwMaximumWindowSize;
 					outputBufferInfo.dwSize = activeBufferInfo.dwSize;
 					outputBufferInfo.srWindow = activeBufferInfo.srWindow;
 
 					UnsafeNativeMethods.SetConsoleScreenBufferInfoEx(output.Handle.DangerousGetHandle(), ref outputBufferInfo);
+
+					//// recopy output buffer
+					//if (newContent != null)
+					//	output.WriteBuffer(0, 0, newContent);
 
 					// notify size change
 					foreach (var o in overlays)

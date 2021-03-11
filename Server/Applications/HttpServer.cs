@@ -317,6 +317,122 @@ namespace TecWare.DE.Server
 
 		#region -- Output -----------------------------------------------------------------
 
+		private const long bufferFlushSize = 0x10000L;
+		private static readonly Regex encodingValueRegex = new Regex(@"(?<n>\w+)(;q=(?<q>\d+.?\d+))?", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline);
+		private static readonly string[] compressTags = new string[] { "gzip", "deflate" };
+
+		#region -- class HttpOutputBufferStream -------------------------------------------
+
+		private sealed class HttpOutputBufferStream : Stream
+		{
+			private readonly HttpListenerResponse response;
+			private readonly long contentLength;
+			private readonly bool isCompressed;
+
+			private readonly byte[] bufferArray = new byte[(int)bufferFlushSize];
+			private Stream outputStream = null;
+			private long position = 0;
+
+			public HttpOutputBufferStream(HttpListenerResponse response, bool isCompressed, long contentLength)
+			{
+				this.response = response ?? throw new ArgumentNullException(nameof(response));
+				this.isCompressed = isCompressed;
+				this.contentLength = contentLength;
+			} // ctor
+
+			protected override void Dispose(bool disposing)
+			{
+				if (!IsBufferFlushed)
+					FlushBuffer(true);
+				outputStream.Dispose();
+				
+				base.Dispose(disposing);
+			} // proc Dispose
+
+			private void FlushBuffer(bool onClose)
+			{
+				if (outputStream != null)
+					throw new InvalidOperationException();
+
+				// update content header fields
+				if (onClose) // is on close, and all data is in buffer, we will calcuate the length for the header
+				{	
+					response.ContentLength64 = position;
+					response.SendChunked = false;
+				}
+				else // more data is incoming, content-length can not be set if compressed
+				{
+					if (isCompressed || contentLength < 0 || contentLength > 262144)
+					{
+						if (contentLength >= 0)
+							response.Headers["des-content-size"] = contentLength.ToString();
+						response.SendChunked = true; // send all data chunked
+					}
+					else
+						response.ContentLength64 = contentLength; // send one block of data
+				}
+
+				// start output to http
+				outputStream = response.OutputStream;
+				outputStream.Write(bufferArray, 0, (int)position);
+			} // proc FlushBuffer
+
+			public override Task FlushAsync(CancellationToken cancellationToken)
+			{
+				return IsBufferFlushed
+					? outputStream.FlushAsync(cancellationToken)
+					: Task.CompletedTask;
+			} // proc FlushAsync
+
+			public override void Flush()
+			{
+				if (IsBufferFlushed)
+					outputStream.Flush();
+			} // proc Flush
+
+			public override void Write(byte[] buffer, int offset, int count)
+			{
+				if (IsBufferFlushed) // buffer flushed, write direct to output
+				{
+					outputStream.Write(buffer, offset, count);
+				}
+				else if (position + count > bufferFlushSize) // not enough memory to buffer 
+				{
+					FlushBuffer(false);
+					outputStream.Write(buffer, offset, count);
+				}
+				else // write into buffer
+				{
+					Array.Copy(buffer, offset, bufferArray, position, count);
+				}
+
+				position += count;
+			} // proc Write
+
+			public override int Read(byte[] buffer, int offset, int count) 
+				=> throw new NotSupportedException();
+
+			public override long Seek(long offset, SeekOrigin origin)
+				=> throw new NotSupportedException();
+
+			public override void SetLength(long value)
+			{
+				if (value != position)
+					throw new NotSupportedException();
+			} // proc SetLength
+
+			public override long Position { get => position; set => throw new NotSupportedException(); }
+
+			public override bool CanRead => false;
+			public override bool CanWrite => true;
+			public override bool CanSeek => false;
+			public override long Length => position;
+
+			private bool IsBufferFlushed => outputStream != null;
+		} // class HttpOutputBufferStream
+
+		#endregion
+
 		private void CheckOutputSended()
 		{
 			if (isOutputSended)
@@ -336,52 +452,88 @@ namespace TecWare.DE.Server
 			return Http.DefaultEncoding;
 		} // func GetOutputEncoding
 
-		public Stream GetOutputStream(string contentType, long contentLength = -1, bool? compress = null, bool? sendChunked = null)
+		private static int CheckForEncoding(string acceptEncoding, string[] names)
+		{
+			var currentIndex = -1;
+			var currentQuality = 0.0f;
+
+			if (acceptEncoding != null && names.Length > 0)
+			{
+				foreach (var c in acceptEncoding.Split(','))
+				{
+					var m = encodingValueRegex.Match(c);
+					if (m.Success)
+					{
+						var idx = Array.FindIndex(names, c => String.Compare(c, m.Groups["n"].Value, StringComparison.OrdinalIgnoreCase) == 0);
+						if (idx >= 0)
+						{
+							var q = m.Groups["q"].Length > 0 ? Single.Parse(m.Groups["q"].Value) : 1.0f;
+							if (q > currentQuality)
+							{
+								currentQuality = q;
+								currentIndex = idx;
+							}
+						}
+					}
+				}
+			}
+
+			return currentIndex;
+		} // func CheckForEncoding
+
+		private static bool TryGetAllowCompression(ref string contentType)
+		{
+			var p = contentType.IndexOf(";gzip", StringComparison.OrdinalIgnoreCase);
+			if (p >= 0)
+			{
+				contentType = contentType.Remove(p, 5);
+				return true;
+			}
+			return false;
+		} // func TryGetAlowCompression
+
+		public Stream GetOutputStream(string contentType, long contentLength = -1)
 		{
 			CheckOutputSended();
 
 			if (String.IsNullOrEmpty(contentType))
 				throw new ArgumentNullException(nameof(contentType));
 
-			// is the content tpe marked
-			var p = contentType.IndexOf(";gzip", StringComparison.OrdinalIgnoreCase);
-			if (p >= 0)
-			{
-				contentType = contentType.Remove(p, 5);
-				compress = true;
-			}
-
-			// set default value
-			if (!compress.HasValue)
-				compress = !MimeTypeMapping.GetIsCompressedContent(contentType);
+			// is the content type marked
+			var allowCompression = TryGetAllowCompression(ref contentType)
+				|| !MimeTypeMapping.GetIsCompressedContent(contentType); // set default value from content type
 
 			// set the content type 
 			context.Response.ContentType = contentType;
 
 			// compressed streams allowed
-			if (compress ?? false)
-			{
-				var acceptEncoding = context.Request.Headers["Accept-Encoding"];
-				compress = acceptEncoding != null && acceptEncoding.IndexOf("gzip") >= 0;
-			}
-			else
-				compress = false;
+			var compressIndex = allowCompression
+				? CheckForEncoding(context.Request.Headers["Accept-Encoding"], compressTags)
+				: -1;
 
-			//// send chunked
-			//context.Response.SendChunked = sendChunked ?? contentLength < 0 || contentLength > 0x10000;
-			
 			// create the output stream
 			isOutputSended = true;
-			if (compress.Value)
+			if (IsHeadRequest)
 			{
-				context.Response.Headers["Content-Encoding"] = "gzip";
-				return IsHeadRequest ? null : new GZipStream(context.Response.OutputStream, CompressionMode.Compress);
+				if (compressIndex >= 0)
+					context.Response.Headers["Content-Encoding"] = compressTags[compressIndex];
+				return null;
 			}
 			else
 			{
-				//if (contentLength >= 0)
-				//	context.Response.ContentLength64 = contentLength;
-				return IsHeadRequest ? null : context.Response.OutputStream;
+				var returnStream = (Stream)new HttpOutputBufferStream(context.Response, compressIndex >= 0, contentLength);
+				switch (compressIndex)
+				{
+					case 0:
+						returnStream = new GZipStream(returnStream, CompressionMode.Compress, false);
+						context.Response.Headers["Content-Encoding"] = compressTags[0];
+						break;
+					case 1:
+						returnStream = new DeflateStream(returnStream, CompressionMode.Compress, false);
+						context.Response.Headers["Content-Encoding"] = compressTags[1];
+						break;
+				}
+				return returnStream;
 			}
 		} // func GetOutputStream
 
@@ -391,7 +543,7 @@ namespace TecWare.DE.Server
 		
 			// add encoding to the content type
 			contentType = contentType + "; charset=" + encoding.WebName;
-			var outputStream = GetOutputStream(contentType, contentLength, compress: contentLength == -1, sendChunked: null);
+			var outputStream = GetOutputStream(contentType, contentLength);
 
 			if (encoding == Encoding.UTF8)
 				encoding = Procs.Utf8Encoding;
