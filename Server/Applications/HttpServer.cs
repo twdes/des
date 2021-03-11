@@ -341,7 +341,7 @@ namespace TecWare.DE.Server
 			CheckOutputSended();
 
 			if (String.IsNullOrEmpty(contentType))
-				throw new ArgumentNullException("contentType");
+				throw new ArgumentNullException(nameof(contentType));
 
 			// is the content tpe marked
 			var p = contentType.IndexOf(";gzip", StringComparison.OrdinalIgnoreCase);
@@ -367,8 +367,8 @@ namespace TecWare.DE.Server
 			else
 				compress = false;
 
-			// send chunked
-			context.Response.SendChunked = sendChunked ?? contentLength < 0 || contentLength > 0x10000;
+			//// send chunked
+			//context.Response.SendChunked = sendChunked ?? contentLength < 0 || contentLength > 0x10000;
 			
 			// create the output stream
 			isOutputSended = true;
@@ -379,8 +379,8 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				if (contentLength >= 0)
-					context.Response.ContentLength64 = contentLength;
+				//if (contentLength >= 0)
+				//	context.Response.ContentLength64 = contentLength;
 				return IsHeadRequest ? null : context.Response.OutputStream;
 			}
 		} // func GetOutputStream
