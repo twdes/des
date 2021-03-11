@@ -318,6 +318,7 @@ namespace TecWare.DE.Server
 		#region -- Output -----------------------------------------------------------------
 
 		private const long bufferFlushSize = 0x10000L;
+		private const int outputStreamChunkedBorder = 0x40000;
 		private static readonly Regex encodingValueRegex = new Regex(@"(?<n>\w+)(;q=(?<q>\d+.?\d+))?", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline);
 		private static readonly string[] compressTags = new string[] { "gzip", "deflate" };
 
@@ -358,16 +359,14 @@ namespace TecWare.DE.Server
 				if (onClose) // is on close, and all data is in buffer, we will calcuate the length for the header
 				{	
 					response.ContentLength64 = position;
+					if (isCompressed && contentLength > 0)
+						response.Headers["des-content-size"] = contentLength.ToString();
 					response.SendChunked = false;
 				}
 				else // more data is incoming, content-length can not be set if compressed
 				{
-					if (isCompressed || contentLength < 0 || contentLength > 262144)
-					{
-						if (contentLength >= 0)
-							response.Headers["des-content-size"] = contentLength.ToString();
-						response.SendChunked = true; // send all data chunked
-					}
+					if (isCompressed || contentLength < 0 || contentLength > outputStreamChunkedBorder)
+						SetResponseToChunked(response, contentLength);
 					else
 						response.ContentLength64 = contentLength; // send one block of data
 				}
@@ -492,6 +491,13 @@ namespace TecWare.DE.Server
 			return false;
 		} // func TryGetAlowCompression
 
+		private static void SetResponseToChunked(HttpListenerResponse response, long contentLength)
+		{
+			if (contentLength >= 0)
+				response.Headers["des-content-size"] = contentLength.ToString();
+			response.SendChunked = true; // send all data chunked
+		} // proc SetResponseToChunked
+
 		public Stream GetOutputStream(string contentType, long contentLength = -1)
 		{
 			CheckOutputSended();
@@ -519,7 +525,16 @@ namespace TecWare.DE.Server
 					context.Response.Headers["Content-Encoding"] = compressTags[compressIndex];
 				return null;
 			}
-			else
+			else if (compressIndex == -1 && contentLength >= 0) // is not compressed, and content-length is set, we do not need a buffer
+			{
+				if (contentLength < outputStreamChunkedBorder)
+					SetResponseToChunked(context.Response, contentLength);
+				else
+					context.Response.ContentLength64 = contentLength;
+
+				return context.Response.OutputStream;
+			}
+			else // we wait for the first bytes, to test which method is the best
 			{
 				var returnStream = (Stream)new HttpOutputBufferStream(context.Response, compressIndex >= 0, contentLength);
 				switch (compressIndex)

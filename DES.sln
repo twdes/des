@@ -46,6 +46,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DEModette.Core", "Extern\od
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DEModette.UI", "Extern\odette\DEModette.UI\DEModette.UI.csproj", "{5A122B58-690A-46F8-817B-DEC2378F5424}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerHttpTest", "ServerHttpTest\ServerHttpTest.csproj", "{5126E2E7-5270-46ED-BF4A-A391A7B28653}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -92,6 +94,10 @@ Global
 		{5A122B58-690A-46F8-817B-DEC2378F5424}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5A122B58-690A-46F8-817B-DEC2378F5424}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5A122B58-690A-46F8-817B-DEC2378F5424}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5126E2E7-5270-46ED-BF4A-A391A7B28653}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5126E2E7-5270-46ED-BF4A-A391A7B28653}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5126E2E7-5270-46ED-BF4A-A391A7B28653}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5126E2E7-5270-46ED-BF4A-A391A7B28653}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
