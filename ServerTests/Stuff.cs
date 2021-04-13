@@ -205,6 +205,13 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
+		public void TimeTest04()
+		{
+			var cron = new CronBound("Mo 6:00");
+			Assert.AreEqual(new DateTime(2021, 3, 29, 6, 0, 0), cron.GetNext(new DateTime(2021, 3, 22, 6, 1, 0, 0)));
+		}
+
+		[TestMethod]
 		public void XmlSplitPaths()
 		{
 			var t = Procs.SplitPaths("a b c").ToArray();

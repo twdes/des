@@ -451,7 +451,7 @@ namespace TecWare.DE.Server.Stuff
 					var nextWeekDay = ret;
 					if (cur < next)
 					{
-						nextWeekDay = ret.AddDays(next - cur);
+						nextWeekDay = ret.Date.AddDays(next - cur);
 						overflowWeekDay = true;
 					}
 
