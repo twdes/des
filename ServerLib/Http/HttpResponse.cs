@@ -58,6 +58,11 @@ namespace TecWare.DE.Server.Http
 		/// <param name="extension">file extension</param>
 		/// <returns>mime-type</returns>
 		string GetContentType(string extension);
+		/// <summary>Get a mime type to the given extension.</summary>
+		/// <param name="extension">file extension</param>
+		/// <param name="mimeType"></param>
+		/// <returns></returns>
+		bool TryGetContentType(string extension, out string mimeType);
 
 		/// <summary>Default uri for the service.</summary>
 		Uri DefaultBaseUri { get; }

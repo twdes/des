@@ -1342,9 +1342,14 @@ namespace TecWare.DE.Server
 		#region -- MimeInfo -----------------------------------------------------------
 
 		public string GetContentType(string extension)
-			=> MimeTypeMapping.TryGetMimeTypeFromExtension(extension, out var mimeType)
+		{
+			return TryGetContentType(extension, out var mimeType)
 				? mimeType
 				: throw new ArgumentException(String.Format("No contentType defined for '{0}'.", extension), "extension");
+		} // func GetContentType
+
+		public bool TryGetContentType(string extension, out string mimeType)
+			=> MimeTypeMapping.TryGetMimeTypeFromExtension(extension, out mimeType);
 
 		#endregion
 
