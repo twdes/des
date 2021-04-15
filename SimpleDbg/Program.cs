@@ -1884,19 +1884,26 @@ namespace TecWare.DE.Server
 			protected override string GetRawValue(XElement x)
 			{
 				var sb = new StringBuilder();
-				if (isArray)
+
+				var xValue = x?.Element(xElementName);
+				if (xValue == null)
+					sb.Append(NullValue);
+				else if (isArray)
 				{
 					var rowCount = 0;
-					foreach (var cur in x.Element(xElementName).Elements(xTypeElementName))
+					
 					{
-						if (rowCount >= 10)
-							break;
-						else if (rowCount > 0)
-							sb.Append(",");
+						foreach (var cur in xValue.Elements(xTypeElementName))
+						{
+							if (rowCount >= 10)
+								break;
+							else if (rowCount > 0)
+								sb.Append(",");
 
-						FormatValueShort(sb, cur);
+							FormatValueShort(sb, cur);
 
-						rowCount++;
+							rowCount++;
+						}
 					}
 
 					if (rowCount == 0)
@@ -1904,6 +1911,7 @@ namespace TecWare.DE.Server
 				}
 				else
 					FormatValueShort(sb, x.Element(xElementName).Element(xTypeElementName));
+
 				return sb.ToString();
 			} // func GetRawValue
 		} // class ListGetElementTypeTableColumn
