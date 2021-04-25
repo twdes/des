@@ -380,7 +380,7 @@ namespace TecWare.DE.Server.Http
 		/// <returns></returns>
 		public static IDEWebRequestScope SetInlineFileName(this IDEWebRequestScope context, string fileName)
 		{
-			context.OutputHeaders["Content-Disposition"] = $"inline; filename = \"{fileName}\"";
+			context.OutputHeaders["Content-Disposition"] = $"inline; filename = \"{Procs.FilterFileName(fileName)}\"";
 			return context;
 		} // proc SetAttachment
 
@@ -390,7 +390,7 @@ namespace TecWare.DE.Server.Http
 		/// <returns></returns>
 		public static IDEWebRequestScope SetAttachment(this IDEWebRequestScope context, string fileName)
 		{
-			context.OutputHeaders["Content-Disposition"] = $"attachment; filename = \"{fileName}\"";
+			context.OutputHeaders["Content-Disposition"] = $"attachment; filename = \"{Procs.FilterFileName(fileName)}\"";
 			return context;
 		} // proc SetAttachment
 
