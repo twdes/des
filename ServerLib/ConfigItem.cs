@@ -750,24 +750,44 @@ namespace TecWare.DE.Server
 					try
 					{
 						// set variable to nil
-						if (data == String.Empty)
+						if (String.IsNullOrEmpty(data))
 							data = null;
 
 						// convert value to the target type
-						var value = Procs.ChangeType(data, LuaType.GetType(type));
+						var variableType = LuaType.GetType(type);
+
+						var value = variableType == typeof(LuaTable)
+							? (object)(LuaTable)Lua.RtReadValue(data)
+							: Procs.ChangeType(data, variableType);
 
 						var nameList = name.Split('.');
 						var curTable = (LuaTable)this;
 						for (var i = 0; i < nameList.Length - 1; i++) // create the table structure
 						{
 							var t = nameList[i];
-							if (curTable[t] is LuaTable)
-								curTable[t] = new LuaTable();
-							curTable = (LuaTable)curTable[t];
+							var targetTable = curTable[t] as LuaTable;
+							if (targetTable == null)
+							{
+								targetTable = new LuaTable();
+								curTable[t] = targetTable;
+							}
+							curTable = targetTable;
 						}
 
 						// finally set the value
-						curTable[nameList[nameList.Length - 1]] = value;
+						var lastName = nameList[nameList.Length - 1];
+						if (value is LuaTable sourceTable)
+						{
+							var targetTable = curTable[lastName] as LuaTable;
+							if (targetTable == null)
+							{
+								targetTable = new LuaTable();
+								curTable[lastName] = targetTable;
+							}
+							merge(targetTable, sourceTable);
+						}
+						else
+							curTable[nameList[nameList.Length - 1]] = value;
 					}
 					catch (Exception e)
 					{
