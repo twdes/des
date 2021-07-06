@@ -125,7 +125,9 @@ namespace TecWare.DE.Server.UI
 			lastCheckTick = Environment.TickCount;
 		} // proc Save
 
-		private void RemoveAt(int idx)
+		/// <summary>Remove history item</summary>
+		/// <param name="idx"></param>
+		public void RemoveAt(int idx)
 		{
 			if (idx < history.Count)
 			{

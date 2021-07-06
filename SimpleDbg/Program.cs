@@ -716,16 +716,68 @@ namespace TecWare.DE.Server
 
 		#region -- Open ---------------------------------------------------------------
 
+		private static readonly Regex openScanRegex = new Regex(@"^:open\s+(?<url>.*)");
+
+		private sealed class OpenPairItem : SelectPairItem<string>
+		{
+			private readonly int historyIndex;
+
+			public OpenPairItem(string url, string text, int historyIndex)
+				: base(url, text)
+			{
+				this.historyIndex = historyIndex;
+			} // ctor
+			
+			public int HistoryIndex => historyIndex;
+		} // class OpenPairItem
+
 		[InteractiveCommand("open", HelpText = "Open a new connection.")]
-		private static void Open(
+		public static async Task OpenAsync(
 			[Description("Uri to the server.")]
 			string url =  null
 		)
 		{
-			var uri = new Uri(url ?? "http://localhost:8080/", UriKind.Absolute);
+			if (url == null)
+			{
+				var list = new List<OpenPairItem>
+				{
+					new OpenPairItem("http://localhost:8080/", "(local)", -1)
+				};
 
-			BeginConnection(uri, null);
+				for (var i = commandHistory.Count - 1; i >= 0; i--)
+				{
+					var m = openScanRegex.Match(commandHistory[i]);
+					if (m.Success)
+					{
+						var t = m.Groups["url"].Value.Trim();
+						list.Add(new OpenPairItem(t, t, i));
+					}
+				}
+
+				var dlg = new SelectListDialog<string>(app, list) { Title = "Open" };
+
+				dlg.AddKeyCommand(ConsoleKey.F8, "Delete",
+					() =>
+					{
+						if (dlg.View.SelectedItem is OpenPairItem op)
+							commandHistory.RemoveAt(op.HistoryIndex);
+						return Task.FromResult<bool?>(false);
+					},
+					() => dlg.View.SelectedItem is OpenPairItem op && op.HistoryIndex >= 0
+				);
+				
+				if (await dlg.ShowDialogAsync())
+					OpenCore(dlg.SelectedValue);
+			}
+			else
+				OpenCore(url);
 		} // func Open
+
+		private static void OpenCore(string url)
+		{
+			var uri = new Uri(url, UriKind.Absolute);
+			BeginConnection(uri, null);
+		} // func OpenCore
 
 		#endregion
 
