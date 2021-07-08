@@ -16,7 +16,8 @@ namespace TecWare.DE.Server
 	{
 		private static readonly string sampleSimple01 = String.Join(Environment.NewLine,
 			"Hallo;\"Welt\"",
-			"\"Quote \"\"me\"\";\";1");
+			"\"Quote \"\"me\"\";\";1",
+			"\"\"test\"\" ;\"\"");
 		private static readonly string sampleSimple02 = String.Join(String.Empty,
 			"Hallo     Welt      ",
 			"\"Quote\"   1         ");
@@ -33,11 +34,11 @@ namespace TecWare.DE.Server
 			{
 				while (r.ReadRow())
 				{
-					Assert.AreEqual(r.Count, 2);
 					Console.WriteLine("{0}, {1}", r[0], r[1]);
+					Assert.AreEqual(r.Count, 2);
 					row++;
 				}
-				Assert.AreEqual(2, row);
+				Assert.AreEqual(3, row);
 			}
 		}
 
