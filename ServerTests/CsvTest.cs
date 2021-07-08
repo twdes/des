@@ -286,8 +286,8 @@ namespace TecWare.DE.Server
 			{
 				using (var w = new TextCsvWriter(sw, new TextCsvSettings() { Quotation = CsvQuotation.ForceText, Quote = '\"', Delemiter = ',', HeaderRow = 0 }))
 				{
-					w.WriteRow(new string[] { "Forced\"Text\" ", "123" });
-					Assert.AreEqual("\"Forced\"Text\"\" ,123\r\n", w.BaseWriter.ToString());
+					w.WriteRow(new string[] { "Forced\"Text\" ", "123" }, new bool[] { true, false });
+					Assert.AreEqual("\"Forced\"\"Text\"\" \",123\r\n", w.BaseWriter.ToString());
 				}
 			}
 		}
