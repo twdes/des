@@ -322,6 +322,9 @@ namespace TecWare.DE.Server
 
 			#region -- PostNotify -----------------------------------------------------
 
+			protected override bool TryDemandToken(string securityToken)
+				=> true;
+
 			protected override void PostNotify(string path, string eventId, XElement xEvent, CancellationToken cancellationToken)
 				=> Server.Queue.RegisterCommand(() => eventHandler(path, eventId, xEvent));
 
