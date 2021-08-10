@@ -298,36 +298,38 @@ namespace TecWare.DE.Server
 
 		private sealed class HandlerEventSession : EventSession
 		{
-			private readonly WeakReference<DEEventHandler> eventHandler;
+			private readonly DEEventHandler eventHandler;
 			private readonly string pathFilter;
+			private bool isDisposed = false;
 
 			#region -- Ctor/Dtor ------------------------------------------------------
 
 			public HandlerEventSession(DEServer server, DEEventHandler eventHandler, string pathFilter, string[] eventFilter)
 				: base(server)
 			{
-				this.eventHandler = new WeakReference<DEEventHandler>(eventHandler ?? throw new ArgumentNullException(nameof(eventHandler)));
+				this.eventHandler = eventHandler ?? throw new ArgumentNullException(nameof(eventHandler));
 				this.pathFilter = pathFilter;
 				SetEventFilter(eventFilter);
 			} // ctor
+
+			protected override void Dispose(bool disposing)
+			{
+				isDisposed = true;
+				base.Dispose(disposing);
+			} // proc Dispose
 
 			#endregion
 
 			#region -- PostNotify -----------------------------------------------------
 
 			protected override void PostNotify(string path, string eventId, XElement xEvent, CancellationToken cancellationToken)
-			{
-				if (eventHandler.TryGetTarget(out var handler))
-					Server.Queue.RegisterCommand(() => handler(path, eventId, xEvent));
-				else
-					Dispose();
-			} // proc PostNotify
+				=> Server.Queue.RegisterCommand(() => eventHandler(path, eventId, xEvent));
 
 			#endregion
 
 			public override string Type => "handler";
 			public override string PathFilter => pathFilter;
-			public override bool IsActive => eventHandler.TryGetTarget(out _);
+			public override bool IsActive => !isDisposed;
 		} // class HandlerEventSession
 
 		#endregion
