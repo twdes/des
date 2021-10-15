@@ -640,6 +640,7 @@ namespace TecWare.DE.Server
 
 			// Create the parameter
 			var l = parameterInfo.Length - parameterOffset;
+			var visibleParameterIndex = 0;
 			for (var i = 0; i < l; i++)
 			{
 				var currentParameter = parameterInfo[i + parameterOffset];
@@ -693,11 +694,12 @@ namespace TecWare.DE.Server
 				else
 				{
 					CreateArgumentExpressionsByInfo(
-						alternateParameterDescription?.Invoke(i),
+						alternateParameterDescription?.Invoke(visibleParameterIndex),
 						currentParameter,
 						out var parameterName,
 						out var parameterDefault
 					);
+					visibleParameterIndex++;
 
 					if (typeTo == typeof(object)) // Keine Konvertierung
 					{
