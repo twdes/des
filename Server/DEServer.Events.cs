@@ -244,11 +244,14 @@ namespace TecWare.DE.Server
 			{
 				var eventLine = (string)state;
 
-				SendEventLineAsync(eventLine)
-					.ContinueWith(
+				if (Socket.State == WebSocketState.Open
+					|| Socket.State == WebSocketState.CloseReceived)
+				{
+					SendEventLineAsync(eventLine).ContinueWith(
 						t => Server.Log.Warn("Event Socket notify failed.", t.Exception),
 						TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously
 					);
+				}
 			} // proc ExecuteNotify
 
 			protected override bool TryDemandToken(string securityToken)
@@ -538,6 +541,10 @@ namespace TecWare.DE.Server
 				{
 					if (le.NativeErrorCode != 995)
 						Log.Warn($"Event Socket failed.", le);
+				}
+				else if (e is WebSocketException se && se.WebSocketErrorCode == WebSocketError.InvalidState)
+				{
+					Log.Debug("Event socket aborted.");
 				}
 				else
 					Log.Warn("Event Socket failed.", e);
