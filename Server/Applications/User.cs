@@ -33,7 +33,7 @@ namespace TecWare.DE.Server.Applications
 			=> Name.GetHashCode();
 
 		public override bool Equals(object obj)
-			=> obj is DESimpleIdentity c ? Name.Equals(c.Name) : false;
+			=> obj is DESimpleIdentity c && Name.Equals(c.Name);
 
 		public string Name { get; }
 
@@ -54,7 +54,7 @@ namespace TecWare.DE.Server.Applications
 		private sealed class UserContext : IDEAuthentificatedUser
 		{
 			private readonly object userLock = new object();
-			private DEUser user;
+			private readonly DEUser user;
 			private readonly IIdentity identity;
 
 			public UserContext(DEUser user, IIdentity identity)
