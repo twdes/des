@@ -69,9 +69,6 @@ namespace TecWare.DE.Server.Applications
 			public bool IsInRole(string role)
 				=> user.DemandToken(role);
 
-			public void SetProperty(string propertyName, object value)
-				=> user.SetMemberValue(propertyName, value);
-
 			public bool TryGetProperty(string propertyName, out object value)
 				=> user.TryGetProperty(propertyName, out value);
 
@@ -104,6 +101,9 @@ namespace TecWare.DE.Server.Applications
 				Server.UnregisterUser(this);
 			base.Dispose(disposing);
 		} // proc Dispose
+
+		bool IEquatable<IDEUser>.Equals(IDEUser other)
+			=> ReferenceEquals(this, other);
 
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
 		{

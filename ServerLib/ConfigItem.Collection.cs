@@ -846,10 +846,10 @@ namespace TecWare.DE.Server
 
 		#region -- RegisterCollectionController, UnregisterCollectionController -------
 
-		private IDEListController FindController(string sId)
+		private IDEListController FindController(string id)
 		{
 			lock (controllerList)
-				return controllerList.Find(c => String.Compare(c.Id, sId, StringComparison.OrdinalIgnoreCase) == 0);
+				return controllerList.Find(c => String.Compare(c.Id, id, StringComparison.OrdinalIgnoreCase) == 0);
 		} // func FindController
 
 		/// <summary>Registriert eine Liste an diesem Knoten</summary>
@@ -1004,7 +1004,12 @@ namespace TecWare.DE.Server
 			// Suche den passenden Controller
 			var controller = FindController(id);
 			if (controller == null)
-				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Liste '{0}' nicht gefunden.", id));
+			{
+				if (Owner is DEConfigItem parent)
+					controller = parent.FindController(id);
+				else
+					throw new HttpResponseException(HttpStatusCode.BadRequest, $"List'{id}' not found.");
+			}
 
 			// check security token
 			r.DemandToken(controller.SecurityToken);

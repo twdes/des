@@ -35,11 +35,6 @@ namespace TecWare.DE.Server
 	/// <remarks>User this interface only in a connection with <see cref="DECommonScope"/>.</remarks>
 	public interface IDEAuthentificatedUser : IPrincipal, IPropertyReadOnlyDictionary, IDisposable
 	{
-		/// <summary>Set a property of the user context.</summary>
-		/// <param name="propertyName"></param>
-		/// <param name="value"></param>
-		void SetProperty(string propertyName, object value);
-
 		/// <summary>Impersonate the thread to a windows identity.</summary>
 		WindowsImpersonationContext TryImpersonateWindows();
 
@@ -80,7 +75,7 @@ namespace TecWare.DE.Server
 	#region -- interface IDEUser ------------------------------------------------------
 
 	/// <summary>User that is registered in the main server..</summary>
-	public interface IDEUser : IPropertyReadOnlyDictionary
+	public interface IDEUser : IPropertyReadOnlyDictionary, IEquatable<IDEUser>
 	{
 		/// <summary>Creates a authentificated user.</summary>
 		/// <param name="identity">Incoming identity from the user, to check security.</param>
@@ -1060,7 +1055,7 @@ namespace TecWare.DE.Server
 
 		/// <inheritdoc />
 		public void SetUserProperty(string name, object value)
-			=> EnforceUser().SetProperty(name, value);
+			=> throw new NotImplementedException(); // todo: EnforceUser().SetProperty(name, value);
 
 		/// <inheritdoc />
 		public virtual bool TryGetProperty(string name, out object value)
