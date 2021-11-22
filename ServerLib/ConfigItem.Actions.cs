@@ -793,7 +793,7 @@ namespace TecWare.DE.Server
 		public static void WriteActionStart(IDECommonScope r, LogMessageScopeProxy log, string actioName, string[] names, object[] arguments)
 		{
 			// write user
-			var userInfo = r.User?.Info;
+			var userInfo = r.TryDemandUser();
 			if (userInfo != null)
 				log.Write("[").Write(userInfo.DisplayName).Write("] ");
 

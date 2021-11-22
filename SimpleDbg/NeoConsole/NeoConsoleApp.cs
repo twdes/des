@@ -848,7 +848,7 @@ namespace Neo.Console
 
 		private sealed class ConsoleSynchronizationContext : SynchronizationContext
 		{
-			private ConsoleApplication application;
+			private readonly ConsoleApplication application;
 
 			public ConsoleSynchronizationContext(ConsoleApplication application)
 			{
@@ -1576,6 +1576,12 @@ namespace Neo.Console
 			DoEventsUnsafe(true);
 		} // proc DoEvents
 
+		private void DoActionsUnsafe()
+		{
+			while (TryDequeue(out var action))
+				action();
+		} // proc DoActionsUnsafe
+
 		private void DoEventsUnsafe(bool runIdle)
 		{
 			// check for window event
@@ -1586,8 +1592,7 @@ namespace Neo.Console
 				OnHandleEventUnsafe(ev);
 
 			// run actions
-			while (TryDequeue(out var action))
-				action();
+			DoActionsUnsafe();
 
 			// run idle event
 			if (runIdle)
@@ -1630,6 +1635,9 @@ namespace Neo.Console
 				if (continueLoop || invalidateFlags != InvalidateFlag.None)
 					testEvent = WaitHandle.WaitAny(waitHandles, 400);
 			}
+
+			// empty async queue
+			DoActionsUnsafe();
 
 			return t.Result;
 		} // proc Run

@@ -694,7 +694,7 @@ namespace TecWare.DE.Server
 
 				// initial context
 				this.cancellationToken = cancellationToken;
-				currentScope = CreateCommonScopeAsync(context.User, null).AwaitTask();
+				currentScope = CreateCommonScopeAsync(context.GetService<IDEAuthentificatedUser>(false), null).AwaitTask();
 
 				UseNode("/");
 
@@ -1537,7 +1537,7 @@ namespace TecWare.DE.Server
 						log.Except(e);
 					}
 				}
-				currentScope = await CreateCommonScopeAsync(context.User, null);
+				currentScope = await CreateCommonScopeAsync(context.GetService<IDEAuthentificatedUser>(false), null);
 			} // func BeginNewScopeAsync
 
 			private async Task<XElement> BeginScopeAsync(XElement _)

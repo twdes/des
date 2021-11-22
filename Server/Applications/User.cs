@@ -14,6 +14,8 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
+using System.Dynamic;
 using System.Net;
 using System.Security;
 using System.Security.Principal;
@@ -53,7 +55,6 @@ namespace TecWare.DE.Server.Applications
 		/// <summary></summary>
 		private sealed class UserContext : IDEAuthentificatedUser
 		{
-			private readonly object userLock = new object();
 			private readonly DEUser user;
 			private readonly IIdentity identity;
 
@@ -63,28 +64,21 @@ namespace TecWare.DE.Server.Applications
 				this.identity = identity;
 			} // ctor
 
-			public void Dispose()
-			{
-			} // proc Dispose
+			void IDisposable.Dispose() { }
 
 			public bool IsInRole(string role)
 				=> user.DemandToken(role);
 
-			public object GetService(Type serviceType)
-			{
-				lock (userLock)
-				{
-					if (serviceType == typeof(WindowsImpersonationContext) && identity is WindowsIdentity windowsIdentity)
-						return windowsIdentity.Impersonate();
-					else if (serviceType == typeof(IDEUser))
-						return user;
-					else
-						return null;
-				}
-			} // func GetService
+			public void SetProperty(string propertyName, object value)
+				=> user.SetMemberValue(propertyName, value);
+
+			public bool TryGetProperty(string propertyName, out object value)
+				=> user.TryGetProperty(propertyName, out value);
+
+			public WindowsImpersonationContext TryImpersonateWindows()
+				=> identity is WindowsIdentity windowsIdentity ? windowsIdentity.Impersonate() : null;
 
 			public IIdentity Identity => identity;
-
 			public IDEUser Info => user;
 		} // class UserContext
 
@@ -216,7 +210,7 @@ namespace TecWare.DE.Server.Applications
 
 		string IDEUser.DisplayName => userName;
 		IIdentity IDEUser.Identity => identity;
-		string[] IDEUser.SecurityTokens => RefreshSecurityTokens();
+		IReadOnlyList<string> IDEUser.SecurityTokens => RefreshSecurityTokens();
 
 		public override string Icon => "/images/user1.png";
 	} // class DEUser

@@ -19,7 +19,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
-using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
@@ -32,14 +31,49 @@ namespace TecWare.DE.Server
 {
 	#region -- interface IDEAuthentificatedUser ---------------------------------------
 
-	/// <summary>Authentifizierte Nutzer in dem alle Informationen für die aktuelle 
-	/// Abfrage gespeichert werden können. Zusätzliche Dienste können via
-	/// GetService erfragt werden.</summary>
-	public interface IDEAuthentificatedUser : IServiceProvider, IPrincipal, IDisposable
+	/// <summary>A authentificated user exists as long a scope exists. <see cref="IPrincipal"/> is for the security, and <see cref="IPropertyReadOnlyDictionary"/> is the access to stored properties.</summary>
+	/// <remarks>User this interface only in a connection with <see cref="DECommonScope"/>.</remarks>
+	public interface IDEAuthentificatedUser : IPrincipal, IPropertyReadOnlyDictionary, IDisposable
 	{
+		/// <summary>Set a property of the user context.</summary>
+		/// <param name="propertyName"></param>
+		/// <param name="value"></param>
+		void SetProperty(string propertyName, object value);
+
+		/// <summary>Impersonate the thread to a windows identity.</summary>
+		WindowsImpersonationContext TryImpersonateWindows();
+
 		/// <summary>Return user info</summary>
 		IDEUser Info { get; }
 	} // interface IDEAuthentificatedUser
+
+	#endregion
+
+	#region -- class DEUserProperty ---------------------------------------------------
+
+	/// <summary>Publish properties</summary>
+	[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
+	public sealed class DEUserProperty : Attribute
+	{
+		/// <summary></summary>
+		/// <param name="propertyName"></param>
+		/// <param name="type"></param>
+		/// <param name="listName"></param>
+		public DEUserProperty(string propertyName, Type type, string listName = null)
+		{
+			Name = propertyName ?? throw new ArgumentNullException(nameof(propertyName));
+			Type = type ?? throw new ArgumentNullException(nameof(type));
+
+			ListName = listName ?? propertyName;
+		} // ctor
+
+		/// <summary></summary>
+		public string Name { get; }
+		/// <summary></summary>
+		public string ListName { get; }
+		/// <summary></summary>
+		public Type Type {get;}
+	} // class DEUserProperty
 
 	#endregion
 
@@ -58,7 +92,7 @@ namespace TecWare.DE.Server
 		/// <summary>Identity of the user.</summary>
 		IIdentity Identity { get; }
 		/// <summary>Show all security tokens.</summary>
-		string[] SecurityTokens { get; }
+		IReadOnlyList<string> SecurityTokens { get; }
 	} // interface IDEUser
 
 	#endregion
@@ -191,6 +225,13 @@ namespace TecWare.DE.Server
 		/// <summary>Entfernt den Nutzer aus dem HttpServer.</summary>
 		/// <param name="user"></param>
 		void UnregisterUser(IDEUser user);
+
+		/// <summary>All users of a specific type.</summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		T[] GetUser<T>()
+			where T : class, IDEUser;
+
 		/// <summary>Create authentificated user.</summary>
 		/// <param name="user">Identity of the user.</param>
 		/// <returns>Context of the user.</returns>
@@ -331,15 +372,15 @@ namespace TecWare.DE.Server
 		/// <param name="obj"></param>
 		void RegisterDispose(IDisposable obj);
 
-		/// <summary></summary>
-		/// <param name="ns"></param>
-		/// <param name="variable"></param>
+		/// <summary>Get a global variable to scope.</summary>
+		/// <param name="ns">Namespace to avoid collisions.</param>
+		/// <param name="variable">Name of the variable</param>
 		/// <param name="value"></param>
 		/// <returns></returns>
 		bool TryGetGlobal(object ns, object variable, out object value);
-		/// <summary></summary>
-		/// <param name="ns"></param>
-		/// <param name="variable"></param>
+		/// <summary>Set a global variable to scope.</summary>
+		/// <param name="ns">Namespace to avoid collisions.</param>
+		/// <param name="variable">Name of the variable</param>
 		/// <param name="value"></param>
 		void SetGlobal(object ns, object variable, object value);
 
@@ -358,12 +399,6 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		Task RollbackAsync(bool restart);
 
-		/// <summary>Access to the user context.</summary>
-		/// <typeparam name="T"></typeparam>
-		T GetUser<T>() where T : class;
-		/// <summary>Raw access to the user.</summary>
-		IDEAuthentificatedUser User { get; }
-
 		/// <summary>Check for the given token, if the user can access it.</summary>
 		/// <param name="securityToken">Security token.</param>
 		void DemandToken(string securityToken);
@@ -371,6 +406,26 @@ namespace TecWare.DE.Server
 		/// <param name="securityToken">Security token.</param>
 		/// <returns><c>true</c>, if the token is granted.</returns>
 		bool TryDemandToken(string securityToken);
+
+		/// <summary>Check if the scope is authentificated.</summary>
+		/// <returns></returns>
+		IDEUser TryDemandUser();
+
+		/// <summary>Demand user</summary>
+		IDEUser DemandUser();
+
+		/// <summary>Set a user property, this will persist over the complete runtime of the server</summary>
+		/// <param name="name"></param>
+		/// <param name="value"></param>
+		void SetUserProperty(string name, object value);
+
+		/// <summary>Impersonate context for windows.</summary>
+		/// <returns></returns>
+		WindowsImpersonationContext TryImersonateWindows();
+
+		/// <summary>Impersonate context for windows.</summary>
+		/// <returns></returns>
+		WindowsImpersonationContext ImersonateWindows();
 
 		/// <summary>Create an authorization exception in the current context.</summary>
 		/// <param name="message">Message of this exception</param>
@@ -407,11 +462,11 @@ namespace TecWare.DE.Server
 			} // ctor
 
 			public override bool Equals(object obj)
-				=> obj is GlobalKey t ? Equals(t) : false;
+				=> obj is GlobalKey t && Equals(t);
 
 			public bool Equals(GlobalKey other)
-				=> (Object.ReferenceEquals(ns, other.ns) || ns.Equals(other.ns))
-					&& (Object.ReferenceEquals(n, other.n) || n.Equals(other.n));
+				=> (ReferenceEquals(ns, other.ns) || ns.Equals(other.ns))
+					&& (ReferenceEquals(n, other.n) || n.Equals(other.n));
 
 			public override int GetHashCode()
 				=> ns.GetHashCode() ^ n.GetHashCode();
@@ -581,21 +636,6 @@ namespace TecWare.DE.Server
 		public void SetUser(IDEAuthentificatedUser user)
 			=> this.user = user;
 
-		/// <summary>Get the current user.</summary>
-		/// <typeparam name="T"></typeparam>
-		/// <returns></returns>
-		public T GetUser<T>()
-			where T : class
-		{
-			if (user == null)
-				throw CreateAuthorizationException(false, "Authorization expected.");
-
-			if (user is T r)
-				return r;
-
-			throw new NotImplementedException(String.Format("User class does not implement '{0}.", typeof(T).FullName));
-		} // func GetUser
-
 		#endregion
 
 		#region -- Security -----------------------------------------------------------
@@ -614,13 +654,17 @@ namespace TecWare.DE.Server
 			if (String.IsNullOrEmpty(securityToken))
 				return;
 
-			// is this token allowed in the current context
+			// Is this token allowed in the current context
 			if (IsTokenRestricted(securityToken))
 				throw CreateAuthorizationException(true, "Access is restricted.");
 
 			// is http authentification active
 			if (!useAuthentification)
 				return;
+
+			// Special case for desUser
+			if (String.Compare(securityToken, DEConfigItem.SecurityUser, StringComparison.OrdinalIgnoreCase) == 0)
+				EnforceUser();
 
 			if (!TryDemandToken(securityToken))
 				throw CreateAuthorizationException(false, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityToken));
@@ -634,7 +678,7 @@ namespace TecWare.DE.Server
 			// no security token -> public
 			if (String.IsNullOrEmpty(securityToken))
 				return true;
-			
+
 			// is this token allowed in the current context
 			if (IsTokenRestricted(securityToken))
 				return false;
@@ -643,8 +687,34 @@ namespace TecWare.DE.Server
 			if (!useAuthentification)
 				return true;
 
+			// Special case for desUser
+			if (String.Compare(securityToken, DEConfigItem.SecurityUser, StringComparison.OrdinalIgnoreCase) == 0 && user == null)
+				return false;
+
 			return User != null && User.IsInRole(securityToken);
 		} // proc TryDemandToken
+
+		private IDEAuthentificatedUser EnforceUser()
+			=> user ?? throw CreateAuthorizationException(false, "Authorization expected.");
+
+		/// <summary>Check if the scope is authentificated.</summary>
+		/// <returns></returns>
+		public IDEUser TryDemandUser()
+			=> user?.Info;
+		
+		/// <summary>Demand user</summary>
+		public IDEUser DemandUser()
+			=> EnforceUser().Info;
+
+		/// <summary>Impersonate context for windows.</summary>
+		/// <returns></returns>
+		public WindowsImpersonationContext TryImersonateWindows()
+			=> EnforceUser().TryImpersonateWindows();
+
+		/// <summary>Impersonate context for windows.</summary>
+		/// <returns></returns>
+		public WindowsImpersonationContext ImersonateWindows()
+			=> TryImersonateWindows() ?? throw new ArgumentException("Impersonation failed for user {0}.", user.Info.DisplayName);
 
 		/// <summary>Create an authorization exception in the current context.</summary>
 		/// <param name="isTokenRestricted"><c>true</c>, the token is not allowed under the current context. <c>false</c>, the user has no right on the token.</param>
@@ -672,11 +742,6 @@ namespace TecWare.DE.Server
 
 			if (serviceType == typeof(IDEAuthentificatedUser))
 				return user;
-
-			// second check user service
-			r = user?.GetService(serviceType);
-			if (r != null)
-				return r;
 
 			// check for an registered service
 			lock (services)
@@ -983,31 +1048,30 @@ namespace TecWare.DE.Server
 
 		#region -- Global Store -------------------------------------------------------
 
-		/// <summary></summary>
-		/// <param name="ns"></param>
-		/// <param name="variable"></param>
-		/// <param name="value"></param>
-		/// <returns></returns>
+		/// <inheritdoc />
 		public bool TryGetGlobal(object ns, object variable, out object value)
 			=> globals.TryGetValue(new GlobalKey(ns, variable), out value);
 
-		/// <summary></summary>
-		/// <param name="ns"></param>
-		/// <param name="variable"></param>
-		/// <param name="value"></param>
+		/// <inheritdoc />
 		public void SetGlobal(object ns, object variable, object value)
 			=> globals[new GlobalKey(ns, variable)] = value;
 
 		#endregion
 
-		/// <summary></summary>
-		/// <param name="name"></param>
-		/// <param name="value"></param>
-		/// <returns></returns>
+		/// <inheritdoc />
+		public void SetUserProperty(string name, object value)
+			=> EnforceUser().SetProperty(name, value);
+
+		/// <inheritdoc />
 		public virtual bool TryGetProperty(string name, out object value)
 		{
-			value = null;
-			return false;
+			if (user != null)
+				return user.TryGetProperty(name, out value);
+			else
+			{
+				value = null;
+				return false;
+			}
 		} // func TryGetProperty
 
 		/// <summary>Server</summary>

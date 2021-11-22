@@ -57,8 +57,8 @@ namespace TecWare.DE.Server
 	/// <summary></summary>
 	internal partial class DEServer : DEConfigLogItem, IDEBaseLog, IDEServer, IDEServerResolver
 	{
-		public const string ServerCategory = "Dienst";
-		public const string NetworkCategory = "Netzwerk";
+		public const string ServerCategory = "Service";
+		public const string NetworkCategory = "Network";
 
 		#region -- class DumpFileInfo -------------------------------------------------
 
@@ -114,14 +114,32 @@ namespace TecWare.DE.Server
 
 		private sealed class UserListDescriptor : IDEListDescriptor
 		{
+			private readonly List<Type> knownType = new List<Type>();
+			private readonly List<DEUserProperty> extendedProperties = new List<DEUserProperty>();
+
+			public void Update(Type type)
+			{
+				if (knownType.IndexOf(type) >= 0)
+					return;
+
+				foreach (var attr in type.GetCustomAttributes<DEUserProperty>())
+				{
+					if (!extendedProperties.Exists(c => String.Compare(c.ListName, attr.ListName, StringComparison.OrdinalIgnoreCase) == 0))
+						extendedProperties.Add(attr);
+				}
+			} // proc Update
+
 			public void WriteType(DEListTypeWriter xml)
 			{
 				xml.WriteStartType("u");
 				xml.WriteProperty("@id", typeof(string));
-				xml.WriteProperty("@name", typeof(string));
 				xml.WriteProperty("@type", typeof(string));
 				xml.WriteProperty("@displayName", typeof(string));
 				xml.WriteProperty("@security", typeof(string));
+
+				foreach (var c in extendedProperties)
+					xml.WriteProperty("@" + c.ListName, c.Type);
+
 				xml.WriteEndType();
 			} // proc WriteType
 
@@ -130,27 +148,33 @@ namespace TecWare.DE.Server
 				if (item is KeyValuePair<string, IDEUser> user)
 				{
 					xml.WriteStartProperty("u");
-					xml.WriteAttributeProperty("id", user.Key);
-					xml.WriteAttributeProperty("name", user.Value.Identity.Name);
+					xml.WriteAttributeProperty("id", user.Key); // is equal to Identity.Name
 					xml.WriteAttributeProperty("type", user.Value.Identity.AuthenticationType);
 					xml.WriteAttributeProperty("displayName", user.Value.DisplayName);
 					if (user.Value.SecurityTokens != null)
 						xml.WriteAttributeProperty("security", String.Join(";", user.Value.SecurityTokens));
+
+					foreach (var c in extendedProperties)
+					{
+						if (user.Value.TryGetProperty(c.Name, out var v))
+							xml.WriteAttributeProperty(c.ListName, v);
+					}
+
 					xml.WriteEndProperty();
 				}
 			} // proc WriteItem
 
-			public static IDEListDescriptor Default { get; } = new UserListDescriptor();
+			public static UserListDescriptor Default { get; } = new UserListDescriptor();
 		} // class UserListDescriptor
 
 		#endregion
 
-		private string logPath = null;                 // Pfad für sämtliche Log-Dateien
-		private SimpleConfigItemProperty<int> propertyLogCount = null; // Zeigt an wie viel Log-Dateien verwaltet werden
+		private string logPath = null;                                  // Pfad für sämtliche Log-Dateien
+		private SimpleConfigItemProperty<int> propertyLogCount = null;  // Zeigt an wie viel Log-Dateien verwaltet werden
 
 		private volatile int securityGroupsVersion = 0;
-		private readonly Dictionary<string, string[]> securityGroups = new Dictionary<string, string[]>(); // Sicherheitsgruppen
-		private readonly DEDictionary<string, IDEUser> users; // Active users
+		private readonly Dictionary<string, string[]> securityGroups = new Dictionary<string, string[]>();
+		private readonly DEDictionary<string, IDEUser> users; // Active users for authentification
 
 		private readonly ResolveEventHandler resolveEventHandler;
 		private DEConfigurationService configuration;
@@ -205,7 +229,7 @@ namespace TecWare.DE.Server
 				DoneConfiguration(); // close configuration
 
 				propertyMemory?.Dispose();
-				users?.Dispose();			
+				users?.Dispose();
 				dumpFiles?.Dispose();
 				propertyLogCount?.Dispose();
 			}
@@ -642,7 +666,7 @@ namespace TecWare.DE.Server
 			Queue.CancelCommand(refreshConfig);
 			Queue.RegisterCommand(refreshConfig, 500);
 		} // proc ReadConfiguration
-		
+
 		private void BeginReadConfiguration(DEConfigLoading config)
 		{
 			// Lade die aktuelle Konfiguration
@@ -953,26 +977,40 @@ namespace TecWare.DE.Server
 
 		public void RegisterUser(IDEUser user)
 		{
-			lock (users)
+			using (users.EnterWriteLock())
 			{
 				if (users.ContainsKey(user.Identity.Name))
 					throw new ArgumentException(String.Format("User conflict. There is already a user '{0}' registered.", user.Identity.Name));
 				users[user.Identity.Name] = user;
+
+				UserListDescriptor.Default.Update(user.GetType());
 			}
 		} // proc RegisterUser
 
 		public void UnregisterUser(IDEUser user)
 		{
-			lock (users)
+			using (users.EnterWriteLock())
 			{
 				if (users.TryGetValue(user.Identity.Name, out var tmp) && tmp == user)
 					users.Remove(user.Identity.Name);
 			}
 		} // proc UnregisterUser
 
+		public T[] GetUser<T>()
+			where T : class, IDEUser
+		{
+			using (users.EnterReadLock())
+			{
+				return users.List.OfType<KeyValuePair<string, IDEUser>>()
+					.Select(c => c.Value as T)
+					.Where(c => c != null)
+					.ToArray();
+			}
+		} // func GetUser
+
 		public Task<IDEAuthentificatedUser> AuthentificateUserAsync(IIdentity user)
 		{
-			lock (users)
+			using (users.EnterReadLock())
 			{
 				if (users.TryGetValue(user.Name, out var u))
 					return u.AuthentificateAsync(user);
@@ -1104,12 +1142,12 @@ namespace TecWare.DE.Server
 		private static bool CheckCertifcateByRule(LoggerProxy log, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors, XElement x)
 		{
 			var allow = x.GetAttribute("allow", true);
- 			LogCertificateFailure(
-				log,
-				allow ? LogMsgType.Debug : LogMsgType.Error,
-				certificate, chain, sslPolicyErrors,
-				$"Remote certification rule {x.GetAttribute("id", "<id>")} used ({(allow ? "allow" : "deny")}."
-			);
+			LogCertificateFailure(
+			   log,
+			   allow ? LogMsgType.Debug : LogMsgType.Error,
+			   certificate, chain, sslPolicyErrors,
+			   $"Remote certification rule {x.GetAttribute("id", "<id>")} used ({(allow ? "allow" : "deny")}."
+		   );
 			return allow;
 		} // func CheckCertifcateByRule
 
@@ -1141,8 +1179,8 @@ namespace TecWare.DE.Server
 			switch (sslPolicyErrors)
 			{
 				case SslPolicyErrors.RemoteCertificateNameMismatch:
-					if (certificate != null 
-						&& TryGetHostName(sender, out var hostName) 
+					if (certificate != null
+						&& TryGetHostName(sender, out var hostName)
 						&& certificate.ValidateHostName(hostName))
 						return true;
 					else
@@ -1312,7 +1350,7 @@ namespace TecWare.DE.Server
 			private readonly DEServer server;
 			private readonly DELuaIO io;
 
-			public DELuaRuntime(Lua lua, DEServer server) 
+			public DELuaRuntime(Lua lua, DEServer server)
 				: base(lua)
 			{
 				this.server = server ?? throw new ArgumentNullException(nameof(server));
@@ -1423,7 +1461,7 @@ namespace TecWare.DE.Server
 
 			private SecureString GetSecureString(object value, string parameterName)
 			{
-				switch(value)
+				switch (value)
 				{
 					case null:
 						return null;
@@ -1808,7 +1846,7 @@ namespace TecWare.DE.Server
 				=> r ?? throw new ArgumentNullException(nameof(r), $"In the current context {nameof(IDEWebRequestScope)} is missing.");
 
 			[LuaMember]
-			public static IDEWebRequestScope GetWebRequestScope() 
+			public static IDEWebRequestScope GetWebRequestScope()
 				=> CheckContextArgument(DEScope.GetScopeService<IDEWebRequestScope>(true));
 
 			#endregion
