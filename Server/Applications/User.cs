@@ -16,6 +16,7 @@
 using System;
 using System.Collections.Generic;
 using System.Dynamic;
+using System.Linq;
 using System.Net;
 using System.Security;
 using System.Security.Principal;
@@ -207,6 +208,9 @@ namespace TecWare.DE.Server.Applications
 
 		bool IPropertyReadOnlyDictionary.TryGetProperty(string name, out object value)
 			=> Members.TryGetValue(name, out value);
+
+		IEnumerator<PropertyValue> IEnumerable<PropertyValue>.GetEnumerator()
+			=> Members.Select(c => new PropertyValue(c.Key, c.Value)).GetEnumerator();
 
 		string IDEUser.DisplayName => userName;
 		IIdentity IDEUser.Identity => identity;

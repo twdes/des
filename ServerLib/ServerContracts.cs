@@ -75,7 +75,7 @@ namespace TecWare.DE.Server
 	#region -- interface IDEUser ------------------------------------------------------
 
 	/// <summary>User that is registered in the main server..</summary>
-	public interface IDEUser : IPropertyReadOnlyDictionary, IEquatable<IDEUser>
+	public interface IDEUser : IPropertyEnumerableDictionary, IEquatable<IDEUser>
 	{
 		/// <summary>Creates a authentificated user.</summary>
 		/// <param name="identity">Incoming identity from the user, to check security.</param>
