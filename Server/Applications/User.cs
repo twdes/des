@@ -54,54 +54,15 @@ namespace TecWare.DE.Server.Applications
 		#region -- class UserContext --------------------------------------------------
 
 		/// <summary></summary>
-		private sealed class UserContext : IDEAuthentificatedUser
+		private sealed class UserContext : DEAuthentificatedUser<DEUser>
 		{
-			private readonly DEUser user;
-			private readonly IIdentity identity;
-
-			public UserContext(DEUser user, IIdentity identity)
+			public UserContext(DEUser user, IIdentity loginIdentity)
+				: base(user, loginIdentity)
 			{
-				this.user = user;
-				this.identity = identity;
 			} // ctor
 
-			public bool IsInRole(string role)
-				=> user.DemandToken(role);
-
-			public bool TryGetProperty(string propertyName, out object value)
-				=> user.TryGetProperty(propertyName, out value);
-
-			public bool TryImpersonate(out WindowsImpersonationContext impersonationContext)
-			{
-				if (identity is WindowsIdentity windowsIdentity)
-				{
-					impersonationContext = windowsIdentity.Impersonate();
-					return true;
-				}
-				else
-				{
-					impersonationContext = null;
-					return false;
-				}
-			} // func TryImpersonate
-
-			public bool TryGetCredential(out UserCredential userCredential)
-			{
-				if (identity is HttpListenerBasicIdentity basicIdentity)
-				{
-					userCredential = UserCredential.Create(basicIdentity.Name, basicIdentity.Password);
-					return true;
-				}
-				else
-				{
-					userCredential = null;
-					return false;
-				}
-			} // func TryGetCredential
-
-			public IIdentity Identity => identity;
-			public IDEUser Info => user;
-			public bool CanImpersonate => identity is WindowsIdentity;
+			public override bool IsInRole(string role)
+				=> User.DemandToken(role);
 		} // class UserContext
 
 		#endregion

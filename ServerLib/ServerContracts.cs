@@ -55,6 +55,84 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- class DEAuthentificatedUser --------------------------------------------
+
+	/// <summary></summary>
+	/// <typeparam name="T"></typeparam>
+	public abstract class DEAuthentificatedUser<T> : IDEAuthentificatedUser
+		where T : class, IDEUser
+	{
+		private readonly T user;
+		private readonly IIdentity loginIdentity;
+
+		/// <summary></summary>
+		/// <param name="user"></param>
+		/// <param name="loginIdentity"></param>
+		protected DEAuthentificatedUser(T user, IIdentity loginIdentity)
+		{
+			this.user = user ?? throw new ArgumentNullException(nameof(user));
+			this.loginIdentity = loginIdentity ?? throw new ArgumentNullException(nameof(loginIdentity));
+		} // ctor
+
+		/// <summary></summary>
+		/// <param name="impersonationContext"></param>
+		/// <returns></returns>
+		public virtual bool TryImpersonate(out WindowsImpersonationContext impersonationContext)
+		{
+			if (loginIdentity is WindowsIdentity windowsIdentity)
+			{
+				impersonationContext = windowsIdentity.Impersonate();
+				return true;
+			}
+			else
+			{
+				impersonationContext = null;
+				return false;
+			}
+		} // func TryImpersonate
+
+		/// <summary></summary>
+		/// <param name="userCredential"></param>
+		/// <returns></returns>
+		public virtual bool TryGetCredential(out UserCredential userCredential)
+		{
+			if (loginIdentity is HttpListenerBasicIdentity basicIdentity)
+			{
+				userCredential = UserCredential.Create(basicIdentity.Name, basicIdentity.Password);
+				return true;
+			}
+			else
+			{
+				userCredential = null;
+				return false;
+			}
+		} // func TryGetCredential
+
+		/// <summary></summary>
+		/// <param name="role"></param>
+		/// <returns></returns>
+		public abstract bool IsInRole(string role);
+
+		/// <summary></summary>
+		/// <param name="name"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public bool TryGetProperty(string name, out object value)
+			=> user.TryGetProperty(name, out value);
+
+		/// <summary></summary>
+		protected T User => user;
+
+		/// <summary></summary>
+		public IDEUser Info => user;
+		/// <summary></summary>
+		public IIdentity Identity => loginIdentity;
+		/// <summary></summary>
+		public bool CanImpersonate => loginIdentity is WindowsIdentity && loginIdentity.IsAuthenticated;
+	} // class DEAuthentificatedUser
+
+	#endregion
+
 	#region -- class DEUserProperty ---------------------------------------------------
 
 	/// <summary>Publish properties</summary>
