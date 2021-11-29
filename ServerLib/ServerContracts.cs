@@ -19,11 +19,13 @@ using System.Data;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using TecWare.DE.Networking;
 using TecWare.DE.Server.Configuration;
 using TecWare.DE.Stuff;
 
@@ -31,15 +33,25 @@ namespace TecWare.DE.Server
 {
 	#region -- interface IDEAuthentificatedUser ---------------------------------------
 
-	/// <summary>A authentificated user exists as long a scope exists. <see cref="IPrincipal"/> is for the security, and <see cref="IPropertyReadOnlyDictionary"/> is the access to stored properties.</summary>
+	/// <summary>A authentificated user. <see cref="IPrincipal"/> is for the security, and <see cref="IPropertyReadOnlyDictionary"/> is the access to stored properties.</summary>
 	/// <remarks>User this interface only in a connection with <see cref="DECommonScope"/>.</remarks>
-	public interface IDEAuthentificatedUser : IPrincipal, IPropertyReadOnlyDictionary, IDisposable
+	public interface IDEAuthentificatedUser : IPrincipal, IPropertyReadOnlyDictionary
 	{
 		/// <summary>Impersonate the thread to a windows identity.</summary>
-		WindowsImpersonationContext TryImpersonateWindows();
+		/// <param name="impersonationContext"></param>
+		/// <returns><c>false</c>, if the user can not impersonate.</returns>
+		/// <remarks>Do not use direct, use <see cref="DECommonScope"/> for impersonation.</remarks>
+		bool TryImpersonate(out WindowsImpersonationContext impersonationContext);
+		/// <summary>Get the user credentials.</summary>
+		/// <param name="userCredential"></param>
+		/// <returns><c>false</c>, if the user has no password.</returns>
+		bool TryGetCredential(out UserCredential userCredential);
 
 		/// <summary>Return user info</summary>
 		IDEUser Info { get; }
+		
+		/// <summary>Can this user impersonate the windows context.</summary>
+		bool CanImpersonate { get; }
 	} // interface IDEAuthentificatedUser
 
 	#endregion
@@ -74,12 +86,13 @@ namespace TecWare.DE.Server
 
 	#region -- interface IDEUser ------------------------------------------------------
 
-	/// <summary>User that is registered in the main server..</summary>
+	/// <summary>User that is registered in the main server.</summary>
 	public interface IDEUser : IPropertyEnumerableDictionary, IEquatable<IDEUser>
 	{
 		/// <summary>Creates a authentificated user.</summary>
 		/// <param name="identity">Incoming identity from the user, to check security.</param>
 		/// <returns>Context of the authentificated user.</returns>
+		/// <remarks>Expect <see cref="WindowsIdentity"/> or <see cref="HttpListenerBasicIdentity"/>.</remarks>
 		Task<IDEAuthentificatedUser> AuthentificateAsync(IIdentity identity);
 
 		/// <summary>Display name for the user</summary>
@@ -600,10 +613,6 @@ namespace TecWare.DE.Server
 				}
 			);
 
-			// clear user
-			if (user != null && userOwner)
-				await Task.Run(new Action(user.Dispose));
-
 			base.Dispose(true);
 		} // proc DisposeAsync
 
@@ -704,7 +713,7 @@ namespace TecWare.DE.Server
 		/// <summary>Impersonate context for windows.</summary>
 		/// <returns></returns>
 		public WindowsImpersonationContext TryImersonateWindows()
-			=> EnforceUser().TryImpersonateWindows();
+			=> EnforceUser().TryImpersonate(out var ctx) ? ctx : null;
 
 		/// <summary>Impersonate context for windows.</summary>
 		/// <returns></returns>

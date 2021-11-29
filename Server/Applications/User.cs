@@ -15,12 +15,12 @@
 #endregion
 using System;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.Linq;
 using System.Net;
 using System.Security;
 using System.Security.Principal;
 using System.Threading.Tasks;
+using TecWare.DE.Networking;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Applications
@@ -65,24 +65,48 @@ namespace TecWare.DE.Server.Applications
 				this.identity = identity;
 			} // ctor
 
-			void IDisposable.Dispose() { }
-
 			public bool IsInRole(string role)
 				=> user.DemandToken(role);
 
 			public bool TryGetProperty(string propertyName, out object value)
 				=> user.TryGetProperty(propertyName, out value);
 
-			public WindowsImpersonationContext TryImpersonateWindows()
-				=> identity is WindowsIdentity windowsIdentity ? windowsIdentity.Impersonate() : null;
+			public bool TryImpersonate(out WindowsImpersonationContext impersonationContext)
+			{
+				if (identity is WindowsIdentity windowsIdentity)
+				{
+					impersonationContext = windowsIdentity.Impersonate();
+					return true;
+				}
+				else
+				{
+					impersonationContext = null;
+					return false;
+				}
+			} // func TryImpersonate
+
+			public bool TryGetCredential(out UserCredential userCredential)
+			{
+				if (identity is HttpListenerBasicIdentity basicIdentity)
+				{
+					userCredential = UserCredential.Create(basicIdentity.Name, basicIdentity.Password);
+					return true;
+				}
+				else
+				{
+					userCredential = null;
+					return false;
+				}
+			} // func TryGetCredential
 
 			public IIdentity Identity => identity;
 			public IDEUser Info => user;
+			public bool CanImpersonate => identity is WindowsIdentity;
 		} // class UserContext
 
 		#endregion
 
-		private readonly object securityTokensLock = new object();
+		private readonly object securityTokensLock = new ();
 		private int serverSecurityVersion = 0;
 		private string[] securityTokens = null;
 
