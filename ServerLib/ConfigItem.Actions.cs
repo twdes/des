@@ -795,7 +795,7 @@ namespace TecWare.DE.Server
 			// write user
 			var userInfo = r.TryDemandUser();
 			if (userInfo != null)
-				log.Write("[").Write(userInfo.DisplayName).Write("] ");
+				log.Write("[").Write(userInfo.Info.DisplayName).Write("] ");
 
 			// write action an parameter
 			log.Write(actioName);

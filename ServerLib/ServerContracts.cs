@@ -40,7 +40,6 @@ namespace TecWare.DE.Server
 		/// <summary>Impersonate the thread to a windows identity.</summary>
 		/// <param name="impersonationContext"></param>
 		/// <returns><c>false</c>, if the user can not impersonate.</returns>
-		/// <remarks>Do not use direct, use <see cref="DECommonScope"/> for impersonation.</remarks>
 		bool TryImpersonate(out WindowsImpersonationContext impersonationContext);
 		/// <summary>Get the user credentials.</summary>
 		/// <param name="userCredential"></param>
@@ -116,7 +115,7 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- interface DEServerEvent ------------------------------------------------
+	#region -- enum DEServerEvent -----------------------------------------------------
 
 	/// <summary>Special events of the server.</summary>
 	public enum DEServerEvent
@@ -417,23 +416,15 @@ namespace TecWare.DE.Server
 
 		/// <summary>Check if the scope is authentificated.</summary>
 		/// <returns></returns>
-		IDEUser TryDemandUser();
+		IDEAuthentificatedUser TryDemandUser();
 
 		/// <summary>Demand user</summary>
-		IDEUser DemandUser();
+		IDEAuthentificatedUser DemandUser();
 
 		/// <summary>Set a user property, this will persist over the complete runtime of the server</summary>
 		/// <param name="name"></param>
 		/// <param name="value"></param>
 		void SetUserProperty(string name, object value);
-
-		/// <summary>Impersonate context for windows.</summary>
-		/// <returns></returns>
-		WindowsImpersonationContext TryImersonateWindows();
-
-		/// <summary>Impersonate context for windows.</summary>
-		/// <returns></returns>
-		WindowsImpersonationContext ImersonateWindows();
 
 		/// <summary>Create an authorization exception in the current context.</summary>
 		/// <param name="message">Message of this exception</param>
@@ -540,10 +531,7 @@ namespace TecWare.DE.Server
 		private readonly IDEServer server;
 		private readonly bool useAuthentification;
 		private readonly string[] allowGroups;
-#pragma warning disable IDE0069 // Disposable fields should be disposed
 		private IDEAuthentificatedUser user = null; // is disposed async
-#pragma warning restore IDE0069 // Disposable fields should be disposed
-		private bool userOwner;
 
 		private bool? isCommitted = null;
 		private bool isDisposed = false;
@@ -556,7 +544,6 @@ namespace TecWare.DE.Server
 			this.server = sp.GetService<IDEServer>(true);
 
 			this.user = user;
-			this.userOwner = user == null;
 			this.useAuthentification = useAuthentification;
 			this.allowGroups = allowGroups == "*" || allowGroups == null
 				? allowAllGroups 
@@ -631,7 +618,6 @@ namespace TecWare.DE.Server
 				user = await server.AuthentificateUserAsync(authentificateUser);
 				if (user == null)
 					throw CreateAuthorizationException(false, String.Format("Authentification against the DES-Users failed: {0}.", authentificateUser.Name));
-				userOwner = true;
 			}
 		} // proc AuthentificateUser
 
@@ -703,22 +689,12 @@ namespace TecWare.DE.Server
 
 		/// <summary>Check if the scope is authentificated.</summary>
 		/// <returns></returns>
-		public IDEUser TryDemandUser()
-			=> user?.Info;
+		public IDEAuthentificatedUser TryDemandUser()
+			=> user;
 		
 		/// <summary>Demand user</summary>
-		public IDEUser DemandUser()
-			=> EnforceUser().Info;
-
-		/// <summary>Impersonate context for windows.</summary>
-		/// <returns></returns>
-		public WindowsImpersonationContext TryImersonateWindows()
-			=> EnforceUser().TryImpersonate(out var ctx) ? ctx : null;
-
-		/// <summary>Impersonate context for windows.</summary>
-		/// <returns></returns>
-		public WindowsImpersonationContext ImersonateWindows()
-			=> TryImersonateWindows() ?? throw new ArgumentException("Impersonation failed for user {0}.", user.Info.DisplayName);
+		public IDEAuthentificatedUser DemandUser()
+			=> EnforceUser();
 
 		/// <summary>Create an authorization exception in the current context.</summary>
 		/// <param name="isTokenRestricted"><c>true</c>, the token is not allowed under the current context. <c>false</c>, the user has no right on the token.</param>
@@ -1115,6 +1091,25 @@ namespace TecWare.DE.Server
 
 	/// <summary>Ermöglicht den Zugriff auf die Basis-Logdatei</summary>
 	public class DEServerBaseLog { }
+
+	#endregion
+
+	#region -- class DECommonScopeEx --------------------------------------------------
+
+	/// <summary></summary>
+	public static class DECommonScopeEx
+	{
+
+		/// <summary>Impersonate context for windows.</summary>
+		/// <returns></returns>
+		public static WindowsImpersonationContext TryImersonateWindows(this IDEAuthentificatedUser authentificatedUser)
+			=> authentificatedUser.TryImpersonate(out var ctx) ? ctx : null;
+
+		/// <summary>Impersonate context for windows.</summary>
+		/// <returns></returns>
+		public static WindowsImpersonationContext ImersonateWindows(this IDEAuthentificatedUser authentificatedUser)
+			=> TryImersonateWindows(authentificatedUser) ?? throw new ArgumentException("Impersonation failed for user {0}.", authentificatedUser.Info.DisplayName);
+	} // class DECommonScopeEx
 
 	#endregion
 }
