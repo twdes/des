@@ -1080,6 +1080,10 @@ namespace TecWare.DE.Server
 
 		#region -- User Dictionary ----------------------------------------------------
 
+		private readonly object logNextUserLock = new();
+		private string logNextUser = null;
+		private int logNextUserCount = 0;
+
 		public void RegisterUser(IDEUser user)
 		{
 			using (users.EnterWriteLock())
@@ -1117,39 +1121,74 @@ namespace TecWare.DE.Server
 				return users.GetUserByName(name).ToArray();
 		} // func GetUserByName
 
+		private bool LogIdentity(IIdentity identity)
+		{
+			lock (logNextUserLock)
+			{
+				if (logNextUserCount <= 0)
+					return false;
+
+				logNextUserCount--;
+				return logNextUser == null || String.Compare(identity.Name, logNextUser, StringComparison.OrdinalIgnoreCase) == 0;
+			}
+		} // func LogIdentity
+
+		[
+		LuaMember,
+		DEConfigHttpAction("logNextIdentity", IsAutoLog = true, IsSafeCall = true, SecurityToken = SecuritySys)
+		]
+		public void LogNextIdentity(string name = null, int count = 1)
+		{
+			lock (logNextUserLock)
+			{
+				logNextUser = name;
+				logNextUserCount = count;
+			}
+		} // proc LogNextIdentity
+
 		public async Task<IDEAuthentificatedUser> AuthentificateUserAsync(IIdentity user)
 		{
 			using (users.EnterReadLock())
-			using(var log = Log.CreateScope(LogMsgType.Information, autoFlush: IsDebug, stopTime: true))
+			using (var log = LogIdentity(user) ? Log.CreateScope(LogMsgType.Information, autoFlush: true, stopTime: true) : null)
 			{
-				log.WriteLine("Authentificate {0}", user.Name);
+				if (log != null)
+					log.WriteLine("Authentificate {0}", user.Name);
 
 				foreach (var u in users.GetUserByIdentity(user, exact: false))
 				{
-					log.Write("- try {0} ({1}, {2})", u.Identity.Name, u.Identity.AuthenticationType, u.DisplayName);
+					if (log != null)
+						log.Write("- try {0} ({1}, {2})", u.Identity.Name, u.Identity.AuthenticationType, u.DisplayName);
 					try
 					{
 						var r = await u.AuthentificateAsync(user);
 						if (r != null)
 						{
-							log.WriteLine(" - Success.");
+							if (log != null)
+								log.WriteLine(" - Success.");
 							return r;
 						}
 						else
-							log.WriteLine(" - Failed.");
+						{
+							if (log != null)
+								log.WriteLine(" - Failed.");
+						}
 					}
 					catch (Exception e)
 					{
-						log.WriteLine(" - Failed.");
-						using (log.Indent())
+						if (log != null)
 						{
-							log.WriteException(e);
-							log.SetType(LogMsgType.Warning, true);
+							log.WriteLine(" - Failed.");
+							using (log.Indent())
+							{
+								log.WriteException(e);
+								log.SetType(LogMsgType.Warning, true);
+							}
 						}
 					}
 				}
 
-				log.AutoFlush();
+				if (log != null)
+					log.WriteLine("No match found.");
 				return null;
 			}
 		} // func AuthentificateUser
