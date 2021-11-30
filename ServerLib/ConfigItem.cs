@@ -473,7 +473,7 @@ namespace TecWare.DE.Server
 
 		/// <summary>Request needs administrator privileges.</summary>
 		public const string SecuritySys = "desSys";
-		/// <summary>Request needs authentification to an user.</summary>
+		/// <summary>Request needs authentification to an user, login privilege.</summary>
 		public const string SecurityUser = "desUser";
 
 		/// <summary></summary>

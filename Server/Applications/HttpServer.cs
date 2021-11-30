@@ -1500,6 +1500,7 @@ namespace TecWare.DE.Server
 					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
 
 					// authentificate the user
+					context.DemandToken(SecurityUser);
 					context.DemandToken(subProtocol.SecurityToken);
 
 					// accept the protocol to the client
@@ -1551,6 +1552,7 @@ namespace TecWare.DE.Server
 				{
 					// authentificate user
 					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
+					context.DemandToken(SecurityUser);
 
 					// Start logging
 					if (IsDebug || pathTranslation.IsHttpDebugOn)
