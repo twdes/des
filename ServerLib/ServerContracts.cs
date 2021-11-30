@@ -734,7 +734,7 @@ namespace TecWare.DE.Server
 			if (String.Compare(securityToken, DEConfigItem.SecurityUser, StringComparison.OrdinalIgnoreCase) == 0)
 				EnforceUser();
 
-			if (!TryDemandToken(securityToken))
+			if (!EnforceUser().IsInRole(securityToken))
 				throw CreateAuthorizationException(false, String.Format("User {0} is not authorized to access token '{1}'.", User == null ? "Anonymous" : User.Identity.Name, securityToken));
 		} // proc DemandToken
 

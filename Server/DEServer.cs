@@ -14,6 +14,7 @@
 //
 #endregion
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Design;
@@ -145,18 +146,18 @@ namespace TecWare.DE.Server
 
 			public void WriteItem(DEListItemWriter xml, object item)
 			{
-				if (item is KeyValuePair<string, IDEUser> user)
+				if (item is IDEUser user)
 				{
 					xml.WriteStartProperty("u");
-					xml.WriteAttributeProperty("id", user.Key); // is equal to Identity.Name
-					xml.WriteAttributeProperty("type", user.Value.Identity.AuthenticationType);
-					xml.WriteAttributeProperty("displayName", user.Value.DisplayName);
-					if (user.Value.SecurityTokens != null)
-						xml.WriteAttributeProperty("security", String.Join(";", user.Value.SecurityTokens));
+					xml.WriteAttributeProperty("id", user.Identity.Name); // is equal to Identity.Name
+					xml.WriteAttributeProperty("type", user.Identity.AuthenticationType);
+					xml.WriteAttributeProperty("displayName", user.DisplayName);
+					if (user.SecurityTokens != null)
+						xml.WriteAttributeProperty("security", String.Join(";", user.SecurityTokens));
 
 					foreach (var c in extendedProperties)
 					{
-						if (user.Value.TryGetProperty(c.Name, out var v))
+						if (user.TryGetProperty(c.Name, out var v))
 							xml.WriteAttributeProperty(c.ListName, v);
 					}
 
@@ -169,12 +170,116 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class UserListController -------------------------------------------
+
+		private sealed class UserListController : DEListControllerBase
+		{
+			private readonly Dictionary<string, List<IDEUser>> users = new Dictionary<string, List<IDEUser>>(StringComparer.OrdinalIgnoreCase);
+
+			public UserListController(DEConfigItem configItem)
+				: base(configItem, UserListDescriptor.Default, "tw_users", "Active users")
+			{
+			} // ctor
+
+			private List<IDEUser> GetBag(string key, bool allowCreate)
+			{
+				if (users.TryGetValue(key, out var bag))
+					return bag;
+
+				if (allowCreate)
+				{
+					bag = new List<IDEUser>();
+					users[key] = bag;
+					return bag;
+				}
+				else
+					return null;
+			} // func GetBag
+
+			private int FindUserInBag(List<IDEUser> bag, IDEUser user)
+				=> bag.IndexOf(user);
+
+			public void Register(IDEUser user)
+			{
+				// get bag for user
+				var bag = GetBag(user.Identity.Name, true);
+
+				// add user to bag
+				var idx = FindUserInBag(bag, user);
+				if (idx == -1)
+					bag.Add(user);
+				else
+					bag[idx] = user;
+			} // proc Register
+
+			public void UnRegister(IDEUser user)
+			{
+				var bag = GetBag(user.Identity.Name, false);
+				if (bag != null)
+				{
+					var idx = FindUserInBag(bag, user);
+					if (idx >= 0)
+						bag.RemoveAt(0);
+				}
+			} // proc UnRegister
+
+			public IEnumerable<IDEUser> GetUserByIdentity(IIdentity identity, bool exact = false)
+			{
+				var bag = GetBag(identity.Name, false);
+				if (bag != null)
+				{
+					var notExact = new List<IDEUser>();
+
+					// collect exact matches
+					foreach (var u in bag)
+					{
+						if (ReferenceEquals(u.Identity, identity)
+							|| u.Identity is IEquatable<IIdentity> exactCompare && exactCompare.Equals(identity))
+							yield return u;
+						else if (!exact)
+							notExact.Add(u);
+					}
+
+					// emit not exact
+					foreach (var u in notExact)
+						yield return u;
+				}
+			} // func GetUserByIdentity
+
+			public IEnumerable<IDEUser> GetUserByName(string name)
+			{
+				var bag = GetBag(name, false);
+				if (bag != null)
+				{
+					foreach (var u in bag)
+					{
+						if (String.Compare(u.Identity.Name, name, StringComparison.Ordinal) == 0)
+							yield return u;
+					}
+				}
+			} // func GetUserByName
+
+			public override IEnumerable List
+			{
+				get
+				{
+					foreach(var kv in users)
+					{
+						foreach (var c in kv.Value)
+							yield return c;
+					}
+				}
+			} // prop List
+		} // class UserListController
+
+		#endregion
+
 		private string logPath = null;                                  // Pfad für sämtliche Log-Dateien
 		private SimpleConfigItemProperty<int> propertyLogCount = null;  // Zeigt an wie viel Log-Dateien verwaltet werden
 
 		private volatile int securityGroupsVersion = 0;
 		private readonly Dictionary<string, string[]> securityGroups = new Dictionary<string, string[]>();
-		private readonly DEDictionary<string, IDEUser> users; // Active users for authentification
+		private readonly UserListController users; // Active users for authentification
 
 		private readonly ResolveEventHandler resolveEventHandler;
 		private DEConfigurationService configuration;
@@ -207,7 +312,7 @@ namespace TecWare.DE.Server
 			configuration = new DEConfigurationService(this, configurationFile, ConvertProperties(properties));
 			dumpFiles = new DEList<DumpFileInfo>(this, "tw_dumpfiles", "Dumps");
 
-			users = DEDictionary<string, IDEUser>.CreateDictionary(this, "tw_users", "Active users", UserListDescriptor.Default, StringComparer.OrdinalIgnoreCase);
+			users = new UserListController(this);
 
 			PublishItem(dumpFiles);
 			PublishItem(new DEConfigItemPublicAction("dump") { DisplayName = "Dump" });
@@ -979,9 +1084,7 @@ namespace TecWare.DE.Server
 		{
 			using (users.EnterWriteLock())
 			{
-				if (users.ContainsKey(user.Identity.Name))
-					throw new ArgumentException(String.Format("User conflict. There is already a user '{0}' registered.", user.Identity.Name));
-				users[user.Identity.Name] = user;
+				users.Register(user);
 
 				UserListDescriptor.Default.Update(user.GetType());
 			}
@@ -990,32 +1093,64 @@ namespace TecWare.DE.Server
 		public void UnregisterUser(IDEUser user)
 		{
 			using (users.EnterWriteLock())
-			{
-				if (users.TryGetValue(user.Identity.Name, out var tmp) && tmp == user)
-					users.Remove(user.Identity.Name);
-			}
+				users.UnRegister(user);
 		} // proc UnregisterUser
 
 		public T[] GetUser<T>()
 			where T : class, IDEUser
 		{
 			using (users.EnterReadLock())
-			{
-				return users.List.OfType<KeyValuePair<string, IDEUser>>()
-					.Select(c => c.Value as T)
-					.Where(c => c != null)
-					.ToArray();
-			}
+				return users.List.OfType<T>().ToArray();
 		} // func GetUser
 
-		public Task<IDEAuthentificatedUser> AuthentificateUserAsync(IIdentity user)
+		[LuaMember]
+		public IDEUser[] GetUserByIdentity(IIdentity identity, bool exact = false)
 		{
 			using (users.EnterReadLock())
+				return users.GetUserByIdentity(identity, exact).ToArray();
+		} // func GetUserByIdentity
+
+		[LuaMember]
+		public IDEUser[] GetUserByName(string name)
+		{
+			using (users.EnterReadLock())
+				return users.GetUserByName(name).ToArray();
+		} // func GetUserByName
+
+		public async Task<IDEAuthentificatedUser> AuthentificateUserAsync(IIdentity user)
+		{
+			using (users.EnterReadLock())
+			using(var log = Log.CreateScope(LogMsgType.Information, autoFlush: IsDebug, stopTime: true))
 			{
-				if (users.TryGetValue(user.Name, out var u))
-					return u.AuthentificateAsync(user);
-				else
-					return Task.FromResult<IDEAuthentificatedUser>(null);
+				log.WriteLine("Authentificate {0}", user.Name);
+
+				foreach (var u in users.GetUserByIdentity(user, exact: false))
+				{
+					log.Write("- try {0} ({1}, {2})", u.Identity.Name, u.Identity.AuthenticationType, u.DisplayName);
+					try
+					{
+						var r = await u.AuthentificateAsync(user);
+						if (r != null)
+						{
+							log.WriteLine(" - Success.");
+							return r;
+						}
+						else
+							log.WriteLine(" - Failed.");
+					}
+					catch (Exception e)
+					{
+						log.WriteLine(" - Failed.");
+						using (log.Indent())
+						{
+							log.WriteException(e);
+							log.SetType(LogMsgType.Warning, true);
+						}
+					}
+				}
+
+				log.AutoFlush();
+				return null;
 			}
 		} // func AuthentificateUser
 
