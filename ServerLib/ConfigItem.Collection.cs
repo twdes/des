@@ -846,10 +846,16 @@ namespace TecWare.DE.Server
 
 		#region -- RegisterCollectionController, UnregisterCollectionController -------
 
-		private IDEListController FindController(string id)
+		private IDEListController FindController(string id, bool recursive)
 		{
+			IDEListController controller;
 			lock (controllerList)
-				return controllerList.Find(c => String.Compare(c.Id, id, StringComparison.OrdinalIgnoreCase) == 0);
+				controller = controllerList.Find(c => String.Compare(c.Id, id, StringComparison.OrdinalIgnoreCase) == 0);
+
+			if (controller == null && recursive && Owner is DEConfigItem configItem)
+				controller = configItem.FindController(id, true);
+
+			return controller;
 		} // func FindController
 
 		/// <summary>Registriert eine Liste an diesem Knoten</summary>
@@ -865,7 +871,7 @@ namespace TecWare.DE.Server
 			{
 				if (controller == null)
 					throw new ArgumentNullException("list", "Keine Liste gefunden.");
-				if (FindController(id) != null)
+				if (FindController(id, false) != null)
 					throw new ArgumentException(String.Format("Collection '{0}' ist schon registriert.", id));
 
 				// Füge den Controller ein
@@ -1002,14 +1008,9 @@ namespace TecWare.DE.Server
 		private void HttpListGetAction(IDEWebRequestScope r, string id, int start = 0, int count = Int32.MaxValue)
 		{
 			// Suche den passenden Controller
-			var controller = FindController(id);
+			var controller = FindController(id, true);
 			if (controller == null)
-			{
-				if (Owner is DEConfigItem parent)
-					controller = parent.FindController(id);
-				else
-					throw new HttpResponseException(HttpStatusCode.BadRequest, $"List'{id}' not found.");
-			}
+				throw new HttpResponseException(HttpStatusCode.BadRequest, $"List'{id}' not found.");
 
 			// check security token
 			r.DemandToken(controller.SecurityToken);

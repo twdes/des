@@ -13,4 +13,10 @@ Actions["err"] = {
 		error("Error öß");
 		return {};
 	end
+};
+
+Actions["tab"] = {
+	Method = function (t : table) : table
+		return t;
+	end
 }

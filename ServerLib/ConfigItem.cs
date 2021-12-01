@@ -525,6 +525,7 @@ namespace TecWare.DE.Server
 			PublishItem(scripts = new DEList<ILuaAttachedScript>(this, AttachedScriptsListId, "Attached Scripts"));
 			actions = new ConfigActionDictionary(this);
 			PublishItem(properties = new DEList<IDEConfigItemProperty>(this, PropertiesListId, "Properties"));
+			PublishItem(new DEConfigItemPublicAction("refreshActions") { DisplayName = "Refresh-Actions" });
 
 			InitTypeProperties();
 
@@ -1423,7 +1424,7 @@ namespace TecWare.DE.Server
 		private static readonly MethodInfo getInputStreamMethodInfo;
 		private static readonly MethodInfo getInputTextReaderMethodInfo;
 
-		private static readonly MethodInfo httpRequestGetTypeMethodInfo;
+		private static readonly MethodInfo httpRequestGetTableMethodInfo;
 
 		static DEConfigItem()
 		{
@@ -1456,7 +1457,7 @@ namespace TecWare.DE.Server
 			convertToStringFallBackMethodInfo = typeof(Convert).GetMethod(nameof(Convert.ToString), BindingFlags.Public | BindingFlags.Static | BindingFlags.InvokeMethod, null, new Type[] { typeof(object), typeof(IFormatProvider) }, null) ?? throw new ArgumentNullException("sctor", "Convert");
 			convertFromInvariantStringMethodInfo = typeof(TypeConverter).GetMethod(nameof(TypeConverter.ConvertFromInvariantString), BindingFlags.Public | BindingFlags.Instance | BindingFlags.InvokeMethod, null, new Type[] { typeof(string) }, null) ?? throw new ArgumentNullException("sctor", "TypeConverter");
 
-			httpRequestGetTypeMethodInfo = typeof(HttpRequestHelper).GetMethod(nameof(HttpRequestHelper.GetTable), BindingFlags.Static | BindingFlags.Public);
+			httpRequestGetTableMethodInfo = typeof(HttpRequestHelper).GetMethod(nameof(HttpRequestHelper.GetTable), BindingFlags.Static | BindingFlags.Public);
 		} // sctor	
 
 		internal static string GetSourceUri(XmlSchemaObject x)

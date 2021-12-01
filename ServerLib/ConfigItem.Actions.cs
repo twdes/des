@@ -552,7 +552,7 @@ namespace TecWare.DE.Server
 			 *		WriteActionStart(log, actionName, n, new object[] { arg1, arg2 });
 			 *	 r = call(args);
 			 *	 if (log != null)
-			 *		WriteResult(log, e);
+			 *		WriteResult(log, r);
 			 *	 return r;
 			 * }
 			 * finally
@@ -565,7 +565,7 @@ namespace TecWare.DE.Server
 			var methodVariables = new List<ParameterExpression>(4);
 
 			// generate parameter setting for the function and logging
-			CreateArgumentExpressions(methodBlock, methodVariables, argCaller, argThis, argLog, parameterOffset, parameterInfo, alternateParameterDescription, out var inputStream);
+			CreateArgumentExpressions(methodBlock, methodVariables, argCaller, argThis, argLog, parameterOffset, parameterInfo, alternateParameterDescription, out var inputStream, out var onlyEmptyResultIsAllowed);
 
 			// generate start log message
 			methodBlock.Add(Expression.IfThen(Expression.ReferenceNotEqual(argLog, Expression.Constant(null, argLog.Type)),
@@ -580,6 +580,9 @@ namespace TecWare.DE.Server
 
 			// generate the call command
 			var returnVariable = method.ReturnType == typeof(void) ? null : Expression.Variable(typeof(object), "#return");
+			if (onlyEmptyResultIsAllowed && returnVariable != null)
+				throw new ArgumentException($"Compile of action {actionName}. No return value is allowed for native actions.");
+
 			var exprCall = @delegate == null
 				? (Expression)Expression.Call(Expression.Convert(argThis, method.DeclaringType), method, methodVariables)
 				: Expression.Invoke(Expression.Constant(@delegate), methodVariables);
@@ -634,9 +637,10 @@ namespace TecWare.DE.Server
 				throw new ArgumentException("Invalid input stream type.");
 		} // func CreateGetInputExpression
 
-		private void CreateArgumentExpressions(List<Expression> methodBlock, List<ParameterExpression> methodVariables, ParameterExpression arg, ParameterExpression argThis, ParameterExpression argLog, int parameterOffset, ParameterInfo[] parameterInfo, Func<int, object> alternateParameterDescription, out ParameterExpression extraData)
+		private void CreateArgumentExpressions(List<Expression> methodBlock, List<ParameterExpression> methodVariables, ParameterExpression arg, ParameterExpression argThis, ParameterExpression argLog, int parameterOffset, ParameterInfo[] parameterInfo, Func<int, object> alternateParameterDescription, out ParameterExpression extraData, out bool onlyEmptyResultIsAllowed)
 		{
 			extraData = null;
+			onlyEmptyResultIsAllowed = false;
 
 			// Create the parameter
 			var l = parameterInfo.Length - parameterOffset;
@@ -657,16 +661,12 @@ namespace TecWare.DE.Server
 				{
 					exprGetParameter = GetWebScopeExpression(arg);
 					emitParameterName = "#r";
+					onlyEmptyResultIsAllowed = true;
 				}
 				else if (typeTo == typeof(LogMessageScopeProxy))
 				{
 					exprGetParameter = argLog;
 					emitParameterName = "#log";
-				}
-				else if (typeTo != typeof(object) && typeTo.IsAssignableFrom(GetType()))
-				{
-					exprGetParameter = argThis;
-					emitParameterName = "#this";
 				}
 				else if (typeTo == typeof(TextReader)) // Input-Datenstrom (Text)
 				{
@@ -688,8 +688,13 @@ namespace TecWare.DE.Server
 				}
 				else if (typeTo == typeof(LuaTable)) // input json/lson-object
 				{
-					exprGetParameter = Expression.Call(httpRequestGetTypeMethodInfo, GetWebScopeExpression(arg));
+					exprGetParameter = Expression.Call(httpRequestGetTableMethodInfo, GetWebScopeExpression(arg));
 					emitParameterName = "#table";
+				}
+				else if (typeTo != typeof(object) && typeTo.IsAssignableFrom(GetType()))
+				{
+					exprGetParameter = argThis;
+					emitParameterName = "#this";
 				}
 				else
 				{
@@ -798,6 +803,7 @@ namespace TecWare.DE.Server
 				log.Write("[").Write(userInfo.Info.DisplayName).Write("] ");
 
 			// write action an parameter
+			LuaTable inTable = null;
 			log.Write(actioName);
 			log.Write("(");
 			for (var i = 0; i < names.Length; i++)
@@ -805,14 +811,30 @@ namespace TecWare.DE.Server
 				if (i > 0)
 					log.Write(",");
 
+				var value = arguments[i];
 				if (names[i] != null)
 				{
 					log.Write(names[i])
 						.Write("=")
-						.Write(FormatParameter(arguments[i], 20));
+						.Write(FormatParameter(value, 20));
 				}
+				else if (value == null)
+					log.Write("null");
+				else if (value.GetType() == typeof(LuaTable))
+				{
+					inTable = (LuaTable)value;
+					log.Write("#table");
+				}
+				else
+					log.Write("#" + value.GetType().Name);
 			}
 			log.WriteLine(")");
+
+			if (inTable != null)
+			{
+				log.WriteLine(ToLson(inTable))
+					.WriteLine();
+			}
 		} // proc WriteActionStart
 
 		/// <summary></summary>
@@ -826,7 +848,19 @@ namespace TecWare.DE.Server
 		} // WriteActionResult
 
 		private LuaTable GetActionTable()
-			=> this.GetMemberValue(LuaActions, rawGet: true) as LuaTable;
+			=> GetMemberValue(LuaActions, rawGet: true) as LuaTable;
+
+		/// <summary>Enforce rebuild for actions.</summary>
+		[
+		LuaMember,
+		Description("Enforce rebuild for actions."),
+		DEConfigHttpAction("refreshActions", IsAutoLog = true, IsSafeCall = true, SecurityToken = SecuritySys)
+		]
+		public void RefreshActions()
+		{
+			actions.Clear();
+			CollectActions();
+		} // proc RefreshActions
 
 		#endregion
 	} // class DEConfigItem
