@@ -129,9 +129,9 @@ namespace TecWare.DE.Server
 		{
 			procProcessLogLine = ProcessReceiveLine;
 
-			PublishItem(new DEConfigItemPublicAction("processStart") { DisplayName = "Start(process)" });
-			PublishItem(new DEConfigItemPublicAction("processStop") { DisplayName = "Stop(process)" });
-			PublishItem(new DEConfigItemPublicAction("processRefresh") { DisplayName = "Refresh(process)" });
+			PublishItem(new DEConfigItemPublicAction("processStart") { DisplayName = "Start-Process" });
+			PublishItem(new DEConfigItemPublicAction("processStop") { DisplayName = "Stop-Process" });
+			PublishItem(new DEConfigItemPublicAction("processRefresh") { DisplayName = "Refresh-Process" });
 
 			publishedProperties = new ProcessProperty[]
 			{

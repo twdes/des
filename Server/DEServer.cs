@@ -751,7 +751,7 @@ namespace TecWare.DE.Server
 		{
 			refreshConfig = InternalRefreshConfiguration;
 
-			PublishItem(new DEConfigItemPublicAction("readconfig") { DisplayName = "Refresh(Configuration)" });
+			PublishItem(new DEConfigItemPublicAction("readconfig") { DisplayName = "Refresh-Configuration" });
 
 			// Lese die Konfigurationsdatei
 			ReadConfiguration();

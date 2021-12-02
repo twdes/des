@@ -110,7 +110,7 @@ namespace TecWare.DE.Server
 		} // func TryGetProperty
 
 		public override Exception CreateAuthorizationException(bool isRestrictedToken, string message)
-			=> new HttpResponseException(User == null && !isRestrictedToken ? HttpStatusCode.Unauthorized : HttpStatusCode.Forbidden, message);
+			=> new HttpResponseException(User == null && isRestrictedToken ? HttpStatusCode.Forbidden : HttpStatusCode.Unauthorized, message);
 
 		#endregion
 
@@ -1547,46 +1547,57 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				using var context = new DEWebRequestScope(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous, pathTranslation.AllowGroups);
+				var httpAuthentification = authentificationScheme != AuthenticationSchemes.Anonymous;
+				using var context = new DEWebRequestScope(this, ctx, absolutePath, httpAuthentification, pathTranslation.AllowGroups);
 				try
 				{
 					// authentificate user
 					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
-					context.DemandToken(SecurityUser);
-
-					// Start logging
-					if (IsDebug || pathTranslation.IsHttpDebugOn)
-						context.LogStart();
-
-					// start to find the endpoint
-					if (context.TryEnterSubPath(Server, String.Empty))
+					if (httpAuthentification && context.TryDemandUser() == null) // we need a user, skip exception, for debugging reasons
 					{
-						try
+						ctx.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+						ctx.Response.StatusDescription = "Authorization needed.";
+						ctx.Response.Close();
+					}
+					else
+					{
+						// Ask for token again, might be restricted
+						context.DemandToken(SecurityUser);
+
+						// Start logging
+						if (IsDebug || pathTranslation.IsHttpDebugOn)
+							context.LogStart();
+
+						// start to find the endpoint
+						if (context.TryEnterSubPath(Server, String.Empty))
 						{
-							// try to map a node
-							if (!await ProcessRequestForConfigItemAsync(context, (DEConfigItem)Server))
+							try
 							{
-								// Search all http worker nodes
-								using (EnterReadLock())
+								// try to map a node
+								if (!await ProcessRequestForConfigItemAsync(context, (DEConfigItem)Server))
 								{
-									if (!await UnsafeProcessRequestAsync(context))
-										throw new HttpResponseException(HttpStatusCode.NotFound, "Requested resource not found.");
+									// Search all http worker nodes
+									using (EnterReadLock())
+									{
+										if (!await UnsafeProcessRequestAsync(context))
+											throw new HttpResponseException(HttpStatusCode.NotFound, "Requested resource not found.");
+									}
 								}
 							}
+							finally
+							{
+								context.ExitSubPath(Server);
+							}
 						}
-						finally
-						{
-							context.ExitSubPath(Server);
-						}
+
+						// check the return value
+						if (!context.IsOutputStarted && ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
+							throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
+
+						// commit all is fine!
+						if (!context.IsCommitted.HasValue)
+							await context.CommitAsync();
 					}
-
-					// check the return value
-					if (!context.IsOutputStarted && ctx.Request.HttpMethod != "OPTIONS" && ctx.Response.ContentType == null)
-						throw new HttpResponseException(HttpStatusCode.NoContent, "No result defined.");
-
-					// commit all is fine!
-					if (!context.IsCommitted.HasValue)
-						await context.CommitAsync();
 				}
 				catch (Exception e)
 				{

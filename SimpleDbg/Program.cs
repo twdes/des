@@ -282,6 +282,9 @@ namespace TecWare.DE.Server
 						case ConsoleKey.F3:
 							BeginTask(ShowLogCurrentAsync());
 							break;
+						case ConsoleKey.F4:
+							BeginTask(ShowActionsAsync());
+							break;
 					}
 				}
 			}
@@ -1092,6 +1095,10 @@ namespace TecWare.DE.Server
 				() => ConsoleDialogOverlay.ContinueDialog(ShowLogHttpAsync(http, dlg.SelectedValue)),
 				() => dlg.View.SelectedItem is ListNodePair p && p.HasLog
 			);
+			dlg.AddKeyCommand(ConsoleKey.F4, "Action",
+				() => ConsoleDialogOverlay.ContinueDialog(ShowActionsAsync(http, dlg.SelectedValue)),
+				() => dlg.View.SelectedItem is ListNodePair
+			);
 			dlg.AddKeyCommand(ConsoleKey.F5, "Uri",
 				() => ConsoleDialogOverlay.ContinueDialog(ConsoleReadLineOverlay.SetClipboardTextAsync(new Uri(http.BaseAddress, dlg.SelectedValue).ToString())),
 				() => dlg.SelectedValue != null
@@ -1601,7 +1608,7 @@ namespace TecWare.DE.Server
 		#region -- SendVariables ------------------------------------------------------
 
 		[InteractiveCommand("members", Short = "m", HelpText = "Lists the current available global variables.", ConnectionRequest = InteractiveCommandConnection.Debug)]
-		private static async Task VariablesAsync(string p = null, int l = -1)
+		internal static async Task VariablesAsync(string p = null, int l = -1)
 		{
 			WriteReturn(String.Empty, await GetDebug().MembersAsync(p, l));
 		} // proc VariablesAsync
@@ -2067,17 +2074,50 @@ namespace TecWare.DE.Server
 
 		#region -- Action -------------------------------------------------------------
 
+		private static string FormatActionName(XElement xAction, string id)
+		{
+			var displayName = xAction.GetAttribute("displayname", null);
+			return String.IsNullOrEmpty(displayName) ? id : $"{displayName} ({id})";
+		} // func FormatActionName
+
+		private static Task ActionAsync(DEHttpClient http, string action)
+		{
+			return http.GetXmlAsync(MakeUri(
+				new PropertyValue("action", action)
+			)).ContinueWith(t => app.WriteLine(t.Result.Value ?? "Success."));
+		} // proc ActionAsync
+
+		private static async Task ShowActionsAsync(DEHttpClient http, string actionPath)
+		{
+			var xList = await GetListInfoAsync(http, actionPath, 1, true);
+			var dlg = new SelectListDialog<string>(app,
+				from x in xList.Elements("action")
+				let id = x.GetAttribute("id", null)
+				where id != null
+				select new SelectPairItem<string>(id, FormatActionName(x, id))
+			)
+			{ Title = "Actions" };
+
+			dlg.AddKeyCommand(ConsoleKey.F4, null, () => Task.FromResult<bool?>(false));
+
+			if (await dlg.ShowDialogAsync())
+				await ActionAsync(dlg.SelectedValue);
+		} // proc ShowActionsAsync
+
+		private static Task ShowActionsAsync()
+		{
+			if (!TryGetHttp(out var http))
+				return Task.CompletedTask;
+			return ShowActionsAsync(http, CurrentUsePath);
+		} // proc ShowActionsAsync
+
 		[InteractiveCommand("action", HelpText = "Invoke a server action.", ConnectionRequest = InteractiveCommandConnection.Http)]
-		private static async Task ActionAsync(string action = null)
+		internal static Task ActionAsync(string action = null)
 		{
 			if (String.IsNullOrEmpty(action))
-				throw new ArgumentNullException(nameof(action));
-
-			var xReturn = await GetHttp().GetXmlAsync(MakeUri(
-				new PropertyValue("action", action)
-			));
-
-			app.WriteLine(xReturn.Value ?? "Success.");
+				return ShowActionsAsync(GetHttp(), CurrentUsePath);
+			else
+				return ActionAsync(GetHttp(), action);
 		} //  func ActionAsync
 
 		#endregion
