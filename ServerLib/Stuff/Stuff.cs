@@ -325,6 +325,7 @@ namespace TecWare.DE.Stuff
 					if (*c1 != *c2)
 						return false;
 					c1++;
+					c2++;
 				}
 			}
 

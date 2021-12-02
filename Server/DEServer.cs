@@ -820,10 +820,9 @@ namespace TecWare.DE.Server
 					log.WriteLine("BEGIN Load configuration");
 
 					using (log.Indent())
-					{
-						using (var config = new DEConfigLoading(this, log, xConfig, configuration.ConfigurationStamp))
-							BeginReadConfiguration(config);
-					}
+					using (var config = new DEConfigLoading(this, log, xConfig, configuration.ConfigurationStamp))
+						BeginReadConfiguration(config);
+
 					log.WriteLine("END Load configuration");
 
 					if (!serviceInitialized.Task.IsCompleted)
@@ -1127,9 +1126,14 @@ namespace TecWare.DE.Server
 			{
 				if (logNextUserCount <= 0)
 					return false;
-
-				logNextUserCount--;
-				return logNextUser == null || String.Compare(identity.Name, logNextUser, StringComparison.OrdinalIgnoreCase) == 0;
+				else if (logNextUser == null
+					|| String.Compare(identity.Name, logNextUser, StringComparison.OrdinalIgnoreCase) == 0)
+				{
+					logNextUserCount--;
+					return true;
+				}
+				else
+					return false;
 			}
 		} // func LogIdentity
 

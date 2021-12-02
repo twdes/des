@@ -2085,14 +2085,12 @@ namespace TecWare.DE.Server
 			app.WriteLine(
 				new ConsoleColor[]
 				{
-					ConsoleColor.Gray,
-					ConsoleColor.Gray,
+					ConsoleColor.Gray, ConsoleColor.Gray, ConsoleColor.Gray,
 					ConsoleColor.Green
 				},
 				new string[]
 				{
-					action,
-					" ",
+					"==> ", action, " ",
 					String.IsNullOrEmpty(xReturn.Value) ? "Success" : xReturn.Value
 				},
 				true
