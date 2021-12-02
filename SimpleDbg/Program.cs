@@ -2080,11 +2080,30 @@ namespace TecWare.DE.Server
 			return String.IsNullOrEmpty(displayName) ? id : $"{displayName} ({id})";
 		} // func FormatActionName
 
+		private static void WriteActionResult(string action, XElement xReturn)
+		{
+			app.WriteLine(
+				new ConsoleColor[]
+				{
+					ConsoleColor.Gray,
+					ConsoleColor.Gray,
+					ConsoleColor.Green
+				},
+				new string[]
+				{
+					action,
+					" ",
+					String.IsNullOrEmpty(xReturn.Value) ? "Success" : xReturn.Value
+				},
+				true
+			);
+		} // proc WriteActionResult
+
 		private static Task ActionAsync(DEHttpClient http, string action)
 		{
 			return http.GetXmlAsync(MakeUri(
 				new PropertyValue("action", action)
-			)).ContinueWith(t => app.WriteLine(t.Result.Value ?? "Success."));
+			)).ContinueWith(t => WriteActionResult(action, t.Result), TaskContinuationOptions.ExecuteSynchronously);
 		} // proc ActionAsync
 
 		private static async Task ShowActionsAsync(DEHttpClient http, string actionPath)
