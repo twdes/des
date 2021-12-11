@@ -19,10 +19,10 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.Diagnostics;
+using System.Dynamic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Security;
 using System.Reflection;
 using System.Security;
@@ -263,7 +263,7 @@ namespace TecWare.DE.Server
 			{
 				get
 				{
-					foreach(var kv in users)
+					foreach (var kv in users)
 					{
 						foreach (var c in kv.Value)
 							yield return c;
@@ -1521,245 +1521,6 @@ namespace TecWare.DE.Server
 
 		#region -- Lua Runtime --------------------------------------------------------
 
-		#region -- class DELuaRuntime -------------------------------------------------
-
-		private sealed class DELuaRuntime : LuaGlobal
-		{
-			private readonly DEServer server;
-			private readonly DELuaIO io;
-
-			public DELuaRuntime(Lua lua, DEServer server)
-				: base(lua)
-			{
-				this.server = server ?? throw new ArgumentNullException(nameof(server));
-				this.io = new DELuaIO();
-			} // ctor
-
-			/// <summary>Throw a exception.</summary>
-			/// <param name="value"></param>
-			/// <param name="message"></param>
-			/// <returns></returns>
-			[LuaMember("assert")]
-			private new object LuaAssert(object value, string message)
-			{
-				if (!value.ChangeType<bool>())
-					throw new LuaAssertRuntimeException(message ?? "Assertion failed!", 1, true);
-				return value;
-			} // func LuaAssert
-
-			/// <summary>Throw a user error.</summary>
-			/// <param name="message"></param>
-			/// <param name="level"></param>
-			[LuaMember("error")]
-			public static new void LuaError(object message, int level)
-			{
-				// this method is needed to overwrite Lua-default
-				LuaError(message, null, level);
-			} // func LuaError
-
-			/// <summary>Throw a user error.</summary>
-			/// <param name="message"></param>
-			/// <param name="arg1"></param>
-			[LuaMember("error")]
-			public static void LuaError(object message, object arg1, object arg2)
-			{
-				var level = 1;
-
-				if (arg1 is int i && i > 1)  // validate stack trace level
-					level = i;
-				else if (arg2 is int i2 && i2 > 1)
-					level = i2;
-
-				if (message is Exception ex) // throw exception
-				{
-					if (arg1 is string text)
-						throw new LuaUserRuntimeException(text, ex);
-					else
-						throw ex;
-				}
-				else if (message is string text) // generate exception with message
-				{
-					if (arg1 is Exception innerException)
-						throw new LuaUserRuntimeException(text, innerException);
-					else
-						throw new LuaUserRuntimeException(text, level, true);
-				}
-				else
-				{
-					var messageText = message?.ToString() ?? "Internal error.";
-					if (arg1 is Exception innerException)
-						throw new LuaRuntimeException(messageText, innerException);
-					else
-						throw new LuaRuntimeException(messageText, level, true);
-				}
-			} // proc LuaError
-
-			[LuaMember("await")]
-			public LuaResult LuaAwait(object func)
-			{
-				int GetTaskType()
-				{
-					var t = func.GetType();
-					if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Task<>) && t.GetGenericArguments()[0].IsPublic)
-						return 0;
-					else if (typeof(Task).IsAssignableFrom(t))
-						return 1;
-					else
-						return -1;
-				};
-
-				switch (func)
-				{
-					case null:
-						throw new ArgumentNullException(nameof(func));
-					case Task t:
-						t.AwaitTask();
-						switch (GetTaskType())
-						{
-							case 0:
-								var genericArguments = t.GetType().GetGenericArguments();
-								if (genericArguments[0] == typeof(LuaResult))
-									return ((Task<LuaResult>)t).Result;
-								else
-								{
-									dynamic d = t;
-									return new LuaResult(d.Result);
-								}
-							case 1:
-								return LuaResult.Empty;
-							default:
-								throw new NotSupportedException($"Could not await for task ({func.GetType().Name}).");
-						}
-					default:
-						throw new ArgumentException($"The type '{func.GetType().Name}' is not awaitable.");
-				}
-			} // func LuaAwait
-
-			#region -- Password - Handling --------------------------------------------
-
-			private SecureString GetSecureString(object value, string parameterName)
-			{
-				switch (value)
-				{
-					case null:
-						return null;
-					case SecureString ss:
-						return ss;
-					case string s:
-						return s.CreateSecureString();
-					default:
-						throw new ArgumentException("String expected", parameterName);
-				}
-			} // func GetSecureString
-
-			/// <summary>Crypt a password.</summary>
-			/// <param name="password">Password to crypt. Can be a plain text string or a secure string.</param>
-			/// <param name="passwordType">Password type, (win64, win0x, usr64, usr0x or plain)</param>
-			/// <returns>Crypt string.</returns>
-			[LuaMember]
-			public string EncodePassword(object password, string passwordType = null)
-				=> Passwords.EncodePassword(GetSecureString(password, nameof(password)), passwordType);
-
-			/// <summary>Decrypt a password.</summary>
-			/// <param name="passwordValue">Crypt string to decode.</param>
-			/// <returns>Plain password as string.</returns>
-			[LuaMember]
-			public string DecodePassword(string passwordValue)
-				=> Passwords.DecodePassword(passwordValue).AsPlainText();
-
-			/// <summary>Decrypt a password.</summary>
-			/// <param name="passwordValue">Crypt string to decode.</param>
-			/// <returns>Plain password as string.</returns>
-			[LuaMember]
-			public SecureString DecodePasswordSecure(string passwordValue)
-				=> Passwords.DecodePassword(passwordValue);
-
-			/// <summary>Create a password hash.</summary>
-			/// <param name="password">Password to hash. Can be a plain text string or a secure string.</param>
-			/// <returns>The password-hash as base64.</returns>
-			[LuaMember]
-			public string EncodePasswordHash(object password)
-				=> Convert.ToBase64String(Passwords.HashPassword(GetSecureString(password, nameof(password))));
-
-			/// <summary>Compare a password with a password-hash.</summary>
-			/// <param name="password">Password as plain text.</param>
-			/// <param name="passwordHash">Secret hash value.</param>
-			/// <returns><c>true</c>, if secret and hash are equal.</returns>
-			[LuaMember]
-			public bool ComparePasswordHash(string password, string passwordHash)
-				=> Passwords.PasswordCompare(password, passwordHash);
-
-			#endregion
-
-			#region -- Scope - Handling -----------------------------------------------
-
-			/// <summary>Access the current scope.</summary>
-			/// <returns>Returns the current scope or throws an exception.</returns>
-			[LuaMember]
-			public object GetCurrentScope()
-				=> DEScope.GetScope(true);
-
-			/// <summary>Access the current scope.</summary>
-			/// <returns>Returns the current scope or <c>null</c>.</returns>
-			[LuaMember]
-			public object TryGetCurrentScope()
-				=> DEScope.GetScope(false);
-
-			/// <summary>Get a service of the current scope.</summary>
-			/// <param name="serviceType">Type of the service</param>
-			/// <returns>The service instance or an exception.</returns>
-			[LuaMember]
-			public object GetScopeService(object serviceType)
-				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, true), true);
-
-			/// <summary>Get a service of the current scope.</summary>
-			/// <param name="serviceType">Type of the service</param>
-			/// <returns>The service instance or <c>null</c>.</returns>
-			[LuaMember]
-			public object TryGetScopeService(object serviceType)
-				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, false), false);
-
-			[LuaMember]
-			public object CreateCommonScope()
-				=> new DECommonScope(GetCurrentScope() as IServiceProvider ?? server, false, null);
-
-			#endregion
-
-			[LuaMember("format")]
-			private string LuaFormat(string text, params object[] args)
-				=> String.Format(text, args);
-
-			[LuaMember("LogMsgType")]
-			private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
-
-			[LuaMember("UseNode")]
-			private LuaResult UseNode(string path, object code, DEConfigItem item = null)
-			{
-				// find the node for execution
-				if (String.IsNullOrEmpty(path))
-					item = item ?? server;
-				else if (path[0] == '/')
-					item = ProcsDE.UseNode(server, path, 1);
-				else
-					item = ProcsDE.UseNode(item ?? server, path, 0);
-
-				// execute code on node
-				using (item.EnterReadLock())
-					return new LuaResult(Lua.RtInvoke(
-						code ?? throw new ArgumentNullException(nameof(code)),
-						item
-					));
-			} // func UseNode
-
-			protected override void OnPrint(string text)
-				=> server.Log.LogMsg(LogMsgType.Debug, text);
-
-			[LuaMember]
-			public DELuaIO IO => io;
-		} // class DELuaRuntime
-
-		#endregion
-
 		#region -- class DELuaIO ------------------------------------------------------
 
 		/// <summary>IO package for lua. It gives access to the static methods from <see cref="DEFile"/>.</summary>
@@ -2155,6 +1916,321 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class DELuaConfig --------------------------------------------------
+
+		private sealed class DELuaConfig : DynamicObject
+		{
+			private readonly IDECommonScope commonScope;
+
+			public DELuaConfig(IDECommonScope commonScope)
+			{
+				this.commonScope = commonScope;
+			} // ctor
+
+			public override bool TryGetMember(GetMemberBinder binder, out object result)
+			{
+				if (commonScope != null && commonScope.TryGetProperty(binder.Name, out result))
+					return true;
+
+				return base.TryGetMember(binder, out result);
+			} // func TryGetMember
+
+			public override bool TrySetMember(SetMemberBinder binder, object value)
+			{
+				if (commonScope == null)
+					throw new ArgumentNullException(nameof(commonScope), "Scope is null");
+				commonScope.SetUserProperty(binder.Name, value);
+				return true;
+			} // func TrySetMember
+
+			public override bool TryGetIndex(GetIndexBinder binder, object[] indexes, out object result)
+			{
+				if (commonScope != null
+					&& indexes.Length >= 1 && indexes[0] is string memberName
+					&& commonScope.TryGetProperty(memberName, out result))
+				{
+					dynamic d = result;
+					if (d != null)
+					{
+						for (var i = 1; i < indexes.Length; i++)
+						{
+							d = d[indexes[i]];
+							if (d == null)
+								break;
+						}
+					}
+					result = d;
+					return true;
+				}
+				return base.TryGetIndex(binder, indexes, out result);
+			} // func TryGetIndex
+
+			public IEnumerable<PropertyValue> GetProperties()
+			{
+				if (commonScope != null)
+				{
+					var user = commonScope.TryDemandUser();
+					if (user != null)
+					{
+						foreach (var kv in user.Info)
+							yield return kv;
+					}
+				}
+			} // func GetProperties
+
+			public override IEnumerable<string> GetDynamicMemberNames()
+				=> GetProperties().Select(c => c.Name);
+		} // class DELuaConfig
+
+		#endregion
+
+		#region -- class DELuaRuntime -------------------------------------------------
+
+		private sealed class DELuaRuntime : LuaGlobal
+		{
+			private readonly DEServer server;
+			private readonly DELuaIO io;
+
+			public DELuaRuntime(Lua lua, DEServer server)
+				: base(lua)
+			{
+				this.server = server ?? throw new ArgumentNullException(nameof(server));
+				this.io = new DELuaIO();
+			} // ctor
+
+			/// <summary>Throw a exception.</summary>
+			/// <param name="value"></param>
+			/// <param name="message"></param>
+			/// <returns></returns>
+			[LuaMember("assert")]
+			private new object LuaAssert(object value, string message)
+			{
+				if (!value.ChangeType<bool>())
+					throw new LuaAssertRuntimeException(message ?? "Assertion failed!", 1, true);
+				return value;
+			} // func LuaAssert
+
+			/// <summary>Throw a user error.</summary>
+			/// <param name="message"></param>
+			/// <param name="level"></param>
+			[LuaMember("error")]
+			public static new void LuaError(object message, int level)
+			{
+				// this method is needed to overwrite Lua-default
+				LuaError(message, null, level);
+			} // func LuaError
+
+			/// <summary>Throw a user error.</summary>
+			/// <param name="message"></param>
+			/// <param name="arg1"></param>
+			[LuaMember("error")]
+			public static void LuaError(object message, object arg1, object arg2)
+			{
+				var level = 1;
+
+				if (arg1 is int i && i > 1)  // validate stack trace level
+					level = i;
+				else if (arg2 is int i2 && i2 > 1)
+					level = i2;
+
+				if (message is Exception ex) // throw exception
+				{
+					if (arg1 is string text)
+						throw new LuaUserRuntimeException(text, ex);
+					else
+						throw ex;
+				}
+				else if (message is string text) // generate exception with message
+				{
+					if (arg1 is Exception innerException)
+						throw new LuaUserRuntimeException(text, innerException);
+					else
+						throw new LuaUserRuntimeException(text, level, true);
+				}
+				else
+				{
+					var messageText = message?.ToString() ?? "Internal error.";
+					if (arg1 is Exception innerException)
+						throw new LuaRuntimeException(messageText, innerException);
+					else
+						throw new LuaRuntimeException(messageText, level, true);
+				}
+			} // proc LuaError
+
+			[LuaMember("await")]
+			public LuaResult LuaAwait(object func)
+			{
+				int GetTaskType()
+				{
+					var t = func.GetType();
+					if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Task<>) && t.GetGenericArguments()[0].IsPublic)
+						return 0;
+					else if (typeof(Task).IsAssignableFrom(t))
+						return 1;
+					else
+						return -1;
+				};
+
+				switch (func)
+				{
+					case null:
+						throw new ArgumentNullException(nameof(func));
+					case Task t:
+						t.AwaitTask();
+						switch (GetTaskType())
+						{
+							case 0:
+								var genericArguments = t.GetType().GetGenericArguments();
+								if (genericArguments[0] == typeof(LuaResult))
+									return ((Task<LuaResult>)t).Result;
+								else
+								{
+									dynamic d = t;
+									return new LuaResult(d.Result);
+								}
+							case 1:
+								return LuaResult.Empty;
+							default:
+								throw new NotSupportedException($"Could not await for task ({func.GetType().Name}).");
+						}
+					default:
+						throw new ArgumentException($"The type '{func.GetType().Name}' is not awaitable.");
+				}
+			} // func LuaAwait
+
+			#region -- Password - Handling --------------------------------------------
+
+			private SecureString GetSecureString(object value, string parameterName)
+			{
+				switch (value)
+				{
+					case null:
+						return null;
+					case SecureString ss:
+						return ss;
+					case string s:
+						return s.CreateSecureString();
+					default:
+						throw new ArgumentException("String expected", parameterName);
+				}
+			} // func GetSecureString
+
+			/// <summary>Crypt a password.</summary>
+			/// <param name="password">Password to crypt. Can be a plain text string or a secure string.</param>
+			/// <param name="passwordType">Password type, (win64, win0x, usr64, usr0x or plain)</param>
+			/// <returns>Crypt string.</returns>
+			[LuaMember]
+			public string EncodePassword(object password, string passwordType = null)
+				=> Passwords.EncodePassword(GetSecureString(password, nameof(password)), passwordType);
+
+			/// <summary>Decrypt a password.</summary>
+			/// <param name="passwordValue">Crypt string to decode.</param>
+			/// <returns>Plain password as string.</returns>
+			[LuaMember]
+			public string DecodePassword(string passwordValue)
+				=> Passwords.DecodePassword(passwordValue).AsPlainText();
+
+			/// <summary>Decrypt a password.</summary>
+			/// <param name="passwordValue">Crypt string to decode.</param>
+			/// <returns>Plain password as string.</returns>
+			[LuaMember]
+			public SecureString DecodePasswordSecure(string passwordValue)
+				=> Passwords.DecodePassword(passwordValue);
+
+			/// <summary>Create a password hash.</summary>
+			/// <param name="password">Password to hash. Can be a plain text string or a secure string.</param>
+			/// <returns>The password-hash as base64.</returns>
+			[LuaMember]
+			public string EncodePasswordHash(object password)
+				=> Convert.ToBase64String(Passwords.HashPassword(GetSecureString(password, nameof(password))));
+
+			/// <summary>Compare a password with a password-hash.</summary>
+			/// <param name="password">Password as plain text.</param>
+			/// <param name="passwordHash">Secret hash value.</param>
+			/// <returns><c>true</c>, if secret and hash are equal.</returns>
+			[LuaMember]
+			public bool ComparePasswordHash(string password, string passwordHash)
+				=> Passwords.PasswordCompare(password, passwordHash);
+
+			#endregion
+
+			#region -- Scope - Handling -----------------------------------------------
+
+			/// <summary>Access the current scope.</summary>
+			/// <returns>Returns the current scope or throws an exception.</returns>
+			[LuaMember]
+			public object GetCurrentScope()
+				=> DEScope.GetScope(true);
+
+			/// <summary>Access the current scope.</summary>
+			/// <returns>Returns the current scope or <c>null</c>.</returns>
+			[LuaMember]
+			public object TryGetCurrentScope()
+				=> DEScope.GetScope(false);
+
+			/// <summary>Get a service of the current scope.</summary>
+			/// <param name="serviceType">Type of the service</param>
+			/// <returns>The service instance or an exception.</returns>
+			[LuaMember]
+			public object GetScopeService(object serviceType)
+				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, true), true);
+
+			/// <summary>Get a service of the current scope.</summary>
+			/// <param name="serviceType">Type of the service</param>
+			/// <returns>The service instance or <c>null</c>.</returns>
+			[LuaMember]
+			public object TryGetScopeService(object serviceType)
+				=> DEScope.GetScopeService(ProcsDE.GetServiceType(serviceType, false), false);
+
+			[LuaMember]
+			public object CreateCommonScope()
+				=> new DECommonScope(GetCurrentScope() as IServiceProvider ?? server, false, null);
+
+			#endregion
+
+			[LuaMember]
+			public object GetCurrentUser()
+				=> DEScope.GetScopeService<IDECommonScope>(true).DemandUser();
+
+			[LuaMember]
+			public object TryGetCurrentUser()
+				=> DEScope.GetScopeService<IDECommonScope>(false)?.TryDemandUser();
+
+			[LuaMember("format")]
+			private string LuaFormat(string text, params object[] args)
+				=> String.Format(text, args);
+
+			[LuaMember("LogMsgType")]
+			private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
+
+			[LuaMember("UseNode")]
+			private LuaResult UseNode(string path, object code, DEConfigItem item = null)
+			{
+				// find the node for execution
+				if (String.IsNullOrEmpty(path))
+					item = item ?? server;
+				else if (path[0] == '/')
+					item = ProcsDE.UseNode(server, path, 1);
+				else
+					item = ProcsDE.UseNode(item ?? server, path, 0);
+
+				// execute code on node
+				using (item.EnterReadLock())
+					return new LuaResult(Lua.RtInvoke(
+						code ?? throw new ArgumentNullException(nameof(code)),
+						item
+					));
+			} // func UseNode
+
+			protected override void OnPrint(string text)
+				=> server.Log.LogMsg(LogMsgType.Debug, text);
+
+			[LuaMember]
+			public DELuaIO IO => io;
+		} // class DELuaRuntime
+
+		#endregion
+
 		private LuaGlobal luaRuntime = null;
 		private readonly DELuaHttp luaHttp = new DELuaHttp();
 
@@ -2191,6 +2267,9 @@ namespace TecWare.DE.Server
 		/// <summary>Library for easy creation of http-results or requests.</summary>
 		[LuaMember]
 		public LuaTable Http { get => luaHttp; set { } }
+		/// <summary>User configuration.</summary>
+		[LuaMember]
+		public dynamic UserConfig { get => new DELuaConfig(DEScope.GetScopeService<IDECommonScope>(false)); set { } }
 
 		#endregion
 
