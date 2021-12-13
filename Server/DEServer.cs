@@ -1962,7 +1962,9 @@ namespace TecWare.DE.Server
 					result = d;
 					return true;
 				}
-				return base.TryGetIndex(binder, indexes, out result);
+			
+				result = null;
+				return true;
 			} // func TryGetIndex
 
 			public IEnumerable<PropertyValue> GetProperties()

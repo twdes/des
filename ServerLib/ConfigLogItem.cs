@@ -72,31 +72,8 @@ namespace TecWare.DE.Server
 			sb.Append(LogLineParser.ConvertDateTime(Stamp))
 				.Append('\t')
 				.Append(((int)Typ).ToString())
-				.Append('\t');
-
-			foreach (var c in Text)
-			{
-				switch (c)
-				{
-					case '\n':
-						sb.Append("\\n");
-						break;
-					case '\r':
-						break;
-					case '\t':
-						sb.Append("\\t");
-						break;
-					case '\\':
-						sb.Append(@"\\");
-						break;
-					case '\0':
-						sb.Append("\\0");
-						break;
-					default:
-						sb.Append(c);
-						break;
-				}
-			}
+				.Append('\t')
+				.EscapeSpecialChars(Text);
 
 			return sb.ToString();
 		} // func GetLineData

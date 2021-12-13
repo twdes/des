@@ -38,50 +38,7 @@ namespace TecWare.DE.Server.Stuff
 				typ = (LogMsgType)t;
 
 			// Text Lesen
-			if (parts.Length >= 3)
-			{
-				var sb = new StringBuilder();
-				var tmp = parts[2];
-				var pos = 0;
-				while (pos < tmp.Length)
-				{
-					var c = tmp[pos];
-					switch (c)
-					{
-						case '\\':
-							if (++pos < tmp.Length)
-							{
-								c = tmp[pos++];
-								switch (c)
-								{
-									case 't':
-										sb.Append('\t');
-										break;
-									case 'n':
-										sb.AppendLine();
-										break;
-									case '\\':
-										sb.Append('\\');
-										break;
-									case '0':
-										sb.Append('\0');
-										break;
-									default:
-										sb.Append(c);
-										break;
-								}
-							}
-							break;
-						default:
-							sb.Append(c);
-							pos++;
-							break;
-					}
-				}
-				text = sb.ToString();
-			}
-			else
-				text = "";
+			text = parts.Length >= 3 ? parts[2].UnescapeSpecialChars() : String.Empty;
 		} // proc Parse
 
 		public static string ConvertDateTime(DateTime value)
