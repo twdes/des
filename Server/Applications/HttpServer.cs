@@ -1548,12 +1548,13 @@ namespace TecWare.DE.Server
 			else
 			{
 				var httpAuthentification = authentificationScheme != AuthenticationSchemes.Anonymous;
+				var hasPossibleAnon = (authentificationScheme & AuthenticationSchemes.Anonymous) == AuthenticationSchemes.Anonymous;
 				using var context = new DEWebRequestScope(this, ctx, absolutePath, httpAuthentification, pathTranslation.AllowGroups);
 				try
 				{
 					// authentificate user
 					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
-					if (httpAuthentification && context.TryDemandUser() == null) // we need a user, skip exception, for debugging reasons
+					if (httpAuthentification && !hasPossibleAnon && context.TryDemandUser() == null) // we need a user, skip exception, for debugging reasons
 					{
 						ctx.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
 						ctx.Response.StatusDescription = "Authorization needed.";
@@ -1562,7 +1563,8 @@ namespace TecWare.DE.Server
 					else
 					{
 						// Ask for token again, might be restricted
-						context.DemandToken(SecurityUser);
+						if (!hasPossibleAnon)
+							context.DemandToken(SecurityUser);
 
 						// Start logging
 						if (IsDebug || pathTranslation.IsHttpDebugOn)
