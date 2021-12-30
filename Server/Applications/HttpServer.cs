@@ -261,8 +261,10 @@ namespace TecWare.DE.Server
 				return; // Log schon gestartet
 
 			log = ((DEHttpServer)Http).LogProxy().CreateScope(LogMsgType.Information, true, true);
+
 			log.WriteLine("{0}: {1}", InputMethod, context.Request.Url);
 			log.WriteLine();
+
 			log.WriteLine("UrlReferrer: {0}", context.Request.UrlReferrer);
 			log.WriteLine("UserAgent: {0}", context.Request.UserAgent);
 			log.WriteLine("UserHostAddress: {0} ({1})", context.Request.UserHostAddress, context.Request.RemoteEndPoint?.Address?.ToString());
@@ -1084,6 +1086,58 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- class ClientInfo ---------------------------------------------------
+
+		private sealed class ClientInfo
+		{
+			private string hostAddress;
+			private string hostName;
+			private string languages;
+			private string userAgent;
+			private string url;
+			private int requests = 0;
+			private DateTime lastRequest;
+
+			public ClientInfo(HttpListenerRequest request)
+				=> Update(request);
+
+			public void Update(HttpListenerRequest request)
+			{
+				hostAddress = request.UserHostAddress;
+				hostName= request.UserHostName;
+				languages = request.UserLanguages != null ? String.Join(";", request.UserLanguages) : null;
+				userAgent = request.UserAgent;
+				url = request.Url?.ToString();
+				lastRequest = DateTime.Now;
+				unchecked { requests++; }
+			} // proc Update
+
+			public static string GetKey(HttpListenerRequest request)
+			{
+				if (request.RemoteEndPoint == null)
+					return null;
+
+				return request.RemoteEndPoint.Address.ToString();
+			} // func GetKey
+
+			[DEListTypeProperty("@hostAddress")]
+			public string HostAddress => hostAddress;
+			[DEListTypeProperty("@hostName")]
+			public string HostName => hostName;
+			[DEListTypeProperty("@langueges")]
+			public string Languages => languages;
+			[DEListTypeProperty("@agent")]
+			public string UserAgent => userAgent;
+			[DEListTypeProperty("@url")]
+			public string Url => url;
+			[DEListTypeProperty("@requests")]
+			public int Requests => requests;
+			[DEListTypeProperty("@last")]
+			public DateTime LastRequest => lastRequest;
+		} // class ClientInfo
+
+		#endregion
+
 		private readonly HttpListener httpListener = new HttpListener();	// Access to the HttpListener
 		private readonly DEThread httpThread;								// Thread, that process requests
 		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
@@ -1093,6 +1147,7 @@ namespace TecWare.DE.Server
 
 		private readonly HttpCacheItem[] cacheItems = new HttpCacheItem[256];
 		private CacheItemListController cacheItemController;
+		private readonly DEDictionary<string, ClientInfo> clientInfos;
 
 		private DEList<IDEWebSocketProtocol> webSocketProtocols;
 
@@ -1120,9 +1175,14 @@ namespace TecWare.DE.Server
 			DefaultCultureInfo = CultureInfo.CurrentCulture;
 
 			// create protocols
-			this.webSocketProtocols = new DEList<IDEWebSocketProtocol>(this, "tw_websockets", "WebSockets");
-			this.RegisterWebSocketProtocol((IDEWebSocketProtocol)this.Server); // register events
+			webSocketProtocols = new DEList<IDEWebSocketProtocol>(this, "tw_websockets", "WebSockets");
+			RegisterWebSocketProtocol((IDEWebSocketProtocol)this.Server); // register events
 
+			// client info
+			clientInfos = DEDictionary<string, ClientInfo>.CreateDictionary(this, "tw_http_clients", "Http-Clients", comparer: StringComparer.OrdinalIgnoreCase);
+			PublishItem(clientInfos);
+
+			// cache
 			cacheItemController = new CacheItemListController(this);
 			PublishItem(new DEConfigItemPublicAction("clearCache") { DisplayName = "Clear http-cache" });
 			PublishDebugInterface();
@@ -1552,6 +1612,9 @@ namespace TecWare.DE.Server
 				using var context = new DEWebRequestScope(this, ctx, absolutePath, httpAuthentification, pathTranslation.AllowGroups);
 				try
 				{
+					// update client infos
+					UpdateClientInfos(ctx.Request);
+
 					// authentificate user
 					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
 					if (httpAuthentification && !hasPossibleAnon && context.TryDemandUser() == null) // we need a user, skip exception, for debugging reasons
@@ -1609,6 +1672,40 @@ namespace TecWare.DE.Server
 				await context.DisposeAsync();
 			}
 		} // proc ProcessRequest
+
+		private void UpdateClientInfos(HttpListenerRequest request)
+		{
+			var key = ClientInfo.GetKey(request);
+			using (clientInfos.EnterWriteLock())
+			{
+
+				if (clientInfos.TryGetValue(key, out var ci))
+					ci.Update(request);
+				else
+				{
+					while (clientInfos.Count > 100)
+					{
+						var keyRemove = String.Empty;
+						var lastRequest = DateTime.MaxValue;
+
+						foreach (var kv in clientInfos.List.Cast<KeyValuePair<string, ClientInfo>>())
+						{
+							if (lastRequest > kv.Value.LastRequest)
+							{
+								keyRemove = kv.Key;
+								lastRequest = kv.Value.LastRequest;
+							}
+						}
+
+						if (keyRemove.Length == 0)
+							throw new InvalidOperationException();
+						clientInfos.Remove(keyRemove);
+					}
+
+					clientInfos.Add(key, new ClientInfo(request));
+				}
+			}
+		} // proc UpdateClientInfos
 
 		private IIdentity FixUserEncoding(HttpListenerContext ctx, IIdentity identity)
 		{

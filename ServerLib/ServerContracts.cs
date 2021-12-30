@@ -710,8 +710,18 @@ namespace TecWare.DE.Server
 
 		private bool IsTokenRestricted(string securityToken)
 		{
-			return allowGroups == restrictAllGroups
-				|| allowGroups != allowAllGroups && !Array.Exists(allowGroups, c => String.Compare(c, securityToken, StringComparison.OrdinalIgnoreCase) == 0);
+			// user token is always allowed
+			if (String.Compare(securityToken, DEConfigItem.SecurityUser, StringComparison.OrdinalIgnoreCase) == 0)
+				return false;
+			else if (allowGroups == restrictAllGroups) // check all tokens restricted
+				return true;
+			else if (allowGroups == allowAllGroups) // check if all tokens are allowed
+				return false;
+			else
+			{
+				var isAllowed = Array.Exists(allowGroups, c => String.Compare(c, securityToken, StringComparison.OrdinalIgnoreCase) == 0);
+				return !isAllowed;
+			}
 		} // func IsTokenRestricted
 
 		/// <summary>Check for the given token, if the user can access it.</summary>
