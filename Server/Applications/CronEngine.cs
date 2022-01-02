@@ -675,7 +675,7 @@ namespace TecWare.DE.Server
 		private void OnCancel()
 			=> CallMember("Cancel");
 		
-		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || this.GetMemberValue("Cancel", rawGet: true) != null;
+		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || GetMemberValue("Cancel", rawGet: true) != null;
 
 		#endregion
 

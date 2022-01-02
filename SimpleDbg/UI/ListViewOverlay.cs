@@ -127,14 +127,17 @@ namespace TecWare.DE.Server.UI
 				return text;
 		} // func GetLineText
 
-		protected virtual int OnRenderLine(int top, int i, T item, string text, bool selected)
+		protected virtual int OnRenderLine(int top, int width, int i, T item, bool selected)
 		{
+			var text = GetLineText(i, item, width);
 			var (endLeft, _) = Content.Write(0, top, text,
 				foreground: GetLineTextColor(i, item, selected),
 				background: selected ? BackgroundHighlightColor : BackgroundColor
 			);
 			return endLeft;
 		} // func OnRenderLine
+
+		protected virtual void OnPreRender(ref int top, int width, int height) { }
 
 		protected sealed override void OnRender()
 		{
@@ -145,15 +148,17 @@ namespace TecWare.DE.Server.UI
 			var height = Content.Height;
 			var top = 0;
 
+			OnPreRender(ref top, width, height);
+			var verticalScrollOffset = top;
+
 			// render list items
-			var lastVisibleIndex = Math.Min(view.Count, firstVisibleIndex + height);
+			var lastVisibleIndex = Math.Min(view.Count, firstVisibleIndex + height - verticalScrollOffset);
 			for (var i = firstVisibleIndex; i < lastVisibleIndex; i++)
 			{
 				var item = view[i];
-				var text = GetLineText(i, item, width);
 				var selected = selectedIndex == i;
 
-				var endLeft = OnRenderLine(top, i, item, text, selected);
+				var endLeft = OnRenderLine(top, width, i, item, selected);
 
 				if (endLeft < width)
 				{
@@ -170,7 +175,7 @@ namespace TecWare.DE.Server.UI
 				Content.Fill(0, top, width - 1, height - 1, ' ', ForegroundColor, BackgroundColor);
 
 			// render scroll
-			RenderVerticalScroll(width, 0, height - 1, Height, firstVisibleIndex, view.Count);
+			RenderVerticalScroll(width, verticalScrollOffset, height - 1, Height, firstVisibleIndex, view.Count);
 		} // proc OnRender
 
 		public override bool OnHandleEvent(EventArgs e)

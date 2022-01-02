@@ -47,6 +47,11 @@ namespace Neo.Console
 	{
 		public const char VerticalDoubleLine = (char)0x2551;
 		public const char HorizontalDoubleLine = (char)0x2550;
+		public const char HorizontalThinLine = (char)0x2500;
+
+		public const char VerticalDoubleToHorizontalThinLineLeft = (char)0x255F;
+		public const char VerticalDoubleToHorizontalThinLineRight = (char)0x2562;
+
 		public const char TopLeftDoubleLine = (char)0x2554;
 		public const char TopRightDoubleLine = (char)0x2557;
 		public const char BottomLeftDoubleLine = (char)0x255A;

@@ -1090,8 +1090,6 @@ namespace TecWare.DE.Server
 
 		private sealed class ClientInfo
 		{
-			private string hostAddress;
-			private string hostName;
 			private string languages;
 			private string userAgent;
 			private string url;
@@ -1103,11 +1101,9 @@ namespace TecWare.DE.Server
 
 			public void Update(HttpListenerRequest request)
 			{
-				hostAddress = request.UserHostAddress;
-				hostName= request.UserHostName;
-				languages = request.UserLanguages != null ? String.Join(";", request.UserLanguages) : null;
-				userAgent = request.UserAgent;
 				url = request.Url?.ToString();
+				userAgent = request.UserAgent;
+				languages = request.UserLanguages != null ? String.Join(";", request.UserLanguages) : null;
 				lastRequest = DateTime.Now;
 				unchecked { requests++; }
 			} // proc Update
@@ -1120,16 +1116,12 @@ namespace TecWare.DE.Server
 				return request.RemoteEndPoint.Address.ToString();
 			} // func GetKey
 
-			[DEListTypeProperty("@hostAddress")]
-			public string HostAddress => hostAddress;
-			[DEListTypeProperty("@hostName")]
-			public string HostName => hostName;
+			[DEListTypeProperty("@url")]
+			public string Url => url;
 			[DEListTypeProperty("@langueges")]
 			public string Languages => languages;
 			[DEListTypeProperty("@agent")]
 			public string UserAgent => userAgent;
-			[DEListTypeProperty("@url")]
-			public string Url => url;
 			[DEListTypeProperty("@requests")]
 			public int Requests => requests;
 			[DEListTypeProperty("@last")]

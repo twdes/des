@@ -551,11 +551,7 @@ namespace TecWare.DE.Server
 		public static string MakeUri(string usePath, params PropertyValue[] args)
 		{
 			// build use path
-			if (String.IsNullOrEmpty(usePath))
-				usePath = CurrentUsePath;
-			else if (usePath[0] != '/')
-				usePath = CurrentUsePath + usePath;
-
+			usePath = GetAbsoluteNodePath(usePath);
 			// make relative
 			usePath = usePath.Substring(1);
 
@@ -591,10 +587,12 @@ namespace TecWare.DE.Server
 		{
 			var ti = typeof(Program).GetTypeInfo();
 
-			var mi = (from c in ti.GetRuntimeMethods()
-					  let attr = c.GetCustomAttribute<InteractiveCommandAttribute>()
-					  where c.IsStatic && attr != null && (String.Compare(attr.Name, cmd, StringComparison.OrdinalIgnoreCase) == 0 || String.Compare(attr.Short, cmd, StringComparison.OrdinalIgnoreCase) == 0)
-					  select c).FirstOrDefault();
+			var mi = (
+				from c in ti.GetRuntimeMethods()
+				let attr = c.GetCustomAttribute<InteractiveCommandAttribute>()
+				where c.IsStatic && attr != null && (String.Compare(attr.Name, cmd, StringComparison.OrdinalIgnoreCase) == 0 || String.Compare(attr.Short, cmd, StringComparison.OrdinalIgnoreCase) == 0)
+				select c
+			).FirstOrDefault();
 
 			if (mi == null)
 				throw new Exception($"Command '{cmd}' not found.");
@@ -606,7 +604,7 @@ namespace TecWare.DE.Server
 			{
 				for (var i = 0; i < parameterInfo.Length; i++)
 				{
-					if (i < argArray.Length) // convert argument
+					if (i < argArray.Length && !String.IsNullOrEmpty(argArray[i])) // convert argument
 						parameters[i] = Procs.ChangeType(argArray[i], parameterInfo[i].ParameterType);
 					else
 						parameters[i] = parameterInfo[i].DefaultValue;
@@ -643,7 +641,7 @@ namespace TecWare.DE.Server
 		#region -- ShowHelp -----------------------------------------------------------
 
 		[InteractiveCommand("help", Short = "h", HelpText = "Shows this text.")]
-		private static void ShowHelp()
+		internal static void ShowHelp()
 		{
 			var ti = typeof(Program).GetTypeInfo();
 			var assembly = typeof(Program).Assembly;
@@ -663,7 +661,15 @@ namespace TecWare.DE.Server
 			app.WriteLine($"NeoLua {informationalVersionLua} ({fileVersionLua})");
 			app.WriteLine(assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
 			app.WriteLine();
-
+			if ((conFlags & InteractiveCommandConnection.Http) != 0)
+			{
+				var keyColors = new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.DarkGray };
+				app.WriteLine(keyColors, new string[] { "  F1 ", "Toggle information bar." });
+				app.WriteLine(keyColors, new string[] { "  F2 ", "Select new node." });
+				app.WriteLine(keyColors, new string[] { "  F3 ", "Show current log." });
+				app.WriteLine(keyColors, new string[] { "  F4 ", "Execute an action or views a list." });
+				app.WriteLine();
+			}
 			foreach (var cur in
 				from c in ti.GetRuntimeMethods()
 				let attr = c.GetCustomAttribute<InteractiveCommandAttribute>()
@@ -730,7 +736,7 @@ namespace TecWare.DE.Server
 			{
 				this.historyIndex = historyIndex;
 			} // ctor
-			
+
 			public int HistoryIndex => historyIndex;
 		} // class OpenPairItem
 
@@ -768,7 +774,7 @@ namespace TecWare.DE.Server
 					},
 					() => dlg.View.SelectedItem is OpenPairItem op && op.HistoryIndex >= 0
 				);
-				
+
 				if (await dlg.ShowDialogAsync())
 					OpenCore(dlg.SelectedValue);
 			}
@@ -892,7 +898,7 @@ namespace TecWare.DE.Server
 					() => dlg.SelectedValue != null
 				);
 				dlg.AddKeyCommand(ConsoleKey.F3, "View",
-					() => ConsoleDialogOverlay.ContinueDialog(ShowLogFileAsync(dlg.SelectedValue?.FullName,dlg.View.SelectedItem?.Text)),
+					() => ConsoleDialogOverlay.ContinueDialog(ShowLogFileAsync(dlg.SelectedValue?.FullName, dlg.View.SelectedItem?.Text)),
 					() => dlg.SelectedValue != null
 				);
 				await dlg.ShowDialogAsync();
@@ -911,7 +917,7 @@ namespace TecWare.DE.Server
 
 		private sealed class ListNodePair : SelectPairItem<string>
 		{
-			public ListNodePair(string key, string text, string displayName, bool hasLog) 
+			public ListNodePair(string key, string text, string displayName, bool hasLog)
 				: base(key, text)
 			{
 				DisplayName = displayName;
@@ -919,7 +925,7 @@ namespace TecWare.DE.Server
 			} // ctor
 
 			public ListNodePair(string key, string text, XElement x)
-				:base(key, text)
+				: base(key, text)
 			{
 				DisplayName = x.Attribute("displayname")?.Value;
 				HasLog = x.GetAttribute("hasLog", false);
@@ -931,20 +937,20 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private static Task<XElement> GetListInfoAsync(DEHttpClient http, string path, int rlevel, bool published)
+		private static Task<XElement> GetListInfoAsync(DEHttpClient http, string node, int rlevel, bool published)
 		{
-			return http.GetXmlAsync(MakeUri(path,
+			return http.GetXmlAsync(MakeUri(node,
 				new PropertyValue("action", "list"),
 				new PropertyValue("published", published),
 				new PropertyValue("rlevel", rlevel)
 			));
 		} // func GetListInfo
 
-		private static IEnumerable<ListNodePair> GetFormattedList(XElement xRoot, string basePath, string baseIndent, int maxLevel)
+		private static IEnumerable<ListNodePair> GetFormattedList(XElement xCur, string basePath, string baseIndent, int maxLevel)
 		{
 			var newIndent = baseIndent + "    ";
-			foreach (var (xCur, pair) in (
-				from x in xRoot.Elements("item")
+			foreach (var (x, pair) in (
+				from x in xCur.Elements("item")
 				let name = x.Attribute("name")?.Value
 				where name != null
 				orderby name
@@ -954,78 +960,117 @@ namespace TecWare.DE.Server
 				yield return pair;
 				if (maxLevel > 0)
 				{
-					foreach (var c in GetFormattedList(xCur, pair.Key, newIndent, maxLevel - 1))
+					foreach (var c in GetFormattedList(x, pair.Key, newIndent, maxLevel - 1))
 						yield return c;
 				}
 			}
 		} // func GetFormattedList
 
-		[InteractiveCommand("list", HelpText = "Lists the current nodes.", ConnectionRequest = InteractiveCommandConnection.Http)]
+		private static void PrintFormattedList(XElement xList, int maxLevel)
+		{
+			foreach (var cur in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
+			{
+				app.WriteLine(
+					new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
+					new string[] { cur.Key, " : ", cur.DisplayName }
+				);
+			}
+		} // func PrintFormattedList
+
+		private static void PrintNodeInformation(XElement xList)
+		{
+			void PrintList(string listHeader, IEnumerable<KeyValuePair<string, string>> items)
+			{
+				var first = true;
+				foreach (var c in items)
+				{
+					if (first)
+					{
+						app.WriteLine(listHeader);
+						first = false;
+					}
+
+					app.WriteLine(
+						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
+						new string[] { "    ", c.Key, " : ", c.Value }
+					);
+				}
+				if (!first)
+				{
+					app.WriteLine();
+					first = true;
+				}
+
+			} // proc PrintList
+
+			// print sub list items
+			PrintList("Nodes:", GetFormattedList(xList, CurrentUsePath, String.Empty, 1).Select(c => new KeyValuePair<string, string>(c.Text, c.DisplayName)));
+
+			// print available actions
+			PrintList("Actions:",
+				from x in xList.Elements("action")
+				let id = x.GetAttribute("id", null)
+				where id != null
+				select new KeyValuePair<string, string>(id, x.GetAttribute("displayname", id))
+			);
+
+			// print available lists
+			PrintList("Lists:",
+				from x in xList.Elements("list")
+				let id = x.GetAttribute("id", null)
+				where id != null
+				select new KeyValuePair<string, string>(id, x.GetAttribute("displayname", id))
+			);
+		} // proc PrintNodeInformation
+
+		[InteractiveCommand("list", HelpText = "Get a list from the server or a node info.", ConnectionRequest = InteractiveCommandConnection.Http)]
 		public static async Task SendListAsync(
-			[Description("true to get all sub nodes of the current node.")]
+			[Description("ListId of the server list.")]
+			string list = null,
+			[Description("true to get all sub nodes of the current node (default: false).")]
 			bool recursive = false
 		)
 		{
-			var maxLevel = recursive ? 1000 : 1;
-			var xList = await GetListInfoAsync(GetHttp(), CurrentUsePath, maxLevel, maxLevel == 1);
-
-			if (maxLevel > 1)
+			if (list != null)
 			{
-				// print formatted list
-				foreach (var cur in GetFormattedList(xList, CurrentUsePath, String.Empty, maxLevel))
+				if (String.Compare(list, Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0)
 				{
-					app.WriteLine(
-						new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
-						new string[] { cur.Key, " : ", cur.DisplayName }
-					);
+					recursive = true;
+					list = null;
+				}
+				else if (String.Compare(list, Boolean.FalseString, StringComparison.OrdinalIgnoreCase) == 0)
+				{
+					recursive = false;
+					list = null;
 				}
 			}
-			else
+
+			if (list == null) // print nodes
 			{
-				void PrintList(string listHeader, IEnumerable<KeyValuePair<string, string>> items)
-				{
-					var first = true;
-					foreach (var c in items)
-					{
-						if (first)
-						{
-							app.WriteLine(listHeader);
-							first = false;
-						}
+				var maxLevel = recursive ? 1000 : 1;
+				var xList = await GetListInfoAsync(GetHttp(), CurrentUsePath, maxLevel, maxLevel == 1);
 
-						app.WriteLine(
-							new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.Gray, ConsoleColor.DarkGray, ConsoleColor.DarkGray },
-							new string[] { "    ", c.Key, " : ", c.Value }
-						);
-					}
-					if (!first)
-					{
-						app.WriteLine();
-						first = true;
-					}
-
-				} // proc PrintList
-
-				// print sub list items
-				PrintList("Nodes:", GetFormattedList(xList, CurrentUsePath, String.Empty, 1).Select(c => new KeyValuePair<string, string>(c.Text, c.DisplayName)));
-
-				// print available actions
-				PrintList("Actions:",
-					from x in xList.Elements("action")
-					let id = x.GetAttribute("id", null)
-					where id != null
-					select new KeyValuePair<string, string>(id, x.GetAttribute("displayname", id))
-				);
-
-				// print available lists
-				PrintList("Lists:",
-					from x in xList.Elements("list")
-					let id = x.GetAttribute("id", null)
-					where id != null
-					select new KeyValuePair<string, string>(id, x.GetAttribute("displayname", id))
-				);
+				if (maxLevel > 1)
+					PrintFormattedList(xList, maxLevel);
+				else
+					PrintNodeInformation(xList);
 			}
+			else
+				await ListGetAsync(list, true);
 		} // func SendListAsync
+
+		private static string GetAbsoluteNodePath(string node = null)
+		{
+			if (String.IsNullOrEmpty(node))
+				return currentUsePath;
+
+			if (node[0] != '/')  // make absolute
+				node = currentUsePath + node;
+			if (node[node.Length - 1] != '/')
+				node += '/';
+
+			return node;
+		} // func GetAbsoluteNodePath
 
 		[InteractiveCommand("use", HelpText = "Activates a new global space, on which the commands are executed.", ConnectionRequest = InteractiveCommandConnection.Http | InteractiveCommandConnection.Debug)]
 		public static async Task UseNodeAsync(
@@ -1040,10 +1085,7 @@ namespace TecWare.DE.Server
 				currentPath = await socket.UseAsync(node ?? String.Empty);
 			else if (!String.IsNullOrEmpty(node)) // change current path, 
 			{
-				if (node[0] != '/') // make absolute
-					node = CurrentUsePath + node;
-				if (node[node.Length - 1] != '/')
-					node += '/';
+				node = GetAbsoluteNodePath(node);
 
 				string lastName;
 				if (node == "/") // change to root
@@ -1096,7 +1138,7 @@ namespace TecWare.DE.Server
 				() => dlg.View.SelectedItem is ListNodePair p && p.HasLog
 			);
 			dlg.AddKeyCommand(ConsoleKey.F4, "Action",
-				() => ConsoleDialogOverlay.ContinueDialog(ShowActionsAsync(http, dlg.SelectedValue)),
+				() => ConsoleDialogOverlay.ContinueDialog(ShowActionsAsync(http, ActionItem.Action | ActionItem.List, dlg.SelectedValue)),
 				() => dlg.View.SelectedItem is ListNodePair
 			);
 			dlg.AddKeyCommand(ConsoleKey.F5, "Uri",
@@ -1791,242 +1833,38 @@ namespace TecWare.DE.Server
 
 		#region -- ListGet ------------------------------------------------------------
 
-		#region -- class ListGetTableColumn -------------------------------------------
-
-		private abstract class ListGetTableColumn : TableColumn
-		{
-			private readonly Type type;
-
-			public ListGetTableColumn(string name, string typeName, Type type, int width)
-				: base(name, typeName, type, width)
-			{
-				this.type = type;
-			} // ctor
-
-			protected abstract string GetRawValue(XElement x);
-
-			protected sealed override string FormatValueCore(object value)
-			{
-				var rawValue = GetRawValue((XElement)value);
-				try
-				{
-					return base.FormatValueCore(Procs.ChangeType(rawValue, type));
-				}
-				catch (FormatException)
-				{
-					return rawValue;
-				}
-			} // func FormatValueCore
-
-			public static TableColumn Create(XElement xTypeDescription, XElement xCol)
-			{
-				if (xCol.Name == "attribute")
-				{
-					var attrName = xCol.Attribute("name")?.Value;
-					var typeName = xCol.Attribute("type")?.Value;
-
-					return new ListGetAttributeTableColumn(attrName, typeName, attrName,
-						attrName == "typ" && xTypeDescription.Name == "line" ? 3 : 0
-					);
-				}
-				else if (xCol.Name == "element")
-				{
-					var elementName = xCol.Attribute("name")?.Value;
-					var typeName = xCol.Attribute("type")?.Value;
-					var isArray = typeName.EndsWith("[]");
-					var xSubType = xTypeDescription.Parent.Element(isArray ? typeName.Substring(0, typeName.Length - 2) : typeName);
-					if (xSubType != null)
-						return new ListGetElementTypeTableColumn(elementName, xTypeDescription.Name.Namespace + elementName, xSubType, isArray);
-					else if (elementName == null)
-						return new ListGetValueTableColumn(typeName);
-					else
-						return new ListGetElementTableColumn(elementName, typeName, xTypeDescription.Name.Namespace + elementName);
-				}
-				else
-					return null;
-			} // func Create
-
-			public static IEnumerable<TableColumn> Create(XElement xTypeDescription)
-				=> xTypeDescription.Elements().Select(c => Create(xTypeDescription, c)).Where(c => c != null);
-		} // class ListGetTableColumn
-
-		#endregion
-
-		#region -- class ListGetAttributeTableColumn ----------------------------------
-
-		private sealed class ListGetAttributeTableColumn : ListGetTableColumn
-		{
-			private readonly XName xAttribute;
-
-			public ListGetAttributeTableColumn(string name, string typeName, XName xAttribute, int width)
-				: base(name, typeName, GetDefaultType(typeName), width)
-			{
-				this.xAttribute = xAttribute ?? throw new ArgumentNullException(nameof(xAttribute));
-			} // ctor
-
-			protected override string GetRawValue(XElement x)
-				=> x.Attribute(xAttribute)?.Value;
-		} // class ListGetAttributeTableColumn
-
-		#endregion
-
-		#region -- class ListGetAttributeTableColumn ----------------------------------
-
-		private sealed class ListGetElementTableColumn : ListGetTableColumn
-		{
-			private readonly XName xElementName;
-
-			public ListGetElementTableColumn(string name, string typeName, XName xElementName)
-				: base(name, typeName, GetDefaultType(typeName), 0)
-			{
-				this.xElementName = xElementName ?? throw new ArgumentNullException(nameof(xElementName));
-			} // ctor
-
-			protected override string GetRawValue(XElement x)
-				=> x.Element(xElementName)?.Value;
-		} // class ListGetElementTableColumn
-
-		#endregion
-
-		#region -- class ListGetAttributeTableColumn ----------------------------------
-
-		private sealed class ListGetValueTableColumn : ListGetTableColumn
-		{
-			public ListGetValueTableColumn(string typeName)
-				: base(".", typeName, GetDefaultType(typeName), 0)
-			{
-			}
-
-			protected override string GetRawValue(XElement x)
-				=> x.Value;
-		} // class ListGetValueTableColumn
-
-		#endregion
-
-		#region -- class ListGetElementTypeTableColumn --------------------------------
-
-		private sealed class ListGetElementTypeTableColumn : ListGetTableColumn
-		{
-			private readonly XName xElementName;
-			private readonly bool isArray;
-			private readonly XName xTypeElementName;
-			private readonly TableColumn[] columns;
-
-			public ListGetElementTypeTableColumn(string name, XName xElementName, XElement xType, bool isArray)
-				: base(name, xType.Name.LocalName + (isArray ? "[]" : String.Empty), typeof(string), -1)
-			{
-				this.xElementName = xElementName ?? throw new ArgumentNullException(nameof(xElementName));
-				this.isArray = isArray;
-				columns = Create(xType ?? throw new ArgumentNullException(nameof(xType))).ToArray();
-				xTypeElementName = xType.Name;
-			} // ctor
-
-			private void FormatValueShort(StringBuilder sb, XElement x)
-			{
-				sb.Append('[');
-
-				var first = true;
-				foreach (var t in columns)
-				{
-					if (first)
-						first = false;
-					else
-						sb.Append(',');
-
-					sb.Append('"').Append(t.Name).Append("\":");
-					sb.Append('"').Append(t.FormatValue(x)).Append('"');
-				}
-
-				sb.Append(']');
-			} // proc FormatValueShort
-
-			protected override string GetRawValue(XElement x)
-			{
-				var sb = new StringBuilder();
-
-				var xValue = x?.Element(xElementName);
-				if (xValue == null)
-					sb.Append(NullValue);
-				else if (isArray)
-				{
-					var rowCount = 0;
-					
-					{
-						foreach (var cur in xValue.Elements(xTypeElementName))
-						{
-							if (rowCount >= 10)
-								break;
-							else if (rowCount > 0)
-								sb.Append(",");
-
-							FormatValueShort(sb, cur);
-
-							rowCount++;
-						}
-					}
-
-					if (rowCount == 0)
-						sb.Append(NullValue);
-				}
-				else
-					FormatValueShort(sb, x.Element(xElementName).Element(xTypeElementName));
-
-				return sb.ToString();
-			} // func GetRawValue
-		} // class ListGetElementTypeTableColumn
-
-		#endregion
-
-		[InteractiveCommand("listget", HelpText = "Get a server list.", ConnectionRequest = InteractiveCommandConnection.Http)]
-		public static async Task ListGetAsync(string list = null)
+		private static async Task ListGetAsync(DEHttpClient http, string node, string list, bool ui)
 		{
 			if (String.IsNullOrEmpty(list))
 				throw new ArgumentNullException(nameof(list));
 
-			var xList = await GetHttp().GetXmlAsync(MakeUri(
+			var xList = await http.GetXmlAsync(MakeUri(node,
 				new PropertyValue("action", "listget"),
 				new PropertyValue("id", list),
 				new PropertyValue("desc", true),
-				new PropertyValue("count", 100)
+				new PropertyValue("count", ui ? 10000 : 100)
 			), rootName: "list");
 
-			// parse type
-			var xType = xList.Element("typedef");
-			if (xType == null)
-				return;
+			if (ui)
+				await ListDialog.ShowListAsync(app, list, xList);
+			else
+				ListDialog.PrintList(app, xList);
+		} // func ListGetAsync
 
-			// get items
-			var xItems = xList.Element("items");
-			if (xItems == null)
-				return;
-
-			// get first root element
-			var xFirstElement = xItems.Elements().FirstOrDefault();
-			if (xFirstElement == null)
-				return;
-
-			// get type of the first element
-			var xElementName = xFirstElement.Name;
-			var xTypeDesc = xType.Element(xElementName);
-			if (xTypeDesc == null)
-				throw new ArgumentNullException($"Type '{xElementName.LocalName}' definition is missing.");
-
-			var totalCount = xItems.GetAttribute("tc", -1);
-			var table = ConsoleTable.Create(app, Console.WindowWidth, ListGetTableColumn.Create(xTypeDesc))
-				.WriteHeader();
-
-			// print columns
-			var count = 0;
-			foreach (var x in xItems.Elements(xElementName))
-			{
-				table.WriteCore((col, _) => col.FormatValue(x));
-				count++;
-			}
-
-			if (totalCount >= 0 && (count == 0 || totalCount > count))
-				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} from {totalCount:N0}" }, true);
-			else if (count >= 0)
-				app.WriteLine(new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, new string[] { "==> ", $"{count:N0} lines" }, true);
+		[InteractiveCommand("listget", HelpText = "Get a server list.", ConnectionRequest = InteractiveCommandConnection.Http)]
+		public static Task ListGetAsync(
+			[Description("ListId to return.")]
+			string list = null,
+			[Description("Show list in dialog.")]
+			bool ui = false,
+			[Description("Node path to list.")]
+			string node = null
+		)
+		{
+			var http = GetHttp();
+			return String.IsNullOrEmpty(list) && !ui
+				? ShowActionsAsync(http, ActionItem.List, CurrentUsePath)
+				: ListGetAsync(http, node, list, ui);
 		} //  func ListGetAsync
 
 		#endregion
@@ -2049,7 +1887,7 @@ namespace TecWare.DE.Server
 		} // func ParseConfiguration
 
 		[InteractiveCommand("configRaw", HelpText = "Return configuration of the current node (raw).", ConnectionRequest = InteractiveCommandConnection.Http)]
-		private static async Task ConfigRawAsync()
+		internal static async Task ConfigRawAsync()
 		{
 			var xReturn = await GetHttp().GetXmlAsync(MakeUri(
 				new PropertyValue("action", "config"),
@@ -2060,7 +1898,7 @@ namespace TecWare.DE.Server
 		} //  func ConfigRawAsync
 
 		[InteractiveCommand("config", HelpText = "Print configuration of the current node.", ConnectionRequest = InteractiveCommandConnection.Http)]
-		private static async Task ConfigAsync(bool all = false)
+		internal static async Task ConfigAsync(bool all = false)
 		{
 			var xReturn = await GetHttp().GetXmlAsync(MakeUri(
 				new PropertyValue("action", "config"),
@@ -2074,11 +1912,22 @@ namespace TecWare.DE.Server
 
 		#region -- Action -------------------------------------------------------------
 
-		private static string FormatActionName(XElement xAction, string id)
+		#region -- enum ActionItem ----------------------------------------------------
+
+		[Flags]
+		private enum ActionItem
 		{
-			var displayName = xAction.GetAttribute("displayname", null);
-			return String.IsNullOrEmpty(displayName) ? id : $"{displayName} ({id})";
-		} // func FormatActionName
+			Action = 1,
+			List = 2
+		} // enum ActionItem
+
+		#endregion
+
+		private static string FormatSelectName(char c, XElement xItem, string id)
+		{
+			var displayName = xItem.GetAttribute("displayname", null);
+			return c + " " + (String.IsNullOrEmpty(displayName) ? id : $"{displayName} ({id})");
+		} // func FormatSelectName
 
 		private static void WriteActionResult(string action, XElement xReturn)
 		{
@@ -2097,44 +1946,76 @@ namespace TecWare.DE.Server
 			);
 		} // proc WriteActionResult
 
-		private static Task ActionAsync(DEHttpClient http, string action)
+		private static Task ActionAsync(DEHttpClient http, string node, string action)
 		{
-			return http.GetXmlAsync(MakeUri(
+			return http.GetXmlAsync(MakeUri(node,
 				new PropertyValue("action", action)
 			)).ContinueWith(t => WriteActionResult(action, t.Result), TaskContinuationOptions.ExecuteSynchronously);
 		} // proc ActionAsync
 
-		private static async Task ShowActionsAsync(DEHttpClient http, string actionPath)
+		private static async Task ShowActionsAsync(DEHttpClient http, ActionItem flags, string node)
 		{
-			var xList = await GetListInfoAsync(http, actionPath, 1, true);
-			var dlg = new SelectListDialog<string>(app,
-				from x in xList.Elements("action")
-				let id = x.GetAttribute("id", null)
-				where id != null
-				select new SelectPairItem<string>(id, FormatActionName(x, id))
-			)
-			{ Title = "Actions" };
+			var xList = await GetListInfoAsync(http, node, 1, true);
+
+			var titleIndex = 0;
+			var title = new string[2];
+			IEnumerable<SelectPairItem<KeyValuePair<ActionItem, string>>> items = Array.Empty<SelectPairItem<KeyValuePair<ActionItem, string>>>();
+
+			if ((flags & ActionItem.Action) != 0)
+			{
+				items = items.Concat(
+					from x in xList.Elements("action")
+					let id = x.GetAttribute("id", null)
+					where id != null
+					select new SelectPairItem<KeyValuePair<ActionItem, string>>(new KeyValuePair<ActionItem, string>(ActionItem.Action, id), FormatSelectName((char)0x25B8, x, id))
+				);
+				title[titleIndex++] = "Actions";
+			}
+
+			if ((flags & ActionItem.List) != 0)
+			{
+				items = items.Concat(
+					from x in xList.Elements("list")
+					let id = x.GetAttribute("id", null)
+					where id != null
+					select new SelectPairItem<KeyValuePair<ActionItem, string>>(new KeyValuePair<ActionItem, string>(ActionItem.List, id), FormatSelectName((char)0x2261, x, id))
+				);
+				title[titleIndex++] = "Lists";
+			}
+
+			var dlg = new SelectListDialog<KeyValuePair<ActionItem, string>>(app, items) { Title = String.Join("/", title, 0, titleIndex) };
 
 			dlg.AddKeyCommand(ConsoleKey.F4, null, () => Task.FromResult<bool?>(false));
 
 			if (await dlg.ShowDialogAsync())
-				await ActionAsync(dlg.SelectedValue);
+			{
+				var x = dlg.SelectedValue;
+				if (x.Key == ActionItem.Action)
+					await ActionAsync(http, node, x.Value);
+				else if (x.Key == ActionItem.List)
+					await ListGetAsync(http, node, x.Value, true);
+			}
 		} // proc ShowActionsAsync
 
 		private static Task ShowActionsAsync()
 		{
 			if (!TryGetHttp(out var http))
 				return Task.CompletedTask;
-			return ShowActionsAsync(http, CurrentUsePath);
+			return ShowActionsAsync(http, ActionItem.Action | ActionItem.List, CurrentUsePath);
 		} // proc ShowActionsAsync
 
 		[InteractiveCommand("action", HelpText = "Invoke a server action.", ConnectionRequest = InteractiveCommandConnection.Http)]
-		internal static Task ActionAsync(string action = null)
+		internal static Task ActionAsync(
+			[Description("Id of the action to execute.")]
+			string action = null,
+			[Description("Path to the action.")]
+			string node = null
+		)
 		{
 			if (String.IsNullOrEmpty(action))
-				return ShowActionsAsync(GetHttp(), CurrentUsePath);
+				return ShowActionsAsync(GetHttp(), ActionItem.Action, CurrentUsePath);
 			else
-				return ActionAsync(GetHttp(), action);
+				return ActionAsync(GetHttp(), node, action);
 		} //  func ActionAsync
 
 		#endregion

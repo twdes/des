@@ -225,6 +225,9 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	public delegate string GetTableColumnFormattedText(TableColumn column, int index);
+	public delegate string GetTableColumnForegroundColor(TableColumn column, int index);
+
 	#region -- class ConsoleTable -----------------------------------------------------
 
 	public sealed class ConsoleTable
@@ -253,7 +256,7 @@ namespace TecWare.DE.Server
 			return this;
 		} // proc WriteHeader
 
-		public ConsoleTable WriteCore(Func<TableColumn, int, string> getValue)
+		public ConsoleTable WriteCore(GetTableColumnFormattedText getValue)
 		{
 			for (var i = 0; i < columns.Length; i++)
 			{
@@ -286,46 +289,55 @@ namespace TecWare.DE.Server
 
 	public sealed class CharBufferTable
 	{
+		private readonly int totalWidth;
 		private readonly TableColumn[] columns;
 
 		private CharBufferTable(int totalWidth, TableColumn[] columns)
 		{
 			this.columns = columns ?? throw new ArgumentNullException(nameof(columns));
 
-			this.TotalWidth = totalWidth;
+			this.totalWidth = totalWidth;
 		} // ctor
 
-		public int Write(CharBuffer buffer, int left, int top, object[] values, ConsoleColor[] foregroundColor, ConsoleColor backgroundColor)
+		public int Write(CharBuffer buffer, int left, int top, GetTableColumnFormattedText getValue, ConsoleColor[] foregroundColor, ConsoleColor backgroundColor)
 		{
 			for (var i = 0; i < columns.Length; i++)
 			{
 				var color = i < foregroundColor.Length ? foregroundColor[i] : foregroundColor[foregroundColor.Length - 1];
 				if (i > 0)
 					(left, _) = buffer.Write(left, top, " ", null, color, backgroundColor);
-				var col = columns[i];
-				var val = i < values.Length ? values[i] : null;
 
-				(left, _ ) = buffer.Write(left, top, TableColumn.TableStringPad(col.FormatValue(val), col.Width), null, color, backgroundColor);
+				var col = columns[i];
+				(left, _) = buffer.Write(left, top, TableColumn.TableStringPad(getValue(col, i), col.Width), null, color, backgroundColor);
 			}
 			(left, _) = buffer.Write(left, top, " ", null, backgroundColor, backgroundColor);
 			return left;
-		} // proc Write
+		} // func Write
+
+		public int WriteHeader(CharBuffer buffer, int left, int top, ConsoleColor foregroundColor, ConsoleColor backgroundColor)
+			=> Write(buffer, left, top, (col, i) => col.Name, foregroundColor, backgroundColor);
+
+		public int Write(CharBuffer buffer, int left, int top, object[] values, ConsoleColor[] foregroundColor, ConsoleColor backgroundColor)
+			=> Write(buffer, left, top, (col, i) => col.FormatValue(i < values.Length ? values[i] : null), foregroundColor, backgroundColor);
+
+		public int Write(CharBuffer buffer, int left, int top, GetTableColumnFormattedText getValue, ConsoleColor foregroundColor, ConsoleColor backgroundColor)
+			=> Write(buffer, left, top, getValue, new ConsoleColor[] { foregroundColor }, backgroundColor);
 
 		public int WriteEmpty(CharBuffer buffer, int left, int top, ConsoleColor backgroundColor)
 		{
-			var endAt = left + TotalWidth;
+			var endAt = left + totalWidth;
 			buffer.Fill(left, top, endAt - 1, top, ' ', backgroundColor, backgroundColor);
 			return endAt;
 		} // proc WriteEmpty
 
-		public int TotalWidth { get; }
+		public int TotalWidth => totalWidth;
 
 		public static CharBufferTable Create(int totalWidth, params TableColumn[] columns)
 			=> new CharBufferTable(totalWidth, TableColumn.CalculateTableLayoutCore(totalWidth, columns));
 
 		public static CharBufferTable Create(int totalWidth, IEnumerable<TableColumn> columns)
 			=> new CharBufferTable(totalWidth, TableColumn.CalculateTableLayoutCore(totalWidth, columns));
-	} // class TableWriter
+	} // class CharBufferTable
 
 	#endregion
 

@@ -66,7 +66,7 @@ namespace TecWare.DE.Server.UI
 			if (ResizeToContent)
 			{
 				// calculate max window size
-				maxWidth = (Title?.Length ?? 0) + 30;
+				maxWidth = Math.Max(50, (Title?.Length ?? 0) + 30);
 				maxHeight = 2;
 				includeReservedRows = false;
 
