@@ -15,6 +15,7 @@
 #endregion
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -269,7 +270,8 @@ namespace TecWare.DE.Server.UI
 			private static bool ContainsString(XNode x, string[] expr)
 			{
 				switch (x)
-				{ case XElement e:
+				{
+					case XElement e:
 						return ContainsString(e, expr);
 					case XCData t2:
 						return ContainsString(t2.Value, expr);
@@ -308,7 +310,6 @@ namespace TecWare.DE.Server.UI
 		#endregion
 
 		private readonly XElement xTypes;
-		private readonly int itemsCount;
 		private readonly int totalCount;
 
 		private string[] filterExpressions = Array.Empty<string>();
@@ -318,17 +319,26 @@ namespace TecWare.DE.Server.UI
 		{
 			Title = listId;
 
-			itemsCount = items.Length;
-			this.totalCount = totalCount;
-
+			this.totalCount = totalCount >= 0 ? totalCount : items.Length;
 			this.xTypes = xTypes ?? throw new ArgumentNullException(nameof(xTypes));
 
 			// set type def
 			View.SetTypeDef(xItemType);
+
+			AddKeyCommand(ConsoleKey.Enter, executeTask: ViewLineAsync, canExecute: CanViewLine);
+			AddKeyCommand(ConsoleKey.F5, name: "Copy", executeTask: CopyLineAsync, canExecute: CanCopyLine);
 		} // ctor
 
 		protected override ListViewOverlay<XElement> CreateListView()
 			=> new ListOverlay(this);
+
+		private string GetItemsCountLine()
+		{
+			var itemsCount = View.ItemCount;
+			return totalCount == 0 || totalCount > itemsCount
+				? $" {itemsCount:N0}/{totalCount:N0} "
+				: $" {itemsCount:N0} items ";
+		} // func GetItemsCountLine
 
 		protected override void OnRender()
 		{
@@ -336,19 +346,45 @@ namespace TecWare.DE.Server.UI
 			if (Content != null)
 				Content.Set(0, 2, VerticalDoubleToHorizontalThinLineLeft, ForegroundColor, BackgroundColor);
 
-			if (totalCount > 0 && (totalCount == 0 || totalCount > itemsCount))
-				Content.Write(3, Height - 1, $" {itemsCount:N0}/{totalCount:N0} ", foreground: ForegroundColor, background: BackgroundColor);
-			else
-				Content.Write(3, Height - 1, $" {itemsCount:N0} items ", foreground: ForegroundColor, background: BackgroundColor);
+			var itemsCount = GetItemsCountLine();
+			var x = Width - itemsCount.Length - 5;
+			if (x > 0)
+				Content.Write(x, 0, itemsCount, foreground: ForegroundColor, background: BackgroundColor);
 		} // proc OnRender
 
 		protected override void SetFilterString(string text)
 		{
 			filterExpressions = text.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 			View.RefreshList();
-		} // proc SetFilterString 
+			Invalidate();
+		} // proc SetFilterString
+
+		private async Task<bool?> CopyLineAsync()
+		{
+			if (View.SelectedItem is XElement x)
+				await ConsoleReadLineOverlay.SetClipboardTextAsync(x.ToString(SaveOptions.None));
+			return null;
+		} // func CopyLineAsync
+
+		private bool CanCopyLine()
+			=> View.SelectedItem is XElement;
+
+		private Task<bool?> ViewLineAsync()
+		{
+			if (View.SelectedItem is XElement x)
+			{
+				//var sb = new StringBuilder();
+				//await Program.ShowTextBlockAsync(sb.ToString(), Title);
+			}
+			return Task.FromResult<bool?>(null);
+		} // func ViewLineAsync
+
+		private bool CanViewLine()
+			=> false; // CanViewLine();
 
 		private new ListOverlay View => (ListOverlay)base.View;
+
+		// -- Static ----------------------------------------------------------------
 
 		private static bool TryGetListInfoData(XElement xList, out XElement xTypes, out IEnumerable<XElement> xItemSource, out XElement xItemType, out int totalCount)
 		{

@@ -1985,7 +1985,18 @@ namespace TecWare.DE.Server
 
 			var dlg = new SelectListDialog<KeyValuePair<ActionItem, string>>(app, items) { Title = String.Join("/", title, 0, titleIndex) };
 
-			dlg.AddKeyCommand(ConsoleKey.F4, null, () => Task.FromResult<bool?>(false));
+			dlg.AddKeyCommand(ConsoleKey.F4,
+				executeTask: async () =>
+				{
+					if (dlg.SelectedIndex >= 0 && dlg.SelectedValue.Key == ActionItem.List)
+					{
+						await ListGetAsync(http, node, dlg.SelectedValue.Value, ui: true);
+						return null;
+					}
+					else
+						return false;
+				}
+			);
 
 			if (await dlg.ShowDialogAsync())
 			{

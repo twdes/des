@@ -55,7 +55,7 @@ namespace TecWare.DE.Server.UI
 			{
 				var charOffset = Int32.MaxValue;
 				var charEnd = -1;
-				var idx = (y - 1) + virtualOffsetY;
+				var idx = y - 1 + virtualOffsetY;
 				if (idx < lines.Count)
 				{
 					charOffset = lines[idx].startAt;
