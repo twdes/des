@@ -18,6 +18,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.Design;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -44,18 +45,19 @@ namespace TecWare.DE.Server
 			private readonly ICronJobExecute job;
 			private readonly ICronJobCancellation jobCancel;
 
-			private readonly Task task;
+			private readonly Task<bool> task;
 			private readonly CancellationTokenSource cancellationTokenSource;
 
 			public CurrentRunningJob(DECronEngine parent, ICronJobExecute job, CancellationToken cancellationToken)
 			{
 				this.parent = parent ?? throw new ArgumentNullException(nameof(parent));
 				this.job = job ?? throw new ArgumentNullException(nameof(job));
-				this.jobCancel = job as ICronJobCancellation;
+				jobCancel = job as ICronJobCancellation;
 
-				this.cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-				this.task = Task.Factory.StartNew(Execute, cancellationTokenSource.Token);
-				this.task.ContinueWith(EndExecute);
+				cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+				task = System.Threading.Tasks.Task.Factory
+					.StartNew(Execute, cancellationTokenSource.Token)
+					.ContinueWith(EndExecute);
 
 				// automatic cancel
 				if (jobCancel != null && jobCancel.RunTimeSlice.HasValue)
@@ -65,10 +67,14 @@ namespace TecWare.DE.Server
 			private void Execute()
 			{
 				using var scope = new DECommonScope(job as IServiceProvider ?? parent, false, null);
-				job.RunJob(cancellationTokenSource.Token);
+				using (scope.Use())
+				{
+					job.RunJob(cancellationTokenSource.Token);
+					scope.CommitAsync().AwaitTask();
+				}
 			} // proc Execute
 
-			private void EndExecute(Task t)
+			private bool EndExecute(Task t)
 			{
 				Exception jobException = null;
 				try
@@ -82,10 +88,12 @@ namespace TecWare.DE.Server
 				try
 				{
 					parent.FinishJob(this, jobException);
+					return jobException == null;
 				}
 				catch (Exception e)
 				{
 					parent.Log.Except("JobFinish failed.", e);
+					return false;
 				}
 			} // proc EndExecute
 
@@ -97,7 +105,7 @@ namespace TecWare.DE.Server
 			} // proc Cancel
 
 			public ICronJobExecute Job => job;
-			public Task Task => task;
+			public Task<bool> Task => task;
 			public bool IsCancellationRequested => cancellationTokenSource.IsCancellationRequested;
 		} // class CurrentRunningJob
 
@@ -130,6 +138,9 @@ namespace TecWare.DE.Server
 				xml.WriteProperty("@supportsCancellation", typeof(bool));
 				xml.WriteProperty("@runTimeSlice", typeof(TimeSpan));
 				xml.WriteProperty("@nextrun", typeof(DateTime));
+				xml.WriteProperty("@lastRun", typeof(DateTime));
+				xml.WriteProperty("@lastDuration", typeof(double));
+				xml.WriteProperty("@failed", typeof(bool));
 				xml.WriteEndType();
 			} // proc WriteType
 
@@ -138,7 +149,7 @@ namespace TecWare.DE.Server
 				var c = (CronCacheItem)item;
 
 				xml.WriteStartProperty("item");
-				
+
 				xml.WriteAttributeProperty("id", c.Job.UniqueName);
 				xml.WriteAttributeProperty("displayname", c.Job.DisplayName);
 				xml.WriteAttributeProperty("bound", c.Job.Bound.ToString());
@@ -150,7 +161,15 @@ namespace TecWare.DE.Server
 				}
 				if (c.NextRun.HasValue)
 					xml.WriteAttributeProperty("nextrun", c.NextRun.Value);
-				
+
+				if (c.Job is ICronJobInformation information)
+				{
+					if (information.LastRun.HasValue)
+						xml.WriteAttributeProperty("lastRun", information.LastRun);
+					xml.WriteAttributeProperty("lastDuration", information.LastDuration);
+					xml.WriteAttributeProperty("failed", information.IsFailed);
+				}
+
 				xml.WriteEndProperty();
 			} // proc WriteItem
 
@@ -211,10 +230,12 @@ namespace TecWare.DE.Server
 		public DECronEngine(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
-			this.cronItemCacheController = new CronItemCacheController(this);
-			this.currentJobs = new DEList<CurrentRunningJob>(this, "tw_cron_running", "Cron running");
+			cronItemCacheController = new CronItemCacheController(this);
+			currentJobs = new DEList<CurrentRunningJob>(this, "tw_cron_running", "Cron running");
 
-			PublishItem(this.currentJobs);
+			PublishItem(currentJobs);
+			PublishDebugInterface();
+			PublishItem(new DEConfigItemPublicAction("resetFailedFlag") { DisplayName = "ResetFailed" });
 
 			// Register Engine
 			var sc = sp.GetService<IServiceContainer>(true);
@@ -417,6 +438,7 @@ namespace TecWare.DE.Server
 				if (index >= 0 && (force || !cronItemCache[index].NextRun.HasValue))
 				{
 					cronItemCache[index].NextRun = next;
+
 					job.NotifyNextRun(next);
 					if (save)
 						SaveNextRuntime();
@@ -482,7 +504,7 @@ namespace TecWare.DE.Server
 			}
 		} // proc StartJob
 
-		public Task ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation)
+		public Task<bool> ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation)
 		{
 			using (currentJobs.EnterWriteLock())
 			{
@@ -496,7 +518,7 @@ namespace TecWare.DE.Server
 							throw new InvalidOperationException(String.Format("Job is blocked (job: {0})", j.Job.DisplayName));
 				}
 
-				Log.Info("jobstart: {0}", job.DisplayName);
+				Log.Debug("jobstart: {0}", job.DisplayName);
 				ClearNextRuntime(job as ICronJobItem);
 				var currentJob = new CurrentRunningJob(this, job, cancellation);
 				currentJobs.Add(currentJob);
@@ -535,8 +557,8 @@ namespace TecWare.DE.Server
 						}
 					}
 					else
-						Log.Info("jobfinish: {0}", name);
-
+						Log.Debug("jobfinish: {0}", name);
+					
 					// calculate next runtime
 					if (jobBound != null && !jobBound.Bound.IsEmpty)
 						UpdateNextRuntime(jobBound, jobBound.Bound.GetNext(DateTime.Now), true, false);
@@ -581,7 +603,7 @@ namespace TecWare.DE.Server
 			{
 				if (cronItemCache != null)
 				{
-					for(var i = 0;i<cronItemCache.Length;i++)
+					for (var i = 0; i < cronItemCache.Length; i++)
 					{
 						if (String.Compare(cronItemCache[i].Job.UniqueName, jobId, StringComparison.OrdinalIgnoreCase) == 0)
 							return cronItemCache[i].Job;
@@ -603,6 +625,24 @@ namespace TecWare.DE.Server
 				return false;
 		} // func ResetNextRuntime
 
+		[LuaMember]
+		public IReadOnlyList<string> GetFailedJobs()
+		{
+			var failedIds = new List<string>();
+			lock (cronItemCache)
+			{
+				if (cronItemCache != null)
+				{
+					for (var i = 0; i < cronItemCache.Length; i++)
+					{
+						if (cronItemCache[i].Job is ICronJobInformation cji && cji.IsFailed)
+							failedIds.Add(cji.UniqueName);
+					}
+				}
+			}
+			return failedIds;
+		} // func GetFailedJobs
+
 		[DEConfigHttpAction("resetJobRuntime", IsSafeCall = true, SecurityToken = SecuritySys)]
 		public XElement HttpResetNextRuntim(string id)
 		{
@@ -613,6 +653,22 @@ namespace TecWare.DE.Server
 				new XElement("reset", ResetNextRuntime(job))
 			);
 		} // func HttpResetNextRuntim
+
+		[DEConfigHttpAction("resetFailedFlag", IsSafeCall = true, SecurityToken = SecuritySys)]
+		public void HttpResetFailedState()
+		{
+			lock (cronItemCache)
+			{
+				if (cronItemCache != null)
+				{
+					for (var i = 0; i < cronItemCache.Length; i++)
+					{
+						if (cronItemCache[i].Job is ICronJobInformation cji)
+							cji.ResetFailed();
+					}
+				}
+			}
+		} // proc HttpResetFailedState
 
 		#endregion
 
@@ -669,12 +725,12 @@ namespace TecWare.DE.Server
 		{
 			cancellationToken = cancellation;
 			cancellation.Register(OnCancel);
-			CallMember("Run", cancellation);
+			CallMember("Run", cancellationToken);
 		} // proc OnRunJob
 
 		private void OnCancel()
 			=> CallMember("Cancel");
-		
+
 		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || GetMemberValue("Cancel", rawGet: true) != null;
 
 		#endregion
@@ -707,7 +763,8 @@ namespace TecWare.DE.Server
 					if (StateRunning != null)
 						StateRunning.Value = c.DisplayName;
 					Log.Info("{0}: started...", c.DisplayName);
-					CronEngine.ExecuteJobAsync(c, cancellation).Wait();
+					if (!CronEngine.ExecuteJobAsync(c, cancellation).Result)
+						OnSetFailed();
 					Log.Info("{0}: finished.", c.DisplayName);
 				}, true
 			);
@@ -734,9 +791,9 @@ namespace TecWare.DE.Server
 
 			using (EnterReadLock())
 			{
-				var tasks = new List<Task>();
+				var tasks = new List<Task<bool>>();
 				Log.Info("Start tasks...");
-				this.WalkChildren<ICronJobExecute>(
+				WalkChildren<ICronJobExecute>(
 					c =>
 					{
 						Log.Info("{0}: Started...", c.DisplayName);
@@ -745,7 +802,14 @@ namespace TecWare.DE.Server
 
 
 				Task.WaitAll(tasks.ToArray(), cancellation);
-				Log.Info("{0}: All tasks finished.");
+				var failed = tasks.Count(t => !t.Result);
+				if (failed > 0)
+				{
+					OnSetFailed();
+					Log.Warn("{0} tasks finished (failed {1}).", tasks.Count,  failed);
+				}
+				else
+					Log.Info("{0} tasks finished.", tasks.Count);
 			}
 		} // proc RunJob
 

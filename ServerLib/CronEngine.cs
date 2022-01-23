@@ -43,8 +43,8 @@ namespace TecWare.DE.Server
 		/// <summary>Executes a job.</summary>
 		/// <param name="job">Job, to execute.</param>
 		/// <param name="cancellation">Cancellation token.</param>
-		/// <returns></returns>
-		Task ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation);
+		/// <returns><c>true</c>, if the job finished succesfull.</returns>
+		Task<bool> ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation);
 
 		/// <summary>Update Timestamp for an job.</summary>
 		/// <param name="job"></param>
@@ -113,10 +113,29 @@ namespace TecWare.DE.Server
 
 	#endregion
 
+	#region -- interface ICronJobInformation ------------------------------------------
+
+	/// <summary>Information about the cron state.</summary>
+	public interface ICronJobInformation : ICronJobItem
+	{
+		/// <summary>Reset the failed flag.</summary>
+		void ResetFailed();
+
+		/// <summary></summary>
+		DateTime? LastRun { get; }
+		/// <summary></summary>
+		double LastDuration { get; }
+
+		/// <summary>Was the job failed.</summary>
+		bool IsFailed { get; }
+	} // interface ICronJobInformation
+
+	#endregion
+
 	#region -- class CronJobItem ------------------------------------------------------
 
 	/// <summary>Basic implemenation of an cron item.</summary>
-	public abstract class CronJobItem : DEConfigLogItem, ICronJobItem, ICronJobCancellation
+	public abstract class CronJobItem : DEConfigLogItem, ICronJobItem, ICronJobCancellation, ICronJobInformation
 	{
 		/// <summary></summary>
 		public const string JobCategory = "Job";
@@ -126,9 +145,11 @@ namespace TecWare.DE.Server
 		private string[] runAfterJob = null;
 		private TimeSpan? runTimeSlice = null;
 
+		private readonly SimpleConfigItemProperty<DateTime?> propertyLastRun;
 		private readonly SimpleConfigItemProperty<DateTime?> propertyNextRun;
 		private readonly SimpleConfigItemProperty<double> propertyLastTime;
 		private readonly SimpleConfigItemProperty<string> propertyIsRunning;
+		private readonly SimpleConfigItemProperty<bool> propertyIsFailed;
 
 		#region -- Ctor/Dtor/Config ---------------------------------------------------
 
@@ -140,9 +161,11 @@ namespace TecWare.DE.Server
 		{
 			this.cronEngine = new Lazy<IDECronEngine>(() => this.GetService<IDECronEngine>(false));
 
-			propertyNextRun = new SimpleConfigItemProperty<DateTime?>(this, "tw_cron_nextrun", "Next run", JobCategory, "Zeitpunkt des nächsten durchlaufs.", "{0:t}", null);
+			propertyLastRun = new SimpleConfigItemProperty<DateTime?>(this, "tw_cron_lastrun", "Last run", JobCategory, "Last time the job was executed", "{0:t}", null);
+			propertyNextRun = new SimpleConfigItemProperty<DateTime?>(this, "tw_cron_nextrun", "Next run", JobCategory, "Time the job is scheduled for the next run.", "{0:t}", null);
 			propertyLastTime = new SimpleConfigItemProperty<double>(this, "tw_cron_duration", "Last duration", JobCategory, "Zuletzt benötigte Zeit für den Durchlauf", "{0:N1} min", 0.0);
 			propertyIsRunning = new SimpleConfigItemProperty<string>(this, "tw_cron_isrunning", "Is running", JobCategory, "Status der aktuellen Aufgabe.", null, "nein");
+			propertyIsFailed = new SimpleConfigItemProperty<bool>(this, "tw_cron_isfailed", "Is failed", JobCategory, "Is the job failed.", null, false);
 
 			PublishItem(new DEConfigItemPublicAction("jobstart") { DisplayName = "Start" });
 		} // ctor
@@ -153,6 +176,7 @@ namespace TecWare.DE.Server
 		{
 			if (disposing)
 			{
+				propertyLastRun?.Dispose();
 				propertyNextRun?.Dispose();
 				propertyLastTime?.Dispose();
 				propertyIsRunning?.Dispose();
@@ -219,9 +243,15 @@ namespace TecWare.DE.Server
 		{
 			var sw = Stopwatch.StartNew();
 			propertyIsRunning.Value = "yes";
+			propertyLastRun.Value = DateTime.Now;
 			try
 			{
 				OnRunJob(cancellation);
+			}
+			catch
+			{
+				OnSetFailed();
+				throw;
 			}
 			finally
 			{
@@ -266,12 +296,23 @@ namespace TecWare.DE.Server
 		/// <summary>Execute more than one job.</summary>
 		/// <param name="job"></param>
 		/// <param name="cancellation"></param>
-		protected async Task ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation)
+		protected Task<bool> ExecuteJobAsync(ICronJobExecute job, CancellationToken cancellation)
 		{
 			CheckCronEngine();
 
-			await CronEngine.ExecuteJobAsync(job, cancellation);
+			return CronEngine.ExecuteJobAsync(job, cancellation);
 		} // proc ExecuteJobAsync
+
+		/// <summary>Is called if the job is failed.</summary>
+		protected virtual void OnSetFailed()
+			=> propertyIsFailed.Value = true;
+
+		/// <summary>Is called to reset the failed state.</summary>
+		protected virtual void OnResetFailed()
+			=> propertyIsFailed.Value = false;
+
+		void ICronJobInformation.ResetFailed()
+			=> OnResetFailed();
 
 		#endregion
 
@@ -282,10 +323,14 @@ namespace TecWare.DE.Server
 		/// <summary>Is cancellation supported. (default: false)</summary>
 		public virtual bool IsSupportCancelation => RunTimeSlice.HasValue;
 
-		/// <summary></summary>
+		/// <summary>Maximal duration fo the task.</summary>
 		public virtual TimeSpan? RunTimeSlice => runTimeSlice;
-		/// <summary></summary>
+		/// <summary>Access to the cron-runtime.</summary>
 		public IDECronEngine CronEngine => cronEngine.Value;
+
+		DateTime? ICronJobInformation.LastRun => propertyLastRun.Value;
+		double ICronJobInformation.LastDuration => propertyLastTime.Value;
+		bool ICronJobInformation.IsFailed => propertyIsFailed.Value;
 
 		/// <summary>Zugriff auf den Status.</summary>
 		protected SimpleConfigItemProperty<string> StateRunning => propertyIsRunning;
