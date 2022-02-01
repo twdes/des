@@ -654,8 +654,11 @@ namespace TecWare.DE.Server
 			);
 		} // func HttpResetNextRuntim
 
-		[DEConfigHttpAction("resetFailedFlag", IsSafeCall = true, SecurityToken = SecuritySys)]
-		public void HttpResetFailedState()
+		[
+		LuaMember,
+		DEConfigHttpAction("resetFailedFlag", IsSafeCall = true, SecurityToken = SecuritySys)
+		]
+		public void ResetFailedState()
 		{
 			lock (cronItemCache)
 			{

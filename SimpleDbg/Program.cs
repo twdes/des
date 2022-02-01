@@ -1755,7 +1755,7 @@ namespace TecWare.DE.Server
 		} // WriteLastExceptionCore
 
 		[InteractiveCommand("lastex", HelpText = "Detail for the last remote exception.")]
-		private static void WriteLastException()
+		internal static void WriteLastException()
 			=> WriteLastExceptionCore(lastRemoteException);
 
 		#endregion
