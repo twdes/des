@@ -123,7 +123,7 @@ namespace TecWare.DE.Server
 			const string sampleRead04 = "1;\"A\"B\";3";
 
 			var row = 0;
-			using (var r = new TextCsvReader(new StringReader(sampleRead04), new TextCsvSettings() { }))
+			using (var r = new TextCsvReader(new StringReader(sampleRead04), new TextCsvSettings() { Quotation = CsvQuotation.NoneRfc }))
 			{
 				while (r.ReadRow())
 				{
@@ -138,10 +138,30 @@ namespace TecWare.DE.Server
 			}
 		}
 
+		[TestMethod]
+		public void TestRead06()
+		{
+			const string sampleRead04 = "1;\"A\"\";3";
+
+			var row = 0;
+			using (var r = new TextCsvReader(new StringReader(sampleRead04), new TextCsvSettings()  { Quotation = CsvQuotation.NoneRfc  }))
+			{
+				while (r.ReadRow())
+				{
+					Assert.AreEqual(3, r.Count);
+					Assert.AreEqual("1", r[0]);
+					Assert.AreEqual("A\"", r[1]);
+					Assert.AreEqual("3", r[2]);
+					Console.WriteLine(r[1]);
+					row++;
+				}
+				Assert.AreEqual(1, row);
+			}
+		}
 
 		// TestMethodes for TextFixedWriter
 		[TestMethod]
-		public void TryTextFixedWriter01()
+		public void TestTextFixedWriter01()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -154,7 +174,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextFixedWriter02()
+		public void TestTextFixedWriter02()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -167,7 +187,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextFixedWriter03()
+		public void TestTextFixedWriter03()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -180,7 +200,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextFixedWriter04()
+		public void TestTextFixedWriter04()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -193,7 +213,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextFixedWriter05()
+		public void TestTextFixedWriter05()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -206,7 +226,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextFixedWriter06()
+		public void TestTextFixedWriter06()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -219,7 +239,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextFixedWriter07()
+		public void TestTextFixedWriter07()
 		{
 			// HeaderRow > StartRow
 			using (var sw = new StringWriter())
@@ -237,7 +257,7 @@ namespace TecWare.DE.Server
 
 		//Forced
 		[TestMethod]
-		public void TryTextCsvWriter01()
+		public void TestTextCsvWriter01()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -250,7 +270,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter02()
+		public void TestTextCsvWriter02()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -263,7 +283,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter03()
+		public void TestTextCsvWriter03()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -276,7 +296,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter04()
+		public void TestTextCsvWriter04()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -290,7 +310,7 @@ namespace TecWare.DE.Server
 
 		// ForceText
 		[TestMethod]
-		public void TryTextCsvWriter05()
+		public void TestTextCsvWriter05()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -303,7 +323,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter06()
+		public void TestTextCsvWriter06()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -316,7 +336,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter07()
+		public void TestTextCsvWriter07()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -331,7 +351,7 @@ namespace TecWare.DE.Server
 
 		//None
 		[TestMethod]
-		public void TryTextCsvWriter08()
+		public void TestTextCsvWriter08()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -344,7 +364,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter09()
+		public void TestTextCsvWriter09()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -359,7 +379,7 @@ namespace TecWare.DE.Server
 
 		//Normal
 		[TestMethod]
-		public void TryTextCsvWriter10()
+		public void TestTextCsvWriter10()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -372,7 +392,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter11()
+		public void TestTextCsvWriter11()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -385,7 +405,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryTextCsvWriter12()
+		public void TestTextCsvWriter12()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -422,7 +442,7 @@ namespace TecWare.DE.Server
 
 
 		[TestMethod]
-		public void TryDataRowWriter01()
+		public void TestDataRowWriter01()
 		{
 
 			using (var sw = new StringWriter())
@@ -448,7 +468,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter02()
+		public void TestDataRowWriter02()
 		{
 			// mehr Felder als Columns
 			using (var sw = new StringWriter())
@@ -474,7 +494,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter03()
+		public void TestDataRowWriter03()
 		{
 			//null-values
 
@@ -501,7 +521,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter04()
+		public void TestDataRowWriter04()
 		{
 			//wrong Datatype
 
@@ -528,7 +548,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter05()
+		public void TestDataRowWriter05()
 		{
 			//Sonderzeichen
 			using (var sw = new StringWriter())
@@ -556,7 +576,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter06()
+		public void TestDataRowWriter06()
 		{
 			//mit TextFixedSettings
 			using (var sw = new StringWriter())
@@ -582,7 +602,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter07()
+		public void TestDataRowWriter07()
 		{
 
 			using (var sw = new StringWriter())
@@ -608,7 +628,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter08()
+		public void TestDataRowWriter08()
 		{
 			using (var sw = new StringWriter())
 			{
@@ -633,7 +653,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter09()
+		public void TestDataRowWriter09()
 		{
 
 			using (var sw = new StringWriter())
@@ -659,7 +679,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter10()
+		public void TestDataRowWriter10()
 		{
 
 			using (var sw = new StringWriter())
@@ -679,7 +699,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter11()
+		public void TestDataRowWriter11()
 		{
 
 			using (var sw = new StringWriter())
@@ -701,7 +721,7 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
-		public void TryDataRowWriter12()
+		public void TestDataRowWriter12()
 		{
 			// HeaderRow > StartRow
 			using (var sw = new StringWriter())
