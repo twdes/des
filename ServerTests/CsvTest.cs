@@ -35,7 +35,7 @@ namespace TecWare.DE.Server
 				while (r.ReadRow())
 				{
 					Console.WriteLine("{0}, {1}", r[0], r[1]);
-					Assert.AreEqual(r.Count, 2);
+					Assert.AreEqual(2, r.Count);
 					row++;
 				}
 				Assert.AreEqual(3, row);
@@ -116,6 +116,29 @@ namespace TecWare.DE.Server
 				Assert.AreEqual(1, row);
 			}
 		}
+
+		[TestMethod]
+		public void TestRead05()
+		{
+			const string sampleRead04 = "1;\"A\"B\";3";
+
+			var row = 0;
+			using (var r = new TextCsvReader(new StringReader(sampleRead04), new TextCsvSettings() { }))
+			{
+				while (r.ReadRow())
+				{
+					Assert.AreEqual(3, r.Count);
+					Assert.AreEqual("1", r[0]);
+					Assert.AreEqual("A\"B", r[1]);
+					Assert.AreEqual("3", r[2]);
+					Console.WriteLine(r[1]);
+					row++;
+				}
+				Assert.AreEqual(1, row);
+			}
+		}
+
+
 		// TestMethodes for TextFixedWriter
 		[TestMethod]
 		public void TryTextFixedWriter01()
@@ -187,7 +210,7 @@ namespace TecWare.DE.Server
 		{
 			using (var sw = new StringWriter())
 			{
-				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 5, 5 }}))
+				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 5, 5 } }))
 				{
 					w.WriteRow(new string[] { "zu", "viele", "Rows" });
 				}
@@ -201,7 +224,7 @@ namespace TecWare.DE.Server
 			// HeaderRow > StartRow
 			using (var sw = new StringWriter())
 			{
-				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 5 }, HeaderRow = 2, StartRow= 1 }))
+				using (var w = new TextFixedWriter(sw, new TextFixedSettings() { Lengths = new int[] { 5 }, HeaderRow = 2, StartRow = 1 }))
 				{
 					w.WriteRow(new string[] { "hi" });
 				}
@@ -368,7 +391,7 @@ namespace TecWare.DE.Server
 			{
 				using (var w = new TextCsvWriter(sw, new TextCsvSettings() { Quotation = CsvQuotation.Forced, Quote = '\"', Delemiter = ',' }))
 				{
-					w.WriteRow(new string[] {null});
+					w.WriteRow(new string[] { null });
 					Assert.AreEqual("\"\"\r\n", w.BaseWriter.ToString());
 				}
 			}
@@ -405,7 +428,7 @@ namespace TecWare.DE.Server
 			using (var sw = new StringWriter())
 			{
 				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1 }, col))
-                {
+				{
 					w.Write(
 						new IDataRow[]
 						{
@@ -414,7 +437,7 @@ namespace TecWare.DE.Server
 							new SimpleDataRow(new object[]{ "value3", 3 }, col)
 						}
 					);
-					
+
 					var text = sw.ToString();
 					Assert.AreEqual("String;Int\r\n" +
 						"value1;1\r\n" +
@@ -430,7 +453,7 @@ namespace TecWare.DE.Server
 			// mehr Felder als Columns
 			using (var sw = new StringWriter())
 			{
-				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation= CsvQuotation.Normal }, col))
+				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation = CsvQuotation.Normal }, col))
 				{
 					w.Write(
 						new IDataRow[]
@@ -484,7 +507,7 @@ namespace TecWare.DE.Server
 
 			using (var sw = new StringWriter())
 			{
-				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation= CsvQuotation.None }, col))
+				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation = CsvQuotation.None }, col))
 				{
 					w.Write(
 						new IDataRow[]
@@ -496,7 +519,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("\"String\";Int\r\n" +
+					Assert.AreEqual("String;Int\r\n" +
 						"1;1\r\n" +
 						"value2;intvalue\r\n" +
 						"value3;3\r\n", text);
@@ -523,7 +546,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;!§$%&/()=*+'#><|\r\n" +
+					Assert.AreEqual("\"\"\"String\"\"\";!§$%&/()=*+'#><|\r\n" +
 						"äüö;-1\r\n" +
 						"@><;2\r\n" +
 						"*'#;3\r\n" +
@@ -538,21 +561,21 @@ namespace TecWare.DE.Server
 			//mit TextFixedSettings
 			using (var sw = new StringWriter())
 			{
-				using (var w = new TextDataRowWriter(sw, new TextFixedSettings() { Padding = ' ', Lengths = new int[] {10,3 }, HeaderRow= 1 }, col))
+				using (var w = new TextDataRowWriter(sw, new TextFixedSettings() { Padding = ' ', Lengths = new int[] { 10, 3 }, HeaderRow = -1 }, col))
 				{
 					w.Write(
 						new IDataRow[]
 						{
-							new SimpleDataRow(new object[]{ "value1", 123 }, col),
-							new SimpleDataRow(new object[]{ "value2", 234 }, col),
-							new SimpleDataRow(new object[]{ "value3", 345 }, col)
+							new SimpleDataRow(new object[] { "value1", 123 }, col),
+							new SimpleDataRow(new object[] { "value2", 234 }, col),
+							new SimpleDataRow(new object[] { "\"value3\"", 345 }, col)
 						}
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String    Int\r\n" +
-						"value1  123\r\n" +
-						"value2  234\r\n" +
+					Assert.AreEqual(
+						"value1    123\r\n" +
+						"value2    234\r\n" +
 						"\"value3\"  345\r\n", text);
 				}
 			}
@@ -564,7 +587,7 @@ namespace TecWare.DE.Server
 
 			using (var sw = new StringWriter())
 			{
-				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation= CsvQuotation.Forced }, col))
+				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation = CsvQuotation.Forced }, col))
 				{
 					w.Write(
 						new IDataRow[]
@@ -587,7 +610,6 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void TryDataRowWriter08()
 		{
-
 			using (var sw = new StringWriter())
 			{
 				using (var w = new TextDataRowWriter(sw, new TextCsvSettings() { HeaderRow = 0, StartRow = 1, Quotation = CsvQuotation.ForceText }, col))
@@ -595,9 +617,9 @@ namespace TecWare.DE.Server
 					w.Write(
 						new IDataRow[]
 						{
-							new SimpleDataRow(new object[]{ "value1", 1 }, col),
-							new SimpleDataRow(new object[]{ "value2", 2 }, col),
-							new SimpleDataRow(new object[]{ "value3", 3 }, col)
+							new SimpleDataRow(new object[] { "value1", 1 }, col),
+							new SimpleDataRow(new object[] { "value2", 2 }, col),
+							new SimpleDataRow(new object[] { "value3", 3 }, col)
 						}
 					);
 
