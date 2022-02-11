@@ -32,6 +32,17 @@ using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Http
 {
+	#region -- interface IDEHttpPreAuthentificate -------------------------------------
+
+	/// <summary></summary>
+	public interface IDEHttpPreAuthentificate : IDisposable
+	{
+		/// <summary>Access token for the application.</summary>
+		string AccessToken { get; }
+	} // interface IDEHttpPreAuthentificate
+
+	#endregion
+
 	#region -- interface IDEHttpServer ------------------------------------------------
 
 	/// <summary></summary>
@@ -43,6 +54,12 @@ namespace TecWare.DE.Server.Http
 		/// <summary></summary>
 		/// <param name="protocol"></param>
 		void UnregisterWebSocketProtocol(IDEWebSocketProtocol protocol);
+
+		/// <summary>A incoming request gets the user context.</summary>
+		/// <param name="user">User context, that is used for this authentification.</param>
+		/// <param name="remoteHost">Access is expected from this ip. <c>null</c> for localhost only.</param>
+		/// <returns></returns>
+		IDEHttpPreAuthentificate PreAuthentificateByToken(IDEAuthentificatedUser user, IPAddress remoteHost = null);
 
 		/// <summary>Fragt den Cache ab</summary>
 		/// <param name="cacheId">Eindeutige Id des Cache-Eintrages</param>

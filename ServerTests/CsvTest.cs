@@ -141,7 +141,7 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void TestRead06()
 		{
-			const string sampleRead04 = "1;\"A\"\";3";
+			const string sampleRead04 = "1;\"A\"\";\"\"";
 
 			var row = 0;
 			using (var r = new TextCsvReader(new StringReader(sampleRead04), new TextCsvSettings()  { Quotation = CsvQuotation.NoneRfc  }))
@@ -151,7 +151,7 @@ namespace TecWare.DE.Server
 					Assert.AreEqual(3, r.Count);
 					Assert.AreEqual("1", r[0]);
 					Assert.AreEqual("A\"", r[1]);
-					Assert.AreEqual("3", r[2]);
+					Assert.AreEqual("", r[2]);
 					Console.WriteLine(r[1]);
 					row++;
 				}

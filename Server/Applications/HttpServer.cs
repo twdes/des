@@ -1140,6 +1140,7 @@ namespace TecWare.DE.Server
 		private readonly HttpCacheItem[] cacheItems = new HttpCacheItem[256];
 		private CacheItemListController cacheItemController;
 		private readonly DEDictionary<string, ClientInfo> clientInfos;
+		private readonly List<WeakReference<PreAuthentificateRule>> preAuthentificateRules = new List<WeakReference<PreAuthentificateRule>>();
 
 		private DEList<IDEWebSocketProtocol> webSocketProtocols;
 
@@ -1470,14 +1471,129 @@ namespace TecWare.DE.Server
 
 		#endregion
 
+		#region -- PreAuthentificate --------------------------------------------------
+
+		#region -- class PreAuthentificateRule ----------------------------------------
+
+		private sealed class PreAuthentificateRule : IDEHttpPreAuthentificate
+		{
+			private static readonly Random random = new Random();
+
+			private readonly DEHttpServer httpServer;
+			private readonly IDEAuthentificatedUser user;
+			private readonly IPAddress remoteHost;
+			private readonly string accessToken;
+
+			public PreAuthentificateRule(DEHttpServer httpServer, IDEAuthentificatedUser user, IPAddress remoteHost)
+			{
+				this.httpServer = httpServer ?? throw new ArgumentNullException(nameof(httpServer));
+				this.user = user ?? throw new ArgumentNullException(nameof(user));
+				this.remoteHost = remoteHost;
+
+				accessToken = GenerateAccessToken();
+			} // ctor
+
+			private static string GenerateAccessToken()
+			{
+				var accessTokenBytes = new byte[256];
+				random.NextBytes(accessTokenBytes);
+				return Convert.ToBase64String(accessTokenBytes);
+			} // func GenerateAccessToken
+
+			public void Dispose()
+				=> httpServer.RemovePreAuthentification(this);
+
+			public bool GrantAccess(HttpListenerRequest r, string testAccessToken)
+			{
+				return IsLocalHostOnly
+					? r.IsLocal && accessToken == testAccessToken
+					: r.RemoteEndPoint != null && Equals(r.RemoteEndPoint.Address, remoteHost) && accessToken == testAccessToken;
+			} // func GrantAccess
+
+			public string AccessToken => accessToken;
+			public IDEAuthentificatedUser User => user;
+			public IPAddress RemoteHost => remoteHost;
+			public bool IsLocalHostOnly => remoteHost == null;
+		} // class PreAuthentificateRule
+
+		#endregion
+
+		private PreAuthentificateRule AddPreAuthentification(PreAuthentificateRule rule)
+		{
+			lock (preAuthentificateRules)
+			{
+				for (var i = 0; i < preAuthentificateRules.Count; i++)
+				{
+					if (preAuthentificateRules[i] == null || !preAuthentificateRules[i].TryGetTarget(out _))
+					{
+						preAuthentificateRules[i] = new WeakReference<PreAuthentificateRule>(rule);
+						return rule;
+					}
+				}
+				preAuthentificateRules.Add(new WeakReference<PreAuthentificateRule>(rule));
+				return rule;
+			}
+		} // proc AddPreAuthentification
+
+		private void RemovePreAuthentification(PreAuthentificateRule rule)
+		{
+			lock (preAuthentificateRules)
+			{
+				var isLast = true;
+
+				for (var i = preAuthentificateRules.Count - 1; i >= 0; i--)
+				{
+					if (preAuthentificateRules[i] == null
+						|| !preAuthentificateRules[i].TryGetTarget(out var r)
+						|| ReferenceEquals(r, rule))
+					{
+						if (isLast)
+							preAuthentificateRules.RemoveAt(i);
+						else
+							preAuthentificateRules[i] = null;
+					}
+					else
+						isLast = false;
+				}
+			}
+		} // proc RemovePreAuthentification
+
+		IDEHttpPreAuthentificate IDEHttpServer.PreAuthentificateByToken(IDEAuthentificatedUser user, IPAddress remoteHost)
+			=> AddPreAuthentification(new PreAuthentificateRule(this, user, remoteHost));
+
+		private bool TryGetPreAuthentificatedUser(HttpListenerRequest r, out IDEAuthentificatedUser user)
+		{
+			user = null;
+
+			var accessToken = r.Headers["des-access-token"];
+			if (String.IsNullOrEmpty(accessToken))
+				return false;
+
+			lock (preAuthentificateRules)
+			{
+				for (var i = 0; i < preAuthentificateRules.Count; i++)
+				{
+					var wrule = preAuthentificateRules[i];
+					if (wrule != null && wrule.TryGetTarget(out var rule) && rule.GrantAccess(r, accessToken))
+					{
+						user = rule.User;
+						return true;
+					}
+				}
+				return false;
+			}
+		} // func TryGetPreAuthentificatedUser
+
+		#endregion
+
 		#region -- ProcessRequest -----------------------------------------------------
 
 		private AuthenticationSchemes GetAuthenticationScheme(HttpListenerRequest r)
 		{
 			var prefixScheme = FindPrefix(prefixAuthentificationSchemes, r.Url, true);
-			if (prefixScheme == null)
+			if (prefixScheme == null || TryGetPreAuthentificatedUser(r, out _))
 				return AuthenticationSchemes.Anonymous;
-			else
+			else 
 			{
 				var allowMultipleAuthentification = r.Headers["des-multiple-authentifications"];
 				if (Boolean.TryParse(allowMultipleAuthentification, out var t) && t)
@@ -1607,8 +1723,12 @@ namespace TecWare.DE.Server
 					// update client infos
 					UpdateClientInfos(ctx.Request);
 
-					// authentificate user
-					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
+					// is this request expected, an pre authentificated. This mode is use for redirected third party applications
+					if (TryGetPreAuthentificatedUser(context, out var user))
+						context.SetUser(user);
+					else // authentificate user
+						await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
+
 					if (httpAuthentification && !hasPossibleAnon && context.TryDemandUser() == null) // we need a user, skip exception, for debugging reasons
 					{
 						ctx.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
