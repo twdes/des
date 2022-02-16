@@ -1724,7 +1724,7 @@ namespace TecWare.DE.Server
 					UpdateClientInfos(ctx.Request);
 
 					// is this request expected, an pre authentificated. This mode is use for redirected third party applications
-					if (TryGetPreAuthentificatedUser(context, out var user))
+					if (TryGetPreAuthentificatedUser(ctx.Request, out var user))
 						context.SetUser(user);
 					else // authentificate user
 						await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));

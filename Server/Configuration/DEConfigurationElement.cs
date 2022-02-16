@@ -46,7 +46,7 @@ namespace TecWare.DE.Server.Configuration
 				case "language":
 					return typeof(CultureInfo);
 				case "PathType":
-					return typeof(DirectoryInfo);
+					return typeof(FileSystemInfo);
 				case "FileSize":
 					return typeof(FileSize);
 				case "PasswordType":

@@ -128,6 +128,18 @@ namespace TecWare.DE.Server.Configuration
 			this.element = element;
 		} // ctor
 
+		private static FileSystemInfo GetFileSystemInfo(string value)
+		{
+			if (Directory.Exists(value))
+				return new DirectoryInfo(value);
+			else if (File.Exists(value))
+				return new FileInfo(value);
+			else if (Path.GetFileName(value).IndexOf('.') >= 0)
+				return new FileInfo(value);
+			else
+				return new DirectoryInfo(value);
+		} // func GetFileSystemInfo
+
 		private static object GetConfigurationValueSingle(IDEConfigurationValue attr, string value)
 		{
 			var type = attr.Type;
@@ -155,11 +167,11 @@ namespace TecWare.DE.Server.Configuration
 					? CultureInfo.GetCultureInfo(attr.DefaultValue)
 					: CultureInfo.GetCultureInfo(value);
 			}
-			else if (type == typeof(DirectoryInfo))
+			else if (type == typeof(FileSystemInfo))
 			{
 				return String.IsNullOrEmpty(value)
 					? null
-					: new DirectoryInfo(value);
+					: GetFileSystemInfo(value);
 			}
 			else if (type == typeof(SecureString))
 			{

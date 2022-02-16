@@ -37,6 +37,8 @@ namespace TecWare.DE.Server.Http
 	/// <summary></summary>
 	public interface IDEHttpPreAuthentificate : IDisposable
 	{
+		/// <summary>User for authentification</summary>
+		IDEAuthentificatedUser User { get; }
 		/// <summary>Access token for the application.</summary>
 		string AccessToken { get; }
 	} // interface IDEHttpPreAuthentificate
