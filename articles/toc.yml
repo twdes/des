@@ -1,8 +1,0 @@
-- name: Users Manual
-  href: usersmanual/toc.yml
-- name: Schemareference
-  href: ../xsd-reference/toc.yml
-- name: Codereference
-  href: ../code-reference/toc.yml
-- name: dieses Handbuch als PDF herunterladen
-  href: ~/ressources/des.pdf

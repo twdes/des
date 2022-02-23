@@ -70,18 +70,18 @@ namespace TecWare.DE.Server
 		public DEConfigurationException(XObject x, string message, Exception innerException = null)
 			: base(message, innerException)
 		{
-			this.sourceUri = x.BaseUri;
+			sourceUri = x?.BaseUri;
 
 			var lineInfo = (IXmlLineInfo)x;
 			if (lineInfo.HasLineInfo())
 			{
-				this.lineNumber = lineInfo.LineNumber;
-				this.linePosition = lineInfo.LinePosition;
+				lineNumber = lineInfo.LineNumber;
+				linePosition = lineInfo.LinePosition;
 			}
 			else
 			{
-				this.lineNumber = -1;
-				this.linePosition = -1;
+				lineNumber = -1;
+				linePosition = -1;
 			}
 		} // ctor
 
@@ -92,9 +92,9 @@ namespace TecWare.DE.Server
 		public DEConfigurationException(XmlSchemaObject x, string message, Exception innerException = null)
 			: base(message, innerException)
 		{
-			this.sourceUri = DEConfigItem.GetSourceUri(x);
-			this.lineNumber = x.LineNumber;
-			this.linePosition = x.LinePosition;
+			sourceUri = DEConfigItem.GetSourceUri(x);
+			lineNumber = x.LineNumber;
+			linePosition = x.LinePosition;
 		} // ctor
 
 		/// <summary>Position an der der Fehler entdeckt wurde</summary>
