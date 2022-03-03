@@ -666,7 +666,7 @@ namespace TecWare.DE.Server.Http
 								o = tr.ReadToEnd();
 						}
 						else
-							o = src.ReadInArray();
+							o = src.ReadInArray() ?? Array.Empty<byte>();
 
 						// write the cache item
 						http?.UpdateWebCache(cacheId, o);

@@ -14,10 +14,12 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using TecWare.DE.Server.Http;
 
 namespace TecWare.DE.Stuff
 {
@@ -64,7 +66,8 @@ namespace TecWare.DE.Stuff
 						value = Environment.GetEnvironmentVariable(variableName);
 
 					return value;
-        });
+				}
+			);
 		} // func GetEnvironmentPath
 
 		/// <summary>Get the directory of the current xml-node.</summary>
@@ -88,5 +91,17 @@ namespace TecWare.DE.Stuff
 
 			return Path.GetFullPath(Path.Combine(GetDirectoryName(x), filename));
 		} // func GetFileName
+
+		/// <summary></summary>
+		/// <param name="r"></param>
+		/// <returns></returns>
+		public static IEnumerable<PropertyValue> ToProperties(this IDEWebRequestScope r)
+		{
+			foreach (var parameterName in r.ParameterNames)
+			{
+				if (r.TryGetProperty(parameterName, out var v))
+					yield return new PropertyValue(parameterName, v);
+			}
+		} // func ToProperties
 	} // class ProcsDE
 }
