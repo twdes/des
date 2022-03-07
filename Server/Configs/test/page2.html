@@ -11,7 +11,7 @@ local lineCount : int = l or 10;
     <h1>Hello World</h1>
     <ul>
         <% for i = 1,lineCount,1 do %>
-        <li>Test <%=i::00%></li>
+        <% printTemplate("Templ.html", { i = i }); %>
         <%end;%>
     </ul>
 </body>

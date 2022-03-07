@@ -204,6 +204,8 @@ namespace TecWare.DE.Server.Configuration
 		public static readonly XName xnLuaCronJob = MainNamespace + "luaCronJob";
 		public static readonly XName xnProcess = MainNamespace + "process";
 		public static readonly XName xnProxy = MainNamespace + "proxy";
+		public static readonly XName xnProxyRedirect = MainNamespace + "redirect";
+		public static readonly XName xnProxyRewrite = MainNamespace + "rewrite";
 		public static readonly XName xnDirectoryListener = MainNamespace + "directoryListener";
 
 		public static readonly XName xnLuaConfigItem = MainNamespace + "configItem";

@@ -14,11 +14,21 @@
 //
 #endregion
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using TecWare.DE.Networking;
+using TecWare.DE.Server.Configuration;
 using TecWare.DE.Server.Http;
 using TecWare.DE.Stuff;
 
@@ -26,123 +36,471 @@ namespace TecWare.DE.Server
 {
 	internal class ProxyItem : DEConfigItem, IHttpWorker
 	{
+		#region -- class RewriteRule --------------------------------------------------
+
+		private abstract class RewriteRule
+		{
+			private readonly string id;
+			private readonly Predicate<string> mediaTypeFilter;
+
+			protected RewriteRule(string id, Predicate<string> mediaTypeFilter)
+			{
+				this.id = id ?? throw new ArgumentNullException(nameof(id));
+				this.mediaTypeFilter = mediaTypeFilter ?? throw new ArgumentNullException(nameof(mediaTypeFilter));
+			} // ctor
+
+			public bool IsMatch(string mediaType)
+				=> mediaTypeFilter(mediaType);
+
+			public abstract string TransformLine(string line);
+
+			public string Id => id;
+		} // class RewriteRule
+
+		#endregion
+
+		#region -- class RegexRewriteRule ---------------------------------------------
+
+		private sealed class RegexRewriteRule : RewriteRule
+		{
+			private readonly Regex regex;
+			private readonly string replacement;
+
+			public RegexRewriteRule(string id, Predicate<string> mediaTypeFilter, Regex regex, string replacement)
+				: base(id, mediaTypeFilter)
+			{
+				this.regex = regex ?? throw new ArgumentNullException(nameof(regex));
+				this.replacement = replacement ?? throw new ArgumentNullException(nameof(replacement));
+			} // ctor
+
+			public override string TransformLine(string line)
+				=> regex.Replace(line, replacement);
+		} // class RegexRewriteRule
+
+		#endregion
+
+		#region -- class RedirectRule -------------------------------------------------
+
+		private abstract class RedirectRule
+		{
+			private readonly string id;
+			private readonly List<RewriteRule> rewriteRules = new List<RewriteRule>();
+
+			protected RedirectRule(string id)
+			{
+				this.id = id ?? throw new ArgumentNullException(nameof(id));
+			} // ctor
+
+			public void AppendRewrite(RewriteRule rule)
+				=> rewriteRules.Add(rule);
+
+			public virtual bool TryTransform(string sourceUrl, out string targetUrl)
+			{
+				targetUrl = null;
+				return false;
+			} // func TryTransform
+
+			public string Id => id;
+
+			public IEnumerable<RewriteRule> Rewrites
+				=> rewriteRules;
+		} // class RedirectRule
+
+		#endregion
+
+		#region -- class RedirectRule -------------------------------------------------
+
+		private sealed class RedirectRegexRule : RedirectRule
+		{
+			private readonly Regex urlFilter;
+			private readonly string replacement;
+
+			public RedirectRegexRule(string id, Regex urlFilter, string replacement)
+				: base(id)
+			{
+				this.urlFilter = urlFilter ?? throw new ArgumentNullException(nameof(urlFilter));
+				this.replacement = replacement;
+			} // ctor
+
+			public override bool TryTransform(string sourceUrl, out string targetUrl)
+			{
+				var m = urlFilter.Match(sourceUrl);
+				if (m.Success)
+				{
+					if (replacement == null)
+						targetUrl = null;
+					else
+						targetUrl = urlFilter.Replace(sourceUrl, replacement);
+					return true;
+				}
+				else
+					return base.TryTransform(sourceUrl, out targetUrl);
+			} // func TryTransform
+		} // class RedirectRegexRule
+
+		#endregion
+
+		#region -- class RedirectSimpleRule -------------------------------------------
+
+		private sealed class RedirectSimpleRule : RedirectRule
+		{
+			private readonly Predicate<string> urlFilter;
+			private readonly bool allow;
+
+			public RedirectSimpleRule(string id, Predicate<string> urlFilter, bool allow)
+				: base(id)
+			{
+				this.urlFilter = urlFilter ?? throw new ArgumentNullException(nameof(urlFilter));
+				this.allow = allow;
+			} // ctor
+
+			public override bool TryTransform(string sourceUrl, out string targetUrl)
+			{
+				if (urlFilter(sourceUrl))
+				{
+					targetUrl = allow ? sourceUrl : null;
+					return true;
+				}
+				else
+					return base.TryTransform(sourceUrl, out targetUrl);
+			} // func TryTransform
+		} // class RedirectSimpleRule
+
+		#endregion
+
 		private HttpClient client = null;
+		private bool defaultAllow = false;
+		private RedirectRule[] redirectRules = Array.Empty<RedirectRule>();
 
 		#region -- Ctor/Dtor/Config ---------------------------------------------------
 
-		public ProxyItem(IServiceProvider sp, string name) 
+		public ProxyItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
 		} // ctor
 
+		private RedirectRule ParseRedirectRule(XConfigNode cur)
+		{
+			var id = cur.GetAttribute<string>("id");
+			try
+			{
+				var url = cur.GetAttribute<string>("url");
+				var allowInSearch = cur.GetAttribute<bool>("allowInSearch");
+				var allow = cur.GetAttribute<bool>("allow");
+				var replacement = cur.GetAttribute<string>("urlReplacement");
+
+				if (replacement == null && url.Length > 0 && url[0] == '/') // default mode, filter by start
+				{
+					var tmp = url.Substring(1);
+					var filter = allowInSearch
+						? new Predicate<string>(c => c.IndexOf(tmp) >= 0)
+						: new Predicate<string>(c => c.StartsWith(tmp));
+
+					return new RedirectSimpleRule(id, filter, allow);
+				}
+				else
+				{
+					if (!allowInSearch && (url.Length == 0 || url[0] != '^'))
+						url = '^' + url;
+
+					var filter = new Regex(url, RegexOptions.Singleline | RegexOptions.Compiled);
+					return new RedirectRegexRule(id, filter, allow ? replacement : null);
+				}
+
+			}
+			catch (Exception e)
+			{
+				Log.Warn(new DEConfigurationException(cur.Data, $"Could not parse redirect rule (id={id})", e));
+				return null;
+			}
+		} // func ParseRedirectRule
+
+		private void ParseRewriteRule(IReadOnlyList<RedirectRule> redirectRules, XConfigNode cur)
+		{
+			var id = cur.GetAttribute<string>("id");
+			try
+			{
+				var rule = new RegexRewriteRule(id,
+					Procs.GetFilterFunction(cur.GetAttribute<string>("media"), false),
+					new Regex(cur.GetAttribute<string>("pattern"), RegexOptions.Singleline | RegexOptions.Compiled),
+					cur.GetAttribute<string>("replacement")
+				);
+
+				foreach (var rid in cur.GetAttribute<string[]>("redirect"))
+				{
+					var appended = false;
+
+					var filterRedirect = Procs.GetFilterFunction(rid, false);
+					foreach (var redirect in redirectRules.Where(c => filterRedirect(c.Id)))
+					{
+						redirect.AppendRewrite(rule);
+						appended = true;
+					}
+
+					if (!appended)
+						Log.Warn($"Rewrite '{id}' rule not assigned to redirect '{rid}'.");
+				}
+			}
+			catch (Exception e)
+			{
+				Log.Warn(new DEConfigurationException(cur.Data, $"Could not parse rewrite rule (id={id})", e));
+			}
+		} // func ParseRewriteRule
+
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
 		{
-			config.Tags.SetProperty(nameof(client), new HttpClient(new HttpClientHandler(), true)
+			var configNew = XConfigNode.Create(Server.Configuration, config.ConfigNew);
+
+			// -- Parse target --
+			// ServicePointManager.DefaultConnectionLimit
+			var clientHandler = new HttpClientHandler() { AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
+			var httpClient = new HttpClient(clientHandler, true)
 			{
-				BaseAddress = new Uri(config.ConfigNew.GetAttribute("target", null), UriKind.Absolute)
-			});
+				BaseAddress = new Uri(configNew.GetAttribute<string>("target"), UriKind.Absolute),
+				Timeout = TimeSpan.FromSeconds(configNew.GetAttribute<int>("timeout"))
+			};
+
+			// -- parse rules --
+			var redirectRules = new List<RedirectRule>();
+
+			redirectRules.AddRange(
+				from cur in configNew.Elements(DEConfigurationConstants.xnProxyRedirect)
+				let rule = ParseRedirectRule(cur)
+				where rule != null
+				select rule
+			);
+
+			foreach (var cur in configNew.Elements(DEConfigurationConstants.xnProxyRewrite))
+				ParseRewriteRule(redirectRules, cur);
+
+			config.Tags.SetProperty(nameof(client), httpClient);
+			config.Tags.SetProperty(nameof(defaultAllow), configNew.GetAttribute<bool>("defaultAllow"));
+			config.Tags.SetProperty(nameof(redirectRules), redirectRules.ToArray());
+
 			base.OnBeginReadConfiguration(config);
-		} // proc 
+		} // proc OnBeginReadConfiguration
 
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
 		{
 			VirtualRoot = ConfigNode.GetAttribute<string>("base") ?? String.Empty;
 			Priority = ConfigNode.GetAttribute<int>("priority");
+
 			client = config.Tags.GetProperty<HttpClient>(nameof(client), null);
+			defaultAllow = config.Tags.GetProperty(nameof(defaultAllow), false);
+			redirectRules = config.Tags.GetProperty(nameof(redirectRules), Array.Empty<RedirectRule>());
 
 			base.OnEndReadConfiguration(config);
 		} // proc OnEndReadConfiguration
 
 		#endregion
 
+		#region -- Helper -------------------------------------------------------------
+
+		private static string[] invalidHeaders = new string[] { "transfer-encoding", "keep-alive", "content-length", };
+
+		private static Uri CreateRequestUri(IDEWebRequestScope r, string targetUrl)
+		{
+			// create relative uri
+			var sb = new StringBuilder();
+			sb.Append(targetUrl);
+
+			// append arguments
+			HttpStuff.MakeUriArguments(sb, false, r.ToProperties());
+
+			return new Uri(sb.ToString(), UriKind.Relative);
+		} // func CreateRequestUri
+
+		private static bool IsInvalidHeader(string k)
+			=> Array.Exists(invalidHeaders, c => String.Compare(c, k, StringComparison.OrdinalIgnoreCase) == 0);
+
+		private static bool TryCopyHeaderValue(NameValueCollection requestHeaders, int i, string k, HttpHeaders headers)
+			=> headers.TryAddWithoutValidation(k, requestHeaders.GetValues(i));
+
+		private static void CopyHeaders(NameValueCollection requestHeaders, HttpRequestHeaders targetRequestHeaders, HttpContentHeaders targetContentHeaders)
+		{
+			for (var i = 0; i < requestHeaders.Count; i++)
+			{
+				var k = requestHeaders.GetKey(i);
+				//if (IsInvalidHeader(k))
+				//	continue;
+
+				if (targetRequestHeaders == null || !TryCopyHeaderValue(requestHeaders, i, k, targetRequestHeaders))
+				{
+					if (targetContentHeaders != null)
+						TryCopyHeaderValue(requestHeaders, i, k, targetContentHeaders);
+				}
+			}
+		} // proc CopyHeaders
+
+		private static void CopyHeaders(HttpHeaders sourceHeaders, WebHeaderCollection targetHeaders)
+		{
+			foreach (var kv in sourceHeaders)
+			{
+				if (IsInvalidHeader(kv.Key))
+					continue;
+
+				targetHeaders.Add(kv.Key, String.Join(";", kv.Value));
+			}
+		} // func CopyHeaders
+
+		private static void CopyHeaders(HttpResponseHeaders sourceResponseHeaders, HttpContentHeaders sourceContentHeaders, WebHeaderCollection targetHeaders)
+		{
+			if (sourceResponseHeaders != null)
+				CopyHeaders(sourceResponseHeaders, targetHeaders);
+			if (sourceContentHeaders != null)
+				CopyHeaders(sourceContentHeaders, targetHeaders);
+		} // proc CopyHeaders
+
+		#endregion
+
 		#region -- ProxyRequest -------------------------------------------------------
 
-		private async Task<bool> ProxyRequestAsync(HttpClient client, DEWebRequestScope r)
+		private HttpMethod GetHttpMethod(DEWebRequestScope r)
 		{
-			// form url
-			var sb = new StringBuilder();
-			var first = true;
-			sb.Append(r.RelativeSubPath);
-			foreach (var parameterName in r.ParameterNames)
+			switch (r.InputMethod)
 			{
-				if (r.TryGetProperty(parameterName, out var parameterValue))
+				case "POST":
+					return HttpMethod.Post;
+				case "GET":
+					return HttpMethod.Get;
+				case "PUT":
+					return HttpMethod.Put;
+				case "HEAD":
+					return HttpMethod.Head;
+				default:
+					throw new ArgumentException($"Unsupported method: {r.InputMethod}");
+			}
+		} // func GetHttpMethod
+
+		private string MakeNewUri(DEWebRequestScope r, string relativeUri)
+		{
+			if (relativeUri == null)
+				relativeUri = String.Empty;
+
+			return r.GetSubPathOrigin(new Uri(relativeUri, UriKind.Relative)).AbsolutePath;
+		} // func MakeNewUri
+
+		private void ProxyRequestFoundAsync(DEWebRequestScope r, HttpResponseMessage response, RedirectRule redirectRule)
+		{
+			var redirectTo = response.Headers.Location.ToString(); // get content
+			CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+
+			// allow rewrite rules
+			var isRuleHit = false;
+			foreach (var rw in redirectRule.Rewrites)
+			{
+				if (rw.IsMatch("status/302"))
+					redirectTo = rw.TransformLine(redirectTo);
+			}
+
+			// default rewrite
+			if (!isRuleHit)
+				redirectTo = MakeNewUri(r, redirectTo);
+
+			// send move
+			r.OutputHeaders["Location"] = redirectTo;
+			r.SetStatus(HttpStatusCode.Found, response.ReasonPhrase);
+		} // func ProxyRequestFoundAsync
+
+		private async Task ProxyRequestRewriteAsync(DEWebRequestScope r, HttpResponseMessage response, RewriteRule[] rewriteRules)
+		{
+			// send header
+			CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+
+			// send modified content
+			using (var src = await response.Content.ReadAsStreamAsync())
+			using (var tr = new StreamReader(src))
+			using (var dst = r.GetOutputStream(response.Content.Headers.ContentType.ToString(), response.Content.Headers.ContentLength ?? -1))
+			using (var sr = new StreamWriter(dst))
+			{
+				string l;
+				while ((l = await tr.ReadLineAsync()) != null)
 				{
-					if (first)
-					{
-						sb.Append('?');
-						first = false;
-					}
-					else
-						sb.Append('&');
-
-
-					sb.Append(WebUtility.UrlEncode(parameterName));
-					sb.Append('=');
-					sb.Append(WebUtility.UrlEncode(parameterValue.ToString()));
+					foreach (var cur in rewriteRules)
+						l = cur.TransformLine(l);
+					await sr.WriteLineAsync(l);
 				}
 			}
+		} // func ProxyRequestRewriteAsync
 
+		private async Task ProxyRequestDirectAsync(DEWebRequestScope r, HttpResponseMessage response)
+		{
+			// send header
+			CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+
+			// send content
+			using (var src = await response.Content.ReadAsStreamAsync())
+			using (var dst = r.GetOutputStream(response.Content.Headers.ContentType.ToString(), response.Content.Headers.ContentLength ?? -1))
+				await src.CopyToAsync(dst);
+		} // proc ProxyRequestDirectAsync
+
+		private async Task<bool> ProxyRequestAsync(HttpClient client, DEWebRequestScope r, RedirectRule redirectRule, string targetUrl)
+		{
 			// build request
-			var request = new HttpRequestMessage(
-				r.InputMethod == "POST" ? HttpMethod.Post : HttpMethod.Get,
-				sb.ToString()
-			);
+			var method = GetHttpMethod(r);
+			var request = new HttpRequestMessage(method, CreateRequestUri(r, targetUrl));
+
+			// connect input content
 			if (r.HasInputData)
-			{
-				var content = new StreamContent(r.Context.Request.InputStream);
-				request.Content = content;
-			}
+				request.Content = new StreamContent(r.Context.Request.InputStream);
 
 			// build 
-			for (var i = 0; i < r.Context.Request.Headers.Count; i++)
-			{
-				var k = r.Context.Request.Headers.GetKey(i);
-				var v = String.Join(";", r.Context.Request.Headers.GetValues(i));
-				if (!(request.Content?.Headers.TryAddWithoutValidation(k, v) ?? false))
-					request.Headers.TryAddWithoutValidation(k, v);
-			}
+			CopyHeaders(r.Context.Request.Headers, request.Headers, request.Content?.Headers);
 
 			// remote request
-			using (var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead))
+			using (var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, CancellationToken.None))
 			{
-				if (response.StatusCode == HttpStatusCode.NotFound)
-					return false;
-
-				if (response.StatusCode != HttpStatusCode.OK)
-					throw new HttpResponseException(response.StatusCode, response.ReasonPhrase);
-
-				// send header
-				foreach (var kv in response.Headers)
+				switch (response.StatusCode)
 				{
-					if (String.Compare(kv.Key, "transfer-encoding", StringComparison.OrdinalIgnoreCase) == 0)
-						continue;
-					if (String.Compare(kv.Key, "keep-alive", StringComparison.OrdinalIgnoreCase) == 0)
-						continue;
-
-					r.OutputHeaders.Add(kv.Key, String.Join(";", kv.Value));
+					case HttpStatusCode.OK:
+						if (response.Content.Headers.ContentType != null)
+						{
+							var mediaType = response.Content.Headers.ContentType.MediaType;
+							var rewrites = redirectRule.Rewrites.Where(c => c.IsMatch(mediaType)).ToArray();
+							if (rewrites.Length == 0)
+								await ProxyRequestDirectAsync(r, response);
+							else
+								await ProxyRequestRewriteAsync(r, response, rewrites);
+						}
+						else
+							await ProxyRequestDirectAsync(r, response);
+						return true;
+					case HttpStatusCode.Found:
+						ProxyRequestFoundAsync(r, response, redirectRule);
+						return true;
+					case HttpStatusCode.NotFound:
+						return false;
+					case HttpStatusCode.NotModified:
+						CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+						r.SetStatus(HttpStatusCode.NotModified, response.ReasonPhrase);
+						return true;
+					default:
+						r.SetStatus(response.StatusCode, response.ReasonPhrase);
+						return true;
 				}
-
-				// copy output headers
-				foreach (var kv in response.Content.Headers)
-				{
-					if (String.Compare(kv.Key, "content-length", StringComparison.OrdinalIgnoreCase) == 0)
-						continue;
-					r.OutputHeaders.Add(kv.Key, String.Join(";", kv.Value));
-				}
-
-				// process content
-				using (var src = await response.Content.ReadAsStreamAsync())
-				using (var dst = r.GetOutputStream(response.Content.Headers.ContentType.ToString(), response.Content.Headers.ContentLength ?? -1))
-					await src.CopyToAsync(dst);
 			}
-			return true;
 		} // proc ProxyRequestAsync
+
+		private bool IsProxyRequest(DEWebRequestScope r, out RedirectRule redirect, out string targetUrl)
+		{
+			foreach (var rule in redirectRules)
+			{
+				if (rule.TryTransform(r.RelativeSubPath, out targetUrl))
+				{
+					redirect = rule;
+					return true;
+				}
+			}
+			redirect = null;
+			targetUrl = null;
+			return false;
+		} // func IsProxyRequest
 
 		async Task<bool> IHttpWorker.RequestAsync(IDEWebRequestScope r)
 		{
 			var cl = client;
-			if (cl != null && r is DEWebRequestScope ir)
-				return await ProxyRequestAsync(cl, ir);
+			if (cl != null && r is DEWebRequestScope ir && IsProxyRequest(ir, out var redirect, out var targetUrl))
+				return await ProxyRequestAsync(cl, ir, redirect, targetUrl);
 			else
 				return false;
 		} // func RequestAsync

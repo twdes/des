@@ -44,6 +44,17 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server
 {
+	#region -- interface IDEPathTranslator --------------------------------------------
+
+	internal interface IDEPathTranslator
+	{
+		string GetRootUri(string absoluteRootPath, string absoluteUri);
+
+		string AllowGroups { get; }
+	} // interface IDEPathTranslator
+
+	#endregion
+
 	#region -- class DECommonWebContext -----------------------------------------------
 
 	/// <summary></summary>
@@ -53,17 +64,19 @@ namespace TecWare.DE.Server
 		private readonly Lazy<NameValueCollection> queryString;
 		private readonly HttpListenerRequest request;
 		private readonly string absolutePath;
+		private readonly IDEPathTranslator pathTranslator;
 
 		private readonly Lazy<CultureInfo> clientCultureInfo;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
-		protected DECommonWebScope(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification, string allowGroups)
-			: base(http, httpAuthentification, allowGroups)
+		protected DECommonWebScope(DEHttpServer http, HttpListenerRequest request, string absolutePath, bool httpAuthentification, IDEPathTranslator pathTranslator)
+			: base(http, httpAuthentification, pathTranslator.AllowGroups)
 		{
 			this.http = http;
 			this.request = request;
 			this.absolutePath = absolutePath;
+			this.pathTranslator = pathTranslator ?? throw new ArgumentNullException(nameof(pathTranslator));
 
 			// fix: request.QueryString uses wrong encoding
 			queryString = new Lazy<NameValueCollection>(() => HttpUtility.ParseQueryString(request.Url.Query, Encoding.UTF8));
@@ -114,8 +127,20 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		public Uri GetOrigin(Uri relativeUri)
+		protected string GetRootUri(string absoluteRootPath, string relativeUri)
+			=> pathTranslator.GetRootUri(absoluteRootPath, relativeUri);
+
+		protected Uri GetRequestUri(string relativeUri)
 			=> new Uri(request.Url, relativeUri);
+
+		public Uri GetOrigin(Uri relativeUri)
+		{
+			return GetRequestUri(
+				relativeUri.OriginalString.StartsWith("/")
+					? GetRootUri("/", relativeUri.OriginalString)
+					: relativeUri.OriginalString
+			);
+		} // func GetOrigin
 
 		/// <summary>Parameter names</summary>
 		public string[] ParameterNames => queryString.Value.AllKeys;
@@ -148,8 +173,8 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
-		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, string allowGroups)
-			: base(http, context.Request, absolutePath, httpAuthentification, allowGroups)
+		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, IDEPathTranslator pathTranslator)
+			: base(http, context.Request, absolutePath, httpAuthentification, pathTranslator)
 		{
 			this.context = context ?? throw new ArgumentNullException(nameof(context));
 		} // ctor
@@ -218,8 +243,8 @@ namespace TecWare.DE.Server
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
-		public DEWebRequestScope(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, string allowGroups)
-			: base(http, context.Request, absolutePath, httpAuthentification, allowGroups)
+		public DEWebRequestScope(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, IDEPathTranslator pathTranslator)
+			: base(http, context.Request, absolutePath, httpAuthentification, pathTranslator)
 		{
 			this.context = context;
 
@@ -680,6 +705,18 @@ namespace TecWare.DE.Server
 				throw new ArgumentException("Invalid Stack.", nameof(sp));
 		} // proc ExitSubPath
 
+		public Uri GetSubPathOrigin(Uri uri)
+		{
+			string relativeUri = uri.OriginalString;
+			if (relativeUri.StartsWith("/"))
+			{
+				var absoluteSubPath = AbsolutePath.Substring(0, relativeStack.Count == 0 ? 0 : relativeStack.Peek().AbsolutePosition);
+				return GetRequestUri(GetRootUri(absoluteSubPath, relativeUri));
+			}
+			else
+				return GetRequestUri(relativeUri);
+		} // func GetSubPathOrigin
+
 		private void RelativeCacheClear()
 		{
 			currentRelativeSubPath = null;
@@ -1010,7 +1047,7 @@ namespace TecWare.DE.Server
 
 		#region -- class PrefixPathTranslation ----------------------------------------
 
-		private sealed class PrefixPathTranslation : PrefixDefinition
+		private sealed class PrefixPathTranslation : PrefixDefinition, IDEPathTranslator
 		{
 			private readonly string redirectPath;
 
@@ -1024,6 +1061,18 @@ namespace TecWare.DE.Server
 				AllowGroups = x.GetAttribute("allowGroups", "*");
 				IsHttpDebugOn = x.GetAttribute("debugOn", false);
 			} // ctor
+
+			public string GetRootUri(string absoluteRootPath, string absoluteUri)
+			{
+				if (absoluteUri[0] != '/') // only available for root selection
+					throw new ArgumentException("Only absolute paths are allowed.");
+
+				if (!absoluteRootPath.StartsWith(redirectPath))
+					throw new ArgumentException("AbsoluteRootPath does not match RedirectPath.");
+
+				var subPath = absoluteRootPath.Substring(redirectPath.Length);
+				return PrefixPath + subPath + absoluteUri.Substring(1);
+			} // func GetRootUri
 
 			public string Path => redirectPath;
 			public string AllowGroups { get; }
@@ -1662,7 +1711,7 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				using (var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous, pathTranslation.AllowGroups))
+				using (var context = new DEWebSocketContext(this, ctx, absolutePath, authentificationScheme != AuthenticationSchemes.Anonymous, pathTranslation))
 				{
 					// start authentification
 					await context.AuthentificateUserAsync(FixUserEncoding(ctx, ctx.User?.Identity));
@@ -1717,7 +1766,7 @@ namespace TecWare.DE.Server
 			{
 				var httpAuthentification = authentificationScheme != AuthenticationSchemes.Anonymous;
 				var hasPossibleAnon = (authentificationScheme & AuthenticationSchemes.Anonymous) == AuthenticationSchemes.Anonymous;
-				using var context = new DEWebRequestScope(this, ctx, absolutePath, httpAuthentification, pathTranslation.AllowGroups);
+				using var context = new DEWebRequestScope(this, ctx, absolutePath, httpAuthentification, pathTranslation);
 				try
 				{
 					// update client infos

@@ -174,6 +174,10 @@ namespace TecWare.DE.Server.Http
 		/// <summary>Exit the sub-path.</summary>
 		/// <param name="sp">Service provider, that represents the sub-path.</param>
 		void ExitSubPath(IServiceProvider sp);
+		/// <summary>Relative origin to the current selected path.</summary>
+		/// <param name="uri"></param>
+		/// <returns></returns>
+		Uri GetSubPathOrigin(Uri uri);
 
 		/// <summary>Mime-types they are accepted from the client.</summary>
 		string[] AcceptedTypes { get; }
@@ -280,6 +284,12 @@ namespace TecWare.DE.Server.Http
 
 		public void Dispose()
 		{
+			if (textOutput is IndentedTextWriter tw)
+			{
+				textOutput.Flush();
+				tw.Close();
+			}
+
 			Procs.FreeAndNil(ref streamOutput);
 			Procs.FreeAndNil(ref textOutput);
 		} // proc Dispose
@@ -320,6 +330,9 @@ namespace TecWare.DE.Server.Http
 
 			public IDEWebRequestScope Context => root.Context;
 			public string ScriptBase => scriptBase;
+
+			[LuaMember]
+			public LuaTable Self { get => this; set { } }
 		} // class LuaTemplateTable
 
 		#endregion
@@ -383,18 +396,30 @@ namespace TecWare.DE.Server.Http
 		private void LuaTemplate(LuaHtmlTable root, IHtmlScriptScope parentScope, object source, LuaTable arguments)
 		{
 			var fi = new FileInfo(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(parentScope.ScriptBase), source.ToString())));
+			var cacheId = fi.FullName + ";" + fi.LastWriteTimeUtc.ToString("o");
 
-			using (var sr = new StreamReader(fi.FullName, Encoding.UTF8, true))
-			using (var chars = new LuaCharLexer(fi.FullName, sr, LuaLexer.HtmlCharStreamLookAHead, leaveOpen: false))
-			using (var code = LuaLexer.CreateHtml(chars))
+			var template = parentScope.Context.Http.GetWebCache(cacheId);
+			if (template == null)
 			{
-				if (Lua.IsConstantScript(code))
-					LuaPrintText(code.LookAhead.Value);
-				else
+				// parse template item
+				using (var sr = new StreamReader(fi.FullName, Encoding.UTF8, true))
+				using (var chars = new LuaCharLexer(fi.FullName, sr, LuaLexer.HtmlCharStreamLookAHead, leaveOpen: false))
+				using (var code = LuaLexer.CreateHtml(chars))
 				{
-					var g = new LuaTemplateTable(root, parentScope, fi.FullName, arguments);
-					HttpResponseHelper.CreateScript(parentScope.Context, code, parentScope.ScriptBase).Run(g, true);
+					template = Lua.IsConstantScript(code)
+						? code.LookAhead.Value
+						: (object)HttpResponseHelper.CreateScript(parentScope.Context, code, parentScope.ScriptBase);
+
+					parentScope.Context.Http.UpdateWebCache(cacheId, template);
 				}
+			}
+
+			if (template is string text)
+				LuaPrintText(text);
+			else if (template is ILuaScript script)
+			{
+				var g = new LuaTemplateTable(root, parentScope, fi.FullName, arguments);
+				script.Run(g, true);
 			}
 		} // proc LuaTemplate
 
@@ -458,6 +483,9 @@ namespace TecWare.DE.Server.Http
 				contentType = value;
 			}
 		} // prop ContentType
+
+		[LuaMember]
+		public LuaTable Self { get => this; set { } }
 
 		[LuaMember("Context")]
 		public IDEWebRequestScope Context { get => context; set { } }

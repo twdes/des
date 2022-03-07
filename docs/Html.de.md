@@ -29,6 +29,9 @@ Globale Variablen die durch den Html-Scope hinzugefügt werden:
 `ScriptBase`: `string`
 :   Dateiname des Scripts.
 
+`Self`: `table`
+:   Current scope.
+
 ## Methoden
 
 `obinary(contentType : string)`

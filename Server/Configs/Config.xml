@@ -26,6 +26,13 @@
 	</files>
 
 	<configItem name="web">
-		<proxy name="proxy" target="http://tecware-gmbh.de/" />
+		<proxy name="proxy" target="http://garten:8080/">
+			<redirect id="git" url="/" allow="true" />
+
+			<rewrite id="addr" redirect="*" media="text/html" pattern="(href|src|action)=&quot;\/" replacement="$1=&quot;/web/" />
+			<rewrite id="home" redirect="*" media="text/*" pattern="garten:8080" replacement="localhost:8080/web" />
+			<rewrite id="js1" redirect="*" media="text/*" pattern="AppSubUrl\:\s\'" replacement="AppSubUrl: '/web"/>
+			<rewrite id="js2" redirect="*" media="text/*" pattern="AssetUrlPrefix\:\s\'\\" replacement="AssetUrlPrefix: '\\/web\\" />
+		</proxy>
 	</configItem>
 </des>
