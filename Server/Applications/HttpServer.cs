@@ -44,7 +44,7 @@ using static TecWare.DE.Server.Configuration.DEConfigurationConstants;
 
 namespace TecWare.DE.Server
 {
-	#region -- class DECommonWebContext -------------------------------------------------
+	#region -- class DECommonWebContext -----------------------------------------------
 
 	/// <summary></summary>
 	internal abstract class DECommonWebScope : DECommonScope
@@ -138,7 +138,7 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEWebSocketContext -------------------------------------------------
+	#region -- class DEWebSocketContext -----------------------------------------------
 
 	/// <summary></summary>
 	internal sealed class DEWebSocketContext : DECommonWebScope, IDEWebSocketScope
@@ -146,7 +146,7 @@ namespace TecWare.DE.Server
 		private readonly HttpListenerContext context;
 		private HttpListenerWebSocketContext webSocketContext;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		public DEWebSocketContext(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, string allowGroups)
 			: base(http, context.Request, absolutePath, httpAuthentification, allowGroups)
@@ -186,19 +186,19 @@ namespace TecWare.DE.Server
 
 	#endregion
 
-	#region -- class DEWebRequestScope --------------------------------------------------
+	#region -- class DEWebRequestScope ------------------------------------------------
 
 	/// <summary></summary>
 	internal sealed class DEWebRequestScope : DECommonWebScope, IDEWebRequestScope
 	{
-		#region -- struct RelativeFrame ---------------------------------------------------
+		#region -- struct RelativeFrame -----------------------------------------------
 
 		private sealed class RelativeFrame
 		{
 			public RelativeFrame(int absolutePosition, IServiceProvider item)
 			{
-				this.AbsolutePosition = absolutePosition;
-				this.Item = item;
+				AbsolutePosition = absolutePosition;
+				Item = item;
 			} // ctor
 
 			public int AbsolutePosition { get; }
@@ -216,7 +216,7 @@ namespace TecWare.DE.Server
 
 		private bool isOutputSended = false;
 
-		#region -- Ctor/Dtor --------------------------------------------------------------
+		#region -- Ctor/Dtor ----------------------------------------------------------
 
 		public DEWebRequestScope(DEHttpServer http, HttpListenerContext context, string absolutePath, bool httpAuthentification, string allowGroups)
 			: base(http, context.Request, absolutePath, httpAuthentification, allowGroups)
@@ -253,7 +253,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Log --------------------------------------------------------------------
+		#region -- Log ----------------------------------------------------------------
 
 		public void LogStart()
 		{
@@ -291,7 +291,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Input ------------------------------------------------------------------
+		#region -- Input --------------------------------------------------------------
 
 		public Stream GetInputStream()
 		{
@@ -317,14 +317,14 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Output -----------------------------------------------------------------
+		#region -- Output -------------------------------------------------------------
 
 		private const long bufferFlushSize = 0x10000L;
 		private const int outputStreamChunkedBorder = 0x40000;
 		private static readonly Regex encodingValueRegex = new Regex(@"(?<n>\w+)(;q=(?<q>\d+.?\d+))?", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline);
 		private static readonly string[] compressTags = new string[] { "gzip", "deflate" };
 
-		#region -- class HttpOutputBufferStream -------------------------------------------
+		#region -- class HttpOutputBufferStream ---------------------------------------
 
 		private sealed class HttpOutputBufferStream : Stream
 		{
@@ -621,7 +621,7 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region -- Relative Path ----------------------------------------------------------
+		#region -- Relative Path ------------------------------------------------------
 
 		/// <summary>Change into a virtual directory.</summary>
 		/// <param name="sp">Service provider, that represents the sub-path.</param>

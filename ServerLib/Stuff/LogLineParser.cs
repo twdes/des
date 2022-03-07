@@ -32,7 +32,7 @@ namespace TecWare.DE.Server.Stuff
 			stamp = parts.Length > 0 ? ParseDateTime(parts[0]) : DateTime.MinValue;
 
 			// Typ Lesen
-			if (parts.Length < 2 || !Int32.TryParse(parts[1], out var t) || t < 0 || t > 2)
+			if (parts.Length < 2 || !Int32.TryParse(parts[1], out var t) || t < 0 || t > 3)
 				typ = LogMsgType.Error;
 			else
 				typ = (LogMsgType)t;

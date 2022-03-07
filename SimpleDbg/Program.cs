@@ -1484,7 +1484,7 @@ namespace TecWare.DE.Server
 				return;
 			}
 
-			var filterFunc = Procs.GetFilerFunction(filter, true);
+			var filterFunc = Procs.GetFilterFunction(filter, true);
 			var selectedScripts = lastScriptResult.Scripts.Where(s => filterFunc(s.ScriptId));
 			var firstScripts = selectedScripts.Take(2).ToArray();
 			if (firstScripts.Length == 0) // no scripts
@@ -1586,8 +1586,8 @@ namespace TecWare.DE.Server
 			Func<DebugRunScriptResult.Test, bool> filterFunc;
 			if (methodFilter != null) // filter script and tests
 			{
-				var filterScriptFunc = Procs.GetFilerFunction(scriptFilter, true);
-				var filterTestFunc = Procs.GetFilerFunction(methodFilter, true);
+				var filterScriptFunc = Procs.GetFilterFunction(scriptFilter, true);
+				var filterTestFunc = Procs.GetFilterFunction(methodFilter, true);
 
 				filterFunc = t => filterScriptFunc(t.Script?.ScriptId ?? String.Empty) && filterTestFunc(t.Name);
 			}
@@ -1596,7 +1596,7 @@ namespace TecWare.DE.Server
 				methodFilter = scriptFilter;
 				scriptFilter = null;
 
-				var filterTestFunc = Procs.GetFilerFunction(methodFilter, true);
+				var filterTestFunc = Procs.GetFilterFunction(methodFilter, true);
 				filterFunc = t => filterTestFunc(t.Name);
 			}
 

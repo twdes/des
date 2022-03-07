@@ -35,6 +35,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{075816AA-6
 		docs\Actions.de.md = docs\Actions.de.md
 		docs\Configuration.de.md = docs\Configuration.de.md
 		docs\Env.IO.de.md = docs\Env.IO.de.md
+		docs\Html.de.md = docs\Html.de.md
 		docs\Passwords.de.md = docs\Passwords.de.md
 		docs\SecurityTokens.de.md = docs\SecurityTokens.de.md
 		docs\Users.de.md = docs\Users.de.md

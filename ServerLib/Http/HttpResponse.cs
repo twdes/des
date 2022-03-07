@@ -14,6 +14,7 @@
 //
 #endregion
 using System;
+using System.CodeDom.Compiler;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -242,10 +243,23 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
+	#region -- interface IHtmlScriptScope ---------------------------------------------
+
+	internal interface IHtmlScriptScope
+	{
+		object GetValue(object key);
+
+		IDEWebRequestScope Context { get; }
+		string ScriptBase { get; }
+	} // interface IHtmlScriptScope
+
+	#endregion
+
 	#region -- class LuaHtmlTable -----------------------------------------------------
 
-	internal sealed class LuaHtmlTable : LuaTable, IDisposable
+	internal sealed class LuaHtmlTable : LuaTable, IHtmlScriptScope, IDisposable
 	{
+		private readonly ILuaScript script;
 		private readonly IDEWebRequestScope context;
 
 		private string contentType; // content type to emit
@@ -255,9 +269,12 @@ namespace TecWare.DE.Server.Http
 		private TextWriter textOutput = null;
 		private Encoding encoding = null;
 
-		public LuaHtmlTable(IDEWebRequestScope context, string contentType)
+		#region -- Ctor/Dtor ----------------------------------------------------------
+
+		public LuaHtmlTable(ILuaScript script, IDEWebRequestScope context, string contentType)
 		{
-			this.context = context;
+			this.script = script ?? throw new ArgumentNullException(nameof(script));
+			this.context = context ?? throw new ArgumentNullException(nameof(script));
 			this.contentType = contentType;
 		} // ctor
 
@@ -266,6 +283,46 @@ namespace TecWare.DE.Server.Http
 			Procs.FreeAndNil(ref streamOutput);
 			Procs.FreeAndNil(ref textOutput);
 		} // proc Dispose
+
+		object IHtmlScriptScope.GetValue(object key)
+			=> GetValue(key);
+
+		#endregion
+
+		#region -- Print --------------------------------------------------------------
+
+		#region -- class LuaTemplateTable ---------------------------------------------
+
+		private sealed class LuaTemplateTable : LuaTable, IHtmlScriptScope
+		{
+			private readonly LuaHtmlTable root;
+			private readonly IHtmlScriptScope parentScope;
+			private readonly string scriptBase;
+			private readonly LuaTable arguments;
+
+			public LuaTemplateTable(LuaHtmlTable root, IHtmlScriptScope parentScope, string scriptBase, LuaTable arguments)
+			{
+				this.root = root ?? throw new ArgumentNullException(nameof(root));
+				this.parentScope = parentScope ?? throw new ArgumentNullException(nameof(parentScope));
+				this.scriptBase = scriptBase ?? throw new ArgumentNullException(nameof(scriptBase));
+				this.arguments = arguments ?? new LuaTable();
+			} // ctor
+
+			object IHtmlScriptScope.GetValue(object key)
+				=> GetValue(key);
+
+			[LuaMember("printTemplate")]
+			public void LuaTemplate(object source, LuaTable scope = null)
+				=> root.LuaTemplate(root, this, source, scope);
+
+			protected override object OnIndex(object key)
+				=> base.OnIndex(key) ?? arguments.GetValue(key) ?? parentScope.GetValue(key);
+
+			public IDEWebRequestScope Context => root.Context;
+			public string ScriptBase => scriptBase;
+		} // class LuaTemplateTable
+
+		#endregion
 
 		private string ConvertForHtml(object value)
 			=> ConvertForHtml(value, null);
@@ -280,6 +337,19 @@ namespace TecWare.DE.Server.Http
 			else
 				return Convert.ToString(value, context.CultureInfo);
 		} // func ConvertForHtml
+
+		private void LuaPrintText(string text)
+		{
+			if (textOutput != null)
+				textOutput.Write(text);
+			else if (streamOutput != null)
+			{
+				var b = encoding.GetBytes(text);
+				streamOutput.Write(b, 0, b.Length);
+			}
+			else
+				throw new ArgumentException("out is not open.");
+		} // proc LuaPrintText
 
 		[LuaMember("printValue")]
 		public void LuaPrintValue(object value, string fmt = null)
@@ -298,18 +368,43 @@ namespace TecWare.DE.Server.Http
 			LuaPrintText(text);
 		} // proc OnPrint
 
-		private void LuaPrintText(string text)
+		[LuaMember("indent")]
+		public IDisposable LuaIndent(int indent)
 		{
-			if (textOutput != null)
-				textOutput.Write(text);
-			else if (streamOutput != null)
+			if (textOutput is IndentedTextWriter tw)
 			{
-				var b = encoding.GetBytes(text);
-				streamOutput.Write(b, 0, b.Length);
+				tw.Indent += indent;
+				return new DisposableScope(() => tw.Indent -= indent);
 			}
 			else
-				throw new ArgumentException("out is not open.");
-		} // proc LuaPrintText
+				return null;
+		} // func LuaIndent
+
+		private void LuaTemplate(LuaHtmlTable root, IHtmlScriptScope parentScope, object source, LuaTable arguments)
+		{
+			var fi = new FileInfo(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(parentScope.ScriptBase), source.ToString())));
+
+			using (var sr = new StreamReader(fi.FullName, Encoding.UTF8, true))
+			using (var chars = new LuaCharLexer(fi.FullName, sr, LuaLexer.HtmlCharStreamLookAHead, leaveOpen: false))
+			using (var code = LuaLexer.CreateHtml(chars))
+			{
+				if (Lua.IsConstantScript(code))
+					LuaPrintText(code.LookAhead.Value);
+				else
+				{
+					var g = new LuaTemplateTable(root, parentScope, fi.FullName, arguments);
+					HttpResponseHelper.CreateScript(parentScope.Context, code, parentScope.ScriptBase).Run(g, true);
+				}
+			}
+		} // proc LuaTemplate
+
+		[LuaMember("printTemplate")]
+		public void LuaTemplate(string source, LuaTable args = null)
+			=> LuaTemplate(this, this, source, args);
+
+		#endregion
+
+		#region -- otext, obinary -----------------------------------------------------
 
 		private void CheckOutputOpened()
 		{
@@ -329,7 +424,7 @@ namespace TecWare.DE.Server.Http
 		public void OpenText(string contentType = null, Encoding encoding = null)
 		{
 			PrepareOutput();
-			textOutput = context.GetOutputTextWriter(contentType ?? this.contentType, encoding);
+			textOutput = new IndentedTextWriter(context.GetOutputTextWriter(contentType ?? this.contentType, encoding), "    ");
 		} // proc OpenText
 
 		[LuaMember("obinary")]
@@ -338,6 +433,8 @@ namespace TecWare.DE.Server.Http
 			PrepareOutput();
 			streamOutput = context.GetOutputStream(contentType ?? this.contentType);
 		} // proc OpenBinary
+
+		#endregion
 
 		protected override object OnIndex(object key)
 		{
@@ -366,6 +463,8 @@ namespace TecWare.DE.Server.Http
 		public IDEWebRequestScope Context { get => context; set { } }
 		[LuaMember("out")]
 		public object Output { get => (object)streamOutput ?? textOutput; set { } }
+		[LuaMember]
+		public string ScriptBase { get => script.ScriptBase; set { } }
 	} // class LuaHtmlTable
 
 	#endregion
@@ -579,7 +678,7 @@ namespace TecWare.DE.Server.Http
 			);
 		} // proc WriteResource
 
-		private static object CreateScript(IDEWebRequestScope context, ILuaLexer code, string scriptBase)
+		internal static ILuaScript CreateScript(IDEWebRequestScope context, ILuaLexer code, string scriptBase)
 		{
 			var luaEngine = context.Server.GetService<IDELuaEngine>(true);
 			return luaEngine.CreateScript(
@@ -657,7 +756,7 @@ namespace TecWare.DE.Server.Http
 							{
 								o = Lua.IsConstantScript(code)
 									? code.LookAhead.Value
-									: CreateScript(context, code, scriptBase);
+									: (object)CreateScript(context, code, scriptBase);
 							}
 						}
 						else if (isText)
@@ -689,7 +788,7 @@ namespace TecWare.DE.Server.Http
 					{
 						LuaResult r;
 						using (context.Use())
-						using (var g = new LuaHtmlTable(context, contentType))
+						using (var g = new LuaHtmlTable(c, context, contentType))
 							r = c.Run(g, true);
 
 						if (!context.IsOutputStarted && r.Count > 0)

@@ -521,7 +521,7 @@ namespace TecWare.DE.Server.IO
 			var subFolders = new Stack<string>();
 			subFolders.Push(path);
 
-			var filterExpr = Procs.GetFilerFunction(searchPattern, true);
+			var filterExpr = Procs.GetFilterFunction(searchPattern, true);
 			var attributeConverter = new FtpItemAtributesConverter();
 
 			var isDirectoriesAllowed = typeof(T).IsAssignableFrom(typeof(FtpDirectory));

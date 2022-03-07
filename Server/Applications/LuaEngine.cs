@@ -1200,13 +1200,13 @@ namespace TecWare.DE.Server
 			{
 				private readonly LuaDebugSession session;
 				private readonly LuaTestScript[] scripts;
-				private readonly Func<string, bool> methodFilter;
+				private readonly Predicate<string> methodFilter;
 
 				public RunScriptClass(LuaDebugSession session, string scriptId, string methodName)
 				{
 					this.session = session;
 					this.scripts = session.engine.FindScripts<LuaTestScript>(scriptId ?? throw new ArgumentNullException(nameof(scriptId)));
-					this.methodFilter = Procs.GetFilerFunction(methodName, true);
+					this.methodFilter = Procs.GetFilterFunction(methodName, true);
 				} // ctor
 
 				private XElement ExecuteScript(LuaTestScript script)
@@ -1267,7 +1267,7 @@ namespace TecWare.DE.Server
 					session.Notify(xScriptResult);
 
 					// run the functions
-					foreach (var functionName in luaTestEnvironment.Members.Keys.Where(methodFilter))
+					foreach (var functionName in luaTestEnvironment.Members.Keys.Where(c => methodFilter(c)))
 					{
 						var func = luaTestEnvironment[functionName];
 						if (Lua.RtInvokeable(func))
@@ -1767,7 +1767,7 @@ namespace TecWare.DE.Server
 		private T[] FindScripts<T>(string filterExpression = null)
 			where T : LuaScript
 		{
-			var filter = Procs.GetFilerFunction(filterExpression);
+			var filter = Procs.GetFilterFunction(filterExpression);
 			lock (scripts)
 			{
 				return (
