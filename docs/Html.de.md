@@ -1,19 +1,19 @@
-# Html Ausgabe
+ï»¿# Html Ausgabe
 
-Html kann mittels Lua-Code der auf dem Server ausgeführt wird angereichert werden.
+Html kann mittels Lua-Code der auf dem Server ausgefÃ¼hrt wird angereichert werden.
 
 Einbetten:
 ```
 <% print("Hallo") %>
 ```
 
-Die Skripte werden in einen speziellen Html-Context ausgeführt. Der vom eigentlichen Knoten erbt.
+Die Skripte werden in einen speziellen Html-Context ausgefÃ¼hrt. Der vom eigentlichen Knoten erbt.
 
 :::info
 Im Html kann also alles verwendet werden, was auch der Knoten kann.
 :::
 
-Globale Variablen die durch den Html-Scope hinzugefügt werden:
+Globale Variablen die durch den Html-Scope hinzugefÃ¼gt werden:
 
 ## Variablen
 
@@ -35,10 +35,10 @@ Globale Variablen die durch den Html-Scope hinzugefügt werden:
 ## Methoden
 
 `obinary(contentType : string)`
-:   Öffnet den Ausgabestrom als Binärstrom. `out` ist ein `Stream`.
+:   Ã–ffnet den Ausgabestrom als BinÃ¤rstrom. `out` ist ein `Stream`.
 
 `otext(contentType : string, encoding : Encoding)`
-:   Öffnet den Ausgabestrom als Text. `out` ist ein `TextWriter`.
+:   Ã–ffnet den Ausgabestrom als Text. `out` ist ein `TextWriter`.
 
 `print(values)`
 :   Gibt die Werte als Text aus.
