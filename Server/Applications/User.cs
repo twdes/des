@@ -20,6 +20,7 @@ using System.Net;
 using System.Security;
 using System.Security.Principal;
 using System.Threading.Tasks;
+using TecWare.DE.Server.Configuration;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.Applications
@@ -193,8 +194,21 @@ namespace TecWare.DE.Server.Applications
 		bool IPropertyReadOnlyDictionary.TryGetProperty(string name, out object value)
 			=> Members.TryGetValue(name, out value);
 
+		private PropertyValue GetPropertyFromVariableDefinition(XConfigNode variableDefinition)
+		{
+			var propertyName = variableDefinition.GetAttribute<string>("name");
+			if (String.IsNullOrEmpty(propertyName))
+				return null;
+
+			var pos = propertyName.IndexOf('.');
+			if (pos >= 0)
+				propertyName = propertyName.Substring(0, pos);
+
+			return new PropertyValue(propertyName, GetMemberValue(propertyName, rawGet: true));
+		} // func GetPropertyFromVariableDefinition
+
 		IEnumerator<PropertyValue> IEnumerable<PropertyValue>.GetEnumerator()
-			=> Members.Select(c => new PropertyValue(c.Key, c.Value)).GetEnumerator();
+			=> ConfigNode.Elements(DEConfigurationConstants.xnVariable).Select(GetPropertyFromVariableDefinition).GetEnumerator();
 
 		string IDEUser.DisplayName => userName;
 		IIdentity IDEUser.Identity => identity;
