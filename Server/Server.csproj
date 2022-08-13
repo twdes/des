@@ -84,6 +84,7 @@
     <None Include="Configs\Cron.lua" />
     <None Include="Configs\Tests.lua" />
     <None Include="Configs\test\me.lua" />
+    <Content Include="Configs\Proxy.lua" />
     <None Include="des.licenseheader" />
     <None Include="TecWare.DES.Deploy.nuspec" />
     <None Include="TecWare.DES.Deploy.targets" />

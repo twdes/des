@@ -195,7 +195,7 @@
 								</xs:attribute>
 								<xs:attribute name="allowInSearch" type="xs:boolean" use="optional" default="false">
 									<xs:annotation>
-										<xs:documentation>Regex can target chars within the uri.</xs:documentation>
+										<xs:documentation>Regex can target chars within the uri. The default false let only target at the beginning.</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 								<xs:attribute name="allow" type="xs:boolean" use="required">
@@ -205,7 +205,12 @@
 								</xs:attribute>
 								<xs:attribute name="urlReplacement" type="xs:string" use="optional">
 									<xs:annotation>
-										<xs:documentation>Rewrite the url.</xs:documentation>
+										<xs:documentation>Rewrite the url-part, that is captured with the regex.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+								<xs:attribute name="customRewriter" type="xs:string" use="optional">
+									<xs:annotation>
+										<xs:documentation>Lua function, that process the request.</xs:documentation>
 									</xs:annotation>
 								</xs:attribute>
 							</xs:complexType>

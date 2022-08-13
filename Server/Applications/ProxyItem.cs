@@ -13,6 +13,7 @@
 // specific language governing permissions and limitations under the Licence.
 //
 #endregion
+using Neo.IronLua;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
@@ -85,10 +86,12 @@ namespace TecWare.DE.Server
 		{
 			private readonly string id;
 			private readonly List<RewriteRule> rewriteRules = new List<RewriteRule>();
+			private readonly string customRewriter;
 
-			protected RedirectRule(string id)
+			protected RedirectRule(string id, string customRewriter)
 			{
 				this.id = id ?? throw new ArgumentNullException(nameof(id));
+				this.customRewriter = customRewriter;
 			} // ctor
 
 			public void AppendRewrite(RewriteRule rule)
@@ -101,22 +104,22 @@ namespace TecWare.DE.Server
 			} // func TryTransform
 
 			public string Id => id;
+			public string CustomRewriter => customRewriter;
 
-			public IEnumerable<RewriteRule> Rewrites
-				=> rewriteRules;
+			public IEnumerable<RewriteRule> Rewrites => rewriteRules;
 		} // class RedirectRule
 
 		#endregion
 
-		#region -- class RedirectRule -------------------------------------------------
+		#region -- class RedirectRegexRule --------------------------------------------
 
 		private sealed class RedirectRegexRule : RedirectRule
 		{
 			private readonly Regex urlFilter;
 			private readonly string replacement;
 
-			public RedirectRegexRule(string id, Regex urlFilter, string replacement)
-				: base(id)
+			public RedirectRegexRule(string id, Regex urlFilter, string replacement, string customRewriter)
+				: base(id, customRewriter)
 			{
 				this.urlFilter = urlFilter ?? throw new ArgumentNullException(nameof(urlFilter));
 				this.replacement = replacement;
@@ -147,8 +150,8 @@ namespace TecWare.DE.Server
 			private readonly Predicate<string> urlFilter;
 			private readonly bool allow;
 
-			public RedirectSimpleRule(string id, Predicate<string> urlFilter, bool allow)
-				: base(id)
+			public RedirectSimpleRule(string id, Predicate<string> urlFilter, bool allow, string customRewriter)
+				: base(id, customRewriter)
 			{
 				this.urlFilter = urlFilter ?? throw new ArgumentNullException(nameof(urlFilter));
 				this.allow = allow;
@@ -188,6 +191,7 @@ namespace TecWare.DE.Server
 				var allowInSearch = cur.GetAttribute<bool>("allowInSearch");
 				var allow = cur.GetAttribute<bool>("allow");
 				var replacement = cur.GetAttribute<string>("urlReplacement");
+				var customRewriter = cur.GetAttribute<string>("customRewriter");
 
 				if (replacement == null && url.Length > 0 && url[0] == '/') // default mode, filter by start
 				{
@@ -196,7 +200,7 @@ namespace TecWare.DE.Server
 						? new Predicate<string>(c => c.IndexOf(tmp) >= 0)
 						: new Predicate<string>(c => c.StartsWith(tmp));
 
-					return new RedirectSimpleRule(id, filter, allow);
+					return new RedirectSimpleRule(id, filter, allow, customRewriter);
 				}
 				else
 				{
@@ -204,7 +208,7 @@ namespace TecWare.DE.Server
 						url = '^' + url;
 
 					var filter = new Regex(url, RegexOptions.Singleline | RegexOptions.Compiled);
-					return new RedirectRegexRule(id, filter, allow ? replacement : null);
+					return new RedirectRegexRule(id, filter, allow ? replacement : null, customRewriter);
 				}
 
 			}
@@ -434,6 +438,28 @@ namespace TecWare.DE.Server
 				await src.CopyToAsync(dst);
 		} // proc ProxyRequestDirectAsync
 
+		private async Task<object> GetRequestDataAsync(DEWebRequestScope r)
+		{
+			if (r.InputContentType.StartsWith("text/")
+				|| r.InputContentType == "application/x-www-form-urlencoded")
+			{
+				using var tr = r.GetInputTextReader();
+				return await tr.ReadToEndAsync();
+			}
+			else
+			{
+				using var src = r.GetInputStream();
+				return await src.ReadInArrayAsync();
+			}
+		} // func GetRequestDataAsync
+
+		private bool InvokeCustomRewriter(string customRewriter, HttpClient client, DEWebRequestScope request, object requestData, string targetUrl)
+		{
+			var r = CallMemberDirect(customRewriter, new object[] { client, request, requestData, targetUrl }, throwExceptions: true).ToBoolean();
+			Log.Debug($"Rewrite[{customRewriter}]: {targetUrl} => {r}");
+			return r;
+		} // func InvokeCustomRewriter
+
 		private async Task<bool> ProxyRequestAsync(HttpClient client, DEWebRequestScope r, RedirectRule redirectRule, string targetUrl)
 		{
 			// build request
@@ -441,8 +467,34 @@ namespace TecWare.DE.Server
 			var request = new HttpRequestMessage(method, CreateRequestUri(r, targetUrl));
 
 			// connect input content
+			var hasCustomRewriter = !String.IsNullOrEmpty(redirectRule.CustomRewriter);
 			if (r.HasInputData)
-				request.Content = new StreamContent(r.Context.Request.InputStream);
+			{
+				if (hasCustomRewriter)
+				{
+					var requestData = await GetRequestDataAsync(r);
+					if (await Task.Run(() => InvokeCustomRewriter(redirectRule.CustomRewriter, client, r, requestData, targetUrl)))
+						return true;
+					switch (requestData)
+					{
+						case string s:
+							request.Content = new StringContent(s, Encoding.UTF8, r.InputContentType);
+							break;
+						case byte[] b:
+							request.Content = new ByteArrayContent(b);
+							break;
+						default:
+							break;
+					}
+				}
+				else
+					request.Content = new StreamContent(r.Context.Request.InputStream);
+			}
+			else
+			{
+				if (hasCustomRewriter && await Task.Run(() => InvokeCustomRewriter(redirectRule.CustomRewriter, client, r, null, targetUrl)))
+					return true;
+			}
 
 			// build 
 			CopyHeaders(r.Context.Request.Headers, request.Headers, request.Content?.Headers);
