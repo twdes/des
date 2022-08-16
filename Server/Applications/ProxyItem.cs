@@ -355,6 +355,45 @@ namespace TecWare.DE.Server
 				CopyHeaders(sourceContentHeaders, targetHeaders);
 		} // proc CopyHeaders
 
+		private void AppendHeader(HttpRequestHeaders headers, string name, string value, bool overwrite)
+		{
+			if (overwrite || !headers.Contains(name))
+				headers.TryAddWithoutValidation(name, value);
+		} // proc AppendHeader
+
+		private string[] GetForwardedForValue(HttpRequestHeaders headers)
+			=> headers.TryGetValues("X-Forwarded-For", out var values) ? values.ToArray() : null;
+
+		private void AppendHeaders(DEWebRequestScope r, HttpRequestHeaders headers)
+		{
+			string clientIP;
+			var url = r.Context.Request.Url;
+			var proxyList = GetForwardedForValue(headers);
+
+			if (proxyList.Length > 0)
+			{
+				clientIP = proxyList[0]; // first ip is client ip
+
+				// append own ip as proxy
+				var newProxyList = new string[proxyList.Length + 1];
+				Array.Copy(proxyList, 0, newProxyList, 0, proxyList.Length);
+				newProxyList[proxyList.Length] = r.Context.Request.LocalEndPoint.Address.ToString();
+
+				AppendHeader(headers, "X-Forwarded-For", String.Join(",", newProxyList), true);
+			}
+			else
+			{
+				clientIP = r.Context.Request.RemoteEndPoint.Address.ToString();
+				headers.Host = url.Host;
+				headers.TryAddWithoutValidation("X-Forwarded-For", clientIP);
+			}
+			
+			AppendHeader(headers, "X-Real-IP", clientIP, false);
+			AppendHeader(headers,"X-Forwarded-Proto", url.Scheme, false);
+			AppendHeader(headers,"X-Forwarded-Protocol", url.Scheme,false);
+			AppendHeader(headers, "X-Forwarded-Host", url.Host, false);
+		} // proc AppendHeaders
+
 		#endregion
 
 		#region -- ProxyRequest -------------------------------------------------------
@@ -498,6 +537,7 @@ namespace TecWare.DE.Server
 
 			// build 
 			CopyHeaders(r.Context.Request.Headers, request.Headers, request.Content?.Headers);
+			AppendHeaders(r, request.Headers);
 
 			// remote request
 			using (var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, CancellationToken.None))
