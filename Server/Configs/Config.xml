@@ -29,7 +29,8 @@
 	<configItem name="web">
 		<proxy name="proxy" target="http://garten:8080/" script="filter">
 			<redirect id="gitLogin" url="/user/login" allow="true" customRewriter="LoginFilter" />
-			<redirect id="git" url="^$" allow="true" />
+			<!--redirect id="git" url="^$" allow="true" /-->
+			<redirect id="git" url="/" allow="true" />
 
 			<rewrite id="addr" redirect="*" media="text/html" pattern="(href|src|action)=&quot;\/" replacement="$1=&quot;/web/" />
 			<rewrite id="home" redirect="*" media="text/*" pattern="garten:8080" replacement="localhost:8080/web" />

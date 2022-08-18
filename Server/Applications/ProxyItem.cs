@@ -257,7 +257,7 @@ namespace TecWare.DE.Server
 
 			// -- Parse target --
 			// ServicePointManager.DefaultConnectionLimit
-			var clientHandler = new HttpClientHandler() { AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
+			var clientHandler = new HttpClientHandler() { AllowAutoRedirect = false, UseCookies = false, UseProxy = false, AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate };
 			var httpClient = new HttpClient(clientHandler, true)
 			{
 				BaseAddress = new Uri(configNew.GetAttribute<string>("target"), UriKind.Absolute),
@@ -300,7 +300,7 @@ namespace TecWare.DE.Server
 
 		#region -- Helper -------------------------------------------------------------
 
-		private static string[] invalidHeaders = new string[] { "transfer-encoding", "keep-alive", "content-length", };
+		private static string[] invalidHeaders = new string[] { "transfer-encoding", "keep-alive", "content-length" };
 
 		private static Uri CreateRequestUri(IDEWebRequestScope r, string targetUrl)
 		{
@@ -317,48 +317,74 @@ namespace TecWare.DE.Server
 		private static bool IsInvalidHeader(string k)
 			=> Array.Exists(invalidHeaders, c => String.Compare(c, k, StringComparison.OrdinalIgnoreCase) == 0);
 
-		private static bool TryCopyHeaderValue(NameValueCollection requestHeaders, int i, string k, HttpHeaders headers)
-			=> headers.TryAddWithoutValidation(k, requestHeaders.GetValues(i));
-
-		private static void CopyHeaders(NameValueCollection requestHeaders, HttpRequestHeaders targetRequestHeaders, HttpContentHeaders targetContentHeaders)
+		private static bool TryCopyHeaderValue(DEWebRequestScope r, NameValueCollection requestHeaders, int i, string k, HttpHeaders headers)
 		{
+			var v = requestHeaders.GetValues(i);
+			var rr = headers.TryAddWithoutValidation(k, v);
+			r.Log(l => l.WriteLine($"  {k}: {String.Join(",", v)} ({rr})"));
+			return rr;
+		} // func TryCopyHeaderValue
+
+		private static void CopyHeaders(DEWebRequestScope r, NameValueCollection requestHeaders, HttpRequestHeaders targetRequestHeaders, HttpContentHeaders targetContentHeaders)
+		{
+			r.Log(l => l.WriteLine("Copy Header (to target):"));
 			for (var i = 0; i < requestHeaders.Count; i++)
 			{
 				var k = requestHeaders.GetKey(i);
 				//if (IsInvalidHeader(k))
 				//	continue;
 
-				if (targetRequestHeaders == null || !TryCopyHeaderValue(requestHeaders, i, k, targetRequestHeaders))
+				if (targetRequestHeaders == null || !TryCopyHeaderValue(r, requestHeaders, i, k, targetRequestHeaders))
 				{
 					if (targetContentHeaders != null)
-						TryCopyHeaderValue(requestHeaders, i, k, targetContentHeaders);
+						TryCopyHeaderValue(r, requestHeaders, i, k, targetContentHeaders);
 				}
 			}
 		} // proc CopyHeaders
 
-		private static void CopyHeaders(HttpHeaders sourceHeaders, WebHeaderCollection targetHeaders)
+		private static void CopyHeaders(DEWebRequestScope r, HttpHeaders sourceHeaders, WebHeaderCollection targetHeaders)
 		{
 			foreach (var kv in sourceHeaders)
 			{
-				if (IsInvalidHeader(kv.Key))
-					continue;
+				if (kv.Key == "Set-Cookie")
+				{
+					var cookieContainer = new CookieContainer();
+					foreach (var cookieString in kv.Value)
+					{
+						r.Log(l => l.WriteLine($"  Set-Cookie: {cookieString}"));
+						cookieContainer.SetCookies(r.Context.Request.Url, cookieString);
+					}
 
-				targetHeaders.Add(kv.Key, String.Join(";", kv.Value));
+					r.OutputCookies.Add(cookieContainer.GetCookies(r.Context.Request.Url));
+				}
+				else
+				{
+					if (IsInvalidHeader(kv.Key))
+						continue;
+
+					var v = String.Join(",", kv.Value);
+					r.Log(l => l.WriteLine($"  {kv.Key}: {v}"));
+					targetHeaders.Add(kv.Key, v);
+				}
 			}
 		} // func CopyHeaders
 
-		private static void CopyHeaders(HttpResponseHeaders sourceResponseHeaders, HttpContentHeaders sourceContentHeaders, WebHeaderCollection targetHeaders)
+		private static void CopyHeaders(DEWebRequestScope r, HttpResponseHeaders sourceResponseHeaders, HttpContentHeaders sourceContentHeaders, WebHeaderCollection targetHeaders)
 		{
+			r.Log(l => l.WriteLine("Copy Header (from target):"));
 			if (sourceResponseHeaders != null)
-				CopyHeaders(sourceResponseHeaders, targetHeaders);
+				CopyHeaders(r, sourceResponseHeaders, targetHeaders);
 			if (sourceContentHeaders != null)
-				CopyHeaders(sourceContentHeaders, targetHeaders);
+				CopyHeaders(r, sourceContentHeaders, targetHeaders);
 		} // proc CopyHeaders
 
-		private void AppendHeader(HttpRequestHeaders headers, string name, string value, bool overwrite)
+		private void AppendHeader(DEWebRequestScope r, HttpRequestHeaders headers, string name, string value, bool overwrite)
 		{
 			if (overwrite || !headers.Contains(name))
-				headers.TryAddWithoutValidation(name, value);
+			{
+				var added = headers.TryAddWithoutValidation(name, value);
+				r.Log(l => l.WriteLine($"  {name}: {value} ({added})"));
+			}
 		} // proc AppendHeader
 
 		private string[] GetForwardedForValue(HttpRequestHeaders headers)
@@ -370,29 +396,40 @@ namespace TecWare.DE.Server
 			var url = r.Context.Request.Url;
 			var proxyList = GetForwardedForValue(headers);
 
-			if (proxyList.Length > 0)
+			if (proxyList != null && proxyList.Length > 0)
 			{
 				clientIP = proxyList[0]; // first ip is client ip
 
 				// append own ip as proxy
 				var newProxyList = new string[proxyList.Length + 1];
 				Array.Copy(proxyList, 0, newProxyList, 0, proxyList.Length);
-				newProxyList[proxyList.Length] = r.Context.Request.LocalEndPoint.Address.ToString();
-
-				AppendHeader(headers, "X-Forwarded-For", String.Join(",", newProxyList), true);
+				proxyList = newProxyList;
 			}
 			else
 			{
 				clientIP = r.Context.Request.RemoteEndPoint.Address.ToString();
 				headers.Host = url.Host;
-				headers.TryAddWithoutValidation("X-Forwarded-For", clientIP);
+				proxyList = new string[2];
+				proxyList[0] = clientIP;
 			}
-			
-			AppendHeader(headers, "X-Real-IP", clientIP, false);
-			AppendHeader(headers,"X-Forwarded-Proto", url.Scheme, false);
-			AppendHeader(headers,"X-Forwarded-Protocol", url.Scheme,false);
-			AppendHeader(headers, "X-Forwarded-Host", url.Host, false);
+
+			proxyList[proxyList.Length - 1] = r.Context.Request.LocalEndPoint.Address.ToString();
+
+			AppendHeader(r, headers, "X-Forwarded-For", String.Join(", ", proxyList), true);
+			AppendHeader(r, headers, "X-Real-IP", clientIP, false);
+			AppendHeader(r, headers, "X-Forwarded-Proto", url.Scheme, false);
+			AppendHeader(r, headers, "X-Forwarded-Protocol", url.Scheme,false);
+			AppendHeader(r, headers, "X-Forwarded-Host", url.Host, false);
 		} // proc AppendHeaders
+
+		private void AppendCookies(DEWebRequestScope r, HttpRequestHeaders headers)
+		{
+			var cookies = new string[r.InputCookies.Count];
+			for (var i = 0; i < cookies.Length; i++)
+				cookies[i] = r.InputCookies[i].ToString();
+
+			AppendHeader(r, headers, "Cookie", String.Join("; ", cookies), true);
+		} // func AppendCookies
 
 		#endregion
 
@@ -426,7 +463,7 @@ namespace TecWare.DE.Server
 		private void ProxyRequestFoundAsync(DEWebRequestScope r, HttpResponseMessage response, RedirectRule redirectRule)
 		{
 			var redirectTo = response.Headers.Location.ToString(); // get content
-			CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+			CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
 
 			// allow rewrite rules
 			var isRuleHit = false;
@@ -448,7 +485,7 @@ namespace TecWare.DE.Server
 		private async Task ProxyRequestRewriteAsync(DEWebRequestScope r, HttpResponseMessage response, RewriteRule[] rewriteRules)
 		{
 			// send header
-			CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+			CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
 
 			// send modified content
 			using (var src = await response.Content.ReadAsStreamAsync())
@@ -469,7 +506,7 @@ namespace TecWare.DE.Server
 		private async Task ProxyRequestDirectAsync(DEWebRequestScope r, HttpResponseMessage response)
 		{
 			// send header
-			CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+			CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
 
 			// send content
 			using (var src = await response.Content.ReadAsStreamAsync())
@@ -501,6 +538,8 @@ namespace TecWare.DE.Server
 
 		private async Task<bool> ProxyRequestAsync(HttpClient client, DEWebRequestScope r, RedirectRule redirectRule, string targetUrl)
 		{
+			r.Log(l => l.WriteLine($"Proxy to {client.BaseAddress}{targetUrl}").WriteLine());
+
 			// build request
 			var method = GetHttpMethod(r);
 			var request = new HttpRequestMessage(method, CreateRequestUri(r, targetUrl));
@@ -535,10 +574,10 @@ namespace TecWare.DE.Server
 					return true;
 			}
 
-			// build 
-			CopyHeaders(r.Context.Request.Headers, request.Headers, request.Content?.Headers);
+			// build			
+			CopyHeaders(r, r.Context.Request.Headers, request.Headers, request.Content?.Headers);
 			AppendHeaders(r, request.Headers);
-
+			
 			// remote request
 			using (var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, CancellationToken.None))
 			{
@@ -563,7 +602,7 @@ namespace TecWare.DE.Server
 					case HttpStatusCode.NotFound:
 						return false;
 					case HttpStatusCode.NotModified:
-						CopyHeaders(response.Headers, response.Content?.Headers, r.OutputHeaders);
+						CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
 						r.SetStatus(HttpStatusCode.NotModified, response.ReasonPhrase);
 						return true;
 					default:
