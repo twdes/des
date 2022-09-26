@@ -1117,6 +1117,11 @@ namespace TecWare.DE.Server
 			if (!err)
 				await r.RollbackAsync(false);
 
+			// cache information for browser
+			var cacheControl = r.OutputHeaders.Get("Cache-Control");
+			if (String.IsNullOrEmpty(cacheControl))
+				r.OutputHeaders.Set("Cache-Control", "no-cache");
+
 			// check the return value
 			if (returnValue == DBNull.Value) // NativeCall
 				return;

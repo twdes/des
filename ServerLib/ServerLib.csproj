@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<RootNamespace>TecWare.DE.Server</RootNamespace>
 		<AssemblyName>DE.Server</AssemblyName>
-		<TargetFramework>net47</TargetFramework>
+		<TargetFramework>net48</TargetFramework>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<PackageId>TecWare.DES.ServerLib</PackageId>
 		<Product>DEServer</Product>

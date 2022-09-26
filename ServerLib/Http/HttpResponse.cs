@@ -815,6 +815,9 @@ namespace TecWare.DE.Server.Http
 				case ILuaScript c:
 					{
 						LuaResult r;
+
+						context.OutputHeaders.Set("Cache-Control", "max-age=10");
+
 						using (context.Use())
 						using (var g = new LuaHtmlTable(c, context, contentType))
 							r = c.Run(g, true);

@@ -606,6 +606,7 @@ namespace TecWare.DE.Server
 						r.SetStatus(HttpStatusCode.NotModified, response.ReasonPhrase);
 						return true;
 					default:
+						CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
 						r.SetStatus(response.StatusCode, response.ReasonPhrase);
 						return true;
 				}

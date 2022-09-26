@@ -3,7 +3,7 @@
   <PropertyGroup>
     <RootNamespace>TecWare.DE</RootNamespace>
     <AssemblyName>DEM.acme</AssemblyName>
-		<TargetFramework>net47</TargetFramework>
+		<TargetFramework>net48</TargetFramework>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<PackageId>TecWare.DES.Module.ACME</PackageId>
 		<Product>DEServer</Product>
