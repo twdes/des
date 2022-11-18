@@ -429,6 +429,15 @@ namespace TecWare.DE.Server.Http
 
 		#endregion
 
+		[LuaMember]
+		public string GetUri(string relativeUri, LuaTable args = null)
+		{
+			var sb = new StringBuilder(relativeUri);
+			if (args != null)
+				HttpStuff.MakeUriArguments(sb, false, args.ToProperties());
+			return context.GetOrigin(new Uri(sb.ToString(), UriKind.Relative)).ToString();
+		} // func GetUri
+
 		#region -- otext, obinary -----------------------------------------------------
 
 		private void CheckOutputOpened()
