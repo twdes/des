@@ -1030,7 +1030,27 @@ namespace TecWare.DE.Server.Http
 					throw ThrowUnknownObjectType(value);
 			}
 		} // proc WriteObject
-		
+
+		/// <summary></summary>
+		/// <param name="dst"></param>
+		/// <param name="e"></param>
+		public static void WriteBinaryException(Stream dst, Exception e)
+		{
+			var value = e.Message;
+			if (value.Length > 1020)
+				value = value.Substring(0, 1020);
+			else if (value.Length <= 10)
+				value = $"Error Detected ({value})";
+			var fixedBlock = new byte[1024];
+			fixedBlock[0] = 0x23;
+			fixedBlock[1] = 0x31;
+			BitConverter.GetBytes((short)value.Length).CopyTo(fixedBlock, 2);
+			
+			Encoding.Unicode.GetBytes(value, 0, value.Length, fixedBlock, 4);
+
+			dst.Write(fixedBlock, 0, fixedBlock.Length);
+		} // func WriteBinaryException
+
 		private static HttpResponseException ThrowUnknownObjectType(object value)
 			=> new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Can not send return value of type '{0}'.", value.GetType().FullName));
 
