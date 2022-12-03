@@ -295,7 +295,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="tagName"></param>
 		/// <param name="attributes"><c>#</c> is sets the id, <c>:</c> sets the style, <c>.</c> set the class</param>
 		/// <returns></returns>
-		IDisposable PrintTag(string tagName, params string[] attributes);
+		IDisposable PrintTag(string tagName, params object[] attributes);
 		/// <summary>Ident the current output.</summary>
 		/// <param name="indent"></param>
 		/// <returns></returns>
@@ -491,8 +491,8 @@ namespace TecWare.DE.Server.Http
 
 				for (var i = 0; i < attributes.Length; i++)
 				{
-					ref var c = ref attributes[i];
-					if (c is string s && s.Length > 0)
+					ref var attr = ref attributes[i];
+					if (attr is string s && s.Length > 0)
 					{
 						switch (s[0])
 						{
@@ -508,7 +508,7 @@ namespace TecWare.DE.Server.Http
 								break;
 						}
 					}
-					else if (c is PropertyValue pv)
+					else if (attr is PropertyValue pv)
 						otherTags[otherTagCount++] = pv;
 				}
 
@@ -518,7 +518,7 @@ namespace TecWare.DE.Server.Http
 				AppendTags(sb, classTags, classTagCount, "class", " ");
 				AppendTags(sb, styleTags, styleTagCount, "style", "; ");
 
-				for (var i = 0; i < otherTags.Length; i++)
+				for (var i = 0; i < otherTagCount; i++)
 					sb.Append(' ').Append(otherTags[i].Name).Append('=').Append('"').Append(otherTags[i].Value).Append('"');
 			}
 			PrintText(sb.ToString());
