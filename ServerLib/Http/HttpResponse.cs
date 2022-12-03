@@ -23,6 +23,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml;
@@ -249,19 +250,78 @@ namespace TecWare.DE.Server.Http
 
 	#region -- interface IHtmlScriptScope ---------------------------------------------
 
-	internal interface IHtmlScriptScope
+	/// <summary>Html script scope</summary>
+	public interface IHtmlScriptScope
 	{
+		/// <summary>Return a value from the current scope.</summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
 		object GetValue(object key);
+		/// <summary>Print a template relative to the source.</summary>
+		/// <param name="source"></param>
+		/// <param name="args"></param>
+		void PrintTemplate(string source, LuaTable args = null);
 
+		/// <summary>Request context</summary>
 		IDEWebRequestScope Context { get; }
+		/// <summary>Script file name.</summary>
 		string ScriptBase { get; }
 	} // interface IHtmlScriptScope
 
 	#endregion
 
+	#region -- interface IHtmlScript --------------------------------------------------
+
+	/// <summary>Html script interface</summary>
+	public interface IHtmlScript : IHtmlScriptScope
+	{
+		/// <summary>Return a relative Uri.</summary>
+		/// <param name="relativeUri"></param>
+		/// <param name="args"></param>
+		/// <returns></returns>
+		string GetUri(string relativeUri, LuaTable args = null);
+
+		/// <summary>Print a formatted value.</summary>
+		/// <param name="value"></param>
+		/// <param name="fmt"></param>
+		void PrintValue(object value, string fmt = null);
+		/// <summary>Print variables or text to the output.</summary>
+		/// <param name="values"></param>
+		void Print(params object[] values);
+		/// <summary>Print text to the output.</summary>
+		/// <param name="text"></param>
+		void Print(string text);
+		/// <summary>Print an html tag.</summary>
+		/// <param name="tagName"></param>
+		/// <param name="attributes"><c>#</c> is sets the id, <c>:</c> sets the style, <c>.</c> set the class</param>
+		/// <returns></returns>
+		IDisposable PrintTag(string tagName, params string[] attributes);
+		/// <summary>Ident the current output.</summary>
+		/// <param name="indent"></param>
+		/// <returns></returns>
+		IDisposable Indent(int indent);
+
+		/// <summary>Open text output.</summary>
+		/// <param name="contentType"></param>
+		/// <param name="encoding"></param>
+		void OpenText(string contentType = null, Encoding encoding = null);
+		/// <summary>Open binary output stream.</summary>
+		/// <param name="contentType"></param>
+		void OpenBinary(string contentType = null);
+
+		/// <summary>Script scope.</summary>
+		LuaTable Self { get; }
+		/// <summary>Content type of the output.</summary>
+		string ContentType { get; }
+		/// <summary>Curent output stream.</summary>
+		object Output { get; }
+	} // interface IHtmlScript
+
+	#endregion
+
 	#region -- class LuaHtmlTable -----------------------------------------------------
 
-	internal sealed class LuaHtmlTable : LuaTable, IHtmlScriptScope, IDisposable
+	internal sealed class LuaHtmlTable : LuaTable, IHtmlScript, IDisposable
 	{
 		private readonly ILuaScript script;
 		private readonly IDEWebRequestScope context;
@@ -272,6 +332,8 @@ namespace TecWare.DE.Server.Http
 		private Stream streamOutput = null;
 		private TextWriter textOutput = null;
 		private Encoding encoding = null;
+
+		private bool tagIsOpen = false;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
@@ -325,6 +387,9 @@ namespace TecWare.DE.Server.Http
 			public void LuaTemplate(object source, LuaTable scope = null)
 				=> root.LuaTemplate(root, this, source, scope);
 
+			void IHtmlScriptScope.PrintTemplate(string source, LuaTable args)
+				=> root.LuaTemplate(root, this, source, args);
+
 			protected override object OnIndex(object key)
 				=> base.OnIndex(key) ?? arguments.GetValue(key) ?? parentScope.GetValue(key);
 
@@ -351,8 +416,14 @@ namespace TecWare.DE.Server.Http
 				return Convert.ToString(value, context.CultureInfo);
 		} // func ConvertForHtml
 
-		private void LuaPrintText(string text)
+		private void PrintText(string text)
 		{
+			if (tagIsOpen)
+			{
+				tagIsOpen = false;
+				PrintText(">");
+			}
+
 			if (textOutput != null)
 				textOutput.Write(text);
 			else if (streamOutput != null)
@@ -365,11 +436,11 @@ namespace TecWare.DE.Server.Http
 		} // proc LuaPrintText
 
 		[LuaMember("printValue")]
-		public void LuaPrintValue(object value, string fmt = null)
-			=> LuaPrintText(ConvertForHtml(value, fmt));
+		public void PrintValue(object value, string fmt = null)
+			=> PrintText(ConvertForHtml(value, fmt));
 
 		[LuaMember("print")]
-		public void LuaPrint(params object[] values)
+		public void Print(params object[] values)
 		{
 			if (values == null || values.Length == 0)
 				return;
@@ -378,11 +449,96 @@ namespace TecWare.DE.Server.Http
 				? ConvertForHtml(values[0])
 				: String.Join(" ", values.Select(ConvertForHtml));
 
-			LuaPrintText(text);
-		} // proc OnPrint
+			PrintText(text);
+		} // proc LuaPrint
+
+		void IHtmlScript.Print(string text)
+			=> PrintText(text);
+
+		private static void AppendTags(StringBuilder sb, string[] attributes, int attributeCount, string attributeName, string attributeSep)
+		{
+			if (attributeCount > 0)
+			{
+				sb.Append(' ')
+					.Append(attributeName).Append('=').Append('"');
+				for (var i = 0; i < attributeCount; i++)
+				{
+					if (i > 0)
+						sb.Append(attributeSep);
+					sb.Append(attributes[i]);
+				}
+				sb.Append('"');
+			}
+		} // proc AppendClassTags
+
+		[LuaMember]
+		public IDisposable PrintTag(string tagName, params object[] attributes)
+		{
+			var sb = new StringBuilder();
+
+			sb.Append('<')
+				.Append(tagName);
+
+			if (attributes.Length > 0)
+			{
+				var classTags = new string[attributes.Length];
+				var classTagCount = 0;
+				var styleTags = new string[attributes.Length];
+				var styleTagCount = 0;
+				var idTag = (string)null;
+				var otherTags = new PropertyValue[attributes.Length];
+				var otherTagCount = 0;
+
+				for (var i = 0; i < attributes.Length; i++)
+				{
+					ref var c = ref attributes[i];
+					if (c is string s && s.Length > 0)
+					{
+						switch (s[0])
+						{
+							case '.':
+								classTags[classTagCount++] = s.Substring(1);
+								break;
+							case ':':
+								styleTags[styleTagCount++] = s.Substring(1);
+								break;
+							case '#':
+								if (idTag == null)
+									idTag = s.Substring(1);
+								break;
+						}
+					}
+					else if (c is PropertyValue pv)
+						otherTags[otherTagCount++] = pv;
+				}
+
+				if (idTag != null)
+					sb.Append(' ').Append("id=").Append('"').TextToHtml(idTag).Append('"');
+
+				AppendTags(sb, classTags, classTagCount, "class", " ");
+				AppendTags(sb, styleTags, styleTagCount, "style", "; ");
+
+				for (var i = 0; i < otherTags.Length; i++)
+					sb.Append(' ').Append(otherTags[i].Name).Append('=').Append('"').Append(otherTags[i].Value).Append('"');
+			}
+			PrintText(sb.ToString());
+			tagIsOpen = true;
+			return new DisposableScope(() => CloseTag(tagName));
+		} // proc PrintTag
+
+		private void CloseTag(string tagName)
+		{
+			if (tagIsOpen)
+			{
+				PrintText("/>");
+				tagIsOpen = false;
+			}
+			else
+				PrintText("</" + tagName + ">");
+		} // proc CloseTag
 
 		[LuaMember("indent")]
-		public IDisposable LuaIndent(int indent)
+		public IDisposable Indent(int indent)
 		{
 			if (textOutput is IndentedTextWriter tw)
 			{
@@ -415,7 +571,7 @@ namespace TecWare.DE.Server.Http
 			}
 
 			if (template is string text)
-				LuaPrintText(text);
+				PrintText(text);
 			else if (template is ILuaScript script)
 			{
 				var g = new LuaTemplateTable(root, parentScope, fi.FullName, arguments);
@@ -425,6 +581,9 @@ namespace TecWare.DE.Server.Http
 
 		[LuaMember("printTemplate")]
 		public void LuaTemplate(string source, LuaTable args = null)
+			=> LuaTemplate(this, this, source, args);
+
+		void IHtmlScriptScope.PrintTemplate(string source, LuaTable args)
 			=> LuaTemplate(this, this, source, args);
 
 		#endregion
@@ -437,6 +596,9 @@ namespace TecWare.DE.Server.Http
 				HttpStuff.MakeUriArguments(sb, false, args.ToProperties());
 			return context.GetOrigin(new Uri(sb.ToString(), UriKind.Relative)).ToString();
 		} // func GetUri
+
+		string IHtmlScript.GetUri(string relativeUri, LuaTable args)
+			=> GetUri(relativeUri, args);
 
 		#region -- otext, obinary -----------------------------------------------------
 
