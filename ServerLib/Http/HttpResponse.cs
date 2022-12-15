@@ -248,38 +248,21 @@ namespace TecWare.DE.Server.Http
 
 	#endregion
 
-	#region -- interface IHtmlScriptScope ---------------------------------------------
-
-	/// <summary>Html script scope</summary>
-	public interface IHtmlScriptScope
-	{
-		/// <summary>Return a value from the current scope.</summary>
-		/// <param name="key"></param>
-		/// <returns></returns>
-		object GetValue(object key);
-		/// <summary>Print a template relative to the source.</summary>
-		/// <param name="source"></param>
-		/// <param name="args"></param>
-		void PrintTemplate(string source, LuaTable args = null);
-
-		/// <summary>Request context</summary>
-		IDEWebRequestScope Context { get; }
-		/// <summary>Script file name.</summary>
-		string ScriptBase { get; }
-	} // interface IHtmlScriptScope
-
-	#endregion
-
 	#region -- interface IHtmlScript --------------------------------------------------
 
 	/// <summary>Html script interface</summary>
-	public interface IHtmlScript : IHtmlScriptScope
+	public interface IHtmlScript
 	{
+        /// <summary>Return a value from the current scope.</summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        object GetValue(object key);
+        
 		/// <summary>Return a relative Uri.</summary>
-		/// <param name="relativeUri"></param>
-		/// <param name="args"></param>
-		/// <returns></returns>
-		string GetUri(string relativeUri, LuaTable args = null);
+        /// <param name="relativeUri"></param>
+        /// <param name="args"></param>
+        /// <returns></returns>
+        string GetUri(string relativeUri, LuaTable args = null);
 
 		/// <summary>Print a formatted value.</summary>
 		/// <param name="value"></param>
@@ -291,15 +274,22 @@ namespace TecWare.DE.Server.Http
 		/// <summary>Print text to the output.</summary>
 		/// <param name="text"></param>
 		void Print(string text);
+
 		/// <summary>Print an html tag.</summary>
 		/// <param name="tagName"></param>
 		/// <param name="attributes"><c>#</c> is sets the id, <c>:</c> sets the style, <c>.</c> set the class</param>
 		/// <returns></returns>
 		IDisposable PrintTag(string tagName, params object[] attributes);
-		/// <summary>Ident the current output.</summary>
-		/// <param name="indent"></param>
-		/// <returns></returns>
-		IDisposable Indent(int indent);
+
+        /// <summary>Print a template relative to the source.</summary>
+        /// <param name="source"><c>FileInfo</c> or file string.</param>
+        /// <param name="args"></param>
+        void PrintTemplate(object source, LuaTable args = null);
+
+        /// <summary>Ident the current output.</summary>
+        /// <param name="indent"></param>
+        /// <returns></returns>
+        IDisposable Indent(int indent);
 
 		/// <summary>Open text output.</summary>
 		/// <param name="contentType"></param>
@@ -311,17 +301,22 @@ namespace TecWare.DE.Server.Http
 
 		/// <summary>Script scope.</summary>
 		LuaTable Self { get; }
-		/// <summary>Content type of the output.</summary>
-		string ContentType { get; }
+        /// <summary>Request context</summary>
+        IDEWebRequestScope Context { get; }
+        /// <summary>Script file name.</summary>
+        string ScriptBase { get; }
+
+        /// <summary>Content type of the output.</summary>
+        string ContentType { get; }
 		/// <summary>Curent output stream.</summary>
 		object Output { get; }
-	} // interface IHtmlScript
+    } // interface IHtmlScript
 
-	#endregion
+    #endregion
 
-	#region -- class LuaHtmlTable -----------------------------------------------------
+    #region -- class LuaHtmlTable -----------------------------------------------------
 
-	internal sealed class LuaHtmlTable : LuaTable, IHtmlScript, IDisposable
+    internal sealed class LuaHtmlTable : LuaTable, IHtmlScript, IDisposable
 	{
 		private readonly ILuaScript script;
 		private readonly IDEWebRequestScope context;
@@ -356,7 +351,7 @@ namespace TecWare.DE.Server.Http
 			Procs.FreeAndNil(ref textOutput);
 		} // proc Dispose
 
-		object IHtmlScriptScope.GetValue(object key)
+		object IHtmlScript.GetValue(object key)
 			=> GetValue(key);
 
 		#endregion
@@ -365,14 +360,14 @@ namespace TecWare.DE.Server.Http
 
 		#region -- class LuaTemplateTable ---------------------------------------------
 
-		private sealed class LuaTemplateTable : LuaTable, IHtmlScriptScope
-		{
+		private sealed class LuaTemplateTable : LuaTable, IHtmlScript
+        {
 			private readonly LuaHtmlTable root;
-			private readonly IHtmlScriptScope parentScope;
+			private readonly IHtmlScript parentScope;
 			private readonly string scriptBase;
 			private readonly LuaTable arguments;
 
-			public LuaTemplateTable(LuaHtmlTable root, IHtmlScriptScope parentScope, string scriptBase, LuaTable arguments)
+			public LuaTemplateTable(LuaHtmlTable root, IHtmlScript parentScope, string scriptBase, LuaTable arguments)
 			{
 				this.root = root ?? throw new ArgumentNullException(nameof(root));
 				this.parentScope = parentScope ?? throw new ArgumentNullException(nameof(parentScope));
@@ -380,15 +375,42 @@ namespace TecWare.DE.Server.Http
 				this.arguments = arguments ?? new LuaTable();
 			} // ctor
 
-			object IHtmlScriptScope.GetValue(object key)
+			object IHtmlScript.GetValue(object key)
 				=> GetValue(key);
 
 			[LuaMember("printTemplate")]
 			public void LuaTemplate(object source, LuaTable scope = null)
 				=> root.LuaTemplate(root, this, source, scope);
 
-			void IHtmlScriptScope.PrintTemplate(string source, LuaTable args)
-				=> root.LuaTemplate(root, this, source, args);
+            string IHtmlScript.GetUri(string relativeUri, LuaTable args)
+				=> root.GetUri(relativeUri, args);
+
+			void IHtmlScript.PrintValue(object value, string fmt)
+				=> root.PrintValue(value, fmt);
+
+			void IHtmlScript.Print(params object[] values)
+				=> root.Print(values);
+
+			void IHtmlScript.Print(string text)
+				=> root.Print(text);
+
+			IDisposable IHtmlScript.PrintTag(string tagName, params object[] attributes)
+				=> root.PrintTag(tagName, attributes);
+
+            void IHtmlScript.PrintTemplate(object source, LuaTable args)
+                => root.LuaTemplate(root, this, source, args);
+
+			IDisposable IHtmlScript.Indent(int indent)
+				=> root.Indent(indent);
+
+			void IHtmlScript.OpenText(string contentType, Encoding encoding)
+				=> root.OpenText(contentType, encoding);
+			
+			void IHtmlScript.OpenBinary(string contentType)
+				=> root.OpenBinary(contentType);
+
+			string IHtmlScript.ContentType => root.ContentType;
+			object IHtmlScript.Output => root.Output;
 
 			protected override object OnIndex(object key)
 				=> base.OnIndex(key) ?? arguments.GetValue(key) ?? parentScope.GetValue(key);
@@ -549,12 +571,14 @@ namespace TecWare.DE.Server.Http
 				return null;
 		} // func LuaIndent
 
-		private void LuaTemplate(LuaHtmlTable root, IHtmlScriptScope parentScope, object source, LuaTable arguments)
+		private void LuaTemplate(LuaHtmlTable root, IHtmlScript parentScope, object source, LuaTable arguments)
 		{
-			var fi = new FileInfo(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(parentScope.ScriptBase), source.ToString())));
-			var cacheId = fi.FullName + ";" + fi.LastWriteTimeUtc.ToString("o");
+			if (!(source is FileInfo fi)) // FileInfo for full names
+				fi = new FileInfo(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(parentScope.ScriptBase), source.ToString())));
 
-			var template = parentScope.Context.Http.GetWebCache(cacheId);
+            var cacheId = fi.FullName + ";" + fi.LastWriteTimeUtc.ToString("o");
+
+            var template = parentScope.Context.Http.GetWebCache(cacheId);
 			if (template == null)
 			{
 				// parse template item
@@ -580,10 +604,10 @@ namespace TecWare.DE.Server.Http
 		} // proc LuaTemplate
 
 		[LuaMember("printTemplate")]
-		public void LuaTemplate(string source, LuaTable args = null)
+		public void LuaTemplate(object source, LuaTable args = null)
 			=> LuaTemplate(this, this, source, args);
 
-		void IHtmlScriptScope.PrintTemplate(string source, LuaTable args)
+		void IHtmlScript.PrintTemplate(object source, LuaTable args)
 			=> LuaTemplate(this, this, source, args);
 
 		#endregion
