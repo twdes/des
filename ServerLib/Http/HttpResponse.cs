@@ -552,8 +552,8 @@ namespace TecWare.DE.Server.Http
 		{
 			if (tagIsOpen)
 			{
-				PrintText("/>");
-				tagIsOpen = false;
+                tagIsOpen = false;
+                PrintText("/>");
 			}
 			else
 				PrintText("</" + tagName + ">");
