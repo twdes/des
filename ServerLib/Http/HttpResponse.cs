@@ -1223,16 +1223,16 @@ namespace TecWare.DE.Server.Http
 		public static void WriteBinaryException(Stream dst, Exception e)
 		{
 			var value = e.Message;
-			if (value.Length > 1020)
-				value = value.Substring(0, 1020);
+			if (value.Length > 510)
+				value = value.Substring(0, 510);
 			else if (value.Length <= 10)
 				value = $"Error Detected ({value})";
 			var fixedBlock = new byte[1024];
 			fixedBlock[0] = 0x23;
 			fixedBlock[1] = 0x31;
-			BitConverter.GetBytes((short)value.Length).CopyTo(fixedBlock, 2);
-			
-			Encoding.Unicode.GetBytes(value, 0, value.Length, fixedBlock, 4);
+
+			var byteCount = Encoding.Unicode.GetBytes(value, 0, value.Length, fixedBlock, 4);
+			BitConverter.GetBytes((short)byteCount).CopyTo(fixedBlock, 2);
 
 			dst.Write(fixedBlock, 0, fixedBlock.Length);
 		} // func WriteBinaryException
