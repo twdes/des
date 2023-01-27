@@ -1222,7 +1222,7 @@ namespace TecWare.DE.Server.Http
 		/// <param name="e"></param>
 		public static void WriteBinaryException(Stream dst, Exception e)
 		{
-			var value = e.Message;
+			var value = e.GetInnerException().Message;
 			if (value.Length > 510)
 				value = value.Substring(0, 510);
 			else if (value.Length <= 10)

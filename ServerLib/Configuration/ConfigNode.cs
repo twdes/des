@@ -266,8 +266,13 @@ namespace TecWare.DE.Server.Configuration
 			}
 		} // func TryGetProperty
 
-		private IDEConfigurationElement GetElementDefinition(XName name)
-			=> getElements.Value.Values.OfType<IDEConfigurationElement>().FirstOrDefault(cur => cur.Name == name);
+		private IDEConfigurationElement GetElementDefinition(XName name, bool throwException)
+		{
+			var elementConfiguration = getElements.Value.Values.OfType<IDEConfigurationElement>().FirstOrDefault(cur => cur.Name == name);
+			if (elementConfiguration == null && throwException)
+				throw new ArgumentOutOfRangeException($"'{name}' is not defined on {Name}.");
+			return elementConfiguration;
+		} // func GetElementDefinition
 
 		/// <summary>Returns all attributes as properties.</summary>
 		/// <returns></returns>
@@ -286,7 +291,7 @@ namespace TecWare.DE.Server.Configuration
 		/// <returns></returns>
 		public XConfigNode Element(XName name, bool throwException = true)
 		{
-			var elementConfiguration = GetElementDefinition(name);
+			var elementConfiguration = GetElementDefinition(name, throwException);
 			if (elementConfiguration == null)
 			{
 				if (throwException)
@@ -306,7 +311,7 @@ namespace TecWare.DE.Server.Configuration
 			if (element != null)
 			{
 				var comparer = (from n in names
-								let ce = GetElementDefinition(n)
+								let ce = GetElementDefinition(n, true)
 								where ce != null
 								select ce).ToArray();
 
