@@ -28,6 +28,11 @@
 							<xs:documentation>Automatic Certificate Management Environment</xs:documentation>
 						</xs:annotation>
 					</xs:attribute>
+					<xs:attribute name="renewDays" type="xs:int" use="optional" default="30">
+						<xs:annotation>
+							<xs:documentation>Days before the certifcate renew will start.</xs:documentation>
+						</xs:annotation>
+					</xs:attribute>
 				</xs:extension>
 			</xs:complexContent>
 		</xs:complexType>

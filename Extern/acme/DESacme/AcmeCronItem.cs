@@ -58,6 +58,7 @@ namespace TecWare.DE
 			private readonly Uri acmeUri;
 			private readonly string commonName;
 			private readonly string fileName;
+			private readonly int renewDays;
 
 			private string accountKey = null;
 
@@ -71,11 +72,12 @@ namespace TecWare.DE
 
 			#region -- Ctor -----------------------------------------------------------
 
-			public AcmeStateStore(Uri acmeUri, string commonName, string fileName)
+			public AcmeStateStore(Uri acmeUri, string commonName, string fileName, int renewDays)
 			{
 				this.acmeUri = acmeUri ?? throw new ArgumentNullException(nameof(acmeUri));
 				this.fileName = fileName ?? throw new ArgumentNullException(nameof(fileName));
 				this.commonName = commonName ?? throw new ArgumentNullException(nameof(commonName));
+				this.renewDays = Math.Abs(renewDays);
 
 				Load();
 			} // ctor
@@ -299,6 +301,8 @@ namespace TecWare.DE
 
 			public string CommonName => commonName;
 
+			public int RenewDays => renewDays;
+
 			/// <summary>Account key</summary>
 			public string AccountKey => accountKey;
 
@@ -378,8 +382,9 @@ namespace TecWare.DE
 
 		private bool TryGetState(LogMsgType type, out AcmeStateStore state)
 		{
-			var acmeUri = GetAcmeUri(Config.GetAttribute("acme", null));
-			var hostName = Config.GetAttribute("commonName", null);
+			var acmeUri = GetAcmeUri(ConfigNode.GetAttribute<string>("acme"));
+			var hostName = ConfigNode.GetAttribute<string>("commonName");
+			var renewDays = Math.Abs(ConfigNode.GetAttribute<int>("renewDays"));
 
 			if (acmeUri == null)
 			{
@@ -402,7 +407,7 @@ namespace TecWare.DE
 				return false;
 			}
 
-			state = new AcmeStateStore(acmeUri, hostName, Path.ChangeExtension(LogFileName, ".state"));
+			state = new AcmeStateStore(acmeUri, hostName, Path.ChangeExtension(LogFileName, ".state"), renewDays);
 			return true;
 		} // func TryGetState
 
@@ -414,7 +419,7 @@ namespace TecWare.DE
 		{
 			var notAfter = force ? DateTime.MinValue : GetCurrentCertifcateNotAfter(state.CommonName);
 			if (notAfter < DateTime.Now
-				|| notAfter.AddDays(-10) < DateTime.Now)
+				|| notAfter.AddDays(-state.RenewDays) < DateTime.Now)
 			{
 				// create a new order
 				Log.Info("Start new Order.");
