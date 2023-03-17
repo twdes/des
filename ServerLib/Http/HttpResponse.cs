@@ -26,6 +26,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web.Caching;
 using System.Xml;
 using System.Xml.Linq;
 using Neo.IronLua;
@@ -253,16 +254,16 @@ namespace TecWare.DE.Server.Http
 	/// <summary>Html script interface</summary>
 	public interface IHtmlScript
 	{
-        /// <summary>Return a value from the current scope.</summary>
-        /// <param name="key"></param>
-        /// <returns></returns>
-        object GetValue(object key);
-        
+		/// <summary>Return a value from the current scope.</summary>
+		/// <param name="key"></param>
+		/// <returns></returns>
+		object GetValue(object key);
+
 		/// <summary>Return a relative Uri.</summary>
-        /// <param name="relativeUri"></param>
-        /// <param name="args"></param>
-        /// <returns></returns>
-        string GetUri(string relativeUri, LuaTable args = null);
+		/// <param name="relativeUri"></param>
+		/// <param name="args"></param>
+		/// <returns></returns>
+		string GetUri(string relativeUri, LuaTable args = null);
 
 		/// <summary>Print a formatted value.</summary>
 		/// <param name="value"></param>
@@ -281,15 +282,15 @@ namespace TecWare.DE.Server.Http
 		/// <returns></returns>
 		IDisposable PrintTag(string tagName, params object[] attributes);
 
-        /// <summary>Print a template relative to the source.</summary>
-        /// <param name="source"><c>FileInfo</c> or file string.</param>
-        /// <param name="args"></param>
-        void PrintTemplate(object source, LuaTable args = null);
+		/// <summary>Print a template relative to the source.</summary>
+		/// <param name="source"><c>FileInfo</c> or file string.</param>
+		/// <param name="args"></param>
+		void PrintTemplate(object source, LuaTable args = null);
 
-        /// <summary>Ident the current output.</summary>
-        /// <param name="indent"></param>
-        /// <returns></returns>
-        IDisposable Indent(int indent);
+		/// <summary>Ident the current output.</summary>
+		/// <param name="indent"></param>
+		/// <returns></returns>
+		IDisposable Indent(int indent);
 
 		/// <summary>Open text output.</summary>
 		/// <param name="contentType"></param>
@@ -301,22 +302,22 @@ namespace TecWare.DE.Server.Http
 
 		/// <summary>Script scope.</summary>
 		LuaTable Self { get; }
-        /// <summary>Request context</summary>
-        IDEWebRequestScope Context { get; }
-        /// <summary>Script file name.</summary>
-        string ScriptBase { get; }
+		/// <summary>Request context</summary>
+		IDEWebRequestScope Context { get; }
+		/// <summary>Script file name.</summary>
+		string ScriptBase { get; }
 
-        /// <summary>Content type of the output.</summary>
-        string ContentType { get; }
+		/// <summary>Content type of the output.</summary>
+		string ContentType { get; }
 		/// <summary>Curent output stream.</summary>
 		object Output { get; }
-    } // interface IHtmlScript
+	} // interface IHtmlScript
 
-    #endregion
+	#endregion
 
-    #region -- class LuaHtmlTable -----------------------------------------------------
+	#region -- class LuaHtmlTable -----------------------------------------------------
 
-    internal sealed class LuaHtmlTable : LuaTable, IHtmlScript, IDisposable
+	internal sealed class LuaHtmlTable : LuaTable, IHtmlScript, IDisposable
 	{
 		private readonly ILuaScript script;
 		private readonly IDEWebRequestScope context;
@@ -327,8 +328,6 @@ namespace TecWare.DE.Server.Http
 		private Stream streamOutput = null;
 		private TextWriter textOutput = null;
 		private Encoding encoding = null;
-
-		private bool tagIsOpen = false;
 
 		#region -- Ctor/Dtor ----------------------------------------------------------
 
@@ -361,7 +360,7 @@ namespace TecWare.DE.Server.Http
 		#region -- class LuaTemplateTable ---------------------------------------------
 
 		private sealed class LuaTemplateTable : LuaTable, IHtmlScript
-        {
+		{
 			private readonly LuaHtmlTable root;
 			private readonly IHtmlScript parentScope;
 			private readonly string scriptBase;
@@ -382,7 +381,7 @@ namespace TecWare.DE.Server.Http
 			public void LuaTemplate(object source, LuaTable scope = null)
 				=> root.LuaTemplate(root, this, source, scope);
 
-            string IHtmlScript.GetUri(string relativeUri, LuaTable args)
+			string IHtmlScript.GetUri(string relativeUri, LuaTable args)
 				=> root.GetUri(relativeUri, args);
 
 			void IHtmlScript.PrintValue(object value, string fmt)
@@ -397,15 +396,15 @@ namespace TecWare.DE.Server.Http
 			IDisposable IHtmlScript.PrintTag(string tagName, params object[] attributes)
 				=> root.PrintTag(tagName, attributes);
 
-            void IHtmlScript.PrintTemplate(object source, LuaTable args)
-                => root.LuaTemplate(root, this, source, args);
+			void IHtmlScript.PrintTemplate(object source, LuaTable args)
+				=> root.LuaTemplate(root, this, source, args);
 
 			IDisposable IHtmlScript.Indent(int indent)
 				=> root.Indent(indent);
 
 			void IHtmlScript.OpenText(string contentType, Encoding encoding)
 				=> root.OpenText(contentType, encoding);
-			
+
 			void IHtmlScript.OpenBinary(string contentType)
 				=> root.OpenBinary(contentType);
 
@@ -440,12 +439,6 @@ namespace TecWare.DE.Server.Http
 
 		private void PrintText(string text)
 		{
-			if (tagIsOpen)
-			{
-				tagIsOpen = false;
-				PrintText(">");
-			}
-
 			if (textOutput != null)
 				textOutput.Write(text);
 			else if (streamOutput != null)
@@ -476,6 +469,11 @@ namespace TecWare.DE.Server.Http
 
 		void IHtmlScript.Print(string text)
 			=> PrintText(text);
+
+		private static readonly string[] emptyTags = new string[] { "area", "base", "br", "col", "embed", "hr", "img", "input", "keygen", "link", "meta", "param", "source", "track", "wbr" };
+
+		private static bool IsEmptyTag(string tagName)
+			=> Array.IndexOf(emptyTags, tagName) >= 0;
 
 		private static void AppendTags(StringBuilder sb, string[] attributes, int attributeCount, string attributeName, string attributeSep)
 		{
@@ -543,21 +541,19 @@ namespace TecWare.DE.Server.Http
 				for (var i = 0; i < otherTagCount; i++)
 					sb.Append(' ').Append(otherTags[i].Name).Append('=').Append('"').Append(otherTags[i].Value).Append('"');
 			}
+
+			var isEmptyTag = IsEmptyTag(tagName);
+			if (isEmptyTag)
+				sb.Append("/>");
+			else
+				sb.Append('>');
 			PrintText(sb.ToString());
-			tagIsOpen = true;
-			return new DisposableScope(() => CloseTag(tagName));
+
+			return isEmptyTag ? DisposableScope.Empty : new DisposableScope(() => CloseTag(tagName));
 		} // proc PrintTag
 
 		private void CloseTag(string tagName)
-		{
-			if (tagIsOpen)
-			{
-                tagIsOpen = false;
-                PrintText("/>");
-			}
-			else
-				PrintText("</" + tagName + ">");
-		} // proc CloseTag
+			=> PrintText("</" + tagName + ">");
 
 		[LuaMember("indent")]
 		public IDisposable Indent(int indent)
@@ -576,9 +572,9 @@ namespace TecWare.DE.Server.Http
 			if (!(source is FileInfo fi)) // FileInfo for full names
 				fi = new FileInfo(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(parentScope.ScriptBase), source.ToString())));
 
-            var cacheId = fi.FullName + ";" + fi.LastWriteTimeUtc.ToString("o");
+			var cacheId = fi.FullName + ";" + fi.LastWriteTimeUtc.ToString("o");
 
-            var template = parentScope.Context.Http.GetWebCache(cacheId);
+			var template = parentScope.Context.Http.GetWebCache(cacheId);
 			if (template == null)
 			{
 				// parse template item
@@ -896,7 +892,7 @@ namespace TecWare.DE.Server.Http
 						throw new ArgumentException(String.Format("Resource '{0}' not found.", resourceName));
 					return src;
 				},
-				assembly.FullName.Replace(" ", "") + "\\" + resourceName, 
+				assembly.FullName.Replace(" ", "") + "\\" + resourceName,
 				contentType
 			);
 		} // proc WriteResource
@@ -1059,7 +1055,7 @@ namespace TecWare.DE.Server.Http
 
 		private static TextWriter PrepareWriteXml(IDEWebRequestScope context, XDocument value, string contentType)
 			=> context.GetOutputTextWriter(contentType, context.Http.DefaultEncoding, -1);
-		
+
 		/// <summary></summary>
 		/// <param name="context"></param>
 		/// <param name="value"></param>

@@ -12,6 +12,7 @@
 		<basicuser name="test1" userName="test" password="plain:test" groups="desSys" />
 		<basicuser name="test2" userName="test2" password="plain:test" groups="desSys" />
 		<basicuser name="test3" userName="test3" password="plain:test" groups="desSys" />
+		<basicuser name="tü" userName="tü" password="plain:ßöä#" groups="desSys" />
 	</http>
 	<cron />
 	<luaengine displayname="LuaEngine" allowDebug="true" script="debugEnv">
