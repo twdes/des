@@ -289,6 +289,9 @@ namespace TecWare.DE.Server
 			catch (Exception e)
 			{
 				Log.Except(e);
+
+				fileSystemWatcher.EnableRaisingEvents = false;
+				fileSystemWatcher.EnableRaisingEvents = true;
 			}
 		} // proc EndRefreshlFiles
 
@@ -362,6 +365,7 @@ namespace TecWare.DE.Server
 		{
 			Log.Warn($"FileSystemWatcher failed (state: {fileSystemWatcher.EnableRaisingEvents}).", e.GetException());
 			// start a scan
+			fileSystemWatcher.EnableRaisingEvents = false;
 			fileSystemWatcher.EnableRaisingEvents = true;
 			StartRefreshFiles(200);
 		} // event FileSystemWatcher_Error

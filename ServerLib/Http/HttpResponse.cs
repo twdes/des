@@ -611,10 +611,13 @@ namespace TecWare.DE.Server.Http
 		[LuaMember]
 		public string GetUri(string relativeUri, LuaTable args = null)
 		{
+			// create uri from arguments
 			var sb = new StringBuilder(relativeUri);
 			if (args != null)
 				HttpStuff.MakeUriArguments(sb, false, args.ToProperties());
-			return context.GetOrigin(new Uri(sb.ToString(), UriKind.Relative)).ToString();
+
+			// reroot uri to different entrances (like https, ...)
+			return context.GetSubPathOrigin(new Uri(sb.ToString(), UriKind.Relative)).ToString();
 		} // func GetUri
 
 		string IHtmlScript.GetUri(string relativeUri, LuaTable args)
