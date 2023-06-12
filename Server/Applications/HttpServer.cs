@@ -1068,7 +1068,7 @@ namespace TecWare.DE.Server
 					throw new ArgumentException("Only absolute paths are allowed.");
 
 				if (!absoluteRootPath.StartsWith(redirectPath))
-					throw new ArgumentException("AbsoluteRootPath does not match RedirectPath.");
+					throw new ArgumentException($"AbsoluteRootPath '{absoluteRootPath}' does not match RedirectPath.");
 
 				var subPath = absoluteRootPath.Substring(redirectPath.Length);
 				return PrefixPath + subPath + absoluteUri.Substring(1);

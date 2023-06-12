@@ -272,8 +272,15 @@ namespace TecWare.DE.Server
 
 		#region  -- RefreshFiles ------------------------------------------------------
 
-		[LuaMember("StartRefreshFiles")]
-		private void StartRefreshFiles(int wait = 500)
+		[LuaMember(nameof(RestartListener))]
+		public void RestartListener()
+		{
+			fileSystemWatcher.EnableRaisingEvents = false;
+			fileSystemWatcher.EnableRaisingEvents = true;
+		} // proc RestartListener
+
+		[LuaMember(nameof(StartRefreshFiles))]
+		public void StartRefreshFiles(int wait = 500)
 		{
 			// wait because the initialization process is not finished.
 			var refreshFiles = new Action<int>(RefreshFiles);
@@ -290,8 +297,7 @@ namespace TecWare.DE.Server
 			{
 				Log.Except(e);
 
-				fileSystemWatcher.EnableRaisingEvents = false;
-				fileSystemWatcher.EnableRaisingEvents = true;
+				RestartListener();
 			}
 		} // proc EndRefreshlFiles
 
@@ -365,8 +371,7 @@ namespace TecWare.DE.Server
 		{
 			Log.Warn($"FileSystemWatcher failed (state: {fileSystemWatcher.EnableRaisingEvents}).", e.GetException());
 			// start a scan
-			fileSystemWatcher.EnableRaisingEvents = false;
-			fileSystemWatcher.EnableRaisingEvents = true;
+			RestartListener();
 			StartRefreshFiles(200);
 		} // event FileSystemWatcher_Error
 
@@ -494,6 +499,14 @@ namespace TecWare.DE.Server
 		Format("N0")
 		]
 		public long FileErrCount => fileErrCount;
+
+		[
+		PropertyName("tw_dirlsn_filewatcherenabled"),
+		DisplayName("FileWatcherEnabled"),
+		Description("Show the state of the file system watcher."),
+		Category(DirectoryListenerCategory)
+		]
+		public bool FileWatcherEnabled => fileSystemWatcher.EnableRaisingEvents;
 
 		#endregion
 	} // class DirectoryListenerItem
