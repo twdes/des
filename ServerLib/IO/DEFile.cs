@@ -291,9 +291,6 @@ namespace TecWare.DE.Server.IO
 			return new FileInfo(destinationName);
 		} // func GetDestinationInfoAsync
 
-		private static string GetFullNameContinue(Task<FileInfo> t)
-			=> t.Result?.FullName;
-
 		private static async Task SecureAsync(Action action, int retryCount)
 		{
 			if (retryCount < 0)
@@ -321,17 +318,19 @@ namespace TecWare.DE.Server.IO
 		/// <summary>Create a unique file name, if the target file exists.</summary>
 		/// <param name="fileName">Target file name</param>
 		/// <returns>Unique file name.</returns>
+		[Obsolete("Use Procs.GetUniqueFileName")]
 		public static string GetUniqueFileName(string fileName)
 			=> GetUniqueFileName(new FileInfo(fileName)).FullName;
 
 		/// <summary>Create a unique file name, if the target file exists.</summary>
 		/// <param name="fi">Target file information.</param>
 		/// <returns></returns>
+		[Obsolete("Use Procs.GetUniqueFileName")]
 		public static FileInfo GetUniqueFileName(this FileInfo fi)
 		{
 			if (fi == null)
 				throw new ArgumentNullException(nameof(fi));
-
+			
 			if (fi.Exists)
 			{
 				var name = Path.GetFileNameWithoutExtension(fi.Name);

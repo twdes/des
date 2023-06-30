@@ -13,6 +13,7 @@
 // specific language governing permissions and limitations under the Licence.
 //
 #endregion
+using Neo.IronLua;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -21,7 +22,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
-using Neo.IronLua;
+using System.Threading.Tasks;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -85,12 +86,13 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		private readonly FileSystemWatcher fileSystemWatcher = new FileSystemWatcher();
-		private readonly List<FileNotifyEvent> notifyQueue = new List<FileNotifyEvent>();
+		private readonly FileSystemWatcher fileSystemWatcher = new();
+		private readonly List<FileNotifyEvent> notifyQueue = new();
 		private NotifyMethod notifyMethod = NotifyMethod.None;
 		private TimeSpan notifyDelay = TimeSpan.FromSeconds(5);
 		private TimeSpan? rescanDelay = null;
-		
+
+		private readonly SemaphoreSlim refreshFiles = new(1, 1);
 		private readonly Action notifyCheck;
 		private DateTime lastTimeStamp = DateTime.MinValue;
 		private DateTime lastFullScan = DateTime.MinValue;
@@ -98,6 +100,7 @@ namespace TecWare.DE.Server
 		private long fileCount = 0;
 		private long fileErrCount = 0;
 		private long fileCountRefresh = 0;
+		private bool fileSystemWatcherEnabled = false;
 
 		#region -- Ctor/Dtor --------------------------------------------------------------
 
@@ -136,7 +139,7 @@ namespace TecWare.DE.Server
 			ValidateDirectory(config.ConfigNew, "path");
 
 			// stop
-			fileSystemWatcher.EnableRaisingEvents = false;
+			NotifyFileSystemWatcherEnabled(false);
 			Server.Queue.CancelCommand(notifyCheck);
 		} // proc OnBeginReadConfiguration
 
@@ -173,7 +176,7 @@ namespace TecWare.DE.Server
 
 			// run
 			Server.Queue.RegisterIdle(notifyCheck);
-			fileSystemWatcher.EnableRaisingEvents = true;
+			NotifyFileSystemWatcherEnabled(true);
 		} // proc OnEndReadConfiguration
 
 		#endregion
@@ -270,38 +273,24 @@ namespace TecWare.DE.Server
 
 		#endregion
 
-		#region  -- RefreshFiles ------------------------------------------------------
+		#region -- RefreshFiles -------------------------------------------------------
 
 		[LuaMember(nameof(RestartListener))]
-		public void RestartListener()
+		public void RestartListener(Exception reason)
 		{
-			fileSystemWatcher.EnableRaisingEvents = false;
-			fileSystemWatcher.EnableRaisingEvents = true;
+			if (reason != null)
+				Log.Warn($"FileSystemWatcher failed (state: {fileSystemWatcher.EnableRaisingEvents}).", reason);
+
+			NotifyFileSystemWatcherEnabled(false);
+			StartRefreshFiles();
 		} // proc RestartListener
 
 		[LuaMember(nameof(StartRefreshFiles))]
 		public void StartRefreshFiles(int wait = 500)
-		{
-			// wait because the initialization process is not finished.
-			var refreshFiles = new Action<int>(RefreshFiles);
-			refreshFiles.BeginInvoke(wait, EndRefreshFiles, refreshFiles);
-		} // proc StartRefreshFiles
+			=> Task.Run(() => RefreshFiles(wait)).Spawn(RestartListener);
 
-		private void EndRefreshFiles(IAsyncResult ar)
-		{
-			try
-			{
-				((Action<int>)ar.AsyncState).EndInvoke(ar);
-			}
-			catch (Exception e)
-			{
-				Log.Except(e);
-
-				RestartListener();
-			}
-		} // proc EndRefreshlFiles
-
-		private void RefreshFiles(int wait)
+		[LuaMember(nameof(RefreshFiles))]
+		public void RefreshFiles(int wait)
 		{
 			using var scope = IsDebug ? Log.CreateScope(LogMsgType.Information, true, true) : null;
 
@@ -309,6 +298,7 @@ namespace TecWare.DE.Server
 
 			lastFullScan = DateTime.Now;
 
+			// wait because the initialization process is not finished.
 			if (wait > 0)
 			{
 				Thread.Sleep(wait);
@@ -334,33 +324,57 @@ namespace TecWare.DE.Server
 					isFileProcessed = fi => false;
 			}
 
-			var di = new DirectoryInfo(fileSystemWatcher.Path);
 			var fileCountChanged = false;
-
-			// check file
-			foreach (var fi in di.EnumerateFiles(fileSystemWatcher.Filter, fileSystemWatcher.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
+			refreshFiles.Wait(); // only executes ones
+			try
 			{
-				if (!isFileProcessed(fi)) // check for enqueue
-				{
-					lock (notifyQueue)
-					{
-						if (IndexOfNotifyEvent(fi.FullName) < 0)
-						{
-							var stamp = fi.LastWriteTime;
-							if (stamp > DateTime.Now) // do not allow timestamp's they are in the future
-								stamp = DateTime.Now;
+				var di = new DirectoryInfo(fileSystemWatcher.Path);
 
-							scope?.WriteLine("Add: {0}", fi.FullName);
-							notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName, stamp));
-							fileCountRefresh++;
-							fileCountChanged |= true;
-						}
-						else
-							scope?.WriteLine("Already queued: {0}", fi.FullName);
+				// restart watcher
+				if (!fileSystemWatcher.EnableRaisingEvents)
+				{
+					scope?.Write("Try restart system watcher: ");
+					try
+					{
+						NotifyFileSystemWatcherEnabled(true);
+						scope?.WriteLine("OK");
+					}
+					catch (FileNotFoundException)
+					{
+						scope?.WriteLine("Failed");
+						scope?.SetType(LogMsgType.Warning);
 					}
 				}
-				else
-					scope?.WriteLine("Skip file: {0}", fi.FullName);
+
+				// check file
+				foreach (var fi in di.EnumerateFiles(fileSystemWatcher.Filter, fileSystemWatcher.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
+				{
+					if (!isFileProcessed(fi)) // check for enqueue
+					{
+						lock (notifyQueue)
+						{
+							if (IndexOfNotifyEvent(fi.FullName) < 0)
+							{
+								var stamp = fi.LastWriteTime;
+								if (stamp > DateTime.Now) // do not allow timestamp's they are in the future
+									stamp = DateTime.Now;
+
+								scope?.WriteLine("Add: {0}", fi.FullName);
+								notifyQueue.Add(new FileNotifyEvent(fi.Name, fi.FullName, stamp));
+								fileCountRefresh++;
+								fileCountChanged |= true;
+							}
+							else
+								scope?.WriteLine("Already queued: {0}", fi.FullName);
+						}
+					}
+					else
+						scope?.WriteLine("Skip file: {0}", fi.FullName);
+				}
+			}
+			finally
+			{
+				refreshFiles.Release();
 			}
 
 			if (fileCountChanged)
@@ -368,16 +382,11 @@ namespace TecWare.DE.Server
 		} // proc RefreshFiles
 
 		private void FileSystemWatcher_Error(object sender, ErrorEventArgs e)
-		{
-			Log.Warn($"FileSystemWatcher failed (state: {fileSystemWatcher.EnableRaisingEvents}).", e.GetException());
-			// start a scan
-			RestartListener();
-			StartRefreshFiles(200);
-		} // event FileSystemWatcher_Error
+			=> RestartListener(e.GetException());
 
 		#endregion
 
-		#region -- Handle File Notify -----------------------------------------------------
+		#region -- Handle File Notify -------------------------------------------------
 
 		private void UpdateLastTimeStamp(DateTime newLastTimeStamp)
 		{
@@ -474,6 +483,17 @@ namespace TecWare.DE.Server
 
 		#region -- Properties ---------------------------------------------------------
 
+		private void NotifyFileSystemWatcherEnabled(bool setState)
+		{
+			fileSystemWatcher.EnableRaisingEvents = setState; // can raise an exception
+			if (fileSystemWatcherEnabled != setState)
+			{
+				fileSystemWatcherEnabled = setState;
+				Log.Info("FileSystemWatcher: {0}", fileSystemWatcherEnabled ? "Started" : "Stopped");
+				OnPropertyChanged(nameof(FileSystemWatcherEnabled));
+			}
+		} // proc NotifyFileSystemWatcherEnabled
+
 		[
 		PropertyName("tw_dirlsn_filecount"),
 		DisplayName("FileCount"),
@@ -506,7 +526,7 @@ namespace TecWare.DE.Server
 		Description("Show the state of the file system watcher."),
 		Category(DirectoryListenerCategory)
 		]
-		public bool FileWatcherEnabled => fileSystemWatcher.EnableRaisingEvents;
+		public bool FileSystemWatcherEnabled => fileSystemWatcherEnabled;
 
 		#endregion
 	} // class DirectoryListenerItem
