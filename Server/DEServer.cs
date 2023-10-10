@@ -1895,6 +1895,18 @@ namespace TecWare.DE.Server
 			public void Redirect(string url, string statusDescription = null)
 				=> GetWebRequestScope().Redirect(url, statusDescription);
 
+			/// <summary>Create a uri with arguments</summary>
+			/// <param name="baseUri"></param>
+			/// <param name="args"></param>
+			/// <returns></returns>
+			[LuaMember]
+			public string MakeUri(string baseUri, LuaTable args)
+			{
+				var sb = new StringBuilder(baseUri);
+				HttpStuff.MakeUriArguments(sb, baseUri.IndexOf('?') == -1, args.Members.Where(kv => kv.Value != null).Select(kv => new PropertyValue(kv.Key, kv.Value)));
+				return sb.ToString();
+			} // func MakeUri
+
 			#endregion
 
 			#region -- Client ---------------------------------------------------------
