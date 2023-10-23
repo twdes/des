@@ -1903,7 +1903,7 @@ namespace TecWare.DE.Server
 			public string MakeUri(string baseUri, LuaTable args)
 			{
 				var sb = new StringBuilder(baseUri);
-				HttpStuff.MakeUriArguments(sb, baseUri.IndexOf('?') == -1, args.Members.Where(kv => kv.Value != null).Select(kv => new PropertyValue(kv.Key, kv.Value)));
+				HttpStuff.MakeUriArguments(sb, baseUri.IndexOf('?') >= 0, args.Members.Where(kv => kv.Value != null).Select(kv => new PropertyValue(kv.Key, kv.Value)));
 				return sb.ToString();
 			} // func MakeUri
 
