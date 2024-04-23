@@ -2,6 +2,8 @@
 <des xmlns="http://tecware-gmbh.de/dev/des/2014" version="330" >
 	<server logpath="Log">
 		<resolve>..\..\SimpleDbg\bin\Debug</resolve>
+
+		<securitygroup name="test">a b</securitygroup>
 	</server>
 
 	<http realm="Test Server">
@@ -9,10 +11,10 @@
 
 		<access id="testNone" scheme="basic none">http://+:8080/testCron/</access>
 
-		<basicuser name="test1" userName="test" password="plain:test" groups="desSys" />
+		<basicuser name="test1" userName="test" password="plain:test" groups="desSys test" />
 		<basicuser name="test2" userName="test2" password="plain:test" groups="desSys" />
 		<basicuser name="test3" userName="test3" password="plain:test" groups="desSys" />
-		<basicuser name="tü" userName="tü" password="plain:ßöä#" groups="desSys" />
+		<basicuser name="tü" userName="tü" password="plain:ßöä#" groups="desSys test" />
 	</http>
 	<cron />
 	<luaengine displayname="LuaEngine" allowDebug="true" script="debugEnv">
@@ -26,6 +28,8 @@
 	<files name="test" displayname="max" directory="test" script="cron">
 		<mimeDef filter="*.lua">text/x-lua</mimeDef>
 	</files>
+
+	<?des-merge ConfigSub.xml?>
 
 	<configItem name="web">
 		<proxy name="proxy" target="http://garten:8080/" script="filter">

@@ -1155,8 +1155,7 @@ namespace TecWare.DE.Server
 			using (users.EnterReadLock())
 			using (var log = LogIdentity(user) ? Log.CreateScope(LogMsgType.Information, autoFlush: true, stopTime: true) : null)
 			{
-				if (log != null)
-					log.WriteLine("Authentificate {0}", user.Name);
+				log?.WriteLine("Authentificate {0}", user.Name);
 
 				foreach (var u in users.GetUserByIdentity(user, exact: false))
 				{
@@ -1212,6 +1211,7 @@ namespace TecWare.DE.Server
 
 		#region -- Security Groups ----------------------------------------------------
 
+		[LuaMember]
 		public string[] BuildSecurityTokens(params string[] securityTokens)
 		{
 			var tokens = new List<string>();
@@ -2253,7 +2253,7 @@ namespace TecWare.DE.Server
 		/// <param name="args"></param>
 		/// <returns></returns>
 		[LuaMember("safecall"), Obsolete("NeoLua do end exception handling.")]
-		private LuaResult LuaSafeCall(object target, params object[] args)
+		internal LuaResult LuaSafeCall(object target, params object[] args)
 		{
 			try
 			{

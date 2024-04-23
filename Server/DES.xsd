@@ -37,6 +37,13 @@
 		</xs:complexContent>
 	</xs:complexType>
 
+	<xs:simpleType name="SecurityTokenType">
+		<xs:annotation>
+			<xs:documentation>List of security tokens.</xs:documentation>
+		</xs:annotation>
+		<xs:list itemType="xs:string" />
+	</xs:simpleType>
+
 	<xs:complexType name="HttpWorkerType">
 		<xs:complexContent>
 			<xs:extension base="ConfigLogItemType">
@@ -277,12 +284,16 @@
 					<xs:annotation>
 						<xs:documentation>Definiert Berechtigungen für den Zugriff auf den Server. Es werden Security-Tokens zu einer Gruppe zusammengefasst, was wiederrum einen Security-Token ergibt.</xs:documentation>
 					</xs:annotation>
-					<xs:complexType mixed="true">
-						<xs:attribute name="name" type="KeyType" use="required">
-							<xs:annotation>
-								<xs:documentation>Bezeichnung der Gruppe.</xs:documentation>
-							</xs:annotation>
-						</xs:attribute>
+					<xs:complexType>
+						<xs:simpleContent>
+							<xs:extension base="SecurityTokenType">
+								<xs:attribute name="name" type="KeyType" use="required">
+									<xs:annotation>
+										<xs:documentation>Bezeichnung der Gruppe.</xs:documentation>
+									</xs:annotation>
+								</xs:attribute>
+							</xs:extension>
+						</xs:simpleContent>
 					</xs:complexType>
 				</xs:element>
 			</xs:sequence>

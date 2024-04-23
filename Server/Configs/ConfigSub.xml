@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<fragment xmlns="http://tecware-gmbh.de/dev/des/2014" >
+	<server>
+		<securitygroup name="test">b c</securitygroup>
+	</server>
+</fragment>
