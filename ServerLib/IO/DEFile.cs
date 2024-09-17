@@ -1000,6 +1000,10 @@ namespace TecWare.DE.Server.IO
 
 				transactionStream.Seek(ofs, SeekOrigin.Begin);
 				transactionStream.Write(block, 0, blockSize);
+
+				// update cache
+				if (currentBlockIndex == index && !ReferenceEquals(block, currentBlock))
+					Array.Copy(block, currentBlock, block.Length);
 			} // proc WriteBlock
 		} // class MemoryTransactionStream
 
