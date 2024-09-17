@@ -325,9 +325,10 @@ namespace TecWare.DE.Server.Data
 
 			private readonly List<LogLine> staged = new List<LogLine>();
 
-			public LogLineBuffer(LogLines lines)
+			public LogLineBuffer(LogLines lines, int insertAt = 0)
 			{
 				this.lines = lines ?? throw new ArgumentNullException(nameof(lines));
+				this.insertAt = insertAt;
 			} // ctor
 
 			private void FlushCore()
@@ -552,8 +553,8 @@ namespace TecWare.DE.Server.Data
 		{
 			var buffer = new LogLineBuffer(this);
 			await LogLine.GetLogLinesAsync(http, path, 0, Int32.MaxValue, (_, log) => buffer.Add(log));
-			lastLineCount = Count;
 			buffer.Flush();
+			lastLineCount = Count;
 		} // proc FetchLinesAsync
 
 		private async Task FetchNextAsync(int nextLineCount)
@@ -563,10 +564,10 @@ namespace TecWare.DE.Server.Data
 				var count = nextLineCount - lastLineCount;
 				if (count > 0)
 				{
-					var buffer = new LogLineBuffer(this);
+					var buffer = new LogLineBuffer(this, lastLineCount);
 					await LogLine.GetLogLinesAsync(http, path, lastLineCount, count, (_, log) => buffer.Add(log));
-					lastLineCount = count + lastLineCount;
 					buffer.Flush();
+					lastLineCount = count + lastLineCount;
 				}
 			}
 			else // fetch all

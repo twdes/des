@@ -272,7 +272,9 @@ namespace TecWare.DE.Server.UI
 
 				Invalidate();
 			}
-		}
+		} // proc EventReceived
+
+		public int Lines => lastLogs.Length;
 	} // class ActivityOverlay
 
 	#endregion

@@ -536,7 +536,7 @@ namespace TecWare.DE.Server
 			if (activityOverlay.Application == null)
 			{
 				activityOverlay.Application = app;
-				app.ReservedBottomRowCount = activityOverlay.Height;
+				app.ReservedBottomRowCount = activityOverlay.Lines;
 			}
 			else
 			{
