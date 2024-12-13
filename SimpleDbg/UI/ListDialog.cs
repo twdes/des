@@ -343,8 +343,8 @@ namespace TecWare.DE.Server.UI
 		protected override void OnRender()
 		{
 			base.OnRender();
-			if (Content != null)
-				Content.Set(0, 2, VerticalDoubleToHorizontalThinLineLeft, ForegroundColor, BackgroundColor);
+			
+			Content?.Set(0, 2, VerticalDoubleToHorizontalThinLineLeft, ForegroundColor, BackgroundColor);
 
 			var itemsCount = GetItemsCountLine();
 			var x = Width - itemsCount.Length - 5;

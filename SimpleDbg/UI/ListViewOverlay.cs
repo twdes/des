@@ -30,6 +30,7 @@ namespace TecWare.DE.Server.UI
 		private IEnumerable<T> source;
 		private int firstVisibleIndex = 0;
 		private int selectedIndex = 0;
+		private int visibleLineCount = 1;
 
 		public ListViewOverlay()
 		{
@@ -152,8 +153,9 @@ namespace TecWare.DE.Server.UI
 			var verticalScrollOffset = top;
 
 			// render list items
-			var lastVisibleIndex = Math.Min(view.Count, firstVisibleIndex + height - verticalScrollOffset);
-			for (var i = firstVisibleIndex; i < lastVisibleIndex; i++)
+			visibleLineCount = height - verticalScrollOffset;
+			var lastVisibleIndex = Math.Min(view.Count, firstVisibleIndex + visibleLineCount) - 1;
+			for (var i = firstVisibleIndex; i <= lastVisibleIndex; i++)
 			{
 				var item = view[i];
 				var selected = selectedIndex == i;
@@ -191,10 +193,10 @@ namespace TecWare.DE.Server.UI
 						SelectIndex(selectedIndex - 1, true);
 						return true;
 					case ConsoleKey.PageDown:
-						SelectIndex(selectedIndex + Height - 1, false);
+						SelectIndex(selectedIndex + visibleLineCount - 1, false);
 						return true;
 					case ConsoleKey.PageUp:
-						SelectIndex(selectedIndex - Height + 1, false);
+						SelectIndex(selectedIndex - visibleLineCount + 1, false);
 						return true;
 					case ConsoleKey.End:
 						SelectLast();
@@ -226,8 +228,8 @@ namespace TecWare.DE.Server.UI
 				newFirstVisibleIndex = view.Count - 1;
 			if (newFirstVisibleIndex < 0)
 				newFirstVisibleIndex = 0;
-			if (LastVisibleLine >= view.Count && view.Count >= Height)
-				newFirstVisibleIndex = view.Count - Height;
+			if (LastVisibleLine >= view.Count && view.Count >= visibleLineCount)
+				newFirstVisibleIndex = view.Count - visibleLineCount;
 
 			if (firstVisibleIndex != newFirstVisibleIndex)
 			{
@@ -257,8 +259,8 @@ namespace TecWare.DE.Server.UI
 					// make index visible
 					if (selectedIndex < firstVisibleIndex)
 						SetFirstVisibleLine(selectedIndex);
-					else if (Height > 0 && selectedIndex > LastVisibleLine)
-						SetFirstVisibleLine(selectedIndex - Height + 1);
+					else if (visibleLineCount > 0 && selectedIndex > LastVisibleLine)
+						SetFirstVisibleLine(selectedIndex - visibleLineCount + 1);
 
 					Invalidate();
 				}
@@ -286,7 +288,7 @@ namespace TecWare.DE.Server.UI
 
 		public int SelectedIndex => selectedIndex;
 		public int FirstVisibleLine => firstVisibleIndex;
-		public int LastVisibleLine => firstVisibleIndex + Height - 1;
+		public int LastVisibleLine => firstVisibleIndex + visibleLineCount - 1;
 		public int ItemCount => view.Count;
 
 		public T SelectedItem => GetItem(selectedIndex);
