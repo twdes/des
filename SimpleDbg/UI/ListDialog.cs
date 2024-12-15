@@ -21,6 +21,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Neo.Console;
+using TecWare.DE.Server.Data;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server.UI
@@ -369,18 +370,15 @@ namespace TecWare.DE.Server.UI
 		private bool CanCopyLine()
 			=> View.SelectedItem is XElement;
 
-		private Task<bool?> ViewLineAsync()
+		private async Task<bool?> ViewLineAsync()
 		{
 			if (View.SelectedItem is XElement x)
-			{
-				//var sb = new StringBuilder();
-				//await Program.ShowTextBlockAsync(sb.ToString(), Title);
-			}
-			return Task.FromResult<bool?>(null);
+				await Program.ShowTextBlockAsync(x.Format(), x.Name.LocalName);
+			return null;
 		} // func ViewLineAsync
 
 		private bool CanViewLine()
-			=> false; // CanViewLine();
+			=> View.SelectedItem is XElement;
 
 		private new ListOverlay View => (ListOverlay)base.View;
 

@@ -111,6 +111,8 @@ namespace TecWare.DE.Server
 		{
 			if (propertyName == ".")
 				WriteProperty(PropertyType.Value, String.Empty, typeName);
+			else if (propertyName.StartsWith("@"))
+				WriteProperty(PropertyType.Attribute, propertyName.Substring(1), typeName);
 			else
 				WriteProperty(PropertyType.Element, propertyName, typeName);
 		} // func WriteProperty

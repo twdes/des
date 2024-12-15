@@ -729,9 +729,8 @@ namespace TecWare.DE.Server
 			var sendTypeDefinition = String.Compare(r.GetProperty("desc", Boolean.FalseString), Boolean.TrueString, StringComparison.OrdinalIgnoreCase) == 0;
 
 			// Suche den passenden Descriptor
-			var descriptor = controller.Descriptor;
-			if (descriptor == null)
-				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("List '{0}' has no format description.", controller.Id));
+			var descriptor = controller.Descriptor
+				?? throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("List '{0}' has no format description.", controller.Id));
 
 			controller.OnBeforeList();
 

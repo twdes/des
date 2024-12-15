@@ -57,6 +57,7 @@
     <Compile Include="ConsoleEventSocket.cs" />
     <Compile Include="ConsoleView.cs" />
     <Compile Include="Data\Log.cs" />
+    <Compile Include="Data\XElementFormatter.cs" />
     <Compile Include="NeoConsole\NativeMethods.cs" />
     <Compile Include="NeoConsole\NeoConsole.cs" />
     <Compile Include="NeoConsole\NeoConsoleApp.cs" />
