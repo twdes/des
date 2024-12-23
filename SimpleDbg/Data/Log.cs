@@ -126,22 +126,32 @@ namespace TecWare.DE.Server.Data
 
 	#region -- class LogPropertyInfo --------------------------------------------------
 
-	internal sealed class LogPropertyInfo
+	internal sealed class LogPropertyInfo : IComparable<LogPropertyInfo>
 	{
 		private readonly string name;
+		private readonly string category;
 		private readonly string displayName;
 		private readonly Type dataType;
 		private readonly string description;
 		private readonly string format;
 
-		public LogPropertyInfo(string name, string displayName, Type dataType, string description, string format)
+		public LogPropertyInfo(string name, string displayName, Type dataType, string category, string description, string format)
 		{
 			this.name = name ?? throw new ArgumentNullException(nameof(name));
 			this.displayName = String.IsNullOrEmpty(displayName) ? null : displayName;
 			this.dataType = dataType ?? typeof(string);
+			this.category = category ?? throw new ArgumentNullException(nameof(category));
 			this.description = description;
 			this.format = format;
 		} // ctor
+
+		public int CompareTo(LogPropertyInfo other)
+		{
+			var r = String.Compare(category, other.category, StringComparison.OrdinalIgnoreCase);
+			if (r == 0)
+				r = String.Compare(displayName, other.displayName, StringComparison.OrdinalIgnoreCase);
+			return r;
+		} // func CompareTo
 
 		public string FormatValue(string value)
 		{
@@ -164,6 +174,7 @@ namespace TecWare.DE.Server.Data
 		public string Name => name;
 		public string DisplayName => displayName ?? name;
 		public Type DataType => dataType ?? typeof(string);
+		public string Category => category;
 		public string Description => description ?? String.Empty;
 		public string Format => format;
 	} // class LogPropertyInfo
@@ -294,6 +305,7 @@ namespace TecWare.DE.Server.Data
 					var propertyInfo = new LogPropertyInfo(name,
 						x.GetAttribute("displayname", name),
 						LuaType.GetType(x.GetAttribute("type", "string"), lateAllowed: true).Type,
+						x.GetAttribute("category", String.Empty),
 						x.GetAttribute("description", name),
 						x.GetAttribute("format", null)
 					);

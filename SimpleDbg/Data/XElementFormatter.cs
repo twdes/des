@@ -24,10 +24,10 @@ namespace TecWare.DE.Server.Data
 		private static bool IsComplexType(XElement x)
 			=> x.HasAttributes || x.HasElements;
 
-		private static void Format(TextWriter tw, string indent, XName name, string value)
+		private static void Format(TextWriter tw, string indent, string name, string value)
 		{
 			tw.Write(indent);
-			tw.Write(name.LocalName);
+			tw.Write(name);
 			tw.Write(" = ");
 			tw.WriteLine(value);
 		} // proc Format
@@ -43,7 +43,7 @@ namespace TecWare.DE.Server.Data
 			var a = x.FirstAttribute;
 			while (a != null)
 			{
-				Format(tw, indent, a.Name, a.Value);
+				Format(tw, indent, a.Name.LocalName, a.Value);
 				a = a.NextAttribute;
 			}
 
@@ -56,7 +56,7 @@ namespace TecWare.DE.Server.Data
 					if (IsComplexType(e))
 						Format(tw, indent, e);
 					else
-						Format(tw, indent, e.Name, e.Value);
+						Format(tw, indent, e.Name.LocalName, e.Value);
 				}
 				else if (n is XCData d)
 					Format(tw, indent, ".", d.Value);

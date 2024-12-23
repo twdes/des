@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Security;
 using System.Text;
 using System.Threading;
@@ -161,8 +162,7 @@ namespace Neo.Console
 				isBufferInvalidate = false;
 			}
 
-			if (Content != null)
-				Content.CopyTo(ActualLeft - windowLeft, ActualTop - windowTop, windowBuffer);
+			Content?.CopyTo(ActualLeft - windowLeft, ActualTop - windowTop, windowBuffer);
 		} // proc Render
 
 		protected virtual void OnRender() { }
@@ -904,6 +904,7 @@ namespace Neo.Console
 		private readonly ConsoleOutputBuffer activeOutput; // active output buffer, for the window
 		private readonly ConsoleInputBuffer input; // active input buffer
 		private int reservedBottomRowCount = 0;
+		private int reservedRightColumnCount = 0;
 
 		private readonly Stack<Action> eventQueue = new Stack<Action>(); // other events that join in the main thread
 		private readonly ManualResetEventSlim eventQueueFilled = new ManualResetEventSlim(false); // marks that events in queue
@@ -1407,9 +1408,6 @@ namespace Neo.Console
 
 			// get new window
 			var afterWindow = activeOutput.GetWindow();
-			//var topRow = window.Top - top - ReservedTopRowCount;
-			//if (topRow > 0)
-			//	activeOutput.SetWindow(left, top - topRow);
 			var bottomRow = top + ReservedBottomRowCount;
 			if (bottomRow > afterWindow.Bottom)
 			{
@@ -1660,7 +1658,6 @@ namespace Neo.Console
 			}
 		} // prop ActiveOverlay
 
-		//public int ReservedTopRowCount { get; set; } = 0;
 		public int ReservedBottomRowCount
 		{
 			get => reservedBottomRowCount;
@@ -1673,6 +1670,23 @@ namespace Neo.Console
 				}
 			}
 		} // proc ReservedBottomRowCount
+
+		public int ReservedRightColumnCount
+		{
+			get => reservedRightColumnCount;
+			set
+			{
+				if (reservedRightColumnCount != value)
+				{
+					reservedRightColumnCount = value;
+
+					foreach (var cur in overlays.OfType<ConsoleReadLineOverlay>())
+						cur.InvalidateSize();
+
+					Invalidate(true);
+				}
+			}
+		} // prop ReservedRightColumnCount
 
 		static ConsoleApplication()
 		{

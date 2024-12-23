@@ -25,6 +25,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using System.Xml.Linq;
 using CommandLine;
 using CommandLine.Text;
@@ -285,6 +286,9 @@ namespace TecWare.DE.Server
 						case ConsoleKey.F4:
 							BeginTask(ShowActionsAsync());
 							break;
+						case ConsoleKey.F6:
+							ToggleProperties();
+							break;
 					}
 				}
 			}
@@ -307,6 +311,7 @@ namespace TecWare.DE.Server
 		private static DEHttpEventSocket eventSocket = null;
 		private static ConnectionStateOverlay connectionStateOverlay = null;
 		private static ActivityOverlay activityOverlay = null;
+		private static PropertyOverlay propertyOverlay = null;
 		private static string currentUsePath = "/"; // current use path
 
 		private static void BeginConnection(Uri uri, ICredentials credentials)
@@ -440,6 +445,11 @@ namespace TecWare.DE.Server
 						activityOverlay.Application = null;
 						activityOverlay = null;
 					}
+					if (propertyOverlay != null)
+					{
+						propertyOverlay.Application = null;
+						propertyOverlay = null;
+					}
 					http?.Dispose();
 					debugSocket?.Dispose();
 					eventSocket?.Dispose();
@@ -455,7 +465,9 @@ namespace TecWare.DE.Server
 				if (eventSocket != null)
 				{
 					activityOverlay = new ActivityOverlay(http, 5);
+					propertyOverlay = new PropertyOverlay(http, currentUsePath);
 					eventSocket.Notify += activityOverlay.EventReceived;
+					eventSocket.Notify += propertyOverlay.EventReceived;
 				}
 			}
 		} // proc SetHttpConnection
@@ -526,6 +538,7 @@ namespace TecWare.DE.Server
 
 			currentUsePath = path; // update path
 			connectionStateOverlay.SetPath(path);
+			propertyOverlay.SetPath(path);
 		} // proc PostNewUsePath
 
 		public static void ToggleActivity()
@@ -537,13 +550,29 @@ namespace TecWare.DE.Server
 			{
 				activityOverlay.Application = app;
 				app.ReservedBottomRowCount = activityOverlay.Lines;
+				propertyOverlay?.InvalidateSize();
 			}
 			else
 			{
 				activityOverlay.Application = null;
 				app.ReservedBottomRowCount = 0;
+				propertyOverlay?.InvalidateSize();
 			}
 		} // proc ToggleActivity
+
+		public static void ToggleProperties()
+		{
+			if (propertyOverlay == null)
+				return;
+
+			if (propertyOverlay.Application == null)
+				propertyOverlay.Application = app;
+			else
+			{
+				propertyOverlay.Application = null;
+				app.ReservedRightColumnCount = 0;
+			}
+		} // proc ToggleProperties
 
 		public static string MakeUri(params PropertyValue[] args)
 			=> MakeUri(CurrentUsePath, args);
@@ -668,6 +697,7 @@ namespace TecWare.DE.Server
 				app.WriteLine(keyColors, new string[] { "  F2 ", "Select new node." });
 				app.WriteLine(keyColors, new string[] { "  F3 ", "Show current log." });
 				app.WriteLine(keyColors, new string[] { "  F4 ", "Execute an action or views a list." });
+				app.WriteLine(keyColors, new string[] { "  F6 ", "Toggle property bar.." });
 				app.WriteLine();
 			}
 			foreach (var cur in

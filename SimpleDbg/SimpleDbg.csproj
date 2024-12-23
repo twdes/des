@@ -70,6 +70,7 @@
     <Compile Include="UI\DebugReadLine.cs" />
     <Compile Include="UI\ListDialog.cs" />
     <Compile Include="UI\ListViewOverlay.cs" />
+    <Compile Include="UI\PropertyOverlay.cs" />
     <Compile Include="UI\ReadLineOverlay.cs" />
     <Compile Include="UI\SelectListDialog.cs" />
     <Compile Include="UI\TextViewDialog.cs" />

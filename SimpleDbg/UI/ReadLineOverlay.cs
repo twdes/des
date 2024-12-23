@@ -419,7 +419,7 @@ namespace TecWare.DE.Server.UI
 
 		protected override void OnRender()
 		{
-			var w = Application.BufferWidth;
+			var w = Application.BufferWidth - Application.ReservedRightColumnCount - 1;
 
 			// build new buffer the can hold the text
 			var totalHeight = 0;
