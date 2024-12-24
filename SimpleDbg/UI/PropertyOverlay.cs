@@ -65,26 +65,25 @@ namespace TecWare.DE.Server.UI
 				{
 					curCat = p.Info.Category;
 
-					content.Set(0, endTop, HorizontalThinLine, ConsoleColor.DarkGray, backgroundColor);
-					content.Set(1, endTop, HorizontalThinLine, ConsoleColor.DarkGray, backgroundColor);
-					content.Set(2, endTop, ' ', ConsoleColor.DarkGray, backgroundColor);
-					var (endLeft, _) = content.Write(3, endTop, curCat, 1, ConsoleColor.DarkGray, backgroundColor);
-					content.Set(endLeft++, endTop, ' ', ConsoleColor.DarkGray, backgroundColor);
+					content.Fill(0, endTop, 1, endTop, HorizontalThinLine, ConsoleColor.DarkGray, backgroundColor);
+					var (endLeft, _) = content.Write(2, endTop, " " + curCat + " ", 1, ConsoleColor.DarkGray, backgroundColor);
 					while (endLeft < content.Width)
 						content.Set(endLeft++, endTop, HorizontalThinLine, ConsoleColor.DarkGray, backgroundColor);
 
-					endTop++;
+					if (++endTop >= content.Height)
+						break;
 				}
 
 				// write property
-				content.Set(0, endTop, ' ', ConsoleColor.Gray, backgroundColor);
-				content.Set(1, endTop, ' ', ConsoleColor.Gray, backgroundColor);
+				content.Fill(0, endTop, 1, endTop, ' ', ConsoleColor.DarkGray, backgroundColor);
 				propertyTable.Write(content, 2, endTop, new object[] { p.Info.DisplayName, p.FormattedValue }, new ConsoleColor[] { ConsoleColor.Gray, ConsoleColor.White }, backgroundColor);
 
-				endTop++;
+				if (++endTop >= content.Height)
+					break;
 			}
-		
-			content.Fill(0, endTop, Width - 1, Height - 1, ' ', ConsoleColor.Gray, backgroundColor);
+
+			if (endTop < content.Height)
+				content.Fill(0, endTop, content.Width - 1, content.Height - 1, ' ', ConsoleColor.Gray, backgroundColor);
 		} // proc OnRender
 
 		protected override void OnParentResize()
