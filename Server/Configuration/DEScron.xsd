@@ -42,6 +42,13 @@
 		<xs:complexType>
 			<xs:complexContent>
 				<xs:extension base="CronJobItemType">
+					<xs:sequence>
+						<xs:element name="code" type="xs:string" minOccurs="0" maxOccurs="1">
+							<xs:annotation>
+								<xs:documentation>Inline Code-Block</xs:documentation>
+							</xs:annotation>
+						</xs:element>
+					</xs:sequence>
 					<xs:attribute name="supportsCancelation" type="xs:boolean" use="optional" default="false">
 						<xs:annotation>
 							<xs:documentation>Does this job supports cancellation.</xs:documentation>

@@ -151,8 +151,6 @@ namespace TecWare.DE.Server.Configuration
 
 		internal static IEnumerable<XmlSchemaElement> GetAllSchemaElements(XmlSchemaObjectCollection items)
 		{
-			
-
 			if (items == null)
 				yield break;
 

@@ -17,6 +17,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Xml;
+using System.Xml.Linq;
 using Neo.IronLua;
 
 namespace TecWare.DE.Server
@@ -139,6 +141,45 @@ namespace TecWare.DE.Server
 	{
 
 	} // class TraceStackTrace
+
+	#endregion
+
+	#region -- class DELuaEngine ------------------------------------------------------
+
+	/// <summary></summary>
+	public static class DELuaEngine
+	{
+		/// <summary></summary>
+		/// <param name="lua"></param>
+		/// <param name="x"></param>
+		/// <param name="leaveOpen"></param>
+		/// <returns></returns>
+		/// <exception cref="ArgumentNullException"></exception>
+		public static ILuaLexer CreateLexerFromElementContent(this IDELuaEngine lua, XElement x, bool leaveOpen = true)
+		{
+			if(x == null) 
+				throw new ArgumentNullException(nameof(x));
+
+			var fileName = x.BaseUri;
+			var line = 1;
+			var column = 1;
+			if (x is IXmlLineInfo l && l.HasLineInfo())
+			{
+				line = l.LineNumber;
+				column = l.LinePosition;
+			}
+
+			return LuaLexer.Create(fileName, new StringReader(x.Value), leaveOpen: leaveOpen, currentLine: line, currentColumn: column);
+		} // func CreateLexerFromElementContent
+
+		/// <summary></summary>
+		/// <param name="lua"></param>
+		/// <param name="x"></param>
+		/// <param name="parameters"></param>
+		/// <returns></returns>
+		public static ILuaScript CreateScript(this IDELuaEngine lua, XElement x, params KeyValuePair<string, Type>[] parameters)
+			=> lua.CreateScript(CreateLexerFromElementContent(lua, x, leaveOpen: false), x.BaseUri, parameters);
+	} // class DELuaEngine
 
 	#endregion
 }

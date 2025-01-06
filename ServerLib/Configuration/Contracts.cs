@@ -185,6 +185,7 @@ namespace TecWare.DE.Server.Configuration
 
 		public static readonly XName xnCron = MainNamespace + "cron";
 		public static readonly XName xnCronRunAfter = MainNamespace + "runafter";
+		public static readonly XName xnCronCode = MainNamespace + "code";
 		public static readonly XName xnLuaEngine = MainNamespace + "luaengine";
 		public static readonly XName xnLuaScript = MainNamespace + "script";
 		public static readonly XName xnLuaTestScript = MainNamespace + "tests";

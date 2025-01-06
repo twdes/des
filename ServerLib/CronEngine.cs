@@ -80,7 +80,7 @@ namespace TecWare.DE.Server
 		/// <summary>Notifies about the next time border.</summary>
 		/// <param name="dt">Scheduled time.</param>
 		void NotifyNextRun(DateTime dt);
-		
+
 		/// <summary>Time borders for the schedule of the job.</summary>
 		CronBound Bound { get; }
 		/// <summary>Unique name of the job, e.g. ConfigPath, Guid</summary>
@@ -127,7 +127,7 @@ namespace TecWare.DE.Server
 		double LastDuration { get; }
 
 		/// <summary>Was the job failed.</summary>
-		bool IsFailed { get; }
+		string LastExceptionInfo { get; }
 	} // interface ICronJobInformation
 
 	#endregion
@@ -149,7 +149,7 @@ namespace TecWare.DE.Server
 		private readonly SimpleConfigItemProperty<DateTime?> propertyNextRun;
 		private readonly SimpleConfigItemProperty<double> propertyLastTime;
 		private readonly SimpleConfigItemProperty<string> propertyIsRunning;
-		private readonly SimpleConfigItemProperty<bool> propertyIsFailed;
+		private readonly SimpleConfigItemProperty<string> propertyFailed;
 
 		#region -- Ctor/Dtor/Config ---------------------------------------------------
 
@@ -165,7 +165,7 @@ namespace TecWare.DE.Server
 			propertyNextRun = new SimpleConfigItemProperty<DateTime?>(this, "tw_cron_nextrun", "Next run", JobCategory, "Time the job is scheduled for the next run.", "{0:t}", null);
 			propertyLastTime = new SimpleConfigItemProperty<double>(this, "tw_cron_duration", "Last duration", JobCategory, "Zuletzt benötigte Zeit für den Durchlauf", "{0:N1} min", 0.0);
 			propertyIsRunning = new SimpleConfigItemProperty<string>(this, "tw_cron_isrunning", "Is running", JobCategory, "Status der aktuellen Aufgabe.", null, "nein");
-			propertyIsFailed = new SimpleConfigItemProperty<bool>(this, "tw_cron_isfailed", "Is failed", JobCategory, "Is the job failed.", null, false);
+			propertyFailed = new SimpleConfigItemProperty<string>(this, "tw_cron_failed", "Is failed", JobCategory, "Is the job failed.", null, null);
 
 			PublishItem(new DEConfigItemPublicAction("jobstart") { DisplayName = "Start" });
 		} // ctor
@@ -192,7 +192,7 @@ namespace TecWare.DE.Server
 
 			// read the border
 			cronBound = new CronBound(config.ConfigNew.GetAttribute("bound", String.Empty));
-			var attr= config.ConfigNew.Attribute("runTimeSlice");
+			var attr = config.ConfigNew.Attribute("runTimeSlice");
 			runTimeSlice = attr == null ? null : new TimeSpan?(TimeSpan.Parse(attr.Value));
 
 			// initialize run after
@@ -246,11 +246,12 @@ namespace TecWare.DE.Server
 			propertyLastRun.Value = DateTime.Now;
 			try
 			{
+				OnResetFailed();
 				OnRunJob(cancellation);
 			}
-			catch
+			catch (Exception e)
 			{
-				OnSetFailed();
+				OnSetFailed(e.GetInnerException().Message);
 				throw;
 			}
 			finally
@@ -304,12 +305,12 @@ namespace TecWare.DE.Server
 		} // proc ExecuteJobAsync
 
 		/// <summary>Is called if the job is failed.</summary>
-		protected virtual void OnSetFailed()
-			=> propertyIsFailed.Value = true;
+		protected virtual void OnSetFailed(string message)
+			=> propertyFailed.Value = message;
 
 		/// <summary>Is called to reset the failed state.</summary>
 		protected virtual void OnResetFailed()
-			=> propertyIsFailed.Value = false;
+			=> propertyFailed.Value = null;
 
 		void ICronJobInformation.ResetFailed()
 			=> OnResetFailed();
@@ -330,7 +331,7 @@ namespace TecWare.DE.Server
 
 		DateTime? ICronJobInformation.LastRun => propertyLastRun.Value;
 		double ICronJobInformation.LastDuration => propertyLastTime.Value;
-		bool ICronJobInformation.IsFailed => propertyIsFailed.Value;
+		string ICronJobInformation.LastExceptionInfo => propertyFailed.Value;
 
 		/// <summary>Zugriff auf den Status.</summary>
 		protected SimpleConfigItemProperty<string> StateRunning => propertyIsRunning;

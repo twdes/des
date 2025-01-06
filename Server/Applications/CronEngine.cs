@@ -24,9 +24,11 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml;
 using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Networking;
+using TecWare.DE.Server.Configuration;
 using TecWare.DE.Stuff;
 
 namespace TecWare.DE.Server
@@ -140,7 +142,7 @@ namespace TecWare.DE.Server
 				xml.WriteProperty("@nextrun", typeof(DateTime));
 				xml.WriteProperty("@lastRun", typeof(DateTime));
 				xml.WriteProperty("@lastDuration", typeof(double));
-				xml.WriteProperty("@failed", typeof(bool));
+				xml.WriteProperty("@failed", typeof(string));
 				xml.WriteEndType();
 			} // proc WriteType
 
@@ -167,7 +169,7 @@ namespace TecWare.DE.Server
 					if (information.LastRun.HasValue)
 						xml.WriteAttributeProperty("lastRun", information.LastRun);
 					xml.WriteAttributeProperty("lastDuration", information.LastDuration);
-					xml.WriteAttributeProperty("failed", information.IsFailed);
+					xml.WriteAttributeProperty("failed", information.LastExceptionInfo);
 				}
 
 				xml.WriteEndProperty();
@@ -625,30 +627,39 @@ namespace TecWare.DE.Server
 				return false;
 		} // func ResetNextRuntime
 
-		[LuaMember]
-		public IReadOnlyList<string> GetFailedJobs()
+		private IEnumerable<Tuple<string, bool, string>> GetJobReportCore()
 		{
-			var failedIds = new List<string>();
+			if (cronItemCache == null)
+				yield break;
+
 			lock (cronItemCache)
 			{
-				if (cronItemCache != null)
+				for (var i = 0; i < cronItemCache.Length; i++)
 				{
-					for (var i = 0; i < cronItemCache.Length; i++)
-					{
-						if (cronItemCache[i].Job is ICronJobInformation cji && cji.IsFailed)
-							failedIds.Add(cji.UniqueName);
-					}
+					if (cronItemCache[i].Job is ICronJobInformation cji)
+						yield return new Tuple<string, bool, string>(cji.UniqueName, cji.LastExceptionInfo is null, cji.LastExceptionInfo ?? "Ok");
 				}
+
 			}
-			return failedIds;
-		} // func GetFailedJobs
+		} // func GetJobReportCore
+
+		[LuaMember]
+		public IReadOnlyList<string> GetFailedJobs()
+			=> GetJobReportCore().Where(c => !c.Item2).Select(c => c.Item1).ToArray();
+
+		[LuaMember]
+		public LuaTable GetJobReport()
+		{
+			var t = new LuaTable();
+			foreach (var cur in GetJobReportCore())
+				insert(t, new LuaTable { ["JobId"] = cur.Item1, ["LastOk"] = cur.Item2, ["LastMessage"] = cur.Item3 });
+			return t;
+		} // func GetJobReport
 
 		[DEConfigHttpAction("resetJobRuntime", IsSafeCall = true, SecurityToken = SecuritySys)]
 		public XElement HttpResetNextRuntim(string id)
 		{
-			var job = GetJobItem(id);
-			if (job == null)
-				throw new HttpResponseException(HttpStatusCode.NotFound, "Job not found.");
+			var job = GetJobItem(id) ?? throw new HttpResponseException(HttpStatusCode.NotFound, "Job not found.");
 			return new XElement("state",
 				new XElement("reset", ResetNextRuntime(job))
 			);
@@ -713,10 +724,44 @@ namespace TecWare.DE.Server
 	{
 		#region -- Ctor/Dtor ----------------------------------------------------------------
 
+		private ILuaScript inlineScript = null;
+
 		public LuaCronJobItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
 		} // ctor
+
+		protected override void Dispose(bool disposing)
+		{
+			if (disposing)
+				ClearInlineScript();
+			base.Dispose(disposing);
+		} // proc Dispose
+
+		protected override void OnEndReadConfiguration(IDEConfigLoading config)
+		{
+			base.OnEndReadConfiguration(config);
+
+			// remove current script
+			ClearInlineScript();
+
+			// create inline script
+			var xCode = Config.Element(DEConfigurationConstants.xnCronCode);
+			if (xCode != null)
+			{
+				var lua = this.GetService<IDELuaEngine>(true);
+				inlineScript = lua.CreateScript(xCode, new KeyValuePair<string, Type>(nameof(CancellationToken), typeof(CancellationToken)));
+			}
+		} // proc OnEndReadConfiguration
+
+		private void ClearInlineScript()
+		{
+			if (inlineScript != null)
+			{
+				inlineScript.Dispose();
+				inlineScript = null;
+			}
+		} // proc ClearInlineScript
 
 		#endregion
 
@@ -727,14 +772,20 @@ namespace TecWare.DE.Server
 		protected override void OnRunJob(CancellationToken cancellation)
 		{
 			cancellationToken = cancellation;
-			cancellation.Register(OnCancel);
-			CallMember("Run", cancellationToken);
+
+			if (inlineScript != null)
+				inlineScript.Run(this, true, cancellationToken);
+			else
+			{
+				cancellation.Register(OnCancel);
+				CallMember("Run", cancellationToken);
+			}
 		} // proc OnRunJob
 
 		private void OnCancel()
 			=> CallMember("Cancel");
 
-		public override bool IsSupportCancelation => Config.GetAttribute("supportsCancelation", false) || GetMemberValue("Cancel", rawGet: true) != null;
+		public override bool IsSupportCancelation => ConfigNode.GetAttribute<bool>("supportsCancelation") || GetMemberValue("Cancel", rawGet: true) != null;
 
 		#endregion
 
@@ -767,7 +818,7 @@ namespace TecWare.DE.Server
 						StateRunning.Value = c.DisplayName;
 					Log.Info("{0}: started...", c.DisplayName);
 					if (!CronEngine.ExecuteJobAsync(c, cancellation).Result)
-						OnSetFailed();
+						OnSetFailed("Job failed.");
 					Log.Info("{0}: finished.", c.DisplayName);
 				}, true
 			);
@@ -808,8 +859,9 @@ namespace TecWare.DE.Server
 				var failed = tasks.Count(t => !t.Result);
 				if (failed > 0)
 				{
-					OnSetFailed();
-					Log.Warn("{0} tasks finished (failed {1}).", tasks.Count,  failed);
+					var msg = String.Format("{0} tasks finished (failed {1}).", tasks.Count, failed);
+					OnSetFailed(msg);
+					Log.Warn(msg);
 				}
 				else
 					Log.Info("{0} tasks finished.", tasks.Count);
