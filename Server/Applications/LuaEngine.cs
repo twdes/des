@@ -325,9 +325,9 @@ namespace TecWare.DE.Server
 
 			private string ChangeDirectory()
 			{
-				if (ScriptBase != null)
+				if (scriptBase != null && File.Exists(scriptBase))
 				{
-					var currentDirectory = Path.GetDirectoryName(ScriptBase);
+					var currentDirectory = Path.GetDirectoryName(scriptBase);
 					var oldDirectory = Environment.CurrentDirectory;
 					Environment.CurrentDirectory = currentDirectory;
 					return oldDirectory;
