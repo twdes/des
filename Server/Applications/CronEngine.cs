@@ -648,6 +648,7 @@ namespace TecWare.DE.Server
 			=> GetJobReportCore().Where(c => !c.Item2).Select(c => c.Item1).ToArray();
 
 		[LuaMember]
+		[DEConfigHttpAction("getJobReport", IsSafeCall = true, SecurityToken = SecuritySys)]
 		public LuaTable GetJobReport()
 		{
 			var t = new LuaTable();

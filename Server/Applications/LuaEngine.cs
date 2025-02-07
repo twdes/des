@@ -113,7 +113,7 @@ namespace TecWare.DE.Server
 				}
 			} // proc Compile
 
-			public void LogLuaException(Exception e)
+			public void LogLuaException(Exception e, bool isCompile)
 			{
 				// unwind target exceptions
 				var ex = e.GetInnerException();
@@ -128,7 +128,7 @@ namespace TecWare.DE.Server
 						Log.Except("{0} at {2}:{1}\n\n{3}", er.Message, er.Line, er.FileName, er.StackTrace);
 						break;
 					default:
-						Log.Except("Compile failed.", ex);
+						Log.Except(isCompile ? "Compile failed." : "Execution failed.", ex);
 						break;
 				}
 			} // proc LogLuaException
@@ -251,7 +251,7 @@ namespace TecWare.DE.Server
 					}
 					catch (Exception e)
 					{
-						LogLuaException(e);
+						LogLuaException(e, true);
 						return false;
 					}
 				}
@@ -317,7 +317,7 @@ namespace TecWare.DE.Server
 				}
 				catch (Exception e)
 				{
-					LogLuaException(e);
+					LogLuaException(e, true);
 				}
 			} // ctor
 
@@ -345,7 +345,7 @@ namespace TecWare.DE.Server
 				}
 				catch (Exception e)
 				{
-					LogLuaException(e);
+					LogLuaException(e, false);
 					if (throwExceptions)
 						throw;
 					return LuaResult.Empty;
