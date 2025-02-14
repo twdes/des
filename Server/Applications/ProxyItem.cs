@@ -317,11 +317,11 @@ namespace TecWare.DE.Server
 		private static bool IsInvalidHeader(string k)
 			=> Array.Exists(invalidHeaders, c => String.Compare(c, k, StringComparison.OrdinalIgnoreCase) == 0);
 
-		private static bool TryCopyHeaderValue(DEWebRequestScope r, NameValueCollection requestHeaders, int i, string k, HttpHeaders headers)
+		private static bool TryCopyHeaderValue(DEWebRequestScope r, NameValueCollection requestHeaders, int i, string k, string targetType, HttpHeaders headers)
 		{
 			var v = requestHeaders.GetValues(i);
 			var rr = headers.TryAddWithoutValidation(k, v);
-			r.Log(l => l.WriteLine($"  {k}: {String.Join(",", v)} ({rr})"));
+			r.Log(l => l.WriteLine($"  {k}: {String.Join(",", v)} ({targetType} {rr})"));
 			return rr;
 		} // func TryCopyHeaderValue
 
@@ -334,10 +334,10 @@ namespace TecWare.DE.Server
 				//if (IsInvalidHeader(k))
 				//	continue;
 
-				if (targetRequestHeaders == null || !TryCopyHeaderValue(r, requestHeaders, i, k, targetRequestHeaders))
+				if (targetRequestHeaders == null || !TryCopyHeaderValue(r, requestHeaders, i, k, "request", targetRequestHeaders))
 				{
 					if (targetContentHeaders != null)
-						TryCopyHeaderValue(r, requestHeaders, i, k, targetContentHeaders);
+						TryCopyHeaderValue(r, requestHeaders, i, k, "content", targetContentHeaders);
 				}
 			}
 		} // proc CopyHeaders
@@ -453,12 +453,7 @@ namespace TecWare.DE.Server
 		} // func GetHttpMethod
 
 		private string MakeNewUri(DEWebRequestScope r, string relativeUri)
-		{
-			if (relativeUri == null)
-				relativeUri = String.Empty;
-
-			return r.GetSubPathOrigin(new Uri(relativeUri, UriKind.Relative)).AbsolutePath;
-		} // func MakeNewUri
+			=> r.GetSubPathOrigin(new Uri(relativeUri ?? String.Empty, UriKind.Relative)).AbsolutePath;
 
 		private void ProxyRequestFoundAsync(DEWebRequestScope r, HttpResponseMessage response, RedirectRule redirectRule)
 		{
@@ -478,6 +473,7 @@ namespace TecWare.DE.Server
 				redirectTo = MakeNewUri(r, redirectTo);
 
 			// send move
+			r.Log(l => l.WriteLine($"Status: Found '{response.ReasonPhrase}' -> {redirectTo}"));
 			r.OutputHeaders["Location"] = redirectTo;
 			r.SetStatus(HttpStatusCode.Found, response.ReasonPhrase);
 		} // func ProxyRequestFoundAsync
@@ -493,6 +489,7 @@ namespace TecWare.DE.Server
 			using (var dst = r.GetOutputStream(response.Content.Headers.ContentType.ToString(), response.Content.Headers.ContentLength ?? -1))
 			using (var sr = new StreamWriter(dst))
 			{
+				r.Log(l => l.WriteLine("Send transformed content."));
 				string l;
 				while ((l = await tr.ReadLineAsync()) != null)
 				{
@@ -511,7 +508,10 @@ namespace TecWare.DE.Server
 			// send content
 			using (var src = await response.Content.ReadAsStreamAsync())
 			using (var dst = r.GetOutputStream(response.Content.Headers.ContentType.ToString(), response.Content.Headers.ContentLength ?? -1))
+			{
+				r.Log(l => l.WriteLine("Send content direct: " + response.Content.Headers.ContentType));
 				await src.CopyToAsync(dst);
+			}
 		} // proc ProxyRequestDirectAsync
 
 		private async Task<object> GetRequestDataAsync(DEWebRequestScope r)
@@ -531,7 +531,7 @@ namespace TecWare.DE.Server
 
 		private bool InvokeCustomRewriter(string customRewriter, HttpClient client, DEWebRequestScope request, object requestData, string targetUrl)
 		{
-			var r = CallMemberDirect(customRewriter, new object[] { client, request, requestData, targetUrl }, throwExceptions: true).ToBoolean();
+			var r = CallMemberDirect(customRewriter, [client, request, requestData, targetUrl], throwExceptions: true).ToBoolean();
 			Log.Debug($"Rewrite[{customRewriter}]: {targetUrl} => {r}");
 			return r;
 		} // func InvokeCustomRewriter
@@ -603,10 +603,12 @@ namespace TecWare.DE.Server
 						return false;
 					case HttpStatusCode.NotModified:
 						CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
+						r.Log(l => l.WriteLine($"Status: NotModified '{response.ReasonPhrase}'"));
 						r.SetStatus(HttpStatusCode.NotModified, response.ReasonPhrase);
 						return true;
 					default:
 						CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
+						r.Log(l => l.WriteLine($"Status: {response.StatusCode} '{response.ReasonPhrase}'"));
 						r.SetStatus(response.StatusCode, response.ReasonPhrase);
 						return true;
 				}
