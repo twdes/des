@@ -352,10 +352,8 @@ namespace TecWare.DE.Server
 					foreach (var cookieString in kv.Value)
 					{
 						r.Log(l => l.WriteLine($"  Set-Cookie: {cookieString}"));
-						cookieContainer.SetCookies(r.Context.Request.Url, cookieString);
+						targetHeaders.Add(kv.Key, cookieString);
 					}
-
-					r.OutputCookies.Add(cookieContainer.GetCookies(r.Context.Request.Url));
 				}
 				else
 				{
@@ -538,11 +536,11 @@ namespace TecWare.DE.Server
 
 		private async Task<bool> ProxyRequestAsync(HttpClient client, DEWebRequestScope r, RedirectRule redirectRule, string targetUrl)
 		{
-			r.Log(l => l.WriteLine($"Proxy to {client.BaseAddress}{targetUrl}").WriteLine());
-
 			// build request
 			var method = GetHttpMethod(r);
 			var request = new HttpRequestMessage(method, CreateRequestUri(r, targetUrl));
+
+			r.Log(l => l.WriteLine($"Proxy to {method} {request.RequestUri}").WriteLine());
 
 			// connect input content
 			var hasCustomRewriter = !String.IsNullOrEmpty(redirectRule.CustomRewriter);
@@ -603,12 +601,12 @@ namespace TecWare.DE.Server
 						return false;
 					case HttpStatusCode.NotModified:
 						CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
-						r.Log(l => l.WriteLine($"Status: NotModified '{response.ReasonPhrase}'"));
+						r.Log(l => l.WriteLine($"Status: 304 '{response.ReasonPhrase}'"));
 						r.SetStatus(HttpStatusCode.NotModified, response.ReasonPhrase);
 						return true;
 					default:
 						CopyHeaders(r, response.Headers, response.Content?.Headers, r.OutputHeaders);
-						r.Log(l => l.WriteLine($"Status: {response.StatusCode} '{response.ReasonPhrase}'"));
+						r.Log(l => l.WriteLine($"Status: {(int)response.StatusCode} '{response.ReasonPhrase}'"));
 						r.SetStatus(response.StatusCode, response.ReasonPhrase);
 						return true;
 				}
