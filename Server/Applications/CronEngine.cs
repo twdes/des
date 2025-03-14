@@ -725,44 +725,34 @@ namespace TecWare.DE.Server
 	{
 		#region -- Ctor/Dtor ----------------------------------------------------------------
 
-		private ILuaScript inlineScript = null;
+		private readonly LuaInlineScript script;
 
 		public LuaCronJobItem(IServiceProvider sp, string name)
 			: base(sp, name)
 		{
+			script = new LuaInlineScript(DEConfigurationConstants.xnCronCode, "Run", new KeyValuePair<string, Type>(nameof(CancellationToken), typeof(CancellationToken)));
 		} // ctor
 
 		protected override void Dispose(bool disposing)
 		{
 			if (disposing)
-				ClearInlineScript();
+				script.Dispose();
 			base.Dispose(disposing);
 		} // proc Dispose
+
+		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
+		{
+			base.OnBeginReadConfiguration(config);
+
+			script.OnBeginReadConfiguration(this, config);
+		} // proc OnEndReadConfiguration
 
 		protected override void OnEndReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnEndReadConfiguration(config);
 
-			// remove current script
-			ClearInlineScript();
-
-			// create inline script
-			var xCode = Config.Element(DEConfigurationConstants.xnCronCode);
-			if (xCode != null)
-			{
-				var lua = this.GetService<IDELuaEngine>(true);
-				inlineScript = lua.CreateScript(xCode, new KeyValuePair<string, Type>(nameof(CancellationToken), typeof(CancellationToken)));
-			}
+			script.OnEndReadConfiguration(config);
 		} // proc OnEndReadConfiguration
-
-		private void ClearInlineScript()
-		{
-			if (inlineScript != null)
-			{
-				inlineScript.Dispose();
-				inlineScript = null;
-			}
-		} // proc ClearInlineScript
 
 		#endregion
 
@@ -774,13 +764,10 @@ namespace TecWare.DE.Server
 		{
 			cancellationToken = cancellation;
 
-			if (inlineScript != null)
-				inlineScript.Run(this, true, cancellationToken);
-			else
-			{
+			if (!script.IsInlined)
 				cancellation.Register(OnCancel);
-				CallMember("Run", cancellationToken);
-			}
+
+			script.Run(this, cancellationToken);
 		} // proc OnRunJob
 
 		private void OnCancel()

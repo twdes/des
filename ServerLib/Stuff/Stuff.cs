@@ -23,6 +23,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Xml;
+using System.Xml.Linq;
 using Neo.IronLua;
 using TecWare.DE.Server;
 
@@ -452,6 +453,82 @@ namespace TecWare.DE.Stuff
 		/// <summary>Description of the argument.</summary>
 		public string Description { get; set; }
 	} // class LuaArgument
+
+	#endregion
+
+	#region -- class LuaInlineScript --------------------------------------------------
+
+	/// <summary>Helper for inline script handling.</summary>
+	public sealed class LuaInlineScript : IDisposable
+	{
+		private const string configLoadTag = nameof(LuaInlineScript) + "." + nameof(script);
+
+		private readonly KeyValuePair<string, Type>[] arguments;
+		private readonly XName codeName;
+		private readonly string alternativeMember;
+
+		private ILuaScript script = null;
+
+		/// <summary></summary>
+		/// <param name="codeName"></param>
+		/// <param name="alternativeMember"></param>
+		/// <param name="arguments"></param>
+		public LuaInlineScript(XName codeName, string alternativeMember, params KeyValuePair<string, Type>[] arguments)
+		{
+			this.codeName = codeName ?? throw new ArgumentNullException(nameof(codeName));
+			this.alternativeMember = alternativeMember;
+			this.arguments = arguments;
+		} // ctor
+
+		/// <summary>Destroy script</summary>
+		public void Dispose()
+			=> ClearScript();
+
+		private void ClearScript()
+		{
+			if (script != null)
+			{
+				script.Dispose();
+				script = null;
+			}
+		} // proc ClearScript
+
+		/// <summary>Call to set script from configuration</summary>
+		/// <param name="config"></param>
+		public void OnBeginReadConfiguration(IServiceProvider sp, IDEConfigLoading config)
+		{
+			// create inline script
+			var xCode = config.ConfigNew.Element(codeName);
+			if (xCode != null)
+			{
+				var lua = sp.GetService<IDELuaEngine>(true);
+				config.Tags[configLoadTag] = lua.CreateScript(xCode, arguments);
+			}
+		} // proc OnBeginReadConfiguration
+
+		/// <summary>Commit configuration information</summary>
+		/// <param name="config"></param>
+		/// <exception cref="NotImplementedException"></exception>
+		public void OnEndReadConfiguration(IDEConfigLoading config)
+		{
+			ClearScript();
+			script = (ILuaScript)config.Tags[configLoadTag];
+		} // proc OnEndReadConfiguration
+
+		/// <summary>Execute script</summary>
+		/// <param name="table"></param>
+		/// <param name="args"></param>
+		public void Run(LuaTable table, params object[] args)
+		{
+			if (script != null)
+				script.Run(table, true, args);
+			else
+				table.CallMember(alternativeMember, args);
+		} // proc Run
+
+		/// <summary>Is an inline script used.</summary>
+		public bool IsInlined => script != null;
+	} // class LuaInlineScript
 
 	#endregion
 }
