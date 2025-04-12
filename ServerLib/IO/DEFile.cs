@@ -313,39 +313,7 @@ namespace TecWare.DE.Server.IO
 
 		#endregion
 
-		#region -- GetUniqueFileName, CreateDestination -------------------------------
-
-		/// <summary>Create a unique file name, if the target file exists.</summary>
-		/// <param name="fileName">Target file name</param>
-		/// <returns>Unique file name.</returns>
-		[Obsolete("Use Procs.GetUniqueFileName")]
-		public static string GetUniqueFileName(string fileName)
-			=> GetUniqueFileName(new FileInfo(fileName)).FullName;
-
-		/// <summary>Create a unique file name, if the target file exists.</summary>
-		/// <param name="fi">Target file information.</param>
-		/// <returns></returns>
-		[Obsolete("Use Procs.GetUniqueFileName")]
-		public static FileInfo GetUniqueFileName(this FileInfo fi)
-		{
-			if (fi == null)
-				throw new ArgumentNullException(nameof(fi));
-			
-			if (fi.Exists)
-			{
-				var name = Path.GetFileNameWithoutExtension(fi.Name);
-				var ext = fi.Extension;
-				var i = 1;
-
-				do
-				{
-					fi = new FileInfo(Path.Combine(fi.Directory.FullName, name + "." + i.ToString() + ext));
-					i++;
-				}
-				while (fi.Exists);
-			}
-			return fi;
-		} // func GetUniqueFileName
+		#region -- CreateDestination --------------------------------------------------
 
 		/// <summary>Create the destination file info.</summary>
 		/// <param name="sourceFileInfo"></param>
@@ -382,14 +350,13 @@ namespace TecWare.DE.Server.IO
 						break;
 					case DEFileTargetExists.KeepTarget:
 						if (makeDestinationUnique == null)
-							destinationFileInfo = await Task.Run(() => GetUniqueFileName(destinationFileInfo));
+							destinationFileInfo = await Task.Run(() => Procs.GetUniqueFileName(destinationFileInfo));
 						else
 							destinationFileInfo = await Task.Run(() => makeDestinationUnique.Invoke(destinationFileInfo));
 						break;
 					case DEFileTargetExists.OverwriteAlways:
 					default:
 						break;
-
 				}
 			}
 

@@ -127,15 +127,17 @@ namespace TecWare.DE.Server
 
 		private sealed class CronItemCacheDescriptor : IDEListDescriptor
 		{
-			private CronItemCacheDescriptor()
-			{
-			} // ctor
+			private readonly DECronEngine owner;
+
+			public CronItemCacheDescriptor(DECronEngine owner)
+				=> this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
 
 			public void WriteType(DEListTypeWriter xml)
 			{
 				xml.WriteStartType("item");
 				xml.WriteProperty("@id", typeof(string));
 				xml.WriteProperty("@displayname", typeof(string));
+				xml.WriteProperty("@running", typeof(bool));
 				xml.WriteProperty("@bound", typeof(string));
 				xml.WriteProperty("@supportsCancellation", typeof(bool));
 				xml.WriteProperty("@runTimeSlice", typeof(TimeSpan));
@@ -154,6 +156,7 @@ namespace TecWare.DE.Server
 
 				xml.WriteAttributeProperty("id", c.Job.UniqueName);
 				xml.WriteAttributeProperty("displayname", c.Job.DisplayName);
+				xml.WriteAttributeProperty("running", owner.IsJobRunning(c.Job));
 				xml.WriteAttributeProperty("bound", c.Job.Bound.ToString());
 				if (c.Job is ICronJobCancellation jobCancel)
 				{
@@ -174,8 +177,6 @@ namespace TecWare.DE.Server
 
 				xml.WriteEndProperty();
 			} // proc WriteItem
-
-			public static CronItemCacheDescriptor Instance { get; } = new CronItemCacheDescriptor();
 		} // class CronItemCacheDescriptor
 
 		#endregion
@@ -185,10 +186,12 @@ namespace TecWare.DE.Server
 		private sealed class CronItemCacheController : IDEListController
 		{
 			private readonly DECronEngine owner;
+			private readonly IDEListDescriptor descriptor;
 
 			public CronItemCacheController(DECronEngine owner)
 			{
 				this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+				descriptor = new CronItemCacheDescriptor(owner);
 				owner.RegisterList(Id, this, true);
 			} // ctor
 
@@ -208,7 +211,7 @@ namespace TecWare.DE.Server
 
 			public void OnBeforeList() { }
 
-			public IDEListDescriptor Descriptor => CronItemCacheDescriptor.Instance;
+			public IDEListDescriptor Descriptor => descriptor;
 
 			public string Id => "tw_cron_items";
 			public string DisplayName => "Cron items";
@@ -235,7 +238,6 @@ namespace TecWare.DE.Server
 			cronItemCacheController = new CronItemCacheController(this);
 			currentJobs = new DEList<CurrentRunningJob>(this, "tw_cron_running", "Cron running");
 
-			PublishItem(currentJobs);
 			PublishDebugInterface();
 			PublishItem(new DEConfigItemPublicAction("resetFailedFlag") { DisplayName = "ResetFailed" });
 
@@ -516,8 +518,10 @@ namespace TecWare.DE.Server
 				using (currentJobs.EnterReadLock())
 				{
 					foreach (var j in currentJobs)
+					{
 						if (!job.CanRunParallelTo(j.Job))
 							throw new InvalidOperationException(String.Format("Job is blocked (job: {0})", j.Job.DisplayName));
+					}
 				}
 
 				Log.Debug("jobstart: {0}", job.DisplayName);
@@ -573,7 +577,7 @@ namespace TecWare.DE.Server
 			Task t = null;
 			using (currentJobs.EnterReadLock())
 			{
-				var cur = currentJobs.FirstOrDefault(c => c.Job == job);
+				var cur = currentJobs.FirstOrDefault(c => ReferenceEquals(c.Job, job));
 				if (cur != null)
 				{
 					t = cur.Task;
@@ -597,6 +601,12 @@ namespace TecWare.DE.Server
 			}
 			Task.WaitAll(tasks.ToArray());
 		} // proc CancelJobs
+
+		public bool IsJobRunning(ICronJobExecute job)
+		{
+			using (currentJobs.EnterReadLock())
+				return currentJobs.Any(c => ReferenceEquals(c.Job, job));
+		} // func IsJobRunning
 
 		[LuaMember]
 		public ICronJobItem GetJobItem(string jobId)
