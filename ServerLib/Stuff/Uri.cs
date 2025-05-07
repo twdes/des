@@ -38,7 +38,7 @@ namespace TecWare.DE.Stuff
 			if (path.StartsWith("file://"))
 				path = new Uri(path).LocalPath;
 			else
-				path = path.Replace('/', Path.DirectorySeparatorChar);
+				path = Uri.UnescapeDataString(path.Replace('/', Path.DirectorySeparatorChar));
 			return path;
 		} // func GetLocalPath
 

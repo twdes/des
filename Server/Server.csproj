@@ -168,6 +168,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Configs\test\a b.txt" />
     <Content Include="Configs\test\Templ.html" />
     <EmbeddedResource Include="..\ServerWebUI\libs\jquery-3.5.1.min.js">
       <Link>Resources\Http\libs\jquery-3.5.1.min.js</Link>

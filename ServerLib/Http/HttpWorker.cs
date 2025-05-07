@@ -303,7 +303,7 @@ namespace TecWare.DE.Server.Http
 				return false;
 
 			// create the resource name
-			var resourceName = namespaceRoot + r.RelativeSubPath.Replace('/', '.');
+			var resourceName = namespaceRoot + Uri.UnescapeDataString(r.RelativeSubPath.Replace('/', '.'));
 
 			var src = (Stream)null;
 			try
