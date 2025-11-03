@@ -84,7 +84,7 @@ namespace TecWare.DE.Server
 				{
 					var dstR = dst[i].ToArray();
 					var srcR = src[i];
-					Assert.AreEqual(dstR.Length, srcR.Length, $"Sub record length test failed for index {i:N0}.");
+					Assert.HasCount(dstR.Length, srcR, $"Sub record length test failed for index {i:N0}.");
 					for (var j = 0; j < dstR.Length; j++)
 						Assert.AreEqual(dstR[j], srcR[j], $"Sub record compare test failed for index {i:N0} at byte {j:N0}.");
 				}
@@ -246,7 +246,7 @@ namespace TecWare.DE.Server
 				Assert.AreEqual(t.Item1, m.Success, String.Format("{0}", t));
 				if (m.Success)
 				{
-					Assert.AreEqual(4, m.Groups.Count);
+					Assert.HasCount(4, m.Groups);
 					Console.WriteLine("{0} -> Orignator: {1}, File: {2}, Date: {3}", t.Item2, m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value);
 				}
 			}

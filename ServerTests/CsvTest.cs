@@ -38,7 +38,7 @@ namespace TecWare.DE.Server
 					Console.WriteLine("{0}, {1}", r[0], r[1]);
 					Assert.AreEqual(2, r.Count);
 					if (row == 3)
-						Assert.AreEqual(r[1], null);
+						Assert.IsNull(r[1]);
 					row++;
 				}
 				Assert.AreEqual(4, row);
@@ -53,7 +53,7 @@ namespace TecWare.DE.Server
 			{
 				while (r.ReadRow())
 				{
-					Assert.AreEqual(r.Count, 2);
+					Assert.AreEqual(2, r.Count);
 					Console.WriteLine("{0}, {1}", r[0], r[1]);
 					row++;
 				}
@@ -89,7 +89,7 @@ namespace TecWare.DE.Server
 					{
 						Assert.AreEqual(0.0m, c["Preis"]);
 						Assert.AreEqual(new DateTime(2015, 2, 2), c["Datum"]);
-						Assert.AreEqual(null, c[2]);
+						Assert.IsNull(c[2]);
 					}
 					else
 						Assert.Fail();
@@ -109,10 +109,10 @@ namespace TecWare.DE.Server
 			{
 				while (r.ReadRow())
 				{
-					Assert.AreEqual(r.Count, 3);
-					Assert.AreEqual(r[0], "1");
-					Assert.AreEqual(r[1], "<p style=\"margin-top: 0\">Applikationszange    </p>");
-					Assert.AreEqual(r[2], "3");
+					Assert.AreEqual(3, r.Count);
+					Assert.AreEqual("1", r[0]);
+					Assert.AreEqual("<p style=\"margin-top: 0\">Applikationszange    </p>", r[1]);
+					Assert.AreEqual("3", r[2]);
 					Console.WriteLine(r[1]);
 					row++;
 				}
@@ -462,10 +462,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;Int\r\n" +
-						"value1;1\r\n" +
-						"value2;2\r\n" +
-						"value3;3\r\n", text);
+					Assert.AreEqual("String;Int\r\n" + "value1;1\r\n" + "value2;2\r\n" + "value3;3\r\n", text);
 				}
 			}
 		}
@@ -488,10 +485,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;Int\r\n" +
-						"value1;1\r\n" +
-						"value2;2\r\n" +
-						"value3;3\r\n", text);
+					Assert.AreEqual("String;Int\r\n" + "value1;1\r\n" + "value2;2\r\n" + "value3;3\r\n", text);
 				}
 			}
 		}
@@ -515,10 +509,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;Int\r\n" +
-						";1\r\n" +
-						"value2;\r\n" +
-						";\r\n", text);
+					Assert.AreEqual("String;Int\r\n" + ";1\r\n" + "value2;\r\n" + ";\r\n", text);
 				}
 			}
 		}
@@ -542,10 +533,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;Int\r\n" +
-						"1;1\r\n" +
-						"value2;intvalue\r\n" +
-						"value3;3\r\n", text);
+					Assert.AreEqual("String;Int\r\n" + "1;1\r\n" + "value2;intvalue\r\n" + "value3;3\r\n", text);
 				}
 			}
 		}
@@ -569,11 +557,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("\"\"\"String\"\"\";!§$%&/()=*+'#><|\r\n" +
-						"äüö;-1\r\n" +
-						"@><;2\r\n" +
-						"*'#;3\r\n" +
-						"!§$%&()=?²;42\r\n", text);
+					Assert.AreEqual("\"\"\"String\"\"\";!§$%&/()=*+'#><|\r\n" + "äüö;-1\r\n" + "@><;2\r\n" + "*'#;3\r\n" + "!§$%&()=?²;42\r\n", text);
 				}
 			}
 		}
@@ -596,10 +580,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual(
-						"value1    123\r\n" +
-						"value2    234\r\n" +
-						"\"value3\"  345\r\n", text);
+					Assert.AreEqual("value1    123\r\n" + "value2    234\r\n" + "\"value3\"  345\r\n", text);
 				}
 			}
 		}
@@ -622,10 +603,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("\"String\";\"Int\"\r\n" +
-						"\"value1\";\"1\"\r\n" +
-						"\"value2\";\"2\"\r\n" +
-						"\"value3\";\"3\"\r\n", text);
+					Assert.AreEqual("\"String\";\"Int\"\r\n" + "\"value1\";\"1\"\r\n" + "\"value2\";\"2\"\r\n" + "\"value3\";\"3\"\r\n", text);
 				}
 			}
 		}
@@ -647,10 +625,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;Int\r\n" +
-						"\"value1\";1\r\n" +
-						"\"value2\";2\r\n" +
-						"\"value3\";3\r\n", text);
+					Assert.AreEqual("String;Int\r\n" + "\"value1\";1\r\n" + "\"value2\";2\r\n" + "\"value3\";3\r\n", text);
 				}
 			}
 		}
@@ -673,10 +648,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;Int\r\n" +
-						"value1;1\r\n" +
-						"value2;2\r\n" +
-						"value3;3\r\n", text);
+					Assert.AreEqual("String;Int\r\n" + "value1;1\r\n" + "value2;2\r\n" + "value3;3\r\n", text);
 				}
 			}
 		}
@@ -741,10 +713,7 @@ namespace TecWare.DE.Server
 					);
 
 					var text = sw.ToString();
-					Assert.AreEqual("String;Int\r\n" +
-						"value1;1\r\n" +
-						"value2;2\r\n" +
-						"value3;3\r\n", text);
+					Assert.AreEqual("String;Int\r\n" + "value1;1\r\n" + "value2;2\r\n" + "value3;3\r\n", text);
 				}
 			}
 		}

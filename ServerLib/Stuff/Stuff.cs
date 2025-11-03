@@ -494,6 +494,7 @@ namespace TecWare.DE.Stuff
 		} // proc ClearScript
 
 		/// <summary>Call to set script from configuration</summary>
+		/// <param name="sp"></param>
 		/// <param name="config"></param>
 		public void OnBeginReadConfiguration(IServiceProvider sp, IDEConfigLoading config)
 		{

@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Threading.Tasks;
 using System.Xml;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using TecWare.DE.Server.Stuff;
 using TecWare.DE.Stuff;
 
@@ -228,12 +225,12 @@ namespace TecWare.DE.Server
 		[TestMethod]
 		public void XmlRemoveInvalidChars()
 		{
-			Assert.AreEqual(Procs.RemoveInvalidXmlChars(null), null);
+			Assert.IsNull(Procs.RemoveInvalidXmlChars(null));
 			Assert.AreEqual(Procs.RemoveInvalidXmlChars(String.Empty), String.Empty);
-			Assert.AreEqual(Procs.RemoveInvalidXmlChars("String.Empty"), "String.Empty");
-			Assert.AreEqual(XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("String\x1A.Empty")), "String.Empty");
-			Assert.AreEqual(XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("\x001AEmp\x001Aty\x001A")), "Empty");
-			Assert.AreEqual(XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("String\x001AEmp\x10000ty")), "StringEmp\x10000ty");
+			Assert.AreEqual("String.Empty", Procs.RemoveInvalidXmlChars("String.Empty"));
+			Assert.AreEqual("String.Empty", XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("String\x1A.Empty")));
+			Assert.AreEqual("Empty", XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("\x001AEmp\x001Aty\x001A")));
+			Assert.AreEqual("StringEmp\x10000ty", XmlConvert.VerifyXmlChars(Procs.RemoveInvalidXmlChars("String\x001AEmp\x10000ty")));
 		}
 
 	}
@@ -245,14 +242,14 @@ namespace TecWare.DE.Server
 		public void CertFind01()
 		{
 			var certs = ProcsDE.FindCertificate("store://cu/root/CN=GlobalSign").ToArray();
-			Assert.IsTrue(certs.Count() != 0);
+			Assert.AreNotEqual(0, certs.Count());
 		}
 
 		[TestMethod]
 		public void CertFind02()
 		{
 			var certs = ProcsDE.FindCertificate("store://cu/root/subject:CN=GlobalSign").ToArray();
-			Assert.IsTrue(certs.Count() != 0);
+			Assert.AreNotEqual(0, certs.Count());
 		}
 
 		[TestMethod]
@@ -261,7 +258,19 @@ namespace TecWare.DE.Server
 			var certs = ProcsDE.FindCertificate("store://cu/root/thumbprint:75e0abb6138512271c04f85fddde38e4b7242efe").ToArray();
 			//X509KeyUsageExtension a;
 			//a.KeyUsages = X509KeyUsageFlags.
-			Assert.IsTrue(certs.Count() == 1);
+			Assert.AreEqual(1, certs.Count());
+		}
+	}
+
+	[TestClass]
+	public class StuffTests
+	{ 
+		[TestMethod]
+		public void Utf8()
+		{
+			Assert.IsTrue(Procs.IsUtf8(Encoding.UTF8.GetBytes("AAaaaÄÄÖäö")));
+			Assert.IsFalse(Procs.IsUtf8(Encoding.Default.GetBytes("AAaaaÄÄÖäö")));
+			
 		}
 	}
 }

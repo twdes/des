@@ -1876,7 +1876,13 @@ namespace TecWare.DE.Server
 				var auth = ctx.Request.Headers["Authorization"];
 				if (auth != null && auth.StartsWith("Basic "))
 				{
-					var user = Encoding.UTF8.GetString(Convert.FromBase64String(auth.Substring(6)));
+					var authInfo = auth.Substring(6);
+					var userBytes = Convert.FromBase64String(authInfo);
+
+					var user = Procs.IsUtf8(userBytes)
+						? Encoding.UTF8.GetString(userBytes)
+						: Encoding.Default.GetString(userBytes);
+
 					var p = user.IndexOf(':');
 					if (p >= 0)
 						return new HttpListenerBasicIdentity(user.Substring(0, p), user.Substring(p + 1));
