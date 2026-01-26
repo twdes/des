@@ -378,6 +378,14 @@
 											</xs:list>
 										</xs:simpleType>
 									</xs:attribute>
+									<xs:attribute name="origins" use="optional">
+										<xs:annotation>
+											<xs:documentation>CORS allowed origins</xs:documentation>
+										</xs:annotation>
+										<xs:simpleType>
+											<xs:list itemType="xs:string"/>
+										</xs:simpleType>
+									</xs:attribute>
 								</xs:complexType>
 							</xs:element>
 						</xs:sequence>

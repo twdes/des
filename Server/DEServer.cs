@@ -1567,7 +1567,7 @@ namespace TecWare.DE.Server
 			{
 				try
 				{
-					var forWrite = mode.IndexOfAny(new char[] { '+', 'w' }) > 0;
+					var forWrite = mode.IndexOfAny(new char[] { '+', 'w' }) >= 0;
 					var forTrans = mode.IndexOf('t') >= 0;
 					if (forTrans && forWrite)
 					{

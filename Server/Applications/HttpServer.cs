@@ -933,11 +933,18 @@ namespace TecWare.DE.Server
 					{
 						if (allowFileName)  // cut to a relative path
 						{
-							var p = uri.LastIndexOf('/');
-							if (p == -1)
+							var queryStartAt = uri.IndexOf('?');
+
+							// filename
+							var fileStartAt = uri.LastIndexOf('/', queryStartAt == -1 ? uri.Length : queryStartAt);
+							if (fileStartAt == -1)
 								throw new DEConfigurationException(x, "A prefix must and on '/'.");
-							SetFileName(uri.Substring(p + 1));
-							uri = uri.Substring(0, p + 1);
+							SetFileName(uri.Substring(fileStartAt + 1));
+							uri = uri.Substring(0, fileStartAt + 1);
+
+							// parse query
+							if (queryStartAt >= 0)
+								SetQuery(uri.Substring(queryStartAt + 1));
 						}
 						else
 							throw new DEConfigurationException(x, "A prefix must and on '/'.");
@@ -980,6 +987,8 @@ namespace TecWare.DE.Server
 				=> $"[{GetType().Name}] {protocol}://{hostname}:{port}/{relativeUriPath}";
 
 			protected virtual void SetFileName(string fileName) { }
+
+			protected virtual void SetQuery(string query) { }
 
 			/// <summary>Add the path to HttpListener prefix list.</summary>
 			/// <param name="prefixes">Prefixes to add to the HttpListener</param>
@@ -1083,12 +1092,14 @@ namespace TecWare.DE.Server
 
 		#region -- class PrefixAuthentificationScheme ---------------------------------
 
-		private sealed class PrefixAuthentificationScheme : PrefixDefinition
+		private sealed class PrefixAuthentificationInfo : PrefixDefinition
 		{
 			private readonly AuthenticationSchemes scheme;
+			private readonly List<string> allowedOrigins = new List<string>();
 			private string fileName = null;
+			private Dictionary<string, string> parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-			public PrefixAuthentificationScheme(XElement x)
+			public PrefixAuthentificationInfo(XElement x)
 				: base(x, true)
 			{
 				var v = x.GetAttribute("scheme", String.Empty);
@@ -1109,6 +1120,9 @@ namespace TecWare.DE.Server
 					};
 				}
 
+				foreach (var allowedOrigin in x.GetStrings("origins", true))
+					allowedOrigins.Add(allowedOrigin);
+				
 				this.scheme = schemeValue;
 			} // ctor
 
@@ -1117,7 +1131,26 @@ namespace TecWare.DE.Server
 
 			protected override void SetFileName(string fileName)
 				=> this.fileName = fileName;
-			
+
+			protected override void SetQuery(string query)
+			{
+				var q = HttpUtility.ParseQueryString(query, Encoding.UTF8);
+				for (var i = 0; i < q.Count; i++)
+					parameters.Add(q.GetKey(i), q.Get(i));
+			} // proc SetQuery
+
+			public string AllowOrigin(string origin)
+			{
+				if (String.IsNullOrEmpty(origin))
+					return null;
+
+				// check if this origin is allowed
+				if (allowedOrigins.Exists(c => String.Compare(c, origin, StringComparison.OrdinalIgnoreCase) == 0))
+					return origin;
+
+				return null; // not allowed 
+			} // proc AllowOrigin
+
 			public override bool MatchPrefix(Uri url, bool ignorePrefix)
 			{
 				var r = base.MatchPrefix(url, ignorePrefix);
@@ -1126,6 +1159,26 @@ namespace TecWare.DE.Server
 					r = url.AbsolutePath.Length == PrefixLength 
 						&& url.AbsolutePath.Substring(PrefixPath.Length) == fileName;
 				}
+
+				if (r && parameters.Count > 0)
+				{
+					var q = HttpUtility.ParseQueryString(url.Query, Encoding.UTF8);
+					foreach (var kv in parameters)
+					{
+						var v = q[kv.Key];
+						if (v is null) // parameter missing
+						{
+							r = false;
+							break;
+						}
+						else if (!String.IsNullOrEmpty(kv.Value) && !v.StartsWith(kv.Value, StringComparison.OrdinalIgnoreCase)) // parameter mismatch
+						{
+							r = false;
+							break;
+						}
+					}
+				}
+
 				return r;
 			} // func MatchPrefix
 
@@ -1183,7 +1236,7 @@ namespace TecWare.DE.Server
 		private readonly DEThread httpThread;								// Thread, that process requests
 		private Uri defaultBaseUri = new Uri("http://localhost:8080/", UriKind.Absolute);
 
-		private readonly List<PrefixAuthentificationScheme> prefixAuthentificationSchemes = new List<PrefixAuthentificationScheme>(); // Mapped verschiedene Authentification-Schemas auf die Urls
+		private readonly List<PrefixAuthentificationInfo> prefixAuthentificationSchemes = new List<PrefixAuthentificationInfo>(); // Mapped verschiedene Authentification-Schemas auf die Urls
 		private readonly List<PrefixPathTranslation> prefixPathTranslations = new List<PrefixPathTranslation>(); // Mapped den externen Pfad (URI) auf einen internen Pfad (Path)
 
 		private readonly HttpCacheItem[] cacheItems = new HttpCacheItem[256];
@@ -1288,7 +1341,7 @@ namespace TecWare.DE.Server
 					}
 					else if (x.Name == xnHttpAccess)
 					{
-						var p = AddPrefix(prefixAuthentificationSchemes, new PrefixAuthentificationScheme(x));
+						var p = AddPrefix(prefixAuthentificationSchemes, new PrefixAuthentificationInfo(x));
 						if (defaultPrefix == null)
 							defaultPrefix = p;
 					}
@@ -1637,16 +1690,50 @@ namespace TecWare.DE.Server
 
 		#region -- ProcessRequest -----------------------------------------------------
 
+		private enum AccessControlAllowOrigin
+		{
+			None,
+			Origin,
+			All
+		} // enum AccessControlAllowOrigin
+
+		private sealed class AuthentificationInfo
+		{
+			public AuthentificationInfo(AuthenticationSchemes scheme, string accessControlAllowOrigin)
+			{
+				Scheme = scheme;
+				AccessControlAllowOrigin = accessControlAllowOrigin ?? String.Empty;
+			} // ctor
+
+			public AuthenticationSchemes Scheme { get; }
+			public string AccessControlAllowOrigin { get; }
+		} // class AuthentificationInfo
+
 		private AuthenticationSchemes GetAuthenticationScheme(HttpListenerRequest r)
+			=> GetAuthenticationInfo(r).Scheme;
+
+		private string GetAccessControlAllowOrigin(PrefixAuthentificationInfo prefix, string origin)
+		{
+			var allow = prefix.AllowOrigin(origin);
+			if (String.IsNullOrEmpty(allow))
+				return null;
+			else if (prefix.Scheme == AuthenticationSchemes.Anonymous)
+				return "*";
+			else
+				return allow;
+		} // func GetAccessControlAllowOrigin
+
+		private AuthentificationInfo GetAuthenticationInfo(HttpListenerRequest r)
 		{
 			var prefixScheme = FindPrefix(prefixAuthentificationSchemes, r.Url, true);
 			if (prefixScheme == null || TryGetPreAuthentificatedUser(r, out _))
-				return AuthenticationSchemes.Anonymous;
-			else 
+				return new AuthentificationInfo(AuthenticationSchemes.Anonymous, "*");
+			else
 			{
+				// check authentification
 				var allowMultipleAuthentification = r.Headers["des-multiple-authentifications"];
 				if (Boolean.TryParse(allowMultipleAuthentification, out var t) && t)
-					return prefixScheme.Scheme;
+					return new AuthentificationInfo(prefixScheme.Scheme, GetAccessControlAllowOrigin(prefixScheme, r.Headers["Origin"]));
 				else // standard browser's only accept one authentification scheme
 				{
 					var scheme = prefixScheme.Scheme;
@@ -1667,10 +1754,10 @@ namespace TecWare.DE.Server
 							scheme = AuthenticationSchemes.Basic;
 					}
 
-					return prefixScheme == null ? AuthenticationSchemes.Anonymous : scheme;
+					return new AuthentificationInfo(scheme, GetAccessControlAllowOrigin(prefixScheme, r.Headers["Origin"]));
 				}
 			}
-		} // func GetAuthenticationScheme
+		} // func GetAuthenticationInfo
 
 		private async Task ExecuteHttpRequestAsyc(DEThread thread)
 		{
@@ -1745,13 +1832,13 @@ namespace TecWare.DE.Server
 
 			var absolutePath = pathTranslation.Path + url.AbsolutePath.Substring(pathTranslation.PrefixPath.Length);
 
-			var authentificationScheme = GetAuthenticationScheme(ctx.Request);
+			var authentification = GetAuthenticationInfo(ctx.Request);
 
 			if (ctx.Request.IsWebSocketRequest)
 			{
 				try
 				{
-					await ProcessAcceptWebSocketAsync(ctx, absolutePath, pathTranslation, authentificationScheme);
+					await ProcessAcceptWebSocketAsync(ctx, absolutePath, pathTranslation, authentification.Scheme);
 				}
 				catch (AggregateException e)
 				{
@@ -1764,8 +1851,8 @@ namespace TecWare.DE.Server
 			}
 			else
 			{
-				var httpAuthentification = authentificationScheme != AuthenticationSchemes.Anonymous;
-				var hasPossibleAnon = (authentificationScheme & AuthenticationSchemes.Anonymous) == AuthenticationSchemes.Anonymous;
+				var httpAuthentification = authentification.Scheme != AuthenticationSchemes.Anonymous;
+				var hasPossibleAnon = (authentification.Scheme & AuthenticationSchemes.Anonymous) == AuthenticationSchemes.Anonymous;
 				using var context = new DEWebRequestScope(this, ctx, absolutePath, httpAuthentification, pathTranslation);
 				try
 				{
@@ -1793,6 +1880,14 @@ namespace TecWare.DE.Server
 						// Start logging
 						if (IsDebug || pathTranslation.IsHttpDebugOn)
 							context.LogStart();
+
+						// Set Access-Control-Allow-Origin
+						if (!String.IsNullOrEmpty(authentification.AccessControlAllowOrigin))
+						{
+							context.OutputHeaders["Access-Control-Allow-Origin"] = authentification.AccessControlAllowOrigin;
+							if (authentification.AccessControlAllowOrigin != "*")
+								context.OutputHeaders["Vary"] = "Origin";
+						}
 
 						// start to find the endpoint
 						if (context.TryEnterSubPath(Server, String.Empty))
