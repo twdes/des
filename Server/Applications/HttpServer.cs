@@ -1121,7 +1121,7 @@ namespace TecWare.DE.Server
 					};
 				}
 
-				foreach (var allowedOrigin in x.GetStrings("origins", true))
+				foreach (var allowedOrigin in x.GetStrings("origins"))
 					allowedOrigins.Add(allowedOrigin);
 				
 				this.scheme = schemeValue;
