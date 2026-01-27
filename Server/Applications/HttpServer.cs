@@ -936,15 +936,16 @@ namespace TecWare.DE.Server
 							var queryStartAt = uri.IndexOf('?');
 
 							// filename
-							var fileStartAt = uri.LastIndexOf('/', queryStartAt == -1 ? uri.Length : queryStartAt);
+							var fileStartAt = uri.LastIndexOf('/', (queryStartAt == -1 ? uri.Length : queryStartAt) - 1);
 							if (fileStartAt == -1)
 								throw new DEConfigurationException(x, "A prefix must and on '/'.");
 							SetFileName(uri.Substring(fileStartAt + 1));
-							uri = uri.Substring(0, fileStartAt + 1);
 
 							// parse query
 							if (queryStartAt >= 0)
 								SetQuery(uri.Substring(queryStartAt + 1));
+
+							uri = uri.Substring(0, fileStartAt + 1);
 						}
 						else
 							throw new DEConfigurationException(x, "A prefix must and on '/'.");
