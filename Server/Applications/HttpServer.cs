@@ -939,11 +939,15 @@ namespace TecWare.DE.Server
 							var fileStartAt = uri.LastIndexOf('/', (queryStartAt == -1 ? uri.Length : queryStartAt) - 1);
 							if (fileStartAt == -1)
 								throw new DEConfigurationException(x, "A prefix must and on '/'.");
-							SetFileName(uri.Substring(fileStartAt + 1));
 
 							// parse query
 							if (queryStartAt >= 0)
+							{
+								SetFileName(uri.Substring(fileStartAt + 1, queryStartAt - fileStartAt - 1));
 								SetQuery(uri.Substring(queryStartAt + 1));
+							}
+							else
+								SetFileName(uri.Substring(fileStartAt + 1));
 
 							uri = uri.Substring(0, fileStartAt + 1);
 						}
@@ -1131,7 +1135,7 @@ namespace TecWare.DE.Server
 				=> fileName == null ? base.ToString() : base.ToString() + fileName;
 
 			protected override void SetFileName(string fileName)
-				=> this.fileName = fileName;
+				=> this.fileName = String.IsNullOrWhiteSpace(fileName) ? null : fileName;
 
 			protected override void SetQuery(string query)
 			{
