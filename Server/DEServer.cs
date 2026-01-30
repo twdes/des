@@ -2211,11 +2211,35 @@ namespace TecWare.DE.Server
 				=> DEScope.GetScopeService<IDECommonScope>(false)?.TryDemandUser();
 
 			[LuaMember("format")]
-			private string LuaFormat(string text, params object[] args)
+			public string LuaFormat(string text, params object[] args)
 				=> String.Format(text, args);
 
+			#region -- Log-Helper -----------------------------------------------------
+
+			private LogMessageScopeProxy GetLogOrCreate(object log, bool stopTime, bool create)
+			{
+				if (log is LogMessageScopeProxy p)
+					return new LogMessageScopeProxy(p.Scope, stopTime: stopTime, dispose: false);
+				else if (log is ILogMessageScope scope)
+					return new LogMessageScopeProxy(scope, stopTime: stopTime, dispose: false);
+				else if (log is ILogger2 l)
+					return new LogMessageScopeProxy(create ? l.CreateScope() : l.GetScope(), stopTime: stopTime, dispose: true);
+				else
+					return create ? server.Log.CreateScope(stopTime: stopTime) : server.Log.GetScope(stopTime: stopTime);
+			} // func GetLogOrCreate
+
+			[LuaMember]
+			public LogMessageScopeProxy GetScope(object log, bool stopTime = false)
+				=> GetLogOrCreate(log, stopTime, false);
+
+			[LuaMember]
+			public LogMessageScopeProxy CreateScope(object log, bool stopTime = false)
+				=> GetLogOrCreate(log, stopTime, true);
+
+			#endregion
+
 			[LuaMember("LogMsgType")]
-			private LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
+			public LuaType LuaLogMsgType => LuaType.GetType(typeof(LogMsgType));
 
 			[LuaMember("UseNode")]
 			private LuaResult UseNode(string path, object code, DEConfigItem item = null)
