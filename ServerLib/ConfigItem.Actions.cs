@@ -46,6 +46,7 @@ namespace TecWare.DE.Server
 	public sealed class DEConfigAction
 	{
 		private readonly string securityToken;
+		private readonly string[] allowedMethods;
 		private readonly string description;
 		private readonly MethodInfo methodDescription;
 		private readonly DEConfigActionDelegate action;
@@ -58,9 +59,10 @@ namespace TecWare.DE.Server
 		/// <param name="description"></param>
 		/// <param name="action"></param>
 		/// <param name="isSafeCall"></param>
+		/// <param name="allowedMethods"></param>
 		/// <param name="methodDescription"></param>
 		/// <param name="isAutoLog"></param>
-		public DEConfigAction(string securityToken, string description, DEConfigActionDelegate action, bool isSafeCall, MethodInfo methodDescription, bool isAutoLog)
+		public DEConfigAction(string securityToken, string description, DEConfigActionDelegate action, bool isSafeCall, string[] allowedMethods, MethodInfo methodDescription, bool isAutoLog)
 		{
 			this.securityToken = securityToken;
 			this.description = description;
@@ -79,6 +81,7 @@ namespace TecWare.DE.Server
 			}
 		
 			this.isSafeCall = !isNativeCall && isSafeCall;
+			this.allowedMethods = allowedMethods ?? DefaultAllowedMethods;
 			this.methodDescription = methodDescription;
 			this.isAutoLog = isAutoLog;
 		} // ctor
@@ -112,6 +115,8 @@ namespace TecWare.DE.Server
 		public MethodInfo MethodDescription => methodDescription;
 		/// <summary>Security token, that can call the action.</summary>
 		public string SecurityToken => securityToken;
+		/// <summary>Allowed http methods</summary>
+		public string[] AllowedMethods => allowedMethods;
 		/// <summary>Is this action called in the safe mode.</summary>
 		public bool IsSafeCall => isSafeCall;
 		/// <summary>Should this action create a log scope.</summary>
@@ -122,8 +127,10 @@ namespace TecWare.DE.Server
 
 		// -- Static ----------------------------------------------------------
 
+		private readonly string[] DefaultAllowedMethods = new string[] { "GET", "POST" };
+
 		/// <summary></summary>
-		public static DEConfigAction Empty { get; } = new DEConfigAction(null, null, null, false, null, false);
+		public static DEConfigAction Empty { get; } = new DEConfigAction(null, null, null, false, null, null, false);
 	} // class DEConfigAction
 
 	#endregion
@@ -398,6 +405,26 @@ namespace TecWare.DE.Server
 			// check security
 			context.DemandToken(a.SecurityToken);
 
+			// check for cors-preflight
+			if (context.InputMethod == "OPTIONS" && context.TryGetProperty<string>("Access-Control-Request-Method", out var allowList))
+			{
+				if (allowList.IndexOf("GET") < 0 && allowList.IndexOf("POST") < 0)
+					throw new HttpResponseException(HttpStatusCode.Unauthorized, "CORS invalid method (only GET,POST allowed).");
+
+				var allowedMethods = String.Join(",", a.AllowedMethods);
+				Log.Debug("Process cors-preflight: {0} -> {1}", allowList, allowedMethods);
+				
+				// only allow get and post for actions
+				context.OutputHeaders.Add("Access-Control-Allow-Methods", allowedMethods);
+				context.OutputHeaders.Add("Access-Control-Max-Age", "86400"); // 24h
+
+				// no filter for headers
+				if (context.TryGetProperty<string>("Access-Control-Request-Headers", out var allowHeaders))
+					context.OutputHeaders.Add("Access-Control-Allow-Headers", allowHeaders);
+
+				return (true, DBNull.Value);
+			}
+
 			// Execute action
 			using (var log = a.IsAutoLog ? Log.CreateScope(LogMsgType.Information, false, true) : null)
 			{
@@ -474,7 +501,15 @@ namespace TecWare.DE.Server
 			var exprLambda = CompileMethodAction(ca.Attribute.ActionName, ca.Method);
 
 			// Erzeuge die Action
-			return new DEConfigAction(ca.Attribute.SecurityToken, ca.Description, exprLambda.Compile(), ca.Attribute.IsSafeCall, ca.Method, ca.Attribute.IsAutoLog);
+			return new DEConfigAction(
+				ca.Attribute.SecurityToken,
+				ca.Description,
+				exprLambda.Compile(),
+				ca.Attribute.IsSafeCall,
+				Procs.GetStrings(ca.Attribute.AllowedMethods, emptyArrayToNull: true),
+				ca.Method,
+				ca.Attribute.IsAutoLog
+			);
 		} // func CompileTypeAction
 
 		private DEConfigAction CompileLuaAction(string actionName)
@@ -501,6 +536,7 @@ namespace TecWare.DE.Server
 				ca.GetOptionalValue<string>("Description", null),
 				CompileMethodAction(actionName, dlg.Method, dlg, i => ca[i + 1]).Compile(),
 				ca.GetOptionalValue("SafeCall", true),
+				Procs.GetStrings(ca.GetOptionalValue<string>("AllowedMethods", null), emptyArrayToNull: true),
 				dlg.Method,
 				ca.GetOptionalValue("AutoLog", false)
 			);

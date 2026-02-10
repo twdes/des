@@ -150,6 +150,8 @@ namespace TecWare.DE.Server
 		public string ActionName { get; }
 		/// <summary>Gibt den SecurityToken, den der Nutzer besitzen muss, zurück, um die Aktion auszuführen.</summary>
 		public string SecurityToken { get; set; }
+		/// <summary>Allowed methods e.g. GET,POST</summary>
+		public string AllowedMethods { get; set; } = null;
 		/// <summary>Sollen Exceptions in eine gültige Rückgabe umgewandelt werden (default: false).</summary>
 		public bool IsSafeCall { get; set; } = false;
 		/// <summary>Should this action get a log scope. Is a parameter of the type <see cref="LogMessageScopeProxy"/> is defined, AutoLog is always <c>true</c>.</summary>
