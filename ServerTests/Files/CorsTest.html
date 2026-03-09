@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test</title>
+</head>
+<body>
+<div>
+    <h1>Test-Webseite</h1>
+    <button id="sendButton">SendRequest</button>
+</div>
+
+<script>
+
+    var btn = document.getElementById('sendButton');
+
+    btn.addEventListener('click', function() {
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", 'http://localhost:8080/testCron/?action=user', true);
+        xhr.setRequestHeader('des-multiple-authentifications', 'true');
+        xhr.setRequestHeader('Authorization', 'Basic ' + btoa('test:test'));
+        xhr.setRequestHeader('Accept', 'text/json');
+
+        xhr.onload = () => {
+            if(xhr.status === 200) {
+                console.log(JSON.parse(xhr.responseText));
+            } else {
+                console.error('Error: ${xhr.status}');
+            }
+        };
+        xhr.send();
+    });
+</script>
+</body>
+</html>

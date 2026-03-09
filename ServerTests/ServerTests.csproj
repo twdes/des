@@ -88,6 +88,7 @@
   <ItemGroup>
     <Content Include="Files\01_Main.xml" />
     <Content Include="Files\01_Merge.xml" />
+    <Content Include="Files\CorsTest.html" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />

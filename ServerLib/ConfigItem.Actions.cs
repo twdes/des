@@ -402,9 +402,6 @@ namespace TecWare.DE.Server
 			if (a == DEConfigAction.Empty)
 				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
 
-			// check security
-			context.DemandToken(a.SecurityToken);
-
 			// check for cors-preflight
 			if (context.InputMethod == "OPTIONS" && context.TryGetProperty<string>("Access-Control-Request-Method", out var allowList))
 			{
@@ -424,6 +421,9 @@ namespace TecWare.DE.Server
 
 				return (true, DBNull.Value);
 			}
+
+			// check security
+			context.DemandToken(a.SecurityToken);
 
 			// Execute action
 			using (var log = a.IsAutoLog ? Log.CreateScope(LogMsgType.Information, false, true) : null)

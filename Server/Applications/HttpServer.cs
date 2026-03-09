@@ -1325,7 +1325,7 @@ namespace TecWare.DE.Server
 		protected override void OnBeginReadConfiguration(IDEConfigLoading config)
 		{
 			base.OnBeginReadConfiguration(config);
-
+			
 			// clear prefixes, authentification schemes and mine infos
 			prefixPathTranslations.Clear();
 			prefixAuthentificationSchemes.Clear();
@@ -1715,7 +1715,17 @@ namespace TecWare.DE.Server
 		} // class AuthentificationInfo
 
 		private AuthenticationSchemes GetAuthenticationScheme(HttpListenerRequest r)
-			=> GetAuthenticationInfo(r).Scheme;
+		{
+			var prefixScheme = GetAuthenticationInfo(r);
+
+			if (prefixScheme.AccessControlAllowOrigin.Length > 0 && IsPreflightRequest(r))
+				return AuthenticationSchemes.Anonymous; // ignore user for preflight requests
+		
+			return prefixScheme.Scheme;
+		} // func GetAuthentificationScheme
+
+		private static bool IsPreflightRequest(HttpListenerRequest r)
+			=> r.HttpMethod == "OPTIONS" && r.Headers["Access-Control-Request-Method"] != null;
 
 		private string GetAccessControlAllowOrigin(PrefixAuthentificationInfo prefix, string origin)
 		{
@@ -1857,7 +1867,7 @@ namespace TecWare.DE.Server
 			else
 			{
 				var httpAuthentification = authentification.Scheme != AuthenticationSchemes.Anonymous;
-				var hasPossibleAnon = (authentification.Scheme & AuthenticationSchemes.Anonymous) == AuthenticationSchemes.Anonymous;
+				var hasPossibleAnon = (authentification.Scheme & AuthenticationSchemes.Anonymous) == AuthenticationSchemes.Anonymous || IsPreflightRequest(ctx.Request);
 				using var context = new DEWebRequestScope(this, ctx, absolutePath, httpAuthentification, pathTranslation);
 				try
 				{
