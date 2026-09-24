@@ -37,7 +37,7 @@ namespace TecWare.DE.Server.UI
 
 			virtualOffsetX = 0;
 			virtualOffsetY = 0;
-			virtualWidth = lines.Max(c => c.len);
+			virtualWidth = lines.Count == 0 ? 1 : lines.Max(c => c.len);
 			virtualHeight = lines.Count + 1;
 
 			Application = app ?? throw new ArgumentNullException(nameof(app));

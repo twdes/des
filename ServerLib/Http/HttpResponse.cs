@@ -1109,7 +1109,7 @@ namespace TecWare.DE.Server.Http
 		{
 			if (context.AcceptType(MimeTypes.Text.Lson)) // test if lson is givven
 				return DEHttpTableFormat.Lson;
-			else if (context.AcceptType(MimeTypes.Text.Json)) // test if json is givven
+			else if (context.AcceptType(MimeTypes.Text.Json) || context.AcceptType(MimeTypes.Application.Json)) // test if json is givven
 				return DEHttpTableFormat.Json;
 			else
 				return defaultTableFormat;
