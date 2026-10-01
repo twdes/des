@@ -1899,13 +1899,17 @@ namespace TecWare.DE.Server
 						// Set Access-Control-Allow-Origin
 						if (!String.IsNullOrEmpty(authentification.AccessControlAllowOrigin))
 						{
-							context.OutputHeaders["Access-Control-Allow-Origin"] = authentification.AccessControlAllowOrigin;
-							if (authentification.AccessControlAllowOrigin != "*")
-								context.OutputHeaders["Vary"] = "Origin";
-						}
+							if (authentification.AccessControlAllowOrigin == "**") // exchange to correct origin, always
+								context.OutputHeaders["Access-Control-Allow-Origin"] = context.GetOrigin(new Uri(".", UriKind.Relative)).ToString();
+							else  // set a normal orgin or star
+								context.OutputHeaders["Access-Control-Allow-Origin"] = authentification.AccessControlAllowOrigin;
 
-						// start to find the endpoint
-						if (context.TryEnterSubPath(Server, String.Empty))
+							// Set vary
+							if (authentification.AccessControlAllowOrigin == "*") 
+								context.OutputHeaders["Vary"] = "Origin";
+
+							// start to find the endpoint
+							if (context.TryEnterSubPath(Server, String.Empty))
 						{
 							try
 							{

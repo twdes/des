@@ -415,6 +415,10 @@ namespace TecWare.DE.Server
 				context.OutputHeaders.Add("Access-Control-Allow-Methods", allowedMethods);
 				context.OutputHeaders.Add("Access-Control-Max-Age", "86400"); // 24h
 
+				// check for user
+				if (!String.IsNullOrEmpty(a.SecurityToken))
+					context.OutputHeaders.Add("Allow-Control-Allow-Credentials", "true");
+
 				// no filter for headers
 				if (context.TryGetProperty<string>("Access-Control-Request-Headers", out var allowHeaders))
 					context.OutputHeaders.Add("Access-Control-Allow-Headers", allowHeaders);
