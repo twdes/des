@@ -1,0 +1,107 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+<body>
+<script>
+async function getUser() {
+    const url = "http://localhost:8080/testCron/?action=user";
+
+    // Replace with your actual credentials
+    const username = "test";
+    const password = "test";
+
+    const headers = new Headers();
+    headers.set(
+        "Authorization",
+        "Basic " + btoa(username + ":" + password)
+    );
+
+    try {
+        const response = await fetch(url, {
+            method: "GET",
+            headers: headers
+        });
+
+        if (!response.ok) {
+            throw new Error("HTTP error: " + response.status);
+        }
+
+        const xmlText = await response.text();
+        const xml = new DOMParser().parseFromString(
+            xmlText,
+            "application/xml"
+        );
+
+        if (xml.querySelector("parsererror")) {
+            throw new Error("Invalid XML response");
+        }
+
+        const user = xml.querySelector('m[n="User"]');
+
+        if (user) {
+            console.log(user.textContent);
+            document.body.insertAdjacentText(
+                "beforeend",
+                user.textContent
+            );
+        } else {
+            console.error("User element not found");
+        }
+    } catch (error) {
+        console.error("Request failed:", error);
+    }
+}
+
+async function getNoneUser() {
+    const url = "http://kiwi-w:8080/testCron/?action=noneuser";
+
+    try {
+        const response = await fetch(url, {
+            method: "GET"
+        });
+
+        if (!response.ok) {
+            throw new Error("HTTP error: " + response.status);
+        }
+
+        const xmlText = await response.text();
+        const xml = new DOMParser().parseFromString(
+            xmlText,
+            "application/xml"
+        );
+
+        if (xml.querySelector("parsererror")) {
+            throw new Error("Invalid XML response");
+        }
+
+        const user = xml.querySelector('m[n="User"]');
+
+        if (user) {
+            console.log(user.textContent);
+            document.body.insertAdjacentText(
+                "beforeend",
+                user.textContent
+            );
+        } else {
+            console.error("User element not found");
+        }
+    } catch (error) {
+        console.error("Request failed:", error);
+    }
+}
+
+//getNoneUser();
+
+//getUser();
+</script>
+    Hallo!
+    <button onclick="getNoneUser()">No User!</button>
+    <button onclick="getUser()">User!</button>
+    <br/>
+</body>
+</html>
+

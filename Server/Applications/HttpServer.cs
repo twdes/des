@@ -1100,7 +1100,8 @@ namespace TecWare.DE.Server
 		private sealed class PrefixAuthentificationInfo : PrefixDefinition
 		{
 			private readonly AuthenticationSchemes scheme;
-			private readonly List<string> allowedOrigins = new List<string>();
+			private readonly List<Uri> allowedOrigins = new List<Uri>();
+			private readonly bool allowAll = false;
 			private string fileName = null;
 			private Dictionary<string, string> parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -1126,7 +1127,16 @@ namespace TecWare.DE.Server
 				}
 
 				foreach (var allowedOrigin in x.GetStrings("origins"))
-					allowedOrigins.Add(allowedOrigin);
+				{
+					if (allowedOrigin == "**") // every domain!
+					{
+						allowAll = true;
+						allowedOrigins.Clear();
+						break;
+					}
+					else if (allowedOrigin != "*") // wild card is not allowed
+						allowedOrigins.Add(new Uri(new Uri(allowedOrigin, UriKind.Absolute).GetComponents(UriComponents.SchemeAndServer, UriFormat.Unescaped), UriKind.Absolute));
+				}
 				
 				this.scheme = schemeValue;
 			} // ctor
@@ -1144,14 +1154,19 @@ namespace TecWare.DE.Server
 					parameters.Add(q.GetKey(i), q.Get(i));
 			} // proc SetQuery
 
-			public string AllowOrigin(string origin)
+			public Uri AllowOrigin(Uri origin)
 			{
-				if (String.IsNullOrEmpty(origin))
+				if (origin is null)
 					return null;
 
 				// check if this origin is allowed
-				if (allowedOrigins.Exists(c => String.Compare(c, origin, StringComparison.OrdinalIgnoreCase) == 0))
+				if (allowAll)
 					return origin;
+				else
+				{
+					if (allowedOrigins.Exists(c => c == origin))
+						return origin;
+				}
 
 				return null; // not allowed 
 			} // proc AllowOrigin
@@ -1720,7 +1735,7 @@ namespace TecWare.DE.Server
 
 			if (prefixScheme.AccessControlAllowOrigin.Length > 0 && IsPreflightRequest(r))
 				return AuthenticationSchemes.Anonymous; // ignore user for preflight requests
-		
+
 			return prefixScheme.Scheme;
 		} // func GetAuthentificationScheme
 
@@ -1729,13 +1744,18 @@ namespace TecWare.DE.Server
 
 		private string GetAccessControlAllowOrigin(PrefixAuthentificationInfo prefix, string origin)
 		{
-			var allow = prefix.AllowOrigin(origin);
-			if (String.IsNullOrEmpty(allow))
-				return null;
-			else if (prefix.Scheme == AuthenticationSchemes.Anonymous)
-				return "*";
+			if (Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
+			{
+				var allow = prefix.AllowOrigin(originUri);
+				if (allow is null)
+					return null;
+				else if (prefix.Scheme == AuthenticationSchemes.Anonymous)
+					return "*";
+				else
+					return allow.GetComponents(UriComponents.SchemeAndServer, UriFormat.Unescaped);
+			}
 			else
-				return allow;
+				return null;
 		} // func GetAccessControlAllowOrigin
 
 		private AuthentificationInfo GetAuthenticationInfo(HttpListenerRequest r)
@@ -1900,16 +1920,17 @@ namespace TecWare.DE.Server
 						if (!String.IsNullOrEmpty(authentification.AccessControlAllowOrigin))
 						{
 							if (authentification.AccessControlAllowOrigin == "**") // exchange to correct origin, always
-								context.OutputHeaders["Access-Control-Allow-Origin"] = context.GetOrigin(new Uri(".", UriKind.Relative)).ToString();
+								context.OutputHeaders["Access-Control-Allow-Origin"] = context.GetOrigin(new Uri(".", UriKind.Relative)).GetComponents(UriComponents.SchemeAndServer, UriFormat.Unescaped);
 							else  // set a normal orgin or star
 								context.OutputHeaders["Access-Control-Allow-Origin"] = authentification.AccessControlAllowOrigin;
 
 							// Set vary
-							if (authentification.AccessControlAllowOrigin == "*") 
+							if (authentification.AccessControlAllowOrigin == "*")
 								context.OutputHeaders["Vary"] = "Origin";
+						}
 
-							// start to find the endpoint
-							if (context.TryEnterSubPath(Server, String.Empty))
+						// start to find the endpoint
+						if (context.TryEnterSubPath(Server, String.Empty))
 						{
 							try
 							{
