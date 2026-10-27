@@ -1749,8 +1749,8 @@ namespace TecWare.DE.Server
 				var allow = prefix.AllowOrigin(originUri);
 				if (allow is null)
 					return null;
-				else if (prefix.Scheme == AuthenticationSchemes.Anonymous)
-					return "*";
+				//else if (prefix.Scheme == AuthenticationSchemes.Anonymous)
+				//	return "*";
 				else
 					return allow.GetComponents(UriComponents.SchemeAndServer, UriFormat.Unescaped);
 			}

@@ -417,7 +417,7 @@ namespace TecWare.DE.Server
 
 				// check for user
 				if (!String.IsNullOrEmpty(a.SecurityToken))
-					context.OutputHeaders.Add("Allow-Control-Allow-Credentials", "true");
+					context.OutputHeaders.Add("Access-Control-Allow-Credentials", "true");
 
 				// no filter for headers
 				if (context.TryGetProperty<string>("Access-Control-Request-Headers", out var allowHeaders))
