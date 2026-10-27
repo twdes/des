@@ -403,7 +403,7 @@ namespace TecWare.DE.Server
 				throw new HttpResponseException(HttpStatusCode.BadRequest, String.Format("Action {0} not found", actionName));
 
 			// check for cors-preflight
-			if (context.InputMethod == "OPTIONS" && context.TryGetProperty<string>("Access-Control-Request-Method", out var allowList))
+			if (context.TryGetProperty<string>("Access-Control-Request-Method", out var allowList))
 			{
 				if (allowList.IndexOf("GET") < 0 && allowList.IndexOf("POST") < 0)
 					throw new HttpResponseException(HttpStatusCode.Unauthorized, "CORS invalid method (only GET,POST allowed).");
@@ -423,7 +423,9 @@ namespace TecWare.DE.Server
 				if (context.TryGetProperty<string>("Access-Control-Request-Headers", out var allowHeaders))
 					context.OutputHeaders.Add("Access-Control-Allow-Headers", allowHeaders);
 
-				return (true, DBNull.Value);
+				// options only
+				if (context.InputMethod == "OPTIONS" && a.IsSafeCall)
+					return (true, DBNull.Value);
 			}
 
 			// check security

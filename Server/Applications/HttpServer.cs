@@ -1740,7 +1740,7 @@ namespace TecWare.DE.Server
 		} // func GetAuthentificationScheme
 
 		private static bool IsPreflightRequest(HttpListenerRequest r)
-			=> r.HttpMethod == "OPTIONS" && r.Headers["Access-Control-Request-Method"] != null;
+			=> r.Headers["Access-Control-Request-Method"] != null;
 
 		private string GetAccessControlAllowOrigin(PrefixAuthentificationInfo prefix, string origin)
 		{
