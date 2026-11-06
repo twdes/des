@@ -1250,7 +1250,9 @@ namespace TecWare.DE.Server
 		/// <returns></returns>
 		public static object CreateDefaultReturn(IDEWebRequestScope r, DEHttpReturnState state, string text = null)
 		{
-			if (r.AcceptType(MimeTypes.Text.Lson))
+			if (r.AcceptType(MimeTypes.Text.Lson)
+				|| r.AcceptType(MimeTypes.Text.Json)
+				|| r.AcceptType(MimeTypes.Application.Json))
 				return SetStatusMembers(new LuaTable(), state, text);
 			else if (r.AcceptType(MimeTypes.Text.Xml)
 				|| r.AcceptType(MimeTypes.Application.Xaml)

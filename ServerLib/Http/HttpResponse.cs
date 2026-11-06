@@ -1313,13 +1313,13 @@ namespace TecWare.DE.Server.Http
 					using (var tr = r.GetInputTextReader())
 						return LuaTable.FromLson(tr);
 				}
-				else if (contentType.MediaType == MimeTypes.Text.Json)
+				else if (contentType.MediaType == MimeTypes.Text.Json || contentType.MediaType == MimeTypes.Application.Json)
 				{
 					using (var tr = r.GetInputTextReader())
 						return LuaTable.FromJson(tr);
 				}
 				else
-					throw new ArgumentOutOfRangeException(nameof(r.InputContentType), r.InputContentType, "InputContentType is neither xml nor lson.");
+					throw new ArgumentOutOfRangeException(nameof(r.InputContentType), r.InputContentType, "InputContentType is neither xml, json nor lson.");
 			}
 			else
 				throw new ArgumentException("InputContentType is missing.", nameof(r.InputContentType));
