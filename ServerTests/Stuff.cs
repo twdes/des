@@ -209,6 +209,40 @@ namespace TecWare.DE.Server
 		}
 
 		[TestMethod]
+		public void TimeTestSeconds01()
+		{
+			var cron = new CronBound("2:30:30");
+			Assert.AreEqual(new DateTime(2015, 12, 04, 2, 30, 30), cron.GetNext(new DateTime(2015, 12, 03, 12, 0, 0)));
+			Assert.AreEqual(new DateTime(2015, 12, 03, 2, 30, 30), cron.GetNext(new DateTime(2015, 12, 03, 1, 0, 0)));
+		}
+
+		[TestMethod]
+		public void TimeTestSeconds02()
+		{
+			var cron = new CronBound("30:10sec");
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 30, 10), cron.GetNext(new DateTime(2015, 12, 03, 12, 0, 0)));
+			Assert.AreEqual(new DateTime(2015, 12, 03, 13, 30, 10), cron.GetNext(new DateTime(2015, 12, 03, 12, 30, 10)));
+		}
+
+		[TestMethod]
+		public void TimeTestSeconds03()
+		{
+			var cron = new CronBound("*:0,5sec,*");
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 30, 0), cron.GetNext(new DateTime(2015, 12, 03, 12, 29, 56)));
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 30, 5), cron.GetNext(new DateTime(2015, 12, 03, 12, 30, 0)));
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 30, 55), cron.GetNext(new DateTime(2015, 12, 03, 12, 30, 51)));
+		}
+
+		[TestMethod]
+		public void TimeTestLegacyUnchanged()
+		{
+			Assert.IsFalse(new CronBound("12:25").HasSecondResolution);
+			Assert.IsFalse(new CronBound("0,10,30,40,50").HasSecondResolution);
+			Assert.IsFalse(new CronBound("10,*").HasSecondResolution);
+			Assert.AreEqual(new DateTime(2015, 12, 03, 12, 25, 0), new CronBound("12:25").GetNext(new DateTime(2015, 12, 03, 12, 0, 6)));
+		}
+
+		[TestMethod]
 		public void XmlSplitPaths()
 		{
 			var t = Procs.SplitPaths("a b c").ToArray();
