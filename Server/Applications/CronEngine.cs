@@ -485,7 +485,7 @@ namespace TecWare.DE.Server
 							{
 								if (!StartJob(cronCacheItem.Job))
 								{
-									cronCacheItem.NextRun = cronCacheItem.NextRun.Value.Add(TimeSpan.FromSeconds(60)); // add 60sec if the job is busy
+									cronCacheItem.NextRun = cronCacheItem.NextRun.Value.Add(TimeSpan.FromSeconds(cronCacheItem.Job.Bound.HasSecondResolution ? 1 : 60)); // retry busy job: 1sec for second-level schedules, otherwise 60sec
 								}
 							}
 						}
