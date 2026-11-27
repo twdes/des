@@ -42,6 +42,7 @@ namespace TecWare.DE.Server.Stuff
 		private readonly byte[] weekDays;
 		private readonly byte[] hours;
 		private readonly byte[] minutes;
+		private readonly byte[] seconds;
 
 		#region -- Ctor ---------------------------------------------------------------
 
@@ -63,6 +64,7 @@ namespace TecWare.DE.Server.Stuff
 				weekDays = null;
 				hours = null;
 				minutes = new byte[] { 0 };
+				seconds = null;
 			}
 			else
 			{
@@ -102,6 +104,28 @@ namespace TecWare.DE.Server.Stuff
 					weekDays = null;
 				}
 
+				var timeParts = value.Substring(daysSep + 1).Split(new[] { dtfi.TimeSeparator }, StringSplitOptions.None);
+				if (timeParts.Length == 3 || (timeParts.Length == 2 && timeParts[1].IndexOf("sec", StringComparison.Ordinal) >= 0))
+				{
+					if (timeParts.Length == 3)
+					{
+						hours = ParseTimeValues(timeParts[0], 24, 23);
+						minutes = ParseTimeValues(timeParts[1], 60, 59);
+						seconds = ParseTimeValues(timeParts[2], 60, 59);
+					}
+					else
+					{
+						hours = null;
+						minutes = ParseTimeValues(timeParts[0], 60, 59);
+						seconds = ParseTimeValues(timeParts[1].Replace("sec", String.Empty), 60, 59);
+					}
+					if (minutes == null || seconds == null)
+						throw new ArgumentException("Invalid time format.", nameof(value));
+					return;
+				}
+
+				seconds = new byte[] { 0 };
+
 				// Stunden
 				var hoursSep = value.IndexOf(dtfi.TimeSeparator, daysSep + 1);
 				if (hoursSep >= 0)
@@ -127,6 +151,13 @@ namespace TecWare.DE.Server.Stuff
 					minutes = new byte[] { 0 };
 			}
 		} // ctor
+
+		private static byte[] ParseTimeValues(string text, int maxValueRow, int maxValue)
+		{
+			var values = ClearArray(new bool[60]);
+			SplitValues(text, values, maxValueRow);
+			return GetValueArray(values, 0, maxValue);
+		} // func ParseTimeValues
 
 		private static byte[] GetValueArray(bool[] values, int min, int max)
 		{
@@ -245,6 +276,7 @@ namespace TecWare.DE.Server.Stuff
 			SumArray(weekDays, ref ret);
 			SumArray(hours, ref ret);
 			SumArray(minutes, ref ret);
+			SumArray(seconds, ref ret);
 			return ret;
 		} // func GetHashCode
 
@@ -266,7 +298,8 @@ namespace TecWare.DE.Server.Stuff
 			return Procs.CompareBytes(days, o.days) 
 				&& Procs.CompareBytes(weekDays, o.weekDays) 
 				&& Procs.CompareBytes(hours, o.hours) 
-				&& Procs.CompareBytes(minutes, o.minutes);
+				&& Procs.CompareBytes(minutes, o.minutes)
+				&& Procs.CompareBytes(seconds, o.seconds);
 		} // func CompareTo
 
 		#endregion
@@ -329,6 +362,19 @@ namespace TecWare.DE.Server.Stuff
 				}
 			}
 
+			if (seconds != null && !(seconds.Length == 1 && seconds[0] == 0))
+			{
+				sb.Append(dtfi.TimeSeparator);
+				for (var i = 0; i < seconds.Length; i++)
+				{
+					if (i > 0)
+						sb.Append(',');
+					sb.Append(seconds[i].ToString("00"));
+				}
+				if (hours == null)
+					sb.Append("sec");
+			}
+
 			return sb.ToString();
 		} // func ToString
 
@@ -360,6 +406,32 @@ namespace TecWare.DE.Server.Stuff
 		/// <param name="lastTime">Datum von dem aus ausgegangen werden soll.</param>
 		/// <returns>Das neue Datum, welches größer ist als das Übergebene.</returns>
 		public DateTime GetNext(DateTime lastTime)
+		{
+			if (seconds == null || (seconds.Length == 1 && seconds[0] == 0))
+				return GetNextMinute(lastTime);
+
+			var candidate = new DateTime(lastTime.Year, lastTime.Month, lastTime.Day, lastTime.Hour, lastTime.Minute, lastTime.Second).AddSeconds(1);
+			for (var i = 0; i < 100000; i++)
+			{
+				var minute = new DateTime(candidate.Year, candidate.Month, candidate.Day, candidate.Hour, candidate.Minute, 0);
+				var matchMinute = GetNextMinute(minute.AddSeconds(-1));
+				if (matchMinute != minute)
+				{
+					candidate = matchMinute;
+					continue;
+				}
+
+				var second = GetFollowValue(seconds, (byte)candidate.Second, true, out var overflow);
+				if (!overflow)
+					return minute.AddSeconds(second);
+
+				candidate = minute.AddMinutes(1);
+			}
+
+			throw new InvalidOperationException("Logic error!");
+		} // func GetNext
+
+		private DateTime GetNextMinute(DateTime lastTime)
 		{
 			var ret = new DateTime(lastTime.Year, lastTime.Month, lastTime.Day, lastTime.Hour, lastTime.Minute, 0); // Sekunden und Fragmente interessieren nicht
 
@@ -500,7 +572,10 @@ namespace TecWare.DE.Server.Stuff
 			=> !(left == right);
 
 		/// <summary>Ist die Schranke Leer.</summary>
-		public bool IsEmpty => days == null && weekDays == null && hours == null && minutes == null;
+		public bool IsEmpty => days == null && weekDays == null && hours == null && minutes == null && seconds == null;
+
+		/// <summary>Gibt an, ob die Schranke eine Sekundenauflösung benötigt.</summary>
+		public bool HasSecondResolution => seconds != null && !(seconds.Length == 1 && seconds[0] == 0);
 
 		/// <summary>Gibt eine leere Schranke zurück.</summary>
 		public static CronBound Empty { get; } = new CronBound();
